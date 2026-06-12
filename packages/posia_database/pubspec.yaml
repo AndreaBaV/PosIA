@@ -1,0 +1,35 @@
+name: posia_database
+description: Persistencia SQLite local offline para POSIA.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.11.0
+  flutter: ">=3.41.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  path: ^1.9.1
+  path_provider: ^2.1.5
+  posia_core:
+    path: ../posia_core
+  posia_inventory:
+    path: ../posia_inventory
+  posia_pricing:
+    path: ../posia_pricing
+  posia_module_butcher:
+    path: ../posia_module_butcher
+  posia_module_pharmacy:
+    path: ../posia_module_pharmacy
+  posia_sync:
+    path: ../posia_sync
+  sqflite: ^2.4.2
+  sqflite_common_ffi: ^2.3.6
+  sqflite_common_ffi_web: ^1.0.0
+  uuid: ^4.5.2
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter

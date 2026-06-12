@@ -1,0 +1,27 @@
+name: posia
+repository: https://github.com/posia/posia
+
+packages:
+  - apps/**
+  - packages/**
+
+command:
+  bootstrap:
+    usePubspecOverrides: true
+
+scripts:
+  analyze:
+    run: melos exec -- dart analyze .
+    description: Ejecuta analisis estatico en todos los paquetes.
+
+  test:
+    run: melos exec -- dart test
+    description: Ejecuta pruebas unitarias en todos los paquetes.
+
+  format:
+    run: melos exec -- dart format .
+    description: Formatea codigo en todos los paquetes.
+
+  build_runner:
+    run: melos exec --depends-on=build_runner -- dart run build_runner build --delete-conflicting-outputs
+    description: Genera codigo Drift en paquetes que lo requieran.

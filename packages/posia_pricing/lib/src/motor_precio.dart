@@ -1,0 +1,165 @@
+/// Motor de resolucion de precios comerciales POSIA.
+///
+/// Autor: Equipo POSIA
+/// Matricula: POSIA-2026-001
+/// Fecha creacion: 2026-06-07 18:30:00 (UTC-6)
+/// Ultima modificacion: 2026-06-07 18:30:00 (UTC-6)
+library;
+
+import 'package:posia_core/posia_core.dart';
+
+import 'models/escala_mayoreo.dart';
+import 'repositorio_precio.dart';
+
+/// Resuelve precio unitario aplicando reglas de prioridad comercial.
+class MotorPrecio {
+	/// Crea motor con repositorio de datos de precio.
+	///
+	/// [repositorioPrecio] Fuente de escalas y precios preferenciales.
+	MotorPrecio({required RepositorioPrecio repositorioPrecio})
+		: _repositorioPrecio = repositorioPrecio;
+
+	final RepositorioPrecio _repositorioPrecio;
+
+	/// Resuelve precio unitario para el contexto indicado.
+	///
+	/// [contexto] Datos de producto, cantidad, tienda y cliente.
+	/// Retorna [ResultadoPrecio] con precio redondeado y regla aplicada.
+	Future<ResultadoPrecio> resolverPrecio(ContextoPrecio contexto) async {
+		final precioCliente = await _resolverPrecioClienteProducto(contexto);
+		if (precioCliente != null) {
+			return precioCliente;
+		}
+
+		final precioLista = await _resolverPrecioListaCliente(contexto);
+		if (precioLista != null) {
+			return precioLista;
+		}
+
+		final precioMayoreo = await _resolverPrecioMayoreo(contexto);
+		if (precioMayoreo != null) {
+			return precioMayoreo;
+		}
+
+		return _resolverPrecioBase(contexto);
+	}
+
+	/// Intenta precio fijo cliente-producto.
+	///
+	/// [contexto] Contexto de cotizacion activo.
+	/// Retorna resultado o null si no aplica regla.
+	Future<ResultadoPrecio?> _resolverPrecioClienteProducto(
+		ContextoPrecio contexto,
+	) async {
+		final cliente = contexto.cliente;
+		if (cliente == null) {
+			return null;
+		}
+
+		final registro = await _repositorioPrecio.obtenerPrecioClienteProducto(
+			cliente.id,
+			contexto.producto.id,
+		);
+		if (registro == null) {
+			return null;
+		}
+
+		return ResultadoPrecio(
+			precioUnitario: redondearMonto(registro.precioUnitario),
+			reglaAplicada: ReglaPrecio.precioClienteProducto,
+		);
+	}
+
+	/// Intenta precio por lista asignada al cliente.
+	///
+	/// [contexto] Contexto de cotizacion activo.
+	/// Retorna resultado o null si no aplica regla.
+	Future<ResultadoPrecio?> _resolverPrecioListaCliente(
+		ContextoPrecio contexto,
+	) async {
+		final cliente = contexto.cliente;
+		if (cliente == null) {
+			return null;
+		}
+
+		final listaId = cliente.listaPreciosId;
+		if (listaId == null) {
+			return null;
+		}
+
+		final precioLista = await _repositorioPrecio.obtenerPrecioLista(
+			listaId,
+			contexto.producto.id,
+		);
+		if (precioLista == null) {
+			return null;
+		}
+
+		return ResultadoPrecio(
+			precioUnitario: redondearMonto(precioLista),
+			reglaAplicada: ReglaPrecio.listaPreciosCliente,
+		);
+	}
+
+	/// Intenta escala de mayoreo por cantidad.
+	///
+	/// [contexto] Contexto de cotizacion activo.
+	/// Retorna resultado o null si no alcanza umbral.
+	Future<ResultadoPrecio?> _resolverPrecioMayoreo(
+		ContextoPrecio contexto,
+	) async {
+		final escalas = await _repositorioPrecio.obtenerEscalasMayoreo(
+			contexto.producto.id,
+		);
+		if (escalas.isEmpty) {
+			return null;
+		}
+
+		final escalaAplicable = _seleccionarEscalaMayoreo(escalas, contexto.cantidad);
+		if (escalaAplicable == null) {
+			return null;
+		}
+
+		return ResultadoPrecio(
+			precioUnitario: redondearMonto(escalaAplicable.precioUnitario),
+			reglaAplicada: ReglaPrecio.escalaMayoreo,
+		);
+	}
+
+	/// Selecciona la escala de mayor cantidad minima que califica.
+	///
+	/// [escalas] Escalas disponibles del producto.
+	/// [cantidad] Cantidad solicitada en venta.
+	/// Retorna escala aplicable o null.
+	EscalaMayoreo? _seleccionarEscalaMayoreo(
+		List<EscalaMayoreo> escalas,
+		double cantidad,
+	) {
+		EscalaMayoreo? mejorEscala;
+		for (final escala in escalas) {
+			final califica = cantidad >= escala.cantidadMinima;
+			if (!califica) {
+				continue;
+			}
+			if (mejorEscala == null) {
+				mejorEscala = escala;
+				continue;
+			}
+			if (escala.cantidadMinima > mejorEscala.cantidadMinima) {
+				mejorEscala = escala;
+			}
+		}
+		return mejorEscala;
+	}
+
+	/// Aplica precio base del producto.
+	///
+	/// [contexto] Contexto de cotizacion activo.
+	/// Retorna resultado con regla base.
+	ResultadoPrecio _resolverPrecioBase(ContextoPrecio contexto) {
+		return ResultadoPrecio(
+			precioUnitario: redondearMonto(contexto.producto.precioBase),
+			reglaAplicada: ReglaPrecio.precioBase,
+		);
+	}
+}

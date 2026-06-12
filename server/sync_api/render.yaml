@@ -1,0 +1,16 @@
+# Despliegue gratuito en Render.com con Neon PostgreSQL.
+# Ver docs/DEPLOYMENT_NEON.md
+services:
+  - type: web
+    name: posia-sync-api
+    runtime: docker
+    dockerfilePath: Dockerfile
+    plan: free
+    healthCheckPath: /v1/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: API_KEY
+        generateValue: true
+      - key: PORT
+        value: "8080"

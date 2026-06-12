@@ -1,0 +1,86 @@
+/// Repositorio SQLite de turnos de corte de caja.
+///
+/// Autor: Equipo POSIA
+/// Matricula: POSIA-2026-001
+/// Fecha creacion: 2026-06-11 22:00:00 (UTC-6)
+library;
+
+import 'package:posia_core/posia_core.dart';
+import 'package:sqflite/sqflite.dart';
+
+/// Persiste aperturas y cierres de caja.
+class TurnoCajaRepository {
+	TurnoCajaRepository({required Database baseDatos}) : _baseDatos = baseDatos;
+
+	final Database _baseDatos;
+
+	Future<TurnoCaja?> obtenerTurnoAbierto(String tiendaId, String cajaId) async {
+		final filas = await _baseDatos.query(
+			'cash_shifts',
+			where: 'tienda_id = ? AND caja_id = ? AND estado = ?',
+			whereArgs: [tiendaId, cajaId, EstadoTurnoCaja.abierto.name],
+			orderBy: 'abierto_en DESC',
+			limit: 1,
+		);
+		if (filas.isEmpty) {
+			return null;
+		}
+		return _mapear(filas.first);
+	}
+
+	Future<void> guardar(TurnoCaja turno) async {
+		await _baseDatos.insert(
+			'cash_shifts',
+			_mapearMapa(turno),
+			conflictAlgorithm: ConflictAlgorithm.replace,
+		);
+	}
+
+	Future<List<TurnoCaja>> listarPorTienda(String tiendaId, {int limite = 20}) async {
+		final filas = await _baseDatos.query(
+			'cash_shifts',
+			where: 'tienda_id = ?',
+			whereArgs: [tiendaId],
+			orderBy: 'abierto_en DESC',
+			limit: limite,
+		);
+		return filas.map(_mapear).toList();
+	}
+
+	TurnoCaja _mapear(Map<String, Object?> fila) {
+		final cerradoCrudo = fila['cerrado_en'] as String?;
+		return TurnoCaja(
+			id: fila['id'] as String,
+			tiendaId: fila['tienda_id'] as String,
+			cajaId: fila['caja_id'] as String,
+			vendedorId: fila['vendedor_id'] as String?,
+			fondoInicial: fila['fondo_inicial'] as double,
+			totalEfectivo: fila['total_efectivo'] as double,
+			totalTarjeta: fila['total_tarjeta'] as double,
+			totalTransferencia: fila['total_transferencia'] as double,
+			totalVentas: fila['total_ventas'] as double,
+			cantidadVentas: fila['cantidad_ventas'] as int,
+			abiertoEn: DateTime.parse(fila['abierto_en'] as String),
+			cerradoEn: cerradoCrudo == null ? null : DateTime.parse(cerradoCrudo),
+			estado: EstadoTurnoCaja.values.byName(fila['estado'] as String),
+		);
+	}
+
+	Map<String, Object?> _mapearMapa(TurnoCaja turno) {
+		return {
+			'id': turno.id,
+			'tienda_id': turno.tiendaId,
+			'caja_id': turno.cajaId,
+			'vendedor_id': turno.vendedorId,
+			'fondo_inicial': turno.fondoInicial,
+			'total_efectivo': turno.totalEfectivo,
+			'total_tarjeta': turno.totalTarjeta,
+			'total_transferencia': turno.totalTransferencia,
+			'total_ventas': turno.totalVentas,
+			'cantidad_ventas': turno.cantidadVentas,
+			'abierto_en': turno.abiertoEn.toIso8601String(),
+			'cerrado_en': turno.cerradoEn?.toIso8601String(),
+			'estado': turno.estado.name,
+		};
+	}
+}

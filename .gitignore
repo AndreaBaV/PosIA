@@ -1,0 +1,29 @@
+# POSIA
+
+.dart_tool/
+.packages
+build/
+*.iml
+.idea/
+.vscode/
+*.db
+*.log
+
+# Secretos locales
+.env
+**/.env
+!.env.example
+
+# Flutter
+**/flutter/ephemeral/
+**/android/.gradle/
+**/android/local.properties
+**/ios/Pods/
+**/windows/flutter/ephemeral/
+
+# Melos
+pubspec_overrides.yaml
+
+# OS
+.DS_Store
+Thumbs.db

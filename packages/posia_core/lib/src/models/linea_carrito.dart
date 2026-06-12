@@ -1,0 +1,76 @@
+/// Linea temporal del carrito activo en caja.
+///
+/// Autor: Equipo POSIA
+/// Matricula: POSIA-2026-001
+/// Fecha creacion: 2026-06-07 18:30:00 (UTC-6)
+/// Ultima modificacion: 2026-06-07 20:15:00 (UTC-6)
+library;
+
+import '../enums/regla_precio.dart';
+import 'producto.dart';
+
+/// Representa un articulo agregado al carrito antes del cobro.
+class LineaCarrito {
+	/// Crea una linea de carrito.
+	///
+	/// [producto] Producto agregado.
+	/// [cantidad] Cantidad en carrito.
+	/// [precioUnitario] Precio unitario resuelto.
+	/// [reglaPrecio] Regla que produjo el precio.
+	/// [loteId] Identificador de lote farmacia opcional.
+	/// [etiquetaLote] Texto visible de lote para ticket.
+	const LineaCarrito({
+		required this.producto,
+		required this.cantidad,
+		required this.precioUnitario,
+		required this.reglaPrecio,
+		this.loteId,
+		this.etiquetaLote,
+	});
+
+	/// Producto en carrito.
+	final Producto producto;
+
+	/// Cantidad seleccionada.
+	final double cantidad;
+
+	/// Precio unitario aplicado.
+	final double precioUnitario;
+
+	/// Regla de precio utilizada.
+	final ReglaPrecio reglaPrecio;
+
+	/// Lote farmacia asociado opcionalmente.
+	final String? loteId;
+
+	/// Etiqueta de lote para impresion en ticket.
+	final String? etiquetaLote;
+
+	/// Calcula subtotal de la linea.
+	///
+	/// Retorna cantidad multiplicada por precio unitario.
+	double calcularSubtotal() {
+		return cantidad * precioUnitario;
+	}
+
+	/// Genera copia con campos opcionales reemplazados.
+	///
+	/// Retorna nueva instancia de [LineaCarrito].
+	LineaCarrito copiarCon({
+		Producto? producto,
+		double? cantidad,
+		double? precioUnitario,
+		ReglaPrecio? reglaPrecio,
+		String? loteId,
+		String? etiquetaLote,
+	}) {
+		return LineaCarrito(
+			producto: producto ?? this.producto,
+			cantidad: cantidad ?? this.cantidad,
+			precioUnitario: precioUnitario ?? this.precioUnitario,
+			reglaPrecio: reglaPrecio ?? this.reglaPrecio,
+			loteId: loteId ?? this.loteId,
+			etiquetaLote: etiquetaLote ?? this.etiquetaLote,
+		);
+	}
+}

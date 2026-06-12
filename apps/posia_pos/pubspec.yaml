@@ -1,0 +1,47 @@
+name: posia_pos
+description: Aplicacion de caja POSIA para Windows, iOS y Android.
+publish_to: none
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.11.0
+  flutter: ">=3.41.0"
+
+dependencies:
+  connectivity_plus: ^7.0.0
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^3.0.3
+  path_provider: ^2.1.5
+  permission_handler: ^12.0.1
+  speech_to_text: ^7.0.0
+  posia_core:
+    path: ../../packages/posia_core
+  posia_database:
+    path: ../../packages/posia_database
+  posia_hardware:
+    path: ../../packages/posia_hardware
+  posia_inventory:
+    path: ../../packages/posia_inventory
+  posia_licensing:
+    path: ../../packages/posia_licensing
+  posia_module_butcher:
+    path: ../../packages/posia_module_butcher
+  posia_module_pharmacy:
+    path: ../../packages/posia_module_pharmacy
+  posia_pricing:
+    path: ../../packages/posia_pricing
+  posia_sync:
+    path: ../../packages/posia_sync
+  posia_ui:
+    path: ../../packages/posia_ui
+  posia_voice:
+    path: ../../packages/posia_voice
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true

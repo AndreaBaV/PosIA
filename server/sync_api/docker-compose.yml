@@ -1,0 +1,32 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: posia
+      POSTGRES_PASSWORD: posia_dev
+      POSTGRES_DB: posia_sync
+    ports:
+      - "5432:5432"
+    volumes:
+      - posia_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U posia -d posia_sync"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  sync_api:
+    build: .
+    environment:
+      DATABASE_URL: postgres://posia:posia_dev@postgres:5432/posia_sync
+      PORT: "8080"
+      API_KEY: ${API_KEY:-}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  posia_pg_data:
