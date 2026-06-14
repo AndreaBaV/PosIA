@@ -131,6 +131,7 @@ class EstadoCarrito {
 		required this.nombreTienda,
 		this.nombreVendedor,
 		this.turnoAbierto = false,
+		this.favoritos = const [],
 	});
 
 	/// Catalogo visible en grilla.
@@ -157,6 +158,9 @@ class EstadoCarrito {
 	/// Indica si hay turno de caja abierto.
 	final bool turnoAbierto;
 
+	/// Productos favoritos para venta rapida.
+	final List<Producto> favoritos;
+
 	/// Genera copia con campos actualizados.
 	EstadoCarrito copiarCon({
 		List<Producto>? productos,
@@ -167,6 +171,7 @@ class EstadoCarrito {
 		String? nombreTienda,
 		String? nombreVendedor,
 		bool? turnoAbierto,
+		List<Producto>? favoritos,
 	}) {
 		return EstadoCarrito(
 			productos: productos ?? this.productos,
@@ -178,6 +183,7 @@ class EstadoCarrito {
 			nombreTienda: nombreTienda ?? this.nombreTienda,
 			nombreVendedor: nombreVendedor ?? this.nombreVendedor,
 			turnoAbierto: turnoAbierto ?? this.turnoAbierto,
+			favoritos: favoritos ?? this.favoritos,
 		);
 	}
 }
@@ -228,13 +234,10 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 		await recargar();
 	}
 
-	/// Ejecuta cobro con metodo de pago indicado.
-	///
-	/// [metodoPago] Forma de pago seleccionada.
-	/// Retorna total cobrado o null si carrito vacio.
-	Future<double?> cobrar(MetodoPago metodoPago) async {
+	/// Ejecuta cobro con parametros de multipago.
+	Future<double?> cobrar(CobroRequest request) async {
 		final servicio = await ref.read(servicioCajaProvider.future);
-		final venta = await servicio.cobrar(metodoPago);
+		final venta = await servicio.cobrar(request);
 		await recargar();
 		return venta?.total;
 	}
@@ -247,6 +250,7 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 		final productos = await servicio.listarProductos(
 			categoriaId: _categoriaSeleccionadaId,
 		);
+		final favoritos = await servicio.listarFavoritosCaja();
 		final vendedor = servicio.obtenerVendedorActivo();
 		final turno = await contenedor.servicioAdmin
 			.obtenerServicioCorteCaja()
@@ -261,6 +265,7 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 			nombreTienda: tienda?.nombre ?? 'Tienda',
 			nombreVendedor: vendedor?.nombre,
 			turnoAbierto: turno != null,
+			favoritos: favoritos,
 		);
 	}
 }

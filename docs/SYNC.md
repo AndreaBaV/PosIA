@@ -113,8 +113,23 @@ UI muestra:
 
 ---
 
-## 8. Registro de cambios
+## 9. Espejo Postgres (Neon / on-premise)
+
+Arquitectura **offline-first**: la caja opera en SQLite local y sincroniza eventos con el hub. El hub proyecta esos eventos a tablas espejo en Postgres (`products`, `sales`, `stock_levels`, etc.) para consulta centralizada y backup.
+
+| Capa | Rol |
+|------|-----|
+| SQLite (caja) | Fuente operativa offline |
+| Hub `sync_api` | Log `sync_events` + proyector |
+| Postgres (Neon) | Réplica espejo del POS |
+
+La caja **no** conecta directo a Neon. Tras cambiar de equipo: configurar hub en Admin → Sincronizar → pull reconstruye SQLite.
+
+---
+
+## 10. Registro de cambios
 
 | Fecha | Cambio |
 |-------|--------|
+| 2026-06-12 | Proyector hub → Postgres espejo (Neon) |
 | 2026-06-07 18:30 | Documento inicial |

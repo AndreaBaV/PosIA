@@ -19,4 +19,7 @@ enum MetodoPago {
 
 	/// Venta registrada a credito o fiado.
 	credito,
+
+	/// Pago por transferencia bancaria.
+	transferencia,
 }

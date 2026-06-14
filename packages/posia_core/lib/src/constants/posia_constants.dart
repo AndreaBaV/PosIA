@@ -19,7 +19,7 @@ const String TIENDA_DEMO_NORTE_ID = '660e8400-e29b-41d4-a716-446655440002';
 const String CAJA_DEMO_1_ID = '770e8400-e29b-41d4-a716-446655440001';
 
 /// Version actual del esquema local SQLite.
-const int SCHEMA_VERSION = 5;
+const int SCHEMA_VERSION = 6;
 
 /// Identificador de categoria virtual "Todos" en caja.
 const String CATEGORIA_TODOS_ID = '__todos__';

@@ -27,6 +27,7 @@ class LineaVenta {
 		required this.reglaPrecio,
 		this.loteId,
 		this.etiquetaLote,
+		this.descuentoLinea = 0.0,
 	});
 
 	/// Identificador del producto.
@@ -50,10 +51,13 @@ class LineaVenta {
 	/// Etiqueta legible del lote.
 	final String? etiquetaLote;
 
+	/// Descuento absoluto en la linea (MXN).
+	final double descuentoLinea;
+
 	/// Calcula subtotal de la linea vendida.
-	///
-	/// Retorna cantidad por precio unitario.
 	double calcularSubtotal() {
-		return cantidad * precioUnitario;
+		final bruto = cantidad * precioUnitario;
+		final neto = bruto - descuentoLinea;
+		return neto < 0.0 ? 0.0 : neto;
 	}
 }

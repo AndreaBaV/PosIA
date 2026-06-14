@@ -27,6 +27,7 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 	late final TextEditingController _notasController;
 	late bool _credito;
 	late bool _activo;
+	String? _listaPreciosId;
 
 	@override
 	void initState() {
@@ -41,6 +42,7 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 		_notasController = TextEditingController(text: c.notas);
 		_credito = c.creditoHabilitado;
 		_activo = c.activo;
+		_listaPreciosId = c.listaPreciosId;
 	}
 
 	@override
@@ -118,6 +120,36 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 									labelText: 'Direccion',
 									border: OutlineInputBorder(),
 								),
+							),
+							const SizedBox(height: 8.0),
+							Consumer(
+								builder: (context, ref, _) {
+									final listasAsync = ref.watch(_listasClienteProvider);
+									return listasAsync.when(
+										data: (listas) => DropdownButtonFormField<String?>(
+											value: _listaPreciosId,
+											decoration: const InputDecoration(
+												labelText: 'Lista de precios',
+												border: OutlineInputBorder(),
+											),
+											items: [
+												const DropdownMenuItem<String?>(
+													value: null,
+													child: Text('Precio normal'),
+												),
+												...listas.map(
+													(l) => DropdownMenuItem<String?>(
+														value: l.id,
+														child: Text(l.nombre),
+													),
+												),
+											],
+											onChanged: (v) => setState(() => _listaPreciosId = v),
+										),
+										loading: () => const LinearProgressIndicator(),
+										error: (e, _) => Text('$e'),
+									);
+								},
 							),
 							const SizedBox(height: 8.0),
 							TextField(
@@ -209,6 +241,7 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 				notas: _notasController.text.trim(),
 				creditoHabilitado: _credito,
 				activo: _activo,
+				listaPreciosId: _listaPreciosId,
 			),
 		);
 		if (!mounted) {
@@ -219,6 +252,11 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 		);
 	}
 }
+
+final _listasClienteProvider = FutureProvider<List<ListaPrecios>>((ref) async {
+	final servicio = await ref.watch(servicioAdminProvider.future);
+	return servicio.listarListasPrecios();
+});
 
 class _ColumnStat extends StatelessWidget {
 	const _ColumnStat(this.etiqueta, this.valor);

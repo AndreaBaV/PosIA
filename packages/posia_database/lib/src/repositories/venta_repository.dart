@@ -34,6 +34,10 @@ class VentaRepository {
 				'vendedor_id': venta.vendedorId,
 				'estado': venta.estado.name,
 				'turno_caja_id': venta.turnoCajaId,
+				'descuento_ticket': venta.descuentoTicket,
+				'monto_efectivo': venta.montoEfectivo,
+				'monto_tarjeta': venta.montoTarjeta,
+				'monto_transferencia': venta.montoTransferencia,
 			});
 			for (final linea in venta.lineas) {
 				await transaccion.insert('sale_lines', {
@@ -45,6 +49,7 @@ class VentaRepository {
 					'regla_precio': linea.reglaPrecio.name,
 					'lote_id': linea.loteId,
 					'etiqueta_lote': linea.etiquetaLote,
+					'descuento_linea': linea.descuentoLinea,
 				});
 			}
 		});
@@ -146,9 +151,49 @@ class VentaRepository {
 					'regla_precio': linea.reglaPrecio.name,
 					'lote_id': linea.loteId,
 					'etiqueta_lote': linea.etiquetaLote,
+					'descuento_linea': linea.descuentoLinea,
 				});
 			}
 		});
+	}
+
+	/// Resumen de ventas agrupado por producto en periodo.
+	Future<List<ResumenProductoVenta>> resumenPorProducto(FiltroVentas filtro) async {
+		final ventas = await listarConFiltro(filtro);
+		final acumulado = <String, ResumenProductoVenta>{};
+		for (final venta in ventas) {
+			if (venta.estado != EstadoVenta.completada) {
+				continue;
+			}
+			for (final linea in venta.lineas) {
+				final previo = acumulado[linea.productoId];
+				acumulado[linea.productoId] = ResumenProductoVenta(
+					productoId: linea.productoId,
+					nombreProducto: linea.nombreProducto,
+					cantidadVendida: (previo?.cantidadVendida ?? 0.0) + linea.cantidad,
+					totalVendido: redondearMonto(
+						(previo?.totalVendido ?? 0.0) + linea.calcularSubtotal(),
+					),
+				);
+			}
+		}
+		final lista = acumulado.values.toList()
+			..sort((a, b) => b.totalVendido.compareTo(a.totalVendido));
+		return lista;
+	}
+
+	/// Totales de ventas por metodo de pago en periodo.
+	Future<Map<MetodoPago, double>> totalesPorMetodoPago(FiltroVentas filtro) async {
+		final ventas = await listarConFiltro(filtro);
+		final acumulado = <MetodoPago, double>{};
+		for (final venta in ventas) {
+			if (venta.estado != EstadoVenta.completada) {
+				continue;
+			}
+			acumulado[venta.metodoPago] =
+				redondearMonto((acumulado[venta.metodoPago] ?? 0.0) + venta.total);
+		}
+		return acumulado;
 	}
 
 	/// Actualiza estado de una venta.
@@ -195,6 +240,7 @@ class VentaRepository {
 					reglaPrecio: ReglaPrecio.values.byName(fila['regla_precio'] as String),
 					loteId: fila['lote_id'] as String?,
 					etiquetaLote: fila['etiqueta_lote'] as String?,
+					descuentoLinea: (fila['descuento_linea'] as num?)?.toDouble() ?? 0.0,
 				),
 			)
 			.toList();
@@ -211,6 +257,10 @@ class VentaRepository {
 			vendedorId: filaVenta['vendedor_id'] as String?,
 			estado: EstadoVenta.values.byName(estadoNombre),
 			turnoCajaId: filaVenta['turno_caja_id'] as String?,
+			descuentoTicket: (filaVenta['descuento_ticket'] as num?)?.toDouble() ?? 0.0,
+			montoEfectivo: (filaVenta['monto_efectivo'] as num?)?.toDouble(),
+			montoTarjeta: (filaVenta['monto_tarjeta'] as num?)?.toDouble(),
+			montoTransferencia: (filaVenta['monto_transferencia'] as num?)?.toDouble(),
 		);
 	}
 

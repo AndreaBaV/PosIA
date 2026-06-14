@@ -74,12 +74,20 @@ class ServicioCorteCaja {
 		var totalEfectivo = turno.totalEfectivo;
 		var totalTarjeta = turno.totalTarjeta;
 		var totalTransferencia = turno.totalTransferencia;
-		if (venta.metodoPago == MetodoPago.efectivo) {
-			totalEfectivo = totalEfectivo + venta.total;
-		} else if (venta.metodoPago == MetodoPago.tarjeta) {
-			totalTarjeta = totalTarjeta + venta.total;
-		} else {
-			totalTransferencia = totalTransferencia + venta.total;
+		switch (venta.metodoPago) {
+			case MetodoPago.efectivo:
+				totalEfectivo = totalEfectivo + venta.total;
+			case MetodoPago.tarjeta:
+				totalTarjeta = totalTarjeta + venta.total;
+			case MetodoPago.transferencia:
+				totalTransferencia = totalTransferencia + venta.total;
+			case MetodoPago.mixto:
+				totalEfectivo = totalEfectivo + (venta.montoEfectivo ?? 0.0);
+				totalTarjeta = totalTarjeta + (venta.montoTarjeta ?? 0.0);
+				totalTransferencia =
+					totalTransferencia + (venta.montoTransferencia ?? 0.0);
+			case MetodoPago.credito:
+				break;
 		}
 		final actualizado = TurnoCaja(
 			id: turno.id,

@@ -7,6 +7,7 @@
 library;
 
 import 'package:posia_pricing/posia_pricing.dart';
+import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
 /// Implementa [RepositorioPrecio] sobre SQLite local.
@@ -148,5 +149,82 @@ class PrecioRepository implements RepositorioPrecio {
 			},
 			conflictAlgorithm: ConflictAlgorithm.replace,
 		);
+	}
+
+	/// Lista catalogos de precios activos.
+	Future<List<ListaPrecios>> listarListasActivas() async {
+		final filas = await _baseDatos.query(
+			'price_lists',
+			where: 'activa = 1',
+			orderBy: 'nombre ASC',
+		);
+		return filas
+			.map(
+				(f) => ListaPrecios(
+					id: f['id'] as String,
+					nombre: f['nombre'] as String,
+					activa: (f['activa'] as int) == 1,
+				),
+			)
+			.toList();
+	}
+
+	/// Lista todos los catalogos de precios.
+	Future<List<ListaPrecios>> listarTodasListas() async {
+		final filas = await _baseDatos.query(
+			'price_lists',
+			orderBy: 'nombre ASC',
+		);
+		return filas
+			.map(
+				(f) => ListaPrecios(
+					id: f['id'] as String,
+					nombre: f['nombre'] as String,
+					activa: (f['activa'] as int) == 1,
+				),
+			)
+			.toList();
+	}
+
+	/// Guarda lista de precios.
+	Future<void> guardarLista(ListaPrecios lista) async {
+		await _baseDatos.insert(
+			'price_lists',
+			{
+				'id': lista.id,
+				'nombre': lista.nombre,
+				'activa': lista.activa ? 1 : 0,
+			},
+			conflictAlgorithm: ConflictAlgorithm.replace,
+		);
+	}
+
+	/// Precios de productos en una lista.
+	Future<Map<String, double>> listarPreciosDeLista(String listaId) async {
+		final filas = await _baseDatos.query(
+			'price_list_items',
+			where: 'lista_precios_id = ?',
+			whereArgs: [listaId],
+		);
+		return {
+			for (final f in filas)
+				f['producto_id'] as String: f['precio_unitario'] as double,
+		};
+	}
+
+	/// Elimina lista y sus precios asociados.
+	Future<void> eliminarLista(String listaId) async {
+		await _baseDatos.transaction((tx) async {
+			await tx.delete(
+				'price_list_items',
+				where: 'lista_precios_id = ?',
+				whereArgs: [listaId],
+			);
+			await tx.delete(
+				'price_lists',
+				where: 'id = ?',
+				whereArgs: [listaId],
+			);
+		});
 	}
 }

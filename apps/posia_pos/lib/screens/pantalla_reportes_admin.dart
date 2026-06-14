@@ -4,8 +4,9 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:posia_core/posia_core.dart' show formatearMoneda;
+import 'package:posia_core/posia_core.dart';
 import 'package:posia_database/posia_database.dart';
+
 import '../providers/admin_providers.dart';
 
 class PantallaReportesAdmin extends ConsumerWidget {
@@ -42,6 +43,29 @@ class PantallaReportesAdmin extends ConsumerWidget {
 							),
 						),
 						const Divider(),
+						Text('Top productos (7 dias)',
+							style: Theme.of(context).textTheme.titleLarge),
+						if (datos.topProductos.isEmpty)
+							const ListTile(title: Text('Sin ventas en el periodo')),
+						...datos.topProductos.take(10).map(
+							(r) => ListTile(
+								leading: const Icon(Icons.inventory_2),
+								title: Text(r.nombreProducto),
+								subtitle: Text('${r.cantidadVendida.toStringAsFixed(1)} uds'),
+								trailing: Text(formatearMoneda(r.totalVendido)),
+							),
+						),
+						const Divider(),
+						Text('Ventas por metodo de pago',
+							style: Theme.of(context).textTheme.titleLarge),
+						...datos.porMetodoPago.entries.map(
+							(e) => ListTile(
+								leading: const Icon(Icons.payments),
+								title: Text(_etiquetaMetodo(e.key)),
+								trailing: Text(formatearMoneda(e.value)),
+							),
+						),
+						const Divider(),
 						Text('Alertas de faltantes',
 							style: Theme.of(context).textTheme.titleLarge),
 						if (datos.alertas.isEmpty)
@@ -63,12 +87,34 @@ class PantallaReportesAdmin extends ConsumerWidget {
 		);
 	}
 
+	String _etiquetaMetodo(MetodoPago metodo) {
+		switch (metodo) {
+			case MetodoPago.efectivo:
+				return 'Efectivo';
+			case MetodoPago.tarjeta:
+				return 'Tarjeta';
+			case MetodoPago.mixto:
+				return 'Mixto';
+			case MetodoPago.credito:
+				return 'Credito / Fiado';
+			case MetodoPago.transferencia:
+				return 'Transferencia';
+		}
+	}
+
 	void _exportarCsv(BuildContext context, _DatosReporte datos) {
 		final lineas = <String>[
 			'tipo,nombre,detalle,valor',
 			...datos.resumenVendedores.map(
 				(r) =>
 					'vendedor,"${r.nombreVendedor}",${r.cantidadVentas} ventas,${r.totalVendido}',
+			),
+			...datos.topProductos.map(
+				(r) =>
+					'producto,"${r.nombreProducto}",${r.cantidadVendida} uds,${r.totalVendido}',
+			),
+			...datos.porMetodoPago.entries.map(
+				(e) => 'pago,${_etiquetaMetodo(e.key)},,${e.value}',
 			),
 			...datos.alertas.map(
 				(a) =>
@@ -83,8 +129,16 @@ class PantallaReportesAdmin extends ConsumerWidget {
 }
 
 class _DatosReporte {
-	const _DatosReporte({required this.resumenVendedores, required this.alertas});
+	const _DatosReporte({
+		required this.resumenVendedores,
+		required this.topProductos,
+		required this.porMetodoPago,
+		required this.alertas,
+	});
+
 	final List<ResumenVendedor> resumenVendedores;
+	final List<ResumenProductoVenta> topProductos;
+	final Map<MetodoPago, double> porMetodoPago;
 	final List<AlertaFaltante> alertas;
 }
 
@@ -93,6 +147,8 @@ final _reporteProvider = FutureProvider<_DatosReporte>((ref) async {
 	final filtro = servicio.filtroVentasPeriodo(dias: 7);
 	return _DatosReporte(
 		resumenVendedores: await servicio.obtenerResumenPorVendedor(filtro),
+		topProductos: await servicio.obtenerResumenPorProducto(filtro),
+		porMetodoPago: await servicio.obtenerTotalesPorMetodoPago(filtro),
 		alertas: await servicio.obtenerAlertasFaltantes(),
 	);
 });

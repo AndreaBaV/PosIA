@@ -94,5 +94,8 @@ class PosiaLocalDatabase {
 		if (versionAnterior < 5 && versionNueva >= 5) {
 			await MigracionesEsquema.migrarVersion4A5(base);
 		}
+		if (versionAnterior < 6 && versionNueva >= 6) {
+			await MigracionesEsquema.migrarVersion5A6(base);
+		}
 	}
 }

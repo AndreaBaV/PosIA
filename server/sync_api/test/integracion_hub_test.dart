@@ -112,7 +112,7 @@ void main() {
 		final respuesta = await http.post(
 			Uri.parse('$urlBase/v1/events'),
 			headers: {'Content-Type': 'application/json'},
-			body: jsonEncode({'events': []}),
+			body: jsonEncode(<String, Object?>{'events': <Object?>[]}),
 		);
 		expect(respuesta.statusCode, 400);
 	});

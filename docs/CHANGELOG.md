@@ -7,6 +7,26 @@ Historial consolidado de implementaciones del POS de escritorio.
 
 ---
 
+## 2026-06-12 — v6.2 (multipago, descuentos, favoritos, reportes)
+
+Documentacion: [PENDIENTES_V6.2.md](PENDIENTES_V6.2.md)
+
+### Caja
+- Dialogo de cobro: efectivo (cambio), tarjeta, transferencia, mixto, credito
+- Descuento por linea (tocar carrito) y descuento ticket
+- Barra de productos favoritos
+
+### Admin
+- Listas de precios (CRUD) + selector en ficha cliente
+- Estrella favorito en catalogo productos
+- Reportes: top productos + ventas por metodo de pago
+
+### Backend
+- Schema SQLite v6: descuentos, montos mixto, costo_unitario, favorito_caja, price_lists
+- `CobroRequest`, `ServicioCaja.cobrar(request)`, corte de caja multipago
+
+---
+
 ## 2026-06-12 — v6.1 (productos, inventario, fichas)
 
 Documentacion: [PENDIENTES_V6.1.md](PENDIENTES_V6.1.md)

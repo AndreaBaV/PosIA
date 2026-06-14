@@ -15,6 +15,7 @@ import 'package:posia_hardware/posia_hardware.dart';
 import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/app_providers.dart';
+import '../widgets/dialogo_cobro.dart';
 
 /// Interfaz de venta con grilla de productos, carrito y barra de acciones.
 class PantallaCaja extends ConsumerStatefulWidget {
@@ -120,6 +121,29 @@ class _ConstruirLayoutCaja extends ConsumerWidget {
 								ref.read(carritoNotifierProvider.notifier).seleccionarCategoria(id);
 							},
 						),
+					if (estado.favoritos.isNotEmpty)
+						SizedBox(
+							height: 72.0,
+							child: ListView.separated(
+								scrollDirection: Axis.horizontal,
+								padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+								itemCount: estado.favoritos.length,
+								separatorBuilder: (_, __) => const SizedBox(width: 8.0),
+								itemBuilder: (context, indice) {
+									final producto = estado.favoritos[indice];
+									return ActionChip(
+										avatar: const Icon(Icons.star, size: 18.0, color: Colors.amber),
+										label: Text(
+											producto.nombre,
+											overflow: TextOverflow.ellipsis,
+										),
+										onPressed: () {
+											_manejarSeleccionProducto(context, ref, producto);
+										},
+									);
+								},
+							),
+						),
 					Expanded(
 						child: Row(
 							children: [
@@ -138,6 +162,9 @@ class _ConstruirLayoutCaja extends ConsumerWidget {
 										lineas: estado.lineas,
 										alEliminarLinea: (indice) {
 											ref.read(carritoNotifierProvider.notifier).eliminarLinea(indice);
+										},
+										alTocarLinea: (indice) {
+											_mostrarDescuentoLinea(context, ref, indice, estado.lineas[indice]);
 										},
 									),
 								),
@@ -308,6 +335,45 @@ class _ConstruirLayoutCaja extends ConsumerWidget {
 				);
 			},
 		);
+	}
+
+	Future<void> _mostrarDescuentoLinea(
+		BuildContext context,
+		WidgetRef ref,
+		int indice,
+		LineaCarrito linea,
+	) async {
+		final ctrl = TextEditingController(
+			text: linea.descuentoLinea > 0 ? '${linea.descuentoLinea}' : '',
+		);
+		final descuento = await showDialog<double>(
+			context: context,
+			builder: (ctx) => AlertDialog(
+				title: Text('Descuento: ${linea.producto.nombre}'),
+				content: TextField(
+					controller: ctrl,
+					keyboardType: const TextInputType.numberWithOptions(decimal: true),
+					decoration: const InputDecoration(
+						labelText: 'Descuento (\$)',
+						border: OutlineInputBorder(),
+					),
+				),
+				actions: [
+					TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+					FilledButton(
+						onPressed: () => Navigator.pop(ctx, double.tryParse(ctrl.text) ?? 0.0),
+						child: const Text('Aplicar'),
+					),
+				],
+			),
+		);
+		ctrl.dispose();
+		if (descuento == null) {
+			return;
+		}
+		final servicio = await ref.read(servicioCajaProvider.future);
+		servicio.aplicarDescuentoLinea(indice, descuento);
+		await ref.read(carritoNotifierProvider.notifier).recargar();
 	}
 }
 
@@ -520,10 +586,7 @@ class _BarraAccionesCaja extends ConsumerWidget {
 		);
 	}
 
-	/// Ejecuta cobro en efectivo y muestra confirmacion visual.
-	///
-	/// [context] Contexto de navegacion.
-	/// [ref] Referencia Riverpod.
+	/// Ejecuta cobro con dialogo multipago y muestra confirmacion visual.
 	Future<void> _ejecutarCobro(BuildContext context, WidgetRef ref) async {
 		final servicio = await ref.read(servicioCajaProvider.future);
 		final error = await servicio.validarCobro();
@@ -540,7 +603,23 @@ class _BarraAccionesCaja extends ConsumerWidget {
 			);
 			return;
 		}
-		final venta = await servicio.cobrar(MetodoPago.efectivo);
+		final cliente = servicio.obtenerClienteActivo();
+		final request = await mostrarDialogoCobro(
+			context: context,
+			subtotal: servicio.calcularTotalCarrito(),
+			creditoDisponible: cliente?.creditoHabilitado ?? false,
+		);
+		if (request == null || !context.mounted) {
+			return;
+		}
+		final errorCobro = await servicio.validarCobroRequest(request);
+		if (errorCobro != null && context.mounted) {
+			ScaffoldMessenger.of(context).showSnackBar(
+				SnackBar(content: Text(errorCobro), backgroundColor: PosiaColors.cancelar),
+			);
+			return;
+		}
+		final venta = await servicio.cobrar(request);
 		await ref.read(carritoNotifierProvider.notifier).recargar();
 		if (!context.mounted || venta == null) {
 			return;
@@ -550,6 +629,7 @@ class _BarraAccionesCaja extends ConsumerWidget {
 		final textoTicket = generarTextoTicket(
 			venta: venta,
 			nombreTienda: tienda?.nombre ?? 'Tienda',
+			montoRecibido: request.montoRecibido,
 		);
 		final hardware = await ref.read(hardwareRegistryProvider.future);
 		await hardware.obtenerImpresora().imprimirTicket(textoTicket);

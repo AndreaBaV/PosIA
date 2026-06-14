@@ -21,6 +21,7 @@ class PanelCarrito extends StatelessWidget {
 	const PanelCarrito({
 		required this.lineas,
 		required this.alEliminarLinea,
+		this.alTocarLinea,
 		super.key,
 	});
 
@@ -29,6 +30,9 @@ class PanelCarrito extends StatelessWidget {
 
 	/// Accion al eliminar linea por indice.
 	final ValueChanged<int> alEliminarLinea;
+
+	/// Accion al tocar linea (ej. descuento).
+	final ValueChanged<int>? alTocarLinea;
 
 	@override
 	Widget build(BuildContext context) {
@@ -82,6 +86,9 @@ class PanelCarrito extends StatelessWidget {
 								itemBuilder: (context, indice) {
 									final linea = lineas[indice];
 									return ListTile(
+										onTap: alTocarLinea != null
+											? () => alTocarLinea!(indice)
+											: null,
 										leading: CircleAvatar(
 											backgroundColor: PosiaColors.cobrar,
 											child: Text(
@@ -114,6 +121,9 @@ class PanelCarrito extends StatelessWidget {
 		}
 		if (linea.producto.moduloVertical == ModuloVertical.carniceria) {
 			return '${formatearPesoKg(linea.cantidad)} · ${formatearMoneda(linea.precioUnitario)}/kg';
+		}
+		if (linea.descuentoLinea > 0.0) {
+			return '${formatearMoneda(linea.precioUnitario)} · desc ${formatearMoneda(linea.descuentoLinea)}';
 		}
 		return formatearMoneda(linea.precioUnitario);
 	}

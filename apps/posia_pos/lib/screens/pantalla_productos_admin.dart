@@ -139,6 +139,27 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 													trailing: Row(
 														mainAxisSize: MainAxisSize.min,
 														children: [
+															IconButton(
+																icon: Icon(
+																	producto.favoritoCaja
+																		? Icons.star
+																		: Icons.star_border,
+																	color: producto.favoritoCaja
+																		? Colors.amber
+																		: null,
+																),
+																tooltip: 'Favorito en caja',
+																onPressed: () async {
+																	final servicio = await ref.read(
+																		servicioAdminProvider.future,
+																	);
+																	await servicio.establecerFavoritoProducto(
+																		producto.id,
+																		!producto.favoritoCaja,
+																	);
+																	ref.invalidate(_productosCatalogoProvider);
+																},
+															),
 															Text(
 																formatearMoneda(producto.precioBase),
 																style: const TextStyle(

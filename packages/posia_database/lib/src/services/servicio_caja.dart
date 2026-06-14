@@ -330,10 +330,14 @@ class ServicioCaja {
 
 	/// Cierra venta, persiste, ajusta inventario y encola sync.
 	///
-	/// [metodoPago] Forma de pago seleccionada.
-	/// Retorna venta persistida o null si carrito vacio.
-	Future<Venta?> cobrar(MetodoPago metodoPago) async {
+	/// [request] Forma de pago y descuentos.
+	/// Retorna venta persistida o null si carrito vacio o validacion falla.
+	Future<Venta?> cobrar(CobroRequest request) async {
 		if (_lineasCarrito.isEmpty) {
+			return null;
+		}
+		final errorCobro = await validarCobroRequest(request);
+		if (errorCobro != null) {
 			return null;
 		}
 		final lineasVenta = _lineasCarrito
@@ -346,26 +350,47 @@ class ServicioCaja {
 					reglaPrecio: linea.reglaPrecio,
 					loteId: linea.loteId,
 					etiquetaLote: linea.etiquetaLote,
+					descuentoLinea: linea.descuentoLinea,
 				),
 			)
 			.toList();
-		final errorCobro = await validarCobro();
-		if (errorCobro != null) {
-			return null;
-		}
 		final turno = await _servicioCorteCaja?.obtenerTurnoAbierto();
-		final total = Venta.calcularTotalDesdeLineas(lineasVenta);
+		final total = Venta.calcularTotalDesdeLineas(
+			lineasVenta,
+			descuentoTicket: request.descuentoTicket,
+		);
+		double? montoEfectivo;
+		double? montoTarjeta;
+		double? montoTransferencia;
+		switch (request.metodoPago) {
+			case MetodoPago.efectivo:
+				montoEfectivo = total;
+			case MetodoPago.tarjeta:
+				montoTarjeta = total;
+			case MetodoPago.transferencia:
+				montoTransferencia = total;
+			case MetodoPago.mixto:
+				montoEfectivo = request.montoEfectivo;
+				montoTarjeta = request.montoTarjeta;
+				montoTransferencia = request.montoTransferencia;
+			case MetodoPago.credito:
+				break;
+		}
 		final venta = Venta(
 			id: _generadorId.v4(),
 			tiendaId: _tiendaId,
 			cajaId: _cajaId,
 			clienteId: _clienteActivo?.id,
 			lineas: lineasVenta,
-			metodoPago: metodoPago,
+			metodoPago: request.metodoPago,
 			total: total,
 			creadaEn: DateTime.now().toUtc(),
 			vendedorId: _vendedorActivo?.id,
 			turnoCajaId: turno?.id,
+			descuentoTicket: request.descuentoTicket,
+			montoEfectivo: montoEfectivo,
+			montoTarjeta: montoTarjeta,
+			montoTransferencia: montoTransferencia,
 		);
 		await _ventaRepository.guardar(venta);
 		if (turno != null && _servicioCorteCaja != null) {
@@ -376,6 +401,53 @@ class ServicioCaja {
 		await _registrarEventoVenta(venta);
 		vaciarCarrito();
 		return venta;
+	}
+
+	/// Valida cobro con multipago y credito.
+	Future<String?> validarCobroRequest(CobroRequest request) async {
+		final errorBase = await validarCobro();
+		if (errorBase != null) {
+			return errorBase;
+		}
+		final total = calcularTotalCarrito() - request.descuentoTicket;
+		if (total <= 0.0) {
+			return 'Total invalido';
+		}
+		if (request.metodoPago == MetodoPago.credito) {
+			final cliente = _clienteActivo;
+			if (cliente == null) {
+				return 'Seleccione cliente para venta a credito';
+			}
+			if (!cliente.creditoHabilitado) {
+				return 'Cliente sin credito habilitado';
+			}
+		}
+		if (request.metodoPago == MetodoPago.mixto) {
+			final efectivo = request.montoEfectivo ?? 0.0;
+			final tarjeta = request.montoTarjeta ?? 0.0;
+			final transferencia = request.montoTransferencia ?? 0.0;
+			final suma = redondearMonto(efectivo + tarjeta + transferencia);
+			if ((suma - total).abs() > 0.01) {
+				return 'Montos mixtos deben sumar ${formatearMoneda(total)}';
+			}
+		}
+		return null;
+	}
+
+	/// Aplica descuento absoluto a una linea del carrito.
+	void aplicarDescuentoLinea(int indice, double descuento) {
+		if (indice < 0 || indice >= _lineasCarrito.length) {
+			return;
+		}
+		final linea = _lineasCarrito[indice];
+		_lineasCarrito[indice] = linea.copiarCon(
+			descuentoLinea: descuento < 0.0 ? 0.0 : descuento,
+		);
+	}
+
+	/// Lista productos favoritos configurados para caja rapida.
+	Future<List<Producto>> listarFavoritosCaja() async {
+		return _productoRepository.listarFavoritosCaja(_tiendaId);
 	}
 
 	/// Obtiene total vendido en el dia para la tienda activa.

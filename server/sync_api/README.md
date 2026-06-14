@@ -45,7 +45,19 @@ cd server/sync_api
 docker compose up -d --build
 ```
 
-La tabla `sync_events` se crea automaticamente al arrancar.
+La tabla `sync_events` y el **espejo operativo** (`products`, `sales`, `customers`, etc.) se crean al arrancar.
+
+Al recibir eventos (POST `/v1/events`), el hub los persiste en `sync_events` y los **proyecta** a tablas espejo via `ProyectorEventosPostgres` (mismo modelo que SQLite local).
+
+Scripts utiles con Neon:
+
+```bash
+dart run bin/probar_neon.dart          # verifica conexion y esquema
+dart run bin/probar_neon.dart --smoke  # inserta producto de prueba proyectado
+dart run bin/consultar_neon.dart       # conteos por tabla
+dart run bin/ver_eventos_neon.dart     # detalle de sync_events
+dart run bin/reproyectar_neon.dart     # backfill eventos → tablas espejo
+```
 
 ## Pruebas
 

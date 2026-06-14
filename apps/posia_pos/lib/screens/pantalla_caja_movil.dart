@@ -383,7 +383,9 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 		if (confirmar != true) {
 			return;
 		}
-		final venta = await servicio.cobrar(MetodoPago.efectivo);
+		final venta = await servicio.cobrar(
+			CobroRequest(metodoPago: MetodoPago.efectivo),
+		);
 		await ref.read(carritoNotifierProvider.notifier).recargar();
 		if (!mounted || venta == null) {
 			return;

@@ -12,6 +12,7 @@
 |------|--------|-----------|
 | v6.0 | ✅ Completada | [PENDIENTES_V6.md](PENDIENTES_V6.md) |
 | v6.1 | ✅ Completada | [PENDIENTES_V6.1.md](PENDIENTES_V6.1.md) |
+| v6.2 | ✅ Completada | [PENDIENTES_V6.2.md](PENDIENTES_V6.2.md) |
 
 ### Entregado en v6.0
 - Login / seleccion de tienda al iniciar
@@ -23,6 +24,14 @@
 - Ventas hoy: detalle expandible por tienda
 - UI vendedores + busqueda en secciones clave
 - Menu admin: carniceria/farmacia consolidados en productos
+
+### Entregado en v6.2
+- Multipago: efectivo, tarjeta, transferencia, mixto, credito/fiado
+- Descuentos por linea y por ticket
+- Productos favoritos en caja (barra rapida)
+- Admin listas de precios + selector en ficha cliente
+- Reportes: top productos y ventas por metodo de pago
+- Schema v6: costo unitario, descuentos, montos mixto
 
 ### Entregado en v6.1
 - Schema v5: campos extendidos clientes, proveedores, productos
@@ -37,7 +46,7 @@
 
 | Metrica | Valor |
 |---------|-------|
-| **Madurez global** | **88 / 100** |
+| **Madurez global** | **92 / 100** |
 | **Uso recomendado hoy** | Demo y operación en tienda piloto |
 | **Listo para produccion** | Parcial — v6.1 requerida para inventario y catalogo completo |
 
@@ -76,8 +85,9 @@
 
 | Funcion | Motivo |
 |---------|--------|
-| Multipago (tarjeta/mixto/credito) | Alcance acordado: solo efectivo |
 | Impresora USB directa | Red ESC/POS + archivo cubren produccion |
+| CFDI / timbrado | Planificado v7 |
+| Auth multi-usuario | Planificado v7 |
 
 ---
 

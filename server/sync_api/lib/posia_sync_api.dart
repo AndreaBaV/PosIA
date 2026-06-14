@@ -9,6 +9,8 @@ library;
 export 'src/almacen_eventos.dart';
 export 'src/almacen_eventos_archivo.dart';
 export 'src/almacen_eventos_postgres.dart';
+export 'src/esquema_pos_postgres.dart';
+export 'src/proyector_eventos_postgres.dart';
 export 'src/config_entorno.dart';
 export 'src/enrutador_api.dart';
 export 'src/evento_hub.dart';

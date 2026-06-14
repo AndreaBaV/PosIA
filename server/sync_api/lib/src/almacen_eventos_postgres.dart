@@ -7,11 +7,14 @@
 library;
 
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:postgres/postgres.dart';
 
 import 'almacen_eventos.dart';
+import 'esquema_pos_postgres.dart';
 import 'evento_hub.dart';
+import 'proyector_eventos_postgres.dart';
 
 /// Implementa [AlmacenEventos] con tabla sync_events en Postgres.
 class AlmacenEventosPostgres implements AlmacenEventos {
@@ -27,28 +30,13 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 	@override
 	Future<void> inicializar() async {
 		final conexion = await _abrirConexion();
-		await conexion.execute('''
-			CREATE TABLE IF NOT EXISTS sync_events (
-				seq BIGSERIAL PRIMARY KEY,
-				id TEXT UNIQUE NOT NULL,
-				tenant_id TEXT NOT NULL,
-				store_id TEXT NOT NULL,
-				device_id TEXT NOT NULL,
-				type TEXT NOT NULL,
-				payload JSONB NOT NULL,
-				created_at TIMESTAMPTZ NOT NULL,
-				received_at TIMESTAMPTZ NOT NULL DEFAULT now()
-			)
-		''');
-		await conexion.execute('''
-			CREATE INDEX IF NOT EXISTS idx_sync_events_tenant_seq
-			ON sync_events (tenant_id, seq)
-		''');
+		await EsquemaPosPostgres.crearEsquemaCompleto(conexion);
 	}
 
 	@override
 	Future<int> guardarLote(List<EventoHub> eventos) async {
 		final conexion = await _abrirConexion();
+		final proyector = ProyectorEventosPostgres(conexion);
 		var aceptados = 0;
 		for (final evento in eventos) {
 			final resultado = await conexion.execute(
@@ -69,7 +57,14 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 					'createdAt': evento.creadoEn,
 				},
 			);
-			aceptados = aceptados + resultado.affectedRows;
+			if (resultado.affectedRows > 0) {
+				aceptados = aceptados + 1;
+				try {
+					await proyector.aplicar(evento);
+				} on Object catch (error) {
+					stdout.writeln('Proyector: error en ${evento.tipo} (${evento.id}): $error');
+				}
+			}
 		}
 		return aceptados;
 	}

@@ -21,6 +21,8 @@ class Producto {
 		this.unidadesPorBulto,
 		this.proveedorId,
 		this.notas = '',
+		this.costoUnitario = 0.0,
+		this.favoritoCaja = false,
 	});
 
 	final String id;
@@ -37,6 +39,8 @@ class Producto {
 	final int? unidadesPorBulto;
 	final String? proveedorId;
 	final String notas;
+	final double costoUnitario;
+	final bool favoritoCaja;
 
 	bool requierePeso() {
 		return moduloVertical == ModuloVertical.carniceria &&
@@ -62,6 +66,8 @@ class Producto {
 		int? unidadesPorBulto,
 		String? proveedorId,
 		String? notas,
+		double? costoUnitario,
+		bool? favoritoCaja,
 	}) {
 		return Producto(
 			id: id ?? this.id,
@@ -78,6 +84,8 @@ class Producto {
 			unidadesPorBulto: unidadesPorBulto ?? this.unidadesPorBulto,
 			proveedorId: proveedorId ?? this.proveedorId,
 			notas: notas ?? this.notas,
+			costoUnitario: costoUnitario ?? this.costoUnitario,
+			favoritoCaja: favoritoCaja ?? this.favoritoCaja,
 		);
 	}
 }

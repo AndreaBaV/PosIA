@@ -38,6 +38,10 @@ class Venta {
 		this.vendedorId,
 		this.estado = EstadoVenta.completada,
 		this.turnoCajaId,
+		this.descuentoTicket = 0.0,
+		this.montoEfectivo,
+		this.montoTarjeta,
+		this.montoTransferencia,
 	});
 
 	/// Identificador unico de venta.
@@ -73,6 +77,18 @@ class Venta {
 	/// Turno de caja donde se cobro.
 	final String? turnoCajaId;
 
+	/// Descuento global aplicado al ticket (MXN).
+	final double descuentoTicket;
+
+	/// Monto cobrado en efectivo (mixto o desglose).
+	final double? montoEfectivo;
+
+	/// Monto cobrado con tarjeta.
+	final double? montoTarjeta;
+
+	/// Monto cobrado por transferencia.
+	final double? montoTransferencia;
+
 	/// Indica si la venta puede anularse.
 	bool puedeAnularse() {
 		return estado == EstadoVenta.completada;
@@ -96,6 +112,10 @@ class Venta {
 		String? vendedorId,
 		EstadoVenta? estado,
 		String? turnoCajaId,
+		double? descuentoTicket,
+		double? montoEfectivo,
+		double? montoTarjeta,
+		double? montoTransferencia,
 	}) {
 		return Venta(
 			id: id ?? this.id,
@@ -109,18 +129,27 @@ class Venta {
 			vendedorId: vendedorId ?? this.vendedorId,
 			estado: estado ?? this.estado,
 			turnoCajaId: turnoCajaId ?? this.turnoCajaId,
+			descuentoTicket: descuentoTicket ?? this.descuentoTicket,
+			montoEfectivo: montoEfectivo ?? this.montoEfectivo,
+			montoTarjeta: montoTarjeta ?? this.montoTarjeta,
+			montoTransferencia: montoTransferencia ?? this.montoTransferencia,
 		);
 	}
 
 	/// Calcula total a partir de lineas si no fue provisto externamente.
 	///
 	/// [lineas] Coleccion de lineas de venta.
-	/// Retorna suma redondeada de subtotales.
-	static double calcularTotalDesdeLineas(List<LineaVenta> lineas) {
+	/// [descuentoTicket] Descuento global opcional.
+	/// Retorna suma redondeada de subtotales menos descuento ticket.
+	static double calcularTotalDesdeLineas(
+		List<LineaVenta> lineas, {
+		double descuentoTicket = 0.0,
+	}) {
 		var acumulado = 0.0;
 		for (final linea in lineas) {
 			acumulado = acumulado + linea.calcularSubtotal();
 		}
-		return redondearMonto(acumulado);
+		final neto = acumulado - descuentoTicket;
+		return redondearMonto(neto < 0.0 ? 0.0 : neto);
 	}
 }

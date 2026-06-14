@@ -201,6 +201,7 @@ class ServicioAdmin {
 			unidadesPorBulto: req.unidadesPorBulto,
 			proveedorId: req.proveedorId,
 			notas: req.notas.trim(),
+			costoUnitario: redondearMonto(req.costoUnitario),
 		);
 		await _productoRepository.guardar(producto);
 		final ahora = DateTime.now().toUtc();
@@ -1199,6 +1200,51 @@ class ServicioAdmin {
 			);
 		}
 		return acumulado.values.toList();
+	}
+
+	Future<List<ResumenProductoVenta>> obtenerResumenPorProducto(
+		FiltroVentas filtro,
+	) async {
+		return _ventaRepository.resumenPorProducto(filtro);
+	}
+
+	Future<Map<MetodoPago, double>> obtenerTotalesPorMetodoPago(
+		FiltroVentas filtro,
+	) async {
+		return _ventaRepository.totalesPorMetodoPago(filtro);
+	}
+
+	Future<List<ListaPrecios>> listarListasPrecios() async {
+		return _precioRepository?.listarTodasListas() ?? [];
+	}
+
+	Future<ListaPrecios> registrarListaPrecios(String nombre) async {
+		final repo = _precioRepository;
+		if (repo == null) {
+			throw StateError('Repositorio de precios no disponible');
+		}
+		final lista = ListaPrecios(
+			id: _generadorId.v4(),
+			nombre: nombre.trim(),
+		);
+		await repo.guardarLista(lista);
+		return lista;
+	}
+
+	Future<void> guardarPrecioLista(
+		String listaId,
+		String productoId,
+		double precio,
+	) async {
+		await _precioRepository?.guardarPrecioLista(listaId, productoId, precio);
+	}
+
+	Future<void> eliminarListaPrecios(String listaId) async {
+		await _precioRepository?.eliminarLista(listaId);
+	}
+
+	Future<void> establecerFavoritoProducto(String productoId, bool favorito) async {
+		await _productoRepository.establecerFavoritoCaja(productoId, favorito);
 	}
 
 	Future<void> _registrarEventoCategoria(Categoria categoria) async {

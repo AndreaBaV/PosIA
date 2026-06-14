@@ -34,6 +34,24 @@ class MigracionesEsquema {
 		await _agregarColumnaSiNoExiste(base, 'products', 'notas', 'TEXT NOT NULL DEFAULT ""');
 	}
 
+	/// v6.2: multipago, descuentos, favoritos, costo, listas precios.
+	static Future<void> migrarVersion5A6(Database base) async {
+		await _agregarColumnaSiNoExiste(base, 'sales', 'descuento_ticket', 'REAL NOT NULL DEFAULT 0');
+		await _agregarColumnaSiNoExiste(base, 'sales', 'monto_efectivo', 'REAL');
+		await _agregarColumnaSiNoExiste(base, 'sales', 'monto_tarjeta', 'REAL');
+		await _agregarColumnaSiNoExiste(base, 'sales', 'monto_transferencia', 'REAL');
+		await _agregarColumnaSiNoExiste(base, 'sale_lines', 'descuento_linea', 'REAL NOT NULL DEFAULT 0');
+		await _agregarColumnaSiNoExiste(base, 'products', 'costo_unitario', 'REAL NOT NULL DEFAULT 0');
+		await _agregarColumnaSiNoExiste(base, 'products', 'favorito_caja', 'INTEGER NOT NULL DEFAULT 0');
+		await base.execute('''
+			CREATE TABLE IF NOT EXISTS price_lists (
+				id TEXT PRIMARY KEY,
+				nombre TEXT NOT NULL,
+				activa INTEGER NOT NULL DEFAULT 1
+			)
+		''');
+	}
+
 	static Future<void> _agregarColumnaSiNoExiste(
 		Database base,
 		String tabla,
@@ -223,7 +241,9 @@ class MigracionesEsquema {
 				piezas_por_caja INTEGER,
 				proveedor_id TEXT,
 				unidades_por_bulto INTEGER,
-				notas TEXT NOT NULL DEFAULT ''
+				notas TEXT NOT NULL DEFAULT '',
+				costo_unitario REAL NOT NULL DEFAULT 0,
+				favorito_caja INTEGER NOT NULL DEFAULT 0
 			)
 		''');
 		await base.execute('''
@@ -260,6 +280,13 @@ class MigracionesEsquema {
 			)
 		''');
 		await base.execute('''
+			CREATE TABLE price_lists (
+				id TEXT PRIMARY KEY,
+				nombre TEXT NOT NULL,
+				activa INTEGER NOT NULL DEFAULT 1
+			)
+		''');
+		await base.execute('''
 			CREATE TABLE price_list_items (
 				lista_precios_id TEXT NOT NULL,
 				producto_id TEXT NOT NULL,
@@ -278,7 +305,11 @@ class MigracionesEsquema {
 				creada_en TEXT NOT NULL,
 				vendedor_id TEXT,
 				estado TEXT NOT NULL DEFAULT 'completada',
-				turno_caja_id TEXT
+				turno_caja_id TEXT,
+				descuento_ticket REAL NOT NULL DEFAULT 0,
+				monto_efectivo REAL,
+				monto_tarjeta REAL,
+				monto_transferencia REAL
 			)
 		''');
 		await base.execute('''
@@ -291,7 +322,8 @@ class MigracionesEsquema {
 				precio_unitario REAL NOT NULL,
 				regla_precio TEXT NOT NULL,
 				lote_id TEXT,
-				etiqueta_lote TEXT
+				etiqueta_lote TEXT,
+				descuento_linea REAL NOT NULL DEFAULT 0
 			)
 		''');
 		await base.execute('''

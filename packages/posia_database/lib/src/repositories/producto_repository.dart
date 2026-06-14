@@ -143,6 +143,8 @@ class ProductoRepository {
 			unidadesPorBulto: fila['unidades_por_bulto'] as int?,
 			proveedorId: fila['proveedor_id'] as String?,
 			notas: fila['notas'] as String? ?? '',
+			costoUnitario: (fila['costo_unitario'] as num?)?.toDouble() ?? 0.0,
+			favoritoCaja: ((fila['favorito_caja'] as int?) ?? 0) == 1,
 		);
 	}
 
@@ -166,6 +168,30 @@ class ProductoRepository {
 			'unidades_por_bulto': producto.unidadesPorBulto,
 			'proveedor_id': producto.proveedorId,
 			'notas': producto.notas,
+			'costo_unitario': producto.costoUnitario,
+			'favorito_caja': producto.favoritoCaja ? 1 : 0,
 		};
+	}
+
+	/// Lista productos marcados como favoritos de caja.
+	Future<List<Producto>> listarFavoritosCaja(String tiendaId) async {
+		final filas = await _baseDatos.query(
+			'products',
+			where: 'tienda_id = ? AND activo = 1 AND favorito_caja = 1',
+			whereArgs: [tiendaId],
+			orderBy: 'nombre ASC',
+			limit: 12,
+		);
+		return filas.map(_mapearProducto).toList();
+	}
+
+	/// Alterna marca de favorito en caja.
+	Future<void> establecerFavoritoCaja(String productoId, bool favorito) async {
+		await _baseDatos.update(
+			'products',
+			{'favorito_caja': favorito ? 1 : 0},
+			where: 'id = ?',
+			whereArgs: [productoId],
+		);
 	}
 }

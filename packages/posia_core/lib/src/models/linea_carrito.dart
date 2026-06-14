@@ -26,6 +26,7 @@ class LineaCarrito {
 		required this.reglaPrecio,
 		this.loteId,
 		this.etiquetaLote,
+		this.descuentoLinea = 0.0,
 	});
 
 	/// Producto en carrito.
@@ -46,11 +47,16 @@ class LineaCarrito {
 	/// Etiqueta de lote para impresion en ticket.
 	final String? etiquetaLote;
 
+	/// Descuento absoluto aplicado a la linea (MXN).
+	final double descuentoLinea;
+
 	/// Calcula subtotal de la linea.
 	///
-	/// Retorna cantidad multiplicada por precio unitario.
+	/// Retorna cantidad multiplicada por precio unitario menos descuento.
 	double calcularSubtotal() {
-		return cantidad * precioUnitario;
+		final bruto = cantidad * precioUnitario;
+		final neto = bruto - descuentoLinea;
+		return neto < 0.0 ? 0.0 : neto;
 	}
 
 	/// Genera copia con campos opcionales reemplazados.
@@ -63,6 +69,7 @@ class LineaCarrito {
 		ReglaPrecio? reglaPrecio,
 		String? loteId,
 		String? etiquetaLote,
+		double? descuentoLinea,
 	}) {
 		return LineaCarrito(
 			producto: producto ?? this.producto,
@@ -71,6 +78,7 @@ class LineaCarrito {
 			reglaPrecio: reglaPrecio ?? this.reglaPrecio,
 			loteId: loteId ?? this.loteId,
 			etiquetaLote: etiquetaLote ?? this.etiquetaLote,
+			descuentoLinea: descuentoLinea ?? this.descuentoLinea,
 		);
 	}
 }

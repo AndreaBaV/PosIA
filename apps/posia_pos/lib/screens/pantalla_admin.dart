@@ -15,6 +15,7 @@ import 'pantalla_clientes_admin.dart';
 import 'pantalla_corte_caja.dart';
 import 'pantalla_historial_ventas.dart';
 import 'pantalla_inventario_admin.dart';
+import 'pantalla_listas_precios_admin.dart';
 import 'pantalla_movimientos_inventario.dart';
 import 'pantalla_productos_admin.dart';
 import 'pantalla_proveedores_admin.dart';
@@ -60,6 +61,8 @@ class PantallaAdmin extends ConsumerWidget {
 							Colors.orange, const PantallaCategoriasAdmin()),
 						_tile(context, Icons.inventory_2, 'Productos', 'Catalogo unificado',
 							PosiaColors.neutro, const PantallaProductosAdmin()),
+						_tile(context, Icons.sell, 'Listas precios', 'Mayoreo y distribuidor',
+							Colors.green, const PantallaListasPreciosAdmin()),
 					]),
 					_seccion(context, 'Inventario', [
 						_tile(context, Icons.warehouse, 'Existencias', 'Multi-tienda',
