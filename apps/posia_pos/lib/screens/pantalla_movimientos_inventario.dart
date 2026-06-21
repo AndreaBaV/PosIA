@@ -21,22 +21,22 @@ class _PantallaMovimientosInventarioState
 	TipoMovimientoInventario _tipo = TipoMovimientoInventario.entrada;
 	String? _productoId;
 	final _cantidadController = TextEditingController(text: '10');
-	final _motivoController = TextEditingController(text: 'Entrada manual');
 	final _busquedaController = TextEditingController();
 	String _filtro = '';
 	bool _formularioExpandido = false;
+	String? _tiendaOperacionId;
+	String _motivoSeleccionado = motivoInventarioPredeterminado(TipoMovimientoInventario.entrada);
 
 	@override
 	void dispose() {
 		_cantidadController.dispose();
-		_motivoController.dispose();
 		_busquedaController.dispose();
 		super.dispose();
 	}
 
 	@override
 	Widget build(BuildContext context) {
-		final datosAsync = ref.watch(_movimientosDatosProvider);
+		final datosAsync = ref.watch(_movimientosDatosProvider(_tiendaOperacionId));
 		return Scaffold(
 			appBar: AppBar(title: const Text('Movimientos de inventario')),
 			body: datosAsync.when(
@@ -51,6 +51,26 @@ class _PantallaMovimientosInventarioState
 					}).toList();
 					return Column(
 						children: [
+							if (datos.tiendas.length > 1)
+								Padding(
+									padding: const EdgeInsets.fromLTRB(12.0, 12.0, 12.0, 0.0),
+									child: DropdownButtonFormField<String>(
+										initialValue: datos.tiendaId,
+										decoration: const InputDecoration(
+											labelText: 'Tienda',
+											border: OutlineInputBorder(),
+										),
+										items: datos.tiendas
+											.map(
+												(t) => DropdownMenuItem(
+													value: t.id,
+													child: Text(t.nombre),
+												),
+											)
+											.toList(),
+										onChanged: (v) => setState(() => _tiendaOperacionId = v),
+									),
+								),
 							CampoBusqueda(
 								controlador: _busquedaController,
 								sugerencia: 'Buscar movimiento...',
@@ -66,7 +86,7 @@ class _PantallaMovimientosInventarioState
 											final nombre = datos.nombresProducto[m.productoId] ?? m.productoId;
 											return ListTile(
 												leading: Icon(_iconoTipo(m.tipo)),
-												title: Text('$nombre · ${m.tipo.name}'),
+												title: Text('$nombre · ${etiquetaTipoMovimiento(m.tipo)}'),
 												subtitle: Text(
 													'${m.cantidadAnterior.toStringAsFixed(0)} → '
 													'${m.cantidadNueva.toStringAsFixed(0)} · ${m.motivo}',
@@ -98,11 +118,14 @@ class _PantallaMovimientosInventarioState
 														.map(
 															(t) => DropdownMenuItem(
 																value: t,
-																child: Text(t.name),
+																child: Text(etiquetaTipoMovimiento(t)),
 															),
 														)
 														.toList(),
-													onChanged: (v) => setState(() => _tipo = v!),
+													onChanged: (v) => setState(() {
+														_tipo = v!;
+														_motivoSeleccionado = motivoInventarioPredeterminado(_tipo);
+													}),
 													decoration: const InputDecoration(labelText: 'Tipo'),
 												),
 												DropdownButtonFormField<String>(
@@ -127,9 +150,10 @@ class _PantallaMovimientosInventarioState
 															: 'Cantidad',
 													),
 												),
-												TextField(
-													controller: _motivoController,
-													decoration: const InputDecoration(labelText: 'Motivo'),
+												SelectorMotivoInventario(
+													tipo: _tipo,
+													valor: _motivoSeleccionado,
+													alCambiar: (motivo) => setState(() => _motivoSeleccionado = motivo),
 												),
 												FilledButton(
 													onPressed: _registrar,
@@ -169,13 +193,16 @@ class _PantallaMovimientosInventarioState
 		}
 		try {
 			final servicio = await ref.read(servicioAdminProvider.future);
+			final operador = ref.read(sesionUsuarioProvider);
 			await servicio.registrarMovimientoInventario(
 				productoId: productoId,
 				tipo: _tipo,
 				cantidad: double.tryParse(_cantidadController.text) ?? 0.0,
-				motivo: _motivoController.text.trim(),
+				motivo: _motivoSeleccionado,
+				tiendaId: _tiendaOperacionId,
+				operador: operador,
 			);
-			ref.invalidate(_movimientosDatosProvider);
+			ref.invalidate(_movimientosDatosProvider(_tiendaOperacionId));
 			if (!mounted) {
 				return;
 			}
@@ -198,21 +225,35 @@ class _DatosMovimientos {
 		required this.movimientos,
 		required this.productos,
 		required this.nombresProducto,
+		required this.tiendas,
+		required this.tiendaId,
 	});
 
 	final List<MovimientoInventario> movimientos;
 	final List<Producto> productos;
 	final Map<String, String> nombresProducto;
+	final List<Tienda> tiendas;
+	final String tiendaId;
 }
 
-final _movimientosDatosProvider = FutureProvider<_DatosMovimientos>((ref) async {
-	final servicio = await ref.watch(servicioAdminProvider.future);
-	final movimientos = await servicio.listarMovimientosInventario();
-	final productos = await servicio.listarProductos();
-	final nombres = {for (final p in productos) p.id: p.nombre};
-	return _DatosMovimientos(
-		movimientos: movimientos,
-		productos: productos,
-		nombresProducto: nombres,
-	);
-});
+final _movimientosDatosProvider = FutureProvider.family<_DatosMovimientos, String?>(
+	(ref, tiendaOperacionId) async {
+		final servicio = await ref.watch(servicioAdminProvider.future);
+		final operador = ref.watch(sesionUsuarioProvider);
+		final tiendas = await servicio.obtenerTiendasPermitidas(operador: operador);
+		final tiendaId = tiendaOperacionId ?? operador?.tiendaId ?? servicio.tiendaActivaId;
+		final movimientos = await servicio.listarMovimientosInventario(
+			tiendaId: tiendaId,
+			operador: operador,
+		);
+		final productos = await servicio.listarProductos();
+		final nombres = {for (final p in productos) p.id: p.nombre};
+		return _DatosMovimientos(
+			movimientos: movimientos,
+			productos: productos,
+			nombresProducto: nombres,
+			tiendas: tiendas,
+			tiendaId: tiendaId,
+		);
+	},
+);

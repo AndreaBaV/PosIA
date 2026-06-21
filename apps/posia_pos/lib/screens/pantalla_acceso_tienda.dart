@@ -8,7 +8,6 @@ import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
-import 'pantalla_inicio.dart';
 
 /// Muestra tiendas activas para confirmar identidad operativa.
 class PantallaAccesoTienda extends ConsumerStatefulWidget {
@@ -27,94 +26,127 @@ class _PantallaAccesoTiendaState extends ConsumerState<PantallaAccesoTienda> {
 		final tiendasAsync = ref.watch(_tiendasAccesoProvider);
 		final configAsync = ref.watch(configDispositivoProvider);
 		return Scaffold(
-			body: SafeArea(
-				child: Center(
-					child: ConstrainedBox(
-						constraints: const BoxConstraints(maxWidth: 480.0),
-						child: Padding(
-							padding: const EdgeInsets.all(24.0),
-							child: Column(
-								mainAxisAlignment: MainAxisAlignment.center,
-								children: [
-									const Icon(Icons.store, size: 72.0, color: PosiaColors.cobrar),
-									const SizedBox(height: 16.0),
-									Text(
-										'Bienvenido a POSIA',
-										style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-											fontWeight: FontWeight.bold,
-										),
-									),
-									const SizedBox(height: 8.0),
-									const Text(
-										'Selecciona la tienda desde la que operaras hoy',
-										textAlign: TextAlign.center,
-									),
-									const SizedBox(height: 32.0),
-									tiendasAsync.when(
-										data: (tiendas) {
-											if (tiendas.isEmpty) {
-												return const Text('No hay tiendas activas configuradas');
-											}
-											_tiendaSeleccionadaId ??=
-												configAsync.value?.tiendaId ?? tiendas.first.id;
-											return Column(
-												children: tiendas.map((tienda) {
-													final seleccionada = _tiendaSeleccionadaId == tienda.id;
-													return Card(
-														color: seleccionada
-															? PosiaColors.cobrar.withValues(alpha: 0.1)
-															: null,
-														child: ListTile(
-															leading: Icon(
-																Icons.storefront,
-																color: seleccionada
-																	? PosiaColors.cobrar
-																	: Colors.grey,
-															),
-															title: Text(
-																tienda.nombre,
-																style: TextStyle(
-																	fontWeight: seleccionada
-																		? FontWeight.bold
-																		: FontWeight.normal,
-																),
-															),
-															subtitle: Text(tienda.direccion),
-															trailing: seleccionada
-																? const Icon(Icons.check_circle, color: PosiaColors.cobrar)
-																: null,
-															onTap: () => setState(
-																() => _tiendaSeleccionadaId = tienda.id,
-															),
-														),
-													);
-												}).toList(),
-											);
-										},
-										loading: () => const CircularProgressIndicator(),
-										error: (e, _) => Text('$e'),
-									),
-									const SizedBox(height: 24.0),
-									SizedBox(
-										width: double.infinity,
-										height: 48.0,
-										child: FilledButton.icon(
-											onPressed: _tiendaSeleccionadaId == null || _ingresando
-												? null
-												: _ingresar,
-											icon: _ingresando
-												? const SizedBox(
-													width: 20.0,
-													height: 20.0,
-													child: CircularProgressIndicator(strokeWidth: 2.0),
-												)
-												: const Icon(Icons.login),
-											label: Text(_ingresando ? 'Conectando...' : 'Entrar a caja'),
-										),
-									),
-								],
+			backgroundColor: PosiaColors.fondo,
+			body: MarcoAutenticacion(
+				titulo: 'Bienvenido',
+				subtitulo: 'Selecciona la tienda donde operará esta caja',
+				icono: Icons.store,
+				contenido: tiendasAsync.when(
+					data: (tiendas) {
+						if (tiendas.isEmpty) {
+							return const Card(
+								child: Padding(
+									padding: EdgeInsets.all(24.0),
+									child: Text('No hay tiendas activas configuradas'),
+								),
+							);
+						}
+						_tiendaSeleccionadaId ??=
+							configAsync.value?.tiendaId ?? tiendas.first.id;
+						return _listaTiendas(context, tiendas);
+					},
+					loading: () => const Center(child: CircularProgressIndicator()),
+					error: (e, _) => Text('$e'),
+				),
+				pie: SizedBox(
+					width: double.infinity,
+					height: 52.0,
+					child: FilledButton.icon(
+						onPressed: _tiendaSeleccionadaId == null || _ingresando ? null : _ingresar,
+						icon: _ingresando
+							? const SizedBox(
+								width: 20.0,
+								height: 20.0,
+								child: CircularProgressIndicator(
+									strokeWidth: 2.0,
+									color: Colors.white,
+								),
+							)
+							: const Icon(Icons.login),
+						label: Text(_ingresando ? 'Conectando...' : 'Continuar'),
+					),
+				),
+			),
+		);
+	}
+
+	Widget _listaTiendas(BuildContext context, List<Tienda> tiendas) {
+		final ancho = MediaQuery.sizeOf(context).width;
+		final columnas = ancho >= 900 ? 2 : 1;
+		if (columnas == 1) {
+			return Column(
+				children: tiendas.map((t) => _tarjetaTienda(t)).toList(),
+			);
+		}
+		return GridView.builder(
+			shrinkWrap: true,
+			physics: const NeverScrollableScrollPhysics(),
+			gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+				crossAxisCount: 2,
+				mainAxisSpacing: 12.0,
+				crossAxisSpacing: 12.0,
+				childAspectRatio: 2.4,
+			),
+			itemCount: tiendas.length,
+			itemBuilder: (context, indice) => _tarjetaTienda(tiendas[indice]),
+		);
+	}
+
+	Widget _tarjetaTienda(Tienda tienda) {
+		final seleccionada = _tiendaSeleccionadaId == tienda.id;
+		return Card(
+			elevation: seleccionada ? 2.0 : 0.5,
+			color: seleccionada ? PosiaColors.cobrar.withValues(alpha: 0.08) : null,
+			shape: RoundedRectangleBorder(
+				borderRadius: BorderRadius.circular(14.0),
+				side: BorderSide(
+					color: seleccionada ? PosiaColors.cobrar : Colors.grey.shade300,
+					width: seleccionada ? 2.0 : 1.0,
+				),
+			),
+			child: InkWell(
+				borderRadius: BorderRadius.circular(14.0),
+				onTap: () => setState(() => _tiendaSeleccionadaId = tienda.id),
+				child: Padding(
+					padding: const EdgeInsets.all(16.0),
+					child: Row(
+						children: [
+							Icon(
+								Icons.storefront,
+								color: seleccionada ? PosiaColors.cobrar : Colors.grey,
+								size: 32.0,
 							),
-						),
+							const SizedBox(width: 14.0),
+							Expanded(
+								child: Column(
+									crossAxisAlignment: CrossAxisAlignment.start,
+									mainAxisAlignment: MainAxisAlignment.center,
+									children: [
+										Text(
+											tienda.nombre,
+											style: TextStyle(
+												fontWeight: seleccionada ? FontWeight.bold : FontWeight.w600,
+												fontSize: 16.0,
+											),
+										),
+										if (tienda.direccion.isNotEmpty) ...[
+											const SizedBox(height: 4.0),
+											Text(
+												tienda.direccion,
+												maxLines: 2,
+												overflow: TextOverflow.ellipsis,
+												style: TextStyle(
+													fontSize: 13.0,
+													color: Colors.grey.shade600,
+												),
+											),
+										],
+									],
+								),
+							),
+							if (seleccionada)
+								const Icon(Icons.check_circle, color: PosiaColors.cobrar),
+						],
 					),
 				),
 			),
@@ -127,17 +159,17 @@ class _PantallaAccesoTiendaState extends ConsumerState<PantallaAccesoTienda> {
 			return;
 		}
 		setState(() => _ingresando = true);
-		final contenedor = await ref.read(contenedorServiciosProvider.future);
-		await contenedor.servicioAdmin.cambiarTiendaActiva(tiendaId);
-		ref.invalidate(contenedorServiciosProvider);
-		await ref.read(contenedorServiciosProvider.future);
-		ref.read(sesionTiendaProvider.notifier).confirmar(tiendaId);
-		if (!mounted) {
-			return;
+		try {
+			final contenedor = await ref.read(contenedorServiciosProvider.future);
+			await contenedor.servicioAdmin.cambiarTiendaActiva(tiendaId);
+			ref.invalidate(contenedorServiciosProvider);
+			await ref.read(contenedorServiciosProvider.future);
+			ref.read(sesionTiendaProvider.notifier).confirmar(tiendaId);
+		} finally {
+			if (mounted) {
+				setState(() => _ingresando = false);
+			}
 		}
-		await Navigator.of(context).pushReplacement(
-			MaterialPageRoute<void>(builder: (_) => const PantallaInicio()),
-		);
 	}
 }
 

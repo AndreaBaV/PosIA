@@ -130,6 +130,31 @@ class PrecioRepository implements RepositorioPrecio {
 		);
 	}
 
+	Future<List<PrecioClienteProducto>> listarPreciosPorCliente(String clienteId) async {
+		final filas = await _baseDatos.query(
+			'customer_product_prices',
+			where: 'cliente_id = ?',
+			whereArgs: [clienteId],
+		);
+		return filas
+			.map(
+				(fila) => PrecioClienteProducto(
+					clienteId: clienteId,
+					productoId: fila['producto_id'] as String,
+					precioUnitario: (fila['precio_unitario'] as num).toDouble(),
+				),
+			)
+			.toList();
+	}
+
+	Future<void> eliminarPrecioClienteProducto(String clienteId, String productoId) async {
+		await _baseDatos.delete(
+			'customer_product_prices',
+			where: 'cliente_id = ? AND producto_id = ?',
+			whereArgs: [clienteId, productoId],
+		);
+	}
+
 	/// Inserta precio de lista comercial.
 	///
 	/// [listaPreciosId] Identificador de lista.
@@ -148,6 +173,20 @@ class PrecioRepository implements RepositorioPrecio {
 				'precio_unitario': precioUnitario,
 			},
 			conflictAlgorithm: ConflictAlgorithm.replace,
+		);
+	}
+
+	/// Elimina precios de listas y clientes asociados al producto.
+	Future<void> eliminarPreciosPorProducto(String productoId) async {
+		await _baseDatos.delete(
+			'price_list_items',
+			where: 'producto_id = ?',
+			whereArgs: [productoId],
+		);
+		await _baseDatos.delete(
+			'customer_product_prices',
+			where: 'producto_id = ?',
+			whereArgs: [productoId],
 		);
 	}
 

@@ -13,7 +13,9 @@ import 'package:sqflite/sqflite.dart';
 
 import '../repositories/categoria_repository.dart';
 import '../repositories/cliente_repository.dart';
+import '../repositories/descuento_cliente_repository.dart';
 import '../repositories/proveedor_repository.dart';
+import '../repositories/usuario_repository.dart';
 import '../repositories/vendedor_repository.dart';
 import '../repositories/inventario_repository.dart';
 import '../repositories/lote_farmacia_repository.dart';
@@ -42,6 +44,8 @@ class DatosDemo {
 	/// [baseDatos] Conexion SQLite activa.
 	static Future<void> sembrarSiVacio(Database baseDatos) async {
 		await _sembrarOperacionesSiVacio(baseDatos);
+		await _sembrarUsuariosSiVacio(baseDatos);
+		await _sembrarDescuentosClienteDemo(baseDatos);
 		final conteo = Sqflite.firstIntValue(
 			await baseDatos.rawQuery('SELECT COUNT(*) FROM products'),
 		);
@@ -369,6 +373,7 @@ class DatosDemo {
 				nombre: 'Maria Lopez',
 				codigo: '001',
 				activo: true,
+				tiendaId: TIENDA_DEMO_CENTRO_ID,
 			),
 		);
 		await vendedorRepo.guardar(
@@ -377,6 +382,7 @@ class DatosDemo {
 				nombre: 'Juan Perez',
 				codigo: '002',
 				activo: true,
+				tiendaId: TIENDA_DEMO_NORTE_ID,
 			),
 		);
 		final proveedorRepo = ProveedorRepository(baseDatos: baseDatos);
@@ -596,6 +602,81 @@ class DatosDemo {
 				codigoBarras: '7501055300799',
 				precioBase: 28.00,
 				activo: true,
+			),
+		);
+	}
+
+	static Future<void> _sembrarUsuariosSiVacio(Database baseDatos) async {
+		final conteo = Sqflite.firstIntValue(
+			await baseDatos.rawQuery('SELECT COUNT(*) FROM usuarios'),
+		);
+		if (conteo != null && conteo > 0) {
+			return;
+		}
+		final usuarioRepo = UsuarioRepository(baseDatos: baseDatos);
+		await usuarioRepo.guardar(
+			const Usuario(
+				id: ID_USUARIO_DEMO_ADMIN,
+				nombre: 'Ana Administradora',
+				codigo: CODIGO_USUARIO_DEMO_ADMIN,
+				pin: PIN_ADMIN_DEMO,
+				rol: RolUsuario.administrador,
+				activo: true,
+			),
+		);
+		await usuarioRepo.guardar(
+			const Usuario(
+				id: ID_USUARIO_DEMO_SUP_CENTRO,
+				nombre: 'Carlos Supervisor Centro',
+				codigo: CODIGO_USUARIO_DEMO_SUP_CENTRO,
+				pin: PIN_USUARIO_DEMO_SUPERVISOR,
+				rol: RolUsuario.supervisor,
+				tiendaId: TIENDA_DEMO_CENTRO_ID,
+				activo: true,
+			),
+		);
+		await usuarioRepo.guardar(
+			const Usuario(
+				id: ID_USUARIO_DEMO_SUP_NORTE,
+				nombre: 'Laura Supervisor Norte',
+				codigo: CODIGO_USUARIO_DEMO_SUP_NORTE,
+				pin: PIN_USUARIO_DEMO_SUPERVISOR,
+				rol: RolUsuario.supervisor,
+				tiendaId: TIENDA_DEMO_NORTE_ID,
+				activo: true,
+			),
+		);
+		await usuarioRepo.guardar(
+			const Usuario(
+				id: ID_USUARIO_DEMO_EMP_CENTRO,
+				nombre: 'Pedro Empleado',
+				codigo: CODIGO_USUARIO_DEMO_EMP_CENTRO,
+				pin: PIN_USUARIO_DEMO_EMPLEADO,
+				rol: RolUsuario.empleado,
+				tiendaId: TIENDA_DEMO_CENTRO_ID,
+				activo: true,
+			),
+		);
+	}
+
+	static Future<void> _sembrarDescuentosClienteDemo(Database baseDatos) async {
+		final conteo = Sqflite.firstIntValue(
+			await baseDatos.rawQuery('SELECT COUNT(*) FROM customer_discounts'),
+		);
+		if (conteo != null && conteo > 0) {
+			return;
+		}
+		final repo = DescuentoClienteRepository(baseDatos: baseDatos);
+		await repo.guardar(
+			DescuentoCliente(
+				id: 'desc-demo-may-10pct',
+				clienteId: 'cliente-demo-mayorista',
+				tipo: TipoDescuentoCliente.porcentajeGeneral,
+				valor: 10.0,
+				condicion: CondicionDescuentoCliente.montoTicketMinimo,
+				umbral: 500.0,
+				activo: true,
+				descripcion: '10% en compras mayores a 500 pesos',
 			),
 		);
 	}

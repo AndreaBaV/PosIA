@@ -22,6 +22,7 @@ import '../models/stock_por_tienda.dart';
 import '../repositories/categoria_repository.dart';
 import '../repositories/cliente_repository.dart';
 import '../repositories/config_repository.dart';
+import '../repositories/descuento_cliente_repository.dart';
 import '../repositories/movimiento_inventario_repository.dart';
 import '../repositories/proveedor_repository.dart';
 import '../repositories/inventario_repository.dart';
@@ -30,6 +31,7 @@ import '../repositories/producto_repository.dart';
 import '../repositories/sync_event_repository.dart';
 import '../repositories/tienda_repository.dart';
 import '../repositories/traspaso_repository.dart';
+import '../repositories/usuario_repository.dart';
 import '../repositories/variante_repository.dart';
 import '../repositories/vendedor_repository.dart';
 import '../repositories/venta_repository.dart';
@@ -59,7 +61,9 @@ class ServicioAdmin {
 		required ConfigRepository configRepository,
 		CategoriaRepository? categoriaRepository,
 		ClienteRepository? clienteRepository,
+		DescuentoClienteRepository? descuentoClienteRepository,
 		VendedorRepository? vendedorRepository,
+		UsuarioRepository? usuarioRepository,
 		ProveedorRepository? proveedorRepository,
 		PrecioRepository? precioRepository,
 		MovimientoInventarioRepository? movimientoRepository,
@@ -78,7 +82,9 @@ class ServicioAdmin {
 	     _configRepository = configRepository,
 	     _categoriaRepository = categoriaRepository,
 	     _clienteRepository = clienteRepository,
+	     _descuentoClienteRepository = descuentoClienteRepository,
 	     _vendedorRepository = vendedorRepository,
+	     _usuarioRepository = usuarioRepository,
 	     _proveedorRepository = proveedorRepository,
 	     _precioRepository = precioRepository,
 	     _movimientoRepository = movimientoRepository,
@@ -98,7 +104,9 @@ class ServicioAdmin {
 	final ConfigRepository _configRepository;
 	final CategoriaRepository? _categoriaRepository;
 	final ClienteRepository? _clienteRepository;
+	final DescuentoClienteRepository? _descuentoClienteRepository;
 	final VendedorRepository? _vendedorRepository;
+	final UsuarioRepository? _usuarioRepository;
 	final ProveedorRepository? _proveedorRepository;
 	final PrecioRepository? _precioRepository;
 	final MovimientoInventarioRepository? _movimientoRepository;
@@ -120,16 +128,26 @@ class ServicioAdmin {
 	///
 	/// Retorna lista de resumenes por sucursal activa.
 	Future<List<ResumenVentasDia>> obtenerResumenVentasDelDia() async {
+		return obtenerResumenVentasPeriodo(dias: 1);
+	}
+
+	/// Obtiene resumen de ventas por periodo para todas las tiendas activas.
+	///
+	/// [dias] Dias hacia atras desde hoy (1 = solo hoy).
+	Future<List<ResumenVentasDia>> obtenerResumenVentasPeriodo({required int dias}) async {
 		final tiendas = await _tiendaRepository.listarActivas();
 		final resumenes = <ResumenVentasDia>[];
 		for (final tienda in tiendas) {
-			final ventas = await _ventaRepository.listarVentasDelDia(tienda.id);
-			final total = await _ventaRepository.calcularTotalDelDia(tienda.id);
+			final ventas = await listarVentasTiendaPeriodo(tienda.id, dias: dias);
+			var total = 0.0;
+			for (final venta in ventas) {
+				total = total + venta.total;
+			}
 			resumenes.add(
 				ResumenVentasDia(
 					tiendaId: tienda.id,
 					nombreTienda: tienda.nombre,
-					totalVendido: total,
+					totalVendido: redondearMonto(total),
 					cantidadVentas: ventas.length,
 				),
 			);
@@ -149,6 +167,10 @@ class ServicioAdmin {
 	/// Retorna catalogo para administracion.
 	Future<List<Producto>> listarProductos() async {
 		return _productoRepository.listarActivosPorTienda(_tiendaActivaId);
+	}
+
+	Future<List<Producto>> listarProductosActivosPorTienda(String tiendaId) async {
+		return _productoRepository.listarActivosPorTienda(tiendaId);
 	}
 
 	/// Lista catalogo completo incluyendo inactivos (admin).
@@ -263,12 +285,8 @@ class ServicioAdmin {
 	}
 
 	Future<bool> eliminarProducto(String productoId) async {
-		final tiendas = await _tiendaRepository.listarActivas();
-		for (final tienda in tiendas) {
-			final stock = await _inventarioRepository.obtenerStock(productoId, tienda.id);
-			if ((stock?.cantidad ?? 0.0) > 0.0) {
-				return false;
-			}
+		if (await _productoTieneStock(productoId)) {
+			return false;
 		}
 		final producto = await _productoRepository.obtenerPorId(productoId);
 		if (producto == null) {
@@ -279,17 +297,42 @@ class ServicioAdmin {
 		return true;
 	}
 
+	Future<bool> reactivarProducto(String productoId) async {
+		final producto = await _productoRepository.obtenerPorId(productoId);
+		if (producto == null) {
+			return false;
+		}
+		final reactivado = producto.copiarCon(activo: true);
+		await _productoRepository.guardar(reactivado);
+		await _registrarEventoProducto(reactivado);
+		return true;
+	}
+
 	Future<bool> eliminarProductoPermanente(String productoId) async {
+		if (await _productoTieneStock(productoId)) {
+			return false;
+		}
+		final producto = await _productoRepository.obtenerPorId(productoId);
+		if (producto == null) {
+			return false;
+		}
+		await _precioRepository?.eliminarEscalasPorProducto(productoId);
+		await _precioRepository?.eliminarPreciosPorProducto(productoId);
+		await _varianteRepository?.eliminarPorProductoPadre(productoId);
+		await _inventarioRepository.eliminarStockPorProducto(productoId);
+		await _productoRepository.eliminar(productoId);
+		return true;
+	}
+
+	Future<bool> _productoTieneStock(String productoId) async {
 		final tiendas = await _tiendaRepository.listarActivas();
 		for (final tienda in tiendas) {
 			final stock = await _inventarioRepository.obtenerStock(productoId, tienda.id);
 			if ((stock?.cantidad ?? 0.0) > 0.0) {
-				return false;
+				return true;
 			}
 		}
-		await _precioRepository?.eliminarEscalasPorProducto(productoId);
-		await _productoRepository.eliminar(productoId);
-		return true;
+		return false;
 	}
 
 	Future<List<Producto>> listarProductosPorProveedor(String proveedorId) async {
@@ -361,33 +404,49 @@ class ServicioAdmin {
 	}
 
 	/// Agrupa existencias por producto con totales por tienda.
-	Future<List<InventarioAgrupado>> obtenerInventarioAgrupado() async {
+	Future<List<InventarioAgrupado>> obtenerInventarioAgrupado({
+		String? tiendaReferenciaId,
+	}) async {
+		final tiendaRef = tiendaReferenciaId ?? _tiendaActivaId;
 		final tiendas = await _tiendaRepository.listarActivas();
-		final productos = await _productoRepository.listarActivosPorTienda(_tiendaActivaId);
+		final productosPorId = <String, Producto>{};
+		for (final tienda in tiendas) {
+			final productos = await _productoRepository.listarActivosPorTienda(tienda.id);
+			for (final producto in productos) {
+				productosPorId[producto.id] = producto;
+			}
+		}
 		final agrupados = <InventarioAgrupado>[];
-		for (final producto in productos) {
-			final porTienda = <String, double>{};
+		for (final producto in productosPorId.values) {
+			final porNombre = <String, double>{};
+			final porTiendaId = <String, double>{};
+			final minimosPorTiendaId = <String, double>{};
 			for (final tienda in tiendas) {
 				final stock = await _inventarioRepository.obtenerStock(
 					producto.id,
 					tienda.id,
 				);
-				porTienda[tienda.nombre] = stock?.cantidad ?? 0.0;
+				porNombre[tienda.nombre] = stock?.cantidad ?? 0.0;
+				porTiendaId[tienda.id] = stock?.cantidad ?? 0.0;
+				minimosPorTiendaId[tienda.id] = stock?.stockMinimo ?? 0.0;
 			}
-			final local = await _inventarioRepository.obtenerStock(
+			final referencia = await _inventarioRepository.obtenerStock(
 				producto.id,
-				_tiendaActivaId,
+				tiendaRef,
 			);
 			agrupados.add(
 				InventarioAgrupado(
 					productoId: producto.id,
 					nombreProducto: producto.nombre,
-					existenciasPorTienda: porTienda,
-					stockMinimoLocal: local?.stockMinimo ?? 0.0,
-					cantidadLocal: local?.cantidad ?? 0.0,
+					existenciasPorTienda: porNombre,
+					existenciasPorTiendaId: porTiendaId,
+					stockMinimoPorTiendaId: minimosPorTiendaId,
+					stockMinimoLocal: referencia?.stockMinimo ?? 0.0,
+					cantidadLocal: referencia?.cantidad ?? 0.0,
 				),
 			);
 		}
+		agrupados.sort((a, b) => a.nombreProducto.compareTo(b.nombreProducto));
 		return agrupados;
 	}
 
@@ -620,32 +679,436 @@ class ServicioAdmin {
 		);
 	}
 
+	// --- Descuentos de cliente ---
+
+	Future<List<DescuentoCliente>> listarDescuentosCliente(String clienteId) async {
+		return _descuentoClienteRepository?.listarPorCliente(clienteId) ?? [];
+	}
+
+	Future<DescuentoCliente> registrarDescuentoCliente({
+		required String clienteId,
+		required TipoDescuentoCliente tipo,
+		required double valor,
+		required CondicionDescuentoCliente condicion,
+		String? productoId,
+		double? umbral,
+		String descripcion = '',
+	}) async {
+		final repo = _descuentoClienteRepository;
+		if (repo == null) {
+			throw StateError('Repositorio de descuentos no configurado');
+		}
+		_validarDescuentoCliente(
+			tipo: tipo,
+			valor: valor,
+			condicion: condicion,
+			productoId: productoId,
+			umbral: umbral,
+		);
+		final descuento = DescuentoCliente(
+			id: _generadorId.v4(),
+			clienteId: clienteId,
+			tipo: tipo,
+			valor: valor,
+			condicion: condicion,
+			productoId: productoId,
+			umbral: umbral,
+			activo: true,
+			descripcion: descripcion.trim(),
+		);
+		await repo.guardar(descuento);
+		return descuento;
+	}
+
+	Future<void> actualizarDescuentoCliente(DescuentoCliente descuento) async {
+		final repo = _descuentoClienteRepository;
+		if (repo == null) {
+			return;
+		}
+		_validarDescuentoCliente(
+			tipo: descuento.tipo,
+			valor: descuento.valor,
+			condicion: descuento.condicion,
+			productoId: descuento.productoId,
+			umbral: descuento.umbral,
+		);
+		await repo.guardar(descuento);
+	}
+
+	Future<void> eliminarDescuentoCliente(String descuentoId) async {
+		await _descuentoClienteRepository?.eliminar(descuentoId);
+	}
+
+	Future<List<PrecioClienteProducto>> listarPreciosEspecialesCliente(
+		String clienteId,
+	) async {
+		return _precioRepository?.listarPreciosPorCliente(clienteId) ?? [];
+	}
+
+	Future<void> guardarPrecioEspecialCliente({
+		required String clienteId,
+		required String productoId,
+		required double precioUnitario,
+	}) async {
+		final repo = _precioRepository;
+		if (repo == null) {
+			throw StateError('Repositorio de precios no configurado');
+		}
+		if (precioUnitario <= 0) {
+			throw StateError('El precio debe ser mayor a cero');
+		}
+		await repo.guardarPrecioClienteProducto(
+			PrecioClienteProducto(
+				clienteId: clienteId,
+				productoId: productoId,
+				precioUnitario: precioUnitario,
+			),
+		);
+	}
+
+	Future<void> eliminarPrecioEspecialCliente(String clienteId, String productoId) async {
+		await _precioRepository?.eliminarPrecioClienteProducto(clienteId, productoId);
+	}
+
+	void _validarDescuentoCliente({
+		required TipoDescuentoCliente tipo,
+		required double valor,
+		required CondicionDescuentoCliente condicion,
+		String? productoId,
+		double? umbral,
+	}) {
+		if (valor <= 0) {
+			throw StateError('El valor del descuento debe ser mayor a cero');
+		}
+		if ((tipo == TipoDescuentoCliente.porcentajeGeneral ||
+				tipo == TipoDescuentoCliente.porcentajeProducto) &&
+			valor > 100) {
+			throw StateError('El porcentaje no puede superar 100');
+		}
+		if (tipo.esPorProducto && productoId == null) {
+			throw StateError('Seleccione un producto');
+		}
+		if (condicion != CondicionDescuentoCliente.siempre && (umbral == null || umbral <= 0)) {
+			throw StateError('Indique el umbral de la regla');
+		}
+		if (condicion == CondicionDescuentoCliente.cantidadMinima && tipo.esGeneral) {
+			throw StateError('La cantidad minima aplica solo a descuentos por producto');
+		}
+		if (condicion == CondicionDescuentoCliente.montoTicketMinimo && tipo.esPorProducto) {
+			throw StateError('El monto minimo aplica solo a descuentos generales');
+		}
+	}
+
 	// --- Vendedores ---
 
-	Future<List<Vendedor>> listarVendedores() async {
-		return _vendedorRepository?.listarTodos() ?? [];
+	Future<List<Vendedor>> listarVendedores({Usuario? operador}) async {
+		final repo = _vendedorRepository;
+		if (repo == null) {
+			return [];
+		}
+		if (operador == null || PermisosUsuario.puedeGestionarTodasLasTiendas(operador)) {
+			return repo.listarTodos();
+		}
+		return repo.listarTodos(tiendaId: operador.tiendaId);
 	}
 
 	Future<Vendedor> registrarVendedor({
 		required String nombre,
-		required String codigo,
+		String? tiendaId,
+		Usuario? operador,
 	}) async {
 		final repo = _vendedorRepository;
 		if (repo == null) {
 			throw StateError('Repositorio de vendedores no configurado');
 		}
+		final tiendaDestino = _resolverTiendaOperacion(operador, tiendaId ?? operador?.tiendaId);
+		final nombreLimpio = nombre.trim();
+		if (nombreLimpio.isEmpty) {
+			throw StateError('El nombre del vendedor es obligatorio');
+		}
+		final codigo = await repo.generarSiguienteCodigo();
 		final vendedor = Vendedor(
 			id: _generadorId.v4(),
-			nombre: nombre,
+			nombre: nombreLimpio,
 			codigo: codigo,
 			activo: true,
+			tiendaId: tiendaDestino,
 		);
 		await repo.guardar(vendedor);
 		return vendedor;
 	}
 
-	Future<void> actualizarVendedor(Vendedor vendedor) async {
-		await _vendedorRepository?.guardar(vendedor);
+	Future<void> actualizarVendedor(Vendedor vendedor, {Usuario? operador}) async {
+		final repo = _vendedorRepository;
+		if (repo == null) {
+			return;
+		}
+		final existente = await repo.obtenerPorId(vendedor.id);
+		if (existente == null) {
+			return;
+		}
+		if (operador != null &&
+			!PermisosUsuario.puedeGestionarTodasLasTiendas(operador) &&
+			existente.tiendaId != operador.tiendaId) {
+			throw StateError('Sin permiso para editar este vendedor');
+		}
+		await repo.guardar(
+			vendedor.copiarCon(
+				nombre: vendedor.nombre.trim(),
+				codigo: existente.codigo,
+				tiendaId: existente.tiendaId,
+			),
+		);
+	}
+
+	// --- Usuarios ---
+
+	Future<Usuario?> autenticarUsuario(String codigo, String pin) async {
+		return _usuarioRepository?.autenticar(codigo, pin);
+	}
+
+	Future<Usuario?> autenticarUsuarioPorPin(String pin) async {
+		return _usuarioRepository?.autenticarPorPin(pin);
+	}
+
+	Future<Usuario?> autenticarUsuarioPorPinYRol(String pin, RolUsuario rol) async {
+		return _usuarioRepository?.autenticarPorPinYRol(pin, rol);
+	}
+
+	Future<List<Usuario>> listarUsuarios({Usuario? operador}) async {
+		final repo = _usuarioRepository;
+		if (repo == null) {
+			return [];
+		}
+		if (operador == null || PermisosUsuario.puedeGestionarTodasLasTiendas(operador)) {
+			return repo.listarTodos();
+		}
+		final todos = await repo.listarTodos();
+		return todos
+			.where((u) => PermisosUsuario.puedeGestionarUsuario(operador, u))
+			.toList();
+	}
+
+	Future<List<Tienda>> obtenerTiendasPermitidas({Usuario? operador}) async {
+		final tiendas = await _tiendaRepository.listarActivas();
+		if (operador == null || PermisosUsuario.puedeGestionarTodasLasTiendas(operador)) {
+			return tiendas;
+		}
+		final asignada = operador.tiendaId;
+		if (asignada == null) {
+			return [];
+		}
+		return tiendas.where((t) => t.id == asignada).toList();
+	}
+
+	Future<Usuario> registrarUsuario({
+		required String nombre,
+		required RolUsuario rol,
+		required String pin,
+		String? tiendaId,
+		Usuario? operador,
+	}) async {
+		final repo = _usuarioRepository;
+		if (repo == null) {
+			throw StateError('Repositorio de usuarios no configurado');
+		}
+		if (operador != null && !PermisosUsuario.puedeGestionarUsuarios(operador)) {
+			throw StateError('Sin permiso para crear usuarios');
+		}
+		final nombreLimpio = nombre.trim();
+		if (nombreLimpio.isEmpty) {
+			throw StateError('El nombre es obligatorio');
+		}
+		if (pin.trim().length != LONGITUD_PIN_ADMIN) {
+			throw StateError('El PIN debe tener $LONGITUD_PIN_ADMIN digitos');
+		}
+		final tiendaDestino = _resolverTiendaOperacion(operador, tiendaId);
+		if (rol != RolUsuario.administrador && tiendaDestino == null) {
+			throw StateError('Debe asignar una tienda');
+		}
+		if (rol == RolUsuario.administrador && operador?.rol == RolUsuario.supervisor) {
+			throw StateError('Sin permiso para crear administradores');
+		}
+		if (operador?.rol == RolUsuario.supervisor && rol != RolUsuario.empleado) {
+			throw StateError('Los supervisores solo pueden crear empleados');
+		}
+		final codigo = await repo.generarSiguienteCodigo(rol);
+		final usuario = Usuario(
+			id: _generadorId.v4(),
+			nombre: nombreLimpio,
+			codigo: codigo,
+			pin: pin.trim(),
+			rol: rol,
+			tiendaId: rol == RolUsuario.administrador ? null : tiendaDestino,
+			activo: true,
+		);
+		if (operador != null && !PermisosUsuario.puedeGestionarUsuario(operador, usuario)) {
+			throw StateError('Sin permiso para crear este usuario');
+		}
+		await repo.guardar(usuario);
+		return usuario;
+	}
+
+	Future<Usuario> actualizarUsuario(
+		Usuario usuario, {
+		Usuario? operador,
+		String? nuevoPin,
+	}) async {
+		final repo = _usuarioRepository;
+		if (repo == null) {
+			throw StateError('Repositorio de usuarios no configurado');
+		}
+		final existente = await repo.obtenerPorId(usuario.id);
+		if (existente == null) {
+			throw StateError('Usuario no encontrado');
+		}
+		if (operador != null && !PermisosUsuario.puedeGestionarUsuario(operador, existente)) {
+			throw StateError('Sin permiso para editar este usuario');
+		}
+		final esPropiaCuenta = operador?.id == usuario.id;
+		if (!esPropiaCuenta && operador?.rol == RolUsuario.empleado) {
+			throw StateError('Sin permiso para editar otros usuarios');
+		}
+		if (operador?.id == usuario.id && !usuario.activo) {
+			throw StateError('No puede desactivar su propia cuenta');
+		}
+		final nombreLimpio = usuario.nombre.trim();
+		if (nombreLimpio.isEmpty) {
+			throw StateError('El nombre es obligatorio');
+		}
+
+		var rolFinal = usuario.rol;
+		var codigoFinal = existente.codigo;
+		String? tiendaFinal;
+		var limpiarTiendaId = false;
+
+		if (esPropiaCuenta && operador?.rol == RolUsuario.empleado) {
+			rolFinal = existente.rol;
+			tiendaFinal = existente.tiendaId;
+		} else {
+			if (rolFinal != existente.rol) {
+				_validarAsignacionRol(
+					operador: operador,
+					rolNuevo: rolFinal,
+					rolAnterior: existente.rol,
+				);
+			}
+			if (rolFinal != existente.rol) {
+				codigoFinal = await repo.generarSiguienteCodigo(rolFinal);
+			}
+			if (rolFinal == RolUsuario.administrador) {
+				tiendaFinal = null;
+				limpiarTiendaId = true;
+			} else {
+				tiendaFinal = _resolverTiendaOperacion(operador, usuario.tiendaId);
+				if (tiendaFinal == null) {
+					throw StateError('Debe asignar una tienda');
+				}
+			}
+		}
+
+		final pinFinal = _resolverPinEnActualizacion(
+			existente: existente,
+			nuevoPin: nuevoPin,
+			esPropiaCuenta: esPropiaCuenta,
+		);
+
+		final actualizado = existente.copiarCon(
+			nombre: nombreLimpio,
+			codigo: codigoFinal,
+			pin: pinFinal,
+			rol: rolFinal,
+			activo: usuario.activo,
+			tiendaId: tiendaFinal,
+			limpiarTiendaId: limpiarTiendaId,
+		);
+		await repo.guardar(actualizado);
+		return actualizado;
+	}
+
+	void _validarAsignacionRol({
+		Usuario? operador,
+		required RolUsuario rolNuevo,
+		required RolUsuario rolAnterior,
+	}) {
+		if (operador?.rol != RolUsuario.supervisor) {
+			return;
+		}
+		if (rolNuevo == RolUsuario.administrador || rolAnterior == RolUsuario.administrador) {
+			throw StateError('Sin permiso para gestionar administradores');
+		}
+		if (rolNuevo != RolUsuario.empleado) {
+			throw StateError('Los supervisores solo pueden asignar empleados');
+		}
+	}
+
+	String? _resolverPinEnActualizacion({
+		required Usuario existente,
+		String? nuevoPin,
+		required bool esPropiaCuenta,
+	}) {
+		if (nuevoPin == null || nuevoPin.trim().isEmpty) {
+			return null;
+		}
+		if (nuevoPin.trim().length != LONGITUD_PIN_ADMIN) {
+			throw StateError('El PIN debe tener $LONGITUD_PIN_ADMIN digitos');
+		}
+		if (esPropiaCuenta) {
+			throw StateError('Use Mi cuenta para cambiar su PIN');
+		}
+		return nuevoPin.trim();
+	}
+
+	Future<void> cambiarPinUsuario({
+		required String usuarioId,
+		required String pinActual,
+		required String pinNuevo,
+		Usuario? operador,
+	}) async {
+		final repo = _usuarioRepository;
+		if (repo == null) {
+			throw StateError('Repositorio de usuarios no configurado');
+		}
+		final existente = await repo.obtenerPorId(usuarioId);
+		if (existente == null) {
+			throw StateError('Usuario no encontrado');
+		}
+		final esPropiaCuenta = operador?.id == usuarioId;
+		if (operador != null &&
+			!esPropiaCuenta &&
+			!PermisosUsuario.puedeGestionarUsuario(operador, existente)) {
+			throw StateError('Sin permiso para cambiar el PIN');
+		}
+		if (esPropiaCuenta && !await repo.verificarPin(usuarioId, pinActual.trim())) {
+			throw StateError('PIN actual incorrecto');
+		}
+		if (pinNuevo.trim().length != LONGITUD_PIN_ADMIN) {
+			throw StateError('El PIN debe tener $LONGITUD_PIN_ADMIN digitos');
+		}
+		await repo.guardar(existente.copiarCon(pin: pinNuevo.trim()));
+	}
+
+	String? _resolverTiendaOperacion(Usuario? operador, String? tiendaId) {
+		if (operador != null && !PermisosUsuario.puedeGestionarTodasLasTiendas(operador)) {
+			final asignada = operador.tiendaId;
+			if (asignada == null) {
+				throw StateError('Usuario sin tienda asignada');
+			}
+			if (tiendaId != null && tiendaId != asignada) {
+				throw StateError('Sin permiso para esta tienda');
+			}
+			return asignada;
+		}
+		return tiendaId;
+	}
+
+	void _validarPermisoTienda(Usuario? operador, String tiendaId) {
+		if (operador == null) {
+			return;
+		}
+		if (!PermisosUsuario.puedeGestionarTienda(operador, tiendaId)) {
+			throw StateError('Sin permiso para gestionar esta tienda');
+		}
 	}
 
 	// --- Proveedores ---
@@ -737,10 +1200,26 @@ class ServicioAdmin {
 	}
 
 	FiltroVentas filtroVentasPeriodo({required int dias}) {
+		return filtroVentasPeriodoTienda(_tiendaActivaId, dias: dias);
+	}
+
+	/// Filtro de ventas para reportes; [tiendaId] null = todas las tiendas.
+	FiltroVentas filtroVentasReporte({required int dias, String? tiendaId}) {
 		final hasta = DateTime.now().toUtc();
 		final desde = hasta.subtract(Duration(days: dias));
 		return FiltroVentas(
-			tiendaId: _tiendaActivaId,
+			tiendaId: tiendaId,
+			desde: desde,
+			hasta: hasta,
+		);
+	}
+
+	/// Filtro de ventas para una tienda y periodo dados.
+	FiltroVentas filtroVentasPeriodoTienda(String tiendaId, {required int dias}) {
+		final hasta = DateTime.now().toUtc();
+		final desde = hasta.subtract(Duration(days: dias));
+		return FiltroVentas(
+			tiendaId: tiendaId,
 			desde: desde,
 			hasta: hasta,
 		);
@@ -920,7 +1399,12 @@ class ServicioAdmin {
 	}
 
 	Future<List<Venta>> listarVentasDelDiaTienda(String tiendaId) async {
-		return _ventaRepository.listarVentasDelDia(tiendaId);
+		return listarVentasTiendaPeriodo(tiendaId, dias: 1);
+	}
+
+	/// Lista ventas de una tienda en los ultimos [dias] dias.
+	Future<List<Venta>> listarVentasTiendaPeriodo(String tiendaId, {required int dias}) async {
+		return _ventaRepository.listarConFiltro(filtroVentasPeriodoTienda(tiendaId, dias: dias));
 	}
 
 	Future<bool> eliminarVenta(String ventaId) async {
@@ -963,58 +1447,128 @@ class ServicioAdmin {
 		);
 	}
 
-	Future<Traspaso> solicitarTraspaso({
+	Future<Traspaso> realizarTraspaso({
+		required String tiendaOrigenId,
 		required String tiendaDestinoId,
 		required String productoId,
 		required double cantidad,
 		String notas = '',
+		Usuario? operador,
 	}) async {
 		final repo = _traspasoRepository;
 		if (repo == null) {
 			throw StateError('Repositorio de traspasos no configurado');
 		}
-		final producto = (await _productoRepository.listarActivosPorTienda(_tiendaActivaId))
-			.where((p) => p.id == productoId)
-			.firstOrNull;
+		if (tiendaOrigenId == tiendaDestinoId) {
+			throw StateError('Origen y destino deben ser tiendas distintas');
+		}
+		if (cantidad <= 0) {
+			throw StateError('La cantidad debe ser mayor a cero');
+		}
+		_validarPermisoTienda(operador, tiendaOrigenId);
+		_validarPermisoTienda(operador, tiendaDestinoId);
+
+		final producto = await _productoRepository.obtenerPorId(productoId) ??
+			(await _productoRepository.listarActivosPorTienda(tiendaOrigenId))
+				.where((p) => p.id == productoId)
+				.firstOrNull;
 		if (producto == null) {
 			throw StateError('Producto no encontrado');
 		}
-		final stock = await _inventarioRepository.obtenerStock(productoId, _tiendaActivaId);
-		if ((stock?.cantidad ?? 0.0) < cantidad) {
+
+		final stockOrigen = await _inventarioRepository.obtenerStock(productoId, tiendaOrigenId);
+		final anteriorOrigen = stockOrigen?.cantidad ?? 0.0;
+		if (anteriorOrigen < cantidad) {
 			throw StateError('Stock insuficiente en tienda origen');
 		}
+
 		final ahora = DateTime.now().toUtc();
-		final cantidadNueva = (stock?.cantidad ?? 0.0) - cantidad;
+		final nuevoOrigen = anteriorOrigen - cantidad;
 		await _inventarioRepository.guardarStock(
 			StockNivel(
 				productoId: productoId,
-				tiendaId: _tiendaActivaId,
-				cantidad: cantidadNueva,
+				tiendaId: tiendaOrigenId,
+				cantidad: nuevoOrigen,
 				actualizadoEn: ahora,
-				stockMinimo: stock?.stockMinimo ?? 0.0,
+				stockMinimo: stockOrigen?.stockMinimo ?? 0.0,
 			),
 		);
+
+		final stockDestino = await _inventarioRepository.obtenerStock(productoId, tiendaDestinoId);
+		final anteriorDestino = stockDestino?.cantidad ?? 0.0;
+		final nuevoDestino = anteriorDestino + cantidad;
+		await _inventarioRepository.guardarStock(
+			StockNivel(
+				productoId: productoId,
+				tiendaId: tiendaDestinoId,
+				cantidad: nuevoDestino,
+				actualizadoEn: ahora,
+				stockMinimo: stockDestino?.stockMinimo ?? 0.0,
+			),
+		);
+
+		await _registrarAuditoriaInventario(
+			productoId: productoId,
+			tiendaId: tiendaOrigenId,
+			tipo: TipoMovimientoInventario.traspasoSalida,
+			cantidad: cantidad,
+			cantidadAnterior: anteriorOrigen,
+			cantidadNueva: nuevoOrigen,
+			motivo: 'Traspaso enviado',
+			operadorId: operador?.id,
+			creadoEn: ahora,
+		);
+		await _registrarAuditoriaInventario(
+			productoId: productoId,
+			tiendaId: tiendaDestinoId,
+			tipo: TipoMovimientoInventario.traspasoEntrada,
+			cantidad: cantidad,
+			cantidadAnterior: anteriorDestino,
+			cantidadNueva: nuevoDestino,
+			motivo: 'Traspaso recibido',
+			operadorId: operador?.id,
+			creadoEn: ahora,
+		);
+
 		final traspaso = Traspaso(
 			id: _generadorId.v4(),
-			tiendaOrigenId: _tiendaActivaId,
+			tiendaOrigenId: tiendaOrigenId,
 			tiendaDestinoId: tiendaDestinoId,
-			estado: EstadoTraspaso.enTransito,
+			estado: EstadoTraspaso.completado,
 			solicitadoEn: ahora,
-			completadoEn: null,
+			completadoEn: ahora,
 			notas: notas,
 			lineas: [
 				LineaTraspaso(
 					productoId: productoId,
 					nombreProducto: producto.nombre,
 					cantidadSolicitada: cantidad,
+					cantidadRecibida: cantidad,
 				),
 			],
 		);
 		await repo.guardar(traspaso);
-		await _registrarEventoTraspaso(traspaso, TipoSyncEvento.transferRequested);
+		await _registrarEventoTraspaso(traspaso, TipoSyncEvento.transferCompleted);
 		return traspaso;
 	}
 
+	/// Compatibilidad: delega en [realizarTraspaso] usando la tienda activa del dispositivo.
+	Future<Traspaso> solicitarTraspaso({
+		required String tiendaDestinoId,
+		required String productoId,
+		required double cantidad,
+		String notas = '',
+	}) {
+		return realizarTraspaso(
+			tiendaOrigenId: _tiendaActivaId,
+			tiendaDestinoId: tiendaDestinoId,
+			productoId: productoId,
+			cantidad: cantidad,
+			notas: notas,
+		);
+	}
+
+	/// Completa traspasos antiguos en transito (flujo de dos pasos).
 	Future<bool> recibirTraspaso(String traspasoId) async {
 		final repo = _traspasoRepository;
 		if (repo == null) {
@@ -1022,6 +1576,9 @@ class ServicioAdmin {
 		}
 		final traspaso = await repo.obtenerPorId(traspasoId);
 		if (traspaso == null || traspaso.estado == EstadoTraspaso.completado) {
+			return false;
+		}
+		if (traspaso.estado != EstadoTraspaso.enTransito) {
 			return false;
 		}
 		if (traspaso.tiendaDestinoId != _tiendaActivaId) {
@@ -1034,7 +1591,8 @@ class ServicioAdmin {
 				linea.productoId,
 				_tiendaActivaId,
 			);
-			final cantidadNueva = (stock?.cantidad ?? 0.0) + linea.cantidadSolicitada;
+			final anterior = stock?.cantidad ?? 0.0;
+			final cantidadNueva = anterior + linea.cantidadSolicitada;
 			await _inventarioRepository.guardarStock(
 				StockNivel(
 					productoId: linea.productoId,
@@ -1043,6 +1601,16 @@ class ServicioAdmin {
 					actualizadoEn: ahora,
 					stockMinimo: stock?.stockMinimo ?? 0.0,
 				),
+			);
+			await _registrarAuditoriaInventario(
+				productoId: linea.productoId,
+				tiendaId: _tiendaActivaId,
+				tipo: TipoMovimientoInventario.traspasoEntrada,
+				cantidad: linea.cantidadSolicitada,
+				cantidadAnterior: anterior,
+				cantidadNueva: cantidadNueva,
+				motivo: 'Traspaso recibido',
+				creadoEn: ahora,
 			);
 			lineasRecibidas.add(
 				LineaTraspaso(
@@ -1068,6 +1636,39 @@ class ServicioAdmin {
 		return true;
 	}
 
+	Future<void> _registrarAuditoriaInventario({
+		required String productoId,
+		required String tiendaId,
+		required TipoMovimientoInventario tipo,
+		required double cantidad,
+		required double cantidadAnterior,
+		required double cantidadNueva,
+		required String motivo,
+		required DateTime creadoEn,
+		String? operadorId,
+	}) async {
+		final repo = _movimientoRepository;
+		if (repo == null) {
+			return;
+		}
+		await repo.guardar(
+			MovimientoInventario(
+				id: _generadorId.v4(),
+				productoId: productoId,
+				tiendaId: tiendaId,
+				tipo: tipo,
+				cantidad: cantidad,
+				cantidadAnterior: cantidadAnterior,
+				cantidadNueva: cantidadNueva,
+				motivo: motivo,
+				referenciaId: null,
+				proveedorId: null,
+				creadoEn: creadoEn,
+				creadoPor: operadorId,
+			),
+		);
+	}
+
 	// --- Corte de caja ---
 
 	ServicioCorteCaja? obtenerServicioCorteCaja() => _servicioCorteCaja;
@@ -1080,14 +1681,22 @@ class ServicioAdmin {
 		required double cantidad,
 		required String motivo,
 		String? proveedorId,
+		String? tiendaId,
+		Usuario? operador,
 	}) async {
 		final repo = _movimientoRepository;
 		if (repo == null) {
 			throw StateError('Repositorio de movimientos no configurado');
 		}
+		final tiendaDestino = tiendaId ?? _tiendaActivaId;
+		_validarPermisoTienda(operador, tiendaDestino);
+		final motivoLimpio = motivo.trim();
+		if (!esMotivoInventarioValido(tipo, motivoLimpio)) {
+			throw StateError('Seleccione un motivo válido del catálogo');
+		}
 		final stockActual = await _inventarioRepository.obtenerStock(
 			productoId,
-			_tiendaActivaId,
+			tiendaDestino,
 		);
 		final anterior = stockActual?.cantidad ?? 0.0;
 		double nuevo;
@@ -1109,50 +1718,73 @@ class ServicioAdmin {
 		await _inventarioRepository.guardarStock(
 			StockNivel(
 				productoId: productoId,
-				tiendaId: _tiendaActivaId,
+				tiendaId: tiendaDestino,
 				cantidad: nuevo,
 				actualizadoEn: ahora,
 				stockMinimo: stockActual?.stockMinimo ?? 0.0,
 			),
 		);
-		await _registrarEventoAjusteStock(productoId, delta, motivo);
+		await _registrarEventoAjusteStock(productoId, delta, motivoLimpio);
 		await repo.guardar(
 			MovimientoInventario(
 				id: _generadorId.v4(),
 				productoId: productoId,
-				tiendaId: _tiendaActivaId,
+				tiendaId: tiendaDestino,
 				tipo: tipo,
 				cantidad: cantidad,
 				cantidadAnterior: anterior,
 				cantidadNueva: nuevo,
-				motivo: motivo,
+				motivo: motivoLimpio,
 				referenciaId: null,
 				proveedorId: proveedorId,
 				creadoEn: ahora,
-				creadoPor: null,
+				creadoPor: operador?.id,
 			),
 		);
 	}
 
-	Future<List<MovimientoInventario>> listarMovimientosInventario() async {
-		return _movimientoRepository?.listarPorTienda(_tiendaActivaId) ?? [];
+	Future<List<MovimientoInventario>> listarMovimientosInventario({
+		String? tiendaId,
+		Usuario? operador,
+	}) async {
+		final repo = _movimientoRepository;
+		if (repo == null) {
+			return [];
+		}
+		final tiendaDestino = tiendaId ?? operador?.tiendaId ?? _tiendaActivaId;
+		_validarPermisoTienda(operador, tiendaDestino);
+		return repo.listarPorTienda(tiendaDestino);
 	}
 
 	Future<void> configurarStockMinimo(
 		String productoId,
-		double stockMinimo,
-	) async {
+		double stockMinimo, {
+		String? tiendaId,
+		Usuario? operador,
+	}) async {
+		final tiendaDestino = tiendaId ?? _tiendaActivaId;
+		_validarPermisoTienda(operador, tiendaDestino);
 		final stock = await _inventarioRepository.obtenerStock(
 			productoId,
-			_tiendaActivaId,
+			tiendaDestino,
 		);
 		if (stock == null) {
+			final ahora = DateTime.now().toUtc();
+			await _inventarioRepository.guardarStock(
+				StockNivel(
+					productoId: productoId,
+					tiendaId: tiendaDestino,
+					cantidad: 0.0,
+					actualizadoEn: ahora,
+					stockMinimo: stockMinimo,
+				),
+			);
 			return;
 		}
 		await _inventarioRepository.guardarStock(
 			StockNivel(
 				productoId: productoId,
-				tiendaId: _tiendaActivaId,
+				tiendaId: tiendaDestino,
 				cantidad: stock.cantidad,
 				actualizadoEn: stock.actualizadoEn,
 				stockMinimo: stockMinimo,
@@ -1160,21 +1792,30 @@ class ServicioAdmin {
 		);
 	}
 
-	Future<List<AlertaFaltante>> obtenerAlertasFaltantes() async {
-		final bajoMinimo = await _inventarioRepository.listarBajoMinimo(_tiendaActivaId);
-		final productos = await _productoRepository.listarActivosPorTienda(_tiendaActivaId);
-		final nombres = {for (final p in productos) p.id: p.nombre};
-		return bajoMinimo
-			.map(
-				(stock) => AlertaFaltante(
-					productoId: stock.productoId,
-					nombreProducto: nombres[stock.productoId] ?? stock.productoId,
-					cantidadActual: stock.cantidad,
-					stockMinimo: stock.stockMinimo,
-					tiendaId: stock.tiendaId,
+	Future<List<AlertaFaltante>> obtenerAlertasFaltantes({String? tiendaId}) async {
+		final tiendas = await _tiendaRepository.listarActivas();
+		final ids = tiendaId != null
+			? [tiendaId]
+			: tiendas.map((t) => t.id).toList();
+		final alertas = <AlertaFaltante>[];
+		for (final id in ids) {
+			final bajoMinimo = await _inventarioRepository.listarBajoMinimo(id);
+			final productos = await _productoRepository.listarActivosPorTienda(id);
+			final nombres = {for (final p in productos) p.id: p.nombre};
+			alertas.addAll(
+				bajoMinimo.map(
+					(stock) => AlertaFaltante(
+						productoId: stock.productoId,
+						nombreProducto: nombres[stock.productoId] ?? stock.productoId,
+						cantidadActual: stock.cantidad,
+						stockMinimo: stock.stockMinimo,
+						tiendaId: stock.tiendaId,
+					),
 				),
-			)
-			.toList();
+			);
+		}
+		alertas.sort((a, b) => a.cantidadActual.compareTo(b.cantidadActual));
+		return alertas;
 	}
 
 	// --- Reportes ---
@@ -1199,13 +1840,19 @@ class ServicioAdmin {
 				totalVendido: redondearMonto((previo?.totalVendido ?? 0.0) + venta.total),
 			);
 		}
-		return acumulado.values.toList();
+		final lista = acumulado.values.toList()
+			..sort((a, b) => b.totalVendido.compareTo(a.totalVendido));
+		return lista;
 	}
 
 	Future<List<ResumenProductoVenta>> obtenerResumenPorProducto(
 		FiltroVentas filtro,
 	) async {
 		return _ventaRepository.resumenPorProducto(filtro);
+	}
+
+	Future<List<ResumenVentasHora>> obtenerResumenPorHora(FiltroVentas filtro) async {
+		return _ventaRepository.resumenPorHora(filtro);
 	}
 
 	Future<Map<MetodoPago, double>> obtenerTotalesPorMetodoPago(

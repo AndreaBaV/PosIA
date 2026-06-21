@@ -8,7 +8,7 @@ library;
 
 import 'package:posia_database/posia_database.dart';
 
-/// Prepara motor SQLite y datos demo antes de mostrar caja.
+/// Prepara motor SQLite y datos iniciales antes de mostrar caja.
 class InicializadorApp {
 	InicializadorApp._();
 

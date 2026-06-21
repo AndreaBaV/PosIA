@@ -9,10 +9,20 @@
 
 ## Acceso
 
-- Al **iniciar la app**: pantalla de seleccion de tienda (`PantallaAccesoTienda`)
-- Pestaña **Admin** en barra inferior (requiere PIN)
-- PIN por defecto: `1234` (configurable en Admin → Configuracion)
-- Teclado numerico visual
+1. Al **iniciar la app**: pantalla de seleccion de tienda (`PantallaAccesoTienda`).
+2. **Inicio de sesion**: codigo de usuario y contrasena (PIN de 4 digitos) (`PantallaInicioSesion`).
+
+### Cuentas demo
+
+| Usuario | Contrasena | Rol |
+|---------|------------|-----|
+| `1000` | `1234` | Administrador (Ana Administradora) |
+| `2001` / `2002` | `2345` | Supervisor (Centro / Norte) |
+| `3001` | `3456` | Empleado (Pedro Empleado) |
+| `0000` | PIN dispositivo | Admin de respaldo (configuracion) |
+
+- Teclado numerico visual en pantalla de inicio de sesion.
+- En produccion: crear usuarios en Admin → Usuarios y cambiar PINs antes de operar.
 
 ---
 
@@ -34,7 +44,7 @@
 | Categorias | Crear con **icono y color**, reordenar, editar, activar/desactivar |
 | Productos | Alta basica, busqueda, asignar categoria, variantes (icono capas) |
 
-> **Nota v6.0:** Las entradas separadas Carniceria/Farmacia fueron eliminadas del menu. Esas verticals se gestionan como **categorias** dentro de Productos. Alta robusta planificada en [PENDIENTES_V6.1.md](PENDIENTES_V6.1.md).
+> Carnicería y farmacia se gestionan como **categorías** dentro de Productos (formulario completo con pestañas General/Precios/Inventario).
 
 ### Inventario
 
@@ -94,18 +104,7 @@ Cambiar tenant o tienda requiere **reiniciar la app** para reconstruir servicios
 
 ---
 
-## Roadmap admin
-
-| Version | Entregables |
-|---------|-------------|
-| **v6.0** ✅ | Login tienda, CRUD tiendas, categorias completas, ventas fix, busqueda parcial |
-| **v6.1** 📋 | [Especificacion completa](PENDIENTES_V6.1.md) |
-| **v7** | Compras a proveedores, auth multi-usuario, reportes avanzados |
-
----
-
 ## Referencias
 
-- [PENDIENTES_V6.md](PENDIENTES_V6.md) — backlog v6.0
-- [PENDIENTES_V6.1.md](PENDIENTES_V6.1.md) — especificacion v6.1
-- [MANUAL_USUARIO.md](MANUAL_USUARIO.md) — operacion diaria en caja
+- [MANUAL_USUARIO.md](MANUAL_USUARIO.md) — operación diaria en caja
+- [MODULES.md](MODULES.md) — verticales carnicería y farmacia

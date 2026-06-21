@@ -6,7 +6,7 @@ import '../enums/estado_venta.dart';
 /// Parametros de busqueda en historial de ventas.
 class FiltroVentas {
 	const FiltroVentas({
-		required this.tiendaId,
+		this.tiendaId,
 		required this.desde,
 		required this.hasta,
 		this.vendedorId,
@@ -14,7 +14,8 @@ class FiltroVentas {
 		this.estado,
 	});
 
-	final String tiendaId;
+	/// Si es null, incluye todas las tiendas.
+	final String? tiendaId;
 	final DateTime desde;
 	final DateTime hasta;
 	final String? vendedorId;

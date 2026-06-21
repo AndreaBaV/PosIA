@@ -192,7 +192,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 				TextField(
 					controller: _codigoController,
 					decoration: const InputDecoration(
-						labelText: 'Codigo de barras',
+						labelText: 'Código de barras',
 						border: OutlineInputBorder(),
 					),
 				),
@@ -205,7 +205,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 						.toList(),
 					onChanged: (v) => setState(() => _categoriaId = v),
 					decoration: const InputDecoration(
-						labelText: 'Categoria *',
+						labelText: 'Categoría *',
 						border: OutlineInputBorder(),
 					),
 				),
@@ -298,7 +298,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 											controller: escala.cantidadController,
 											keyboardType: TextInputType.number,
 											decoration: const InputDecoration(
-												labelText: 'Cant. minima',
+												labelText: 'Cant. mínima',
 												isDense: true,
 											),
 										),
@@ -386,7 +386,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 					controller: _minimoController,
 					keyboardType: TextInputType.number,
 					decoration: const InputDecoration(
-						labelText: 'Stock minimo (alerta)',
+						labelText: 'Stock mínimo (alerta)',
 						border: OutlineInputBorder(),
 					),
 				),
@@ -419,7 +419,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 		if (nombre.isEmpty || _categoriaId == null) {
 			ScaffoldMessenger.of(context).showSnackBar(
 				const SnackBar(
-					content: Text('Nombre y categoria son obligatorios'),
+					content: Text('Nombre y categoría son obligatorios'),
 					backgroundColor: PosiaColors.cancelar,
 				),
 			);

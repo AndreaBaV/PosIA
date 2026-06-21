@@ -13,6 +13,7 @@ class Vendedor {
 		required this.nombre,
 		required this.codigo,
 		required this.activo,
+		this.tiendaId,
 	});
 
 	/// Identificador unico.
@@ -27,18 +28,24 @@ class Vendedor {
 	/// Indica si puede vender.
 	final bool activo;
 
+	/// Tienda asignada; null si aplica a todas las sucursales.
+	final String? tiendaId;
+
 	/// Genera copia con campos opcionales reemplazados.
 	Vendedor copiarCon({
 		String? id,
 		String? nombre,
 		String? codigo,
 		bool? activo,
+		String? tiendaId,
+		bool limpiarTiendaId = false,
 	}) {
 		return Vendedor(
 			id: id ?? this.id,
 			nombre: nombre ?? this.nombre,
 			codigo: codigo ?? this.codigo,
 			activo: activo ?? this.activo,
+			tiendaId: limpiarTiendaId ? null : (tiendaId ?? this.tiendaId),
 		);
 	}
 }

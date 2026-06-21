@@ -18,14 +18,12 @@ class PantallaVendedoresAdmin extends ConsumerStatefulWidget {
 
 class _PantallaVendedoresAdminState extends ConsumerState<PantallaVendedoresAdmin> {
 	final _nombreController = TextEditingController();
-	final _codigoController = TextEditingController();
 	final _busquedaController = TextEditingController();
 	String _filtro = '';
 
 	@override
 	void dispose() {
 		_nombreController.dispose();
-		_codigoController.dispose();
 		_busquedaController.dispose();
 		super.dispose();
 	}
@@ -78,7 +76,7 @@ class _PantallaVendedoresAdminState extends ConsumerState<PantallaVendedoresAdmi
 												decoration: v.activo ? null : TextDecoration.lineThrough,
 											),
 										),
-										subtitle: Text('Codigo: ${v.codigo}'),
+										subtitle: Text('Código: ${v.codigo}'),
 										trailing: Switch(
 											value: v.activo,
 											onChanged: (activo) async {
@@ -89,7 +87,10 @@ class _PantallaVendedoresAdminState extends ConsumerState<PantallaVendedoresAdmi
 													}
 												}
 												final servicio = await ref.read(servicioAdminProvider.future);
-												await servicio.actualizarVendedor(v.copiarCon(activo: activo));
+												await servicio.actualizarVendedor(
+													v.copiarCon(activo: activo),
+													operador: ref.read(sesionUsuarioProvider),
+												);
 												ref.invalidate(_vendedoresProvider);
 											},
 										),
@@ -107,6 +108,11 @@ class _PantallaVendedoresAdminState extends ConsumerState<PantallaVendedoresAdmi
 											'Nuevo vendedor',
 											style: TextStyle(fontSize: 16.0, fontWeight: FontWeight.bold),
 										),
+										const SizedBox(height: 4.0),
+										Text(
+											'El código se asigna automáticamente',
+											style: Theme.of(context).textTheme.bodySmall,
+										),
 										const SizedBox(height: 12.0),
 										TextField(
 											controller: _nombreController,
@@ -114,15 +120,6 @@ class _PantallaVendedoresAdminState extends ConsumerState<PantallaVendedoresAdmi
 												labelText: 'Nombre completo',
 												border: OutlineInputBorder(),
 												prefixIcon: Icon(Icons.person),
-											),
-										),
-										const SizedBox(height: 8.0),
-										TextField(
-											controller: _codigoController,
-											decoration: const InputDecoration(
-												labelText: 'Codigo de vendedor',
-												border: OutlineInputBorder(),
-												prefixIcon: Icon(Icons.tag),
 											),
 										),
 										const SizedBox(height: 12.0),
@@ -160,21 +157,24 @@ class _PantallaVendedoresAdminState extends ConsumerState<PantallaVendedoresAdmi
 
 	Future<void> _editarVendedor(Vendedor vendedor) async {
 		final nombreController = TextEditingController(text: vendedor.nombre);
-		final codigoController = TextEditingController(text: vendedor.codigo);
 		final guardar = await showDialog<bool>(
 			context: context,
 			builder: (ctx) => AlertDialog(
 				title: const Text('Editar vendedor'),
 				content: Column(
 					mainAxisSize: MainAxisSize.min,
+					crossAxisAlignment: CrossAxisAlignment.start,
 					children: [
+						Text(
+							'Código: ${vendedor.codigo}',
+							style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+								color: Colors.grey.shade700,
+							),
+						),
+						const SizedBox(height: 12.0),
 						TextField(
 							controller: nombreController,
 							decoration: const InputDecoration(labelText: 'Nombre'),
-						),
-						TextField(
-							controller: codigoController,
-							decoration: const InputDecoration(labelText: 'Codigo'),
 						),
 					],
 				),
@@ -189,38 +189,46 @@ class _PantallaVendedoresAdminState extends ConsumerState<PantallaVendedoresAdmi
 		);
 		if (guardar != true) {
 			nombreController.dispose();
-			codigoController.dispose();
 			return;
 		}
 		final servicio = await ref.read(servicioAdminProvider.future);
 		await servicio.actualizarVendedor(
-			vendedor.copiarCon(
-				nombre: nombreController.text.trim(),
-				codigo: codigoController.text.trim(),
-			),
+			vendedor.copiarCon(nombre: nombreController.text.trim()),
+			operador: ref.read(sesionUsuarioProvider),
 		);
 		nombreController.dispose();
-		codigoController.dispose();
 		ref.invalidate(_vendedoresProvider);
 	}
 
 	Future<void> _agregar() async {
 		final nombre = _nombreController.text.trim();
 		if (nombre.isEmpty) {
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(content: Text('Ingresa el nombre del vendedor')),
+			);
 			return;
 		}
 		final servicio = await ref.read(servicioAdminProvider.future);
-		await servicio.registrarVendedor(
+		final operador = ref.read(sesionUsuarioProvider);
+		final vendedor = await servicio.registrarVendedor(
 			nombre: nombre,
-			codigo: _codigoController.text.trim(),
+			operador: operador,
 		);
 		_nombreController.clear();
-		_codigoController.clear();
 		ref.invalidate(_vendedoresProvider);
+		if (!mounted) {
+			return;
+		}
+		ScaffoldMessenger.of(context).showSnackBar(
+			SnackBar(
+				content: Text('${vendedor.nombre} registrado con código ${vendedor.codigo}'),
+				backgroundColor: PosiaColors.cobrar,
+			),
+		);
 	}
 }
 
 final _vendedoresProvider = FutureProvider<List<Vendedor>>((ref) async {
 	final servicio = await ref.watch(servicioAdminProvider.future);
-	return servicio.listarVendedores();
+	return servicio.listarVendedores(operador: ref.watch(sesionUsuarioProvider));
 });

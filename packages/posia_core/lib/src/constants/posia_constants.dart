@@ -19,7 +19,7 @@ const String TIENDA_DEMO_NORTE_ID = '660e8400-e29b-41d4-a716-446655440002';
 const String CAJA_DEMO_1_ID = '770e8400-e29b-41d4-a716-446655440001';
 
 /// Version actual del esquema local SQLite.
-const int SCHEMA_VERSION = 6;
+const int SCHEMA_VERSION = 10;
 
 /// Identificador de categoria virtual "Todos" en caja.
 const String CATEGORIA_TODOS_ID = '__todos__';
@@ -49,10 +49,27 @@ const int INTERVALO_SYNC_PERIODICO_SEGUNDOS = 60;
 const String MDNS_SERVICIO_SYNC = 'posia-sync';
 
 /// PIN demo de acceso administrativo en entorno de desarrollo.
+/// Rol Administrador en inicio de sesion. Ver tambien README de posia_pos.
 const String PIN_ADMIN_DEMO = '1234';
 
-/// Longitud requerida del PIN administrativo.
+/// Longitud requerida del PIN de usuario y administrador.
 const int LONGITUD_PIN_ADMIN = 4;
+
+/// Identificadores de cuentas demo (codigo + PIN en pantalla de acceso).
+const String ID_USUARIO_DEMO_ADMIN = 'usr-demo-admin';
+const String CODIGO_USUARIO_DEMO_ADMIN = '1000';
+const String ID_USUARIO_DEMO_SUP_CENTRO = 'usr-demo-sup-centro';
+const String CODIGO_USUARIO_DEMO_SUP_CENTRO = '2001';
+const String ID_USUARIO_DEMO_SUP_NORTE = 'usr-demo-sup-norte';
+const String CODIGO_USUARIO_DEMO_SUP_NORTE = '2002';
+const String ID_USUARIO_DEMO_EMP_CENTRO = 'usr-demo-emp-centro';
+const String CODIGO_USUARIO_DEMO_EMP_CENTRO = '3001';
+
+/// PIN demo supervisor (rol Supervisor en inicio de sesion).
+const String PIN_USUARIO_DEMO_SUPERVISOR = '2345';
+
+/// PIN demo empleado (rol Empleado en inicio de sesion).
+const String PIN_USUARIO_DEMO_EMPLEADO = '3456';
 
 /// Maximo de tiendas activas permitidas por licencia estandar.
 const int LIMITE_MAX_TIENDAS = 5;

@@ -4,6 +4,7 @@ library;
 import 'dart:async';
 
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 
 import 'barcode_scanner.dart';
 
@@ -32,6 +33,11 @@ class TecladoBarcodeScanner implements BarcodeScanner {
 		if (event is! KeyDownEvent) {
 			return false;
 		}
+		if (_campoTextoTieneFoco()) {
+			_buffer.clear();
+			_ultimoCaracter = null;
+			return false;
+		}
 		final ahora = DateTime.now();
 		if (_ultimoCaracter != null &&
 			ahora.difference(_ultimoCaracter!).inMilliseconds > 400) {
@@ -54,5 +60,13 @@ class TecladoBarcodeScanner implements BarcodeScanner {
 			_buffer.write(caracter);
 		}
 		return false;
+	}
+
+	bool _campoTextoTieneFoco() {
+		final focus = FocusManager.instance.primaryFocus;
+		if (focus == null || !focus.hasFocus) {
+			return false;
+		}
+		return focus.context?.findAncestorWidgetOfExactType<EditableText>() != null;
 	}
 }

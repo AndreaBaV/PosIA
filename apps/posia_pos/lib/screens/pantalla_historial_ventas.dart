@@ -40,8 +40,8 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 						child: SegmentedButton<int>(
 							segments: const [
 								ButtonSegment(value: 1, label: Text('Hoy')),
-								ButtonSegment(value: 7, label: Text('7 dias')),
-								ButtonSegment(value: 30, label: Text('30 dias')),
+								ButtonSegment(value: 7, label: Text('7 días')),
+								ButtonSegment(value: 30, label: Text('30 días')),
 							],
 							selected: {_diasAtras},
 							onSelectionChanged: (s) => setState(() => _diasAtras = s.first),
@@ -70,7 +70,7 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 									return false;
 								}).toList();
 								if (filtradas.isEmpty) {
-									return const Center(child: Text('Sin ventas en el periodo'));
+									return const Center(child: Text('Sin ventas en el período'));
 								}
 								return ListView.builder(
 									itemCount: filtradas.length,
@@ -93,7 +93,7 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 												),
 												subtitle: Text(
 													'${venta.lineas.length} productos · '
-													'${venta.metodoPago.name} · '
+													'${etiquetaMetodoPago(venta.metodoPago)} · '
 													'${venta.creadaEn.toLocal().toString().substring(0, 16)}',
 												),
 												trailing: venta.puedeAnularse()
@@ -123,7 +123,7 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 			context: context,
 			builder: (ctx) => AlertDialog(
 				title: const Text('Anular venta'),
-				content: const Text('Se revertira el stock. Esta accion no se puede deshacer.'),
+				content: const Text('Se revertirá el stock. Esta acción no se puede deshacer.'),
 				actions: [
 					TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
 					FilledButton(
@@ -157,8 +157,8 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 			builder: (ctx) => AlertDialog(
 				title: const Text('Eliminar venta'),
 				content: const Text(
-					'Se eliminara permanentemente del historial. '
-					'Si estaba completada, el stock sera restaurado.',
+					'Se eliminará permanentemente del historial. '
+					'Si estaba completada, el stock será restaurado.',
 				),
 				actions: [
 					TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
@@ -227,8 +227,8 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 								],
 							),
 							const SizedBox(height: 16.0),
-							_wrapInfo('Estado', venta.estado.name),
-							_wrapInfo('Metodo de pago', venta.metodoPago.name),
+							_wrapInfo('Estado', etiquetaEstadoVenta(venta.estado)),
+							_wrapInfo('Método de pago', etiquetaMetodoPago(venta.metodoPago)),
 							_wrapInfo('Fecha', venta.creadaEn.toLocal().toString().substring(0, 19)),
 							if (venta.vendedorId != null)
 								_wrapInfo('Vendedor', venta.vendedorId!),
@@ -352,7 +352,7 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 						controller: controller,
 						keyboardType: TextInputType.number,
 						decoration: InputDecoration(
-							labelText: 'Cantidad (max ${linea.cantidad})',
+							labelText: 'Cantidad (máx. ${linea.cantidad})',
 						),
 					),
 					actions: [
@@ -380,7 +380,7 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 		}
 		messenger.showSnackBar(
 			SnackBar(
-				content: Text(ok ? 'Devolucion registrada' : 'No se pudo devolver'),
+				content: Text(ok ? 'Devolución registrada' : 'No se pudo devolver'),
 				backgroundColor: ok ? PosiaColors.cobrar : PosiaColors.cancelar,
 			),
 		);

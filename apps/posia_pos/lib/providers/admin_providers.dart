@@ -7,6 +7,7 @@
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:posia_core/posia_core.dart';
 import 'package:posia_database/posia_database.dart';
 
 import 'app_providers.dart';
@@ -38,28 +39,43 @@ class SesionTiendaNotifier extends Notifier<String?> {
 	}
 }
 
-/// Indica si el administrador ha desbloqueado el panel con PIN.
-final sesionAdminProvider = NotifierProvider<SesionAdminNotifier, bool>(
-	SesionAdminNotifier.new,
+/// Usuario autenticado en la sesion actual.
+final sesionUsuarioProvider = NotifierProvider<SesionUsuarioNotifier, Usuario?>(
+	SesionUsuarioNotifier.new,
 );
 
-/// Gestiona estado de sesion administrativa desbloqueada.
-class SesionAdminNotifier extends Notifier<bool> {
+/// Gestiona la cuenta de usuario activa en admin.
+class SesionUsuarioNotifier extends Notifier<Usuario?> {
 	@override
-	bool build() {
-		return false;
+	Usuario? build() {
+		return null;
 	}
 
-	/// Marca sesion admin como desbloqueada.
-	void desbloquear() {
-		state = true;
+	void iniciar(Usuario usuario) {
+		state = usuario;
 	}
 
-	/// Cierra sesion administrativa.
 	void cerrar() {
-		state = false;
+		state = null;
 	}
 }
+
+/// Indica si el tile administrativo es visible para el rol actual.
+bool tileAdminVisible(Usuario? usuario, String clave) {
+	if (usuario == null) {
+		return true;
+	}
+	if (usuario.rol == RolUsuario.empleado) {
+		return clave == 'mi_cuenta';
+	}
+	if (usuario.rol == RolUsuario.supervisor) {
+		return !{'tiendas', 'sync', 'config'}.contains(clave);
+	}
+	return true;
+}
+
+/// Indica si el usuario puede ver la pestaña Admin en la navegacion principal.
+bool puedeAccederPanelAdmin(Usuario usuario) => usuario.rol != RolUsuario.empleado;
 
 /// PIN administrativo configurado en el dispositivo.
 final pinAdminProvider = FutureProvider<String>((ref) async {

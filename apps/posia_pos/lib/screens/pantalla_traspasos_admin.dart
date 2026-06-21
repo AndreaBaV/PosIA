@@ -20,6 +20,7 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 	final _cantidadController = TextEditingController(text: '10');
 	final _notasController = TextEditingController();
 	final _busquedaController = TextEditingController();
+	String? _tiendaOrigenId;
 	String? _tiendaDestinoId;
 	String? _productoId;
 	String _filtro = '';
@@ -35,11 +36,17 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 	@override
 	Widget build(BuildContext context) {
 		final datosAsync = ref.watch(_traspasosDatosProvider);
-		final tiendaActivaId = ref.watch(tiendaActivaIdProvider).value;
+		final operador = ref.watch(sesionUsuarioProvider);
 		return Scaffold(
 			appBar: AppBar(title: const Text('Traspasos')),
 			body: datosAsync.when(
 				data: (datos) {
+					final origenId = _resolverOrigenId(datos, operador);
+					final destinos = datos.tiendas.where((t) => t.id != origenId).toList();
+					final destinoId = _tiendaDestinoId ?? destinos.firstOrNull?.id;
+					final productos = datos.productosPorTienda[origenId] ?? [];
+					final productoId = _productoId ?? productos.firstOrNull?.id;
+
 					final filtrados = datos.traspasos.where((t) {
 						if (_filtro.isEmpty) {
 							return true;
@@ -51,9 +58,7 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 							destino.toLowerCase().contains(q) ||
 							t.notas.toLowerCase().contains(q);
 					}).toList();
-					final tiendaActiva = datos.tiendas
-						.where((t) => t.id == tiendaActivaId)
-						.firstOrNull;
+
 					return Column(
 						children: [
 							CampoBusqueda(
@@ -61,12 +66,6 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 								sugerencia: 'Buscar traspaso...',
 								alCambiar: (v) => setState(() => _filtro = v.trim()),
 							),
-							if (tiendaActiva != null)
-								ListTile(
-									dense: true,
-									leading: const Icon(Icons.store),
-									title: Text('Origen: ${tiendaActiva.nombre}'),
-								),
 							Expanded(
 								child: filtrados.isEmpty
 									? const Center(child: Text('Sin traspasos registrados'))
@@ -76,6 +75,12 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 											final t = filtrados[i];
 											final origen = datos.nombresTienda[t.tiendaOrigenId] ?? '?';
 											final destino = datos.nombresTienda[t.tiendaDestinoId] ?? '?';
+											final linea = t.lineas.firstOrNull;
+											final detalle = linea == null
+												? ''
+												: ' · ${linea.nombreProducto.isNotEmpty ? linea.nombreProducto : linea.productoId}'
+													' ${linea.cantidadSolicitada.toStringAsFixed(0)} u.';
+											final pendiente = t.estado == EstadoTraspaso.enTransito;
 											return Card(
 												margin: const EdgeInsets.symmetric(
 													horizontal: 12.0,
@@ -84,18 +89,16 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 												child: ListTile(
 													title: Text('$origen → $destino'),
 													subtitle: Text(
-														'${t.estado.name} · ${t.lineas.length} lineas'
+														'${etiquetaEstadoTraspaso(t.estado)}$detalle'
 														'${t.notas.isNotEmpty ? ' · ${t.notas}' : ''}',
 													),
-													trailing: t.estado == EstadoTraspaso.enTransito &&
-														tiendaActivaId != null &&
-														t.tiendaDestinoId == tiendaActivaId
+													trailing: pendiente
 														? FilledButton(
-															onPressed: () => _recibir(t.id),
+															onPressed: () => _recibirPendiente(t.id),
 															child: const Text('Recibir'),
 														)
 														: Chip(
-															label: Text(t.estado.name),
+															label: Text(etiquetaEstadoTraspaso(t.estado)),
 														),
 												),
 											);
@@ -109,14 +112,41 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 									crossAxisAlignment: CrossAxisAlignment.stretch,
 									children: [
 										const Text(
-											'Nuevo traspaso',
+											'Transferir entre tiendas',
 											style: TextStyle(fontWeight: FontWeight.bold),
+										),
+										const SizedBox(height: 4.0),
+										const Text(
+											'Resta existencia en origen y suma en destino al instante.',
+											style: TextStyle(fontSize: 12.0, color: Colors.grey),
 										),
 										const SizedBox(height: 8.0),
 										DropdownButtonFormField<String>(
-											initialValue: _tiendaDestinoId ??
-												datos.destinos.firstOrNull?.id,
-											items: datos.destinos
+											initialValue: origenId,
+											items: datos.origenes
+												.map(
+													(t) => DropdownMenuItem(
+														value: t.id,
+														child: Text(t.nombre),
+													),
+												)
+												.toList(),
+											onChanged: operador != null &&
+												!PermisosUsuario.puedeGestionarTodasLasTiendas(operador)
+												? null
+												: (v) => setState(() {
+													_tiendaOrigenId = v;
+													_productoId = null;
+												}),
+											decoration: const InputDecoration(
+												labelText: 'Tienda origen',
+												border: OutlineInputBorder(),
+											),
+										),
+										const SizedBox(height: 8.0),
+										DropdownButtonFormField<String>(
+											initialValue: destinoId,
+											items: destinos
 												.map(
 													(t) => DropdownMenuItem(
 														value: t.id,
@@ -132,8 +162,8 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 										),
 										const SizedBox(height: 8.0),
 										DropdownButtonFormField<String>(
-											initialValue: _productoId ?? datos.productos.firstOrNull?.id,
-											items: datos.productos
+											initialValue: productoId,
+											items: productos
 												.map(
 													(p) => DropdownMenuItem(
 														value: p.id,
@@ -141,7 +171,9 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 													),
 												)
 												.toList(),
-											onChanged: (v) => setState(() => _productoId = v),
+											onChanged: productos.isEmpty
+												? null
+												: (v) => setState(() => _productoId = v),
 											decoration: const InputDecoration(
 												labelText: 'Producto',
 												border: OutlineInputBorder(),
@@ -166,9 +198,17 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 										),
 										const SizedBox(height: 8.0),
 										FilledButton.icon(
-											onPressed: () => _solicitar(datos),
-											icon: const Icon(Icons.send),
-											label: const Text('Solicitar traspaso'),
+											onPressed: origenId != null &&
+												destinoId != null &&
+												productoId != null
+												? () => _transferir(
+													origenId: origenId,
+													destinoId: destinoId,
+													productoId: productoId,
+												)
+												: null,
+											icon: const Icon(Icons.swap_horiz),
+											label: const Text('Transferir'),
 										),
 									],
 								),
@@ -182,26 +222,35 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 		);
 	}
 
-	Future<void> _solicitar(_DatosTraspasos datos) async {
-		final servicio = await ref.read(servicioAdminProvider.future);
-		final destino = _tiendaDestinoId ?? datos.destinos.firstOrNull?.id;
-		final producto = _productoId ?? datos.productos.firstOrNull?.id;
-		if (destino == null || producto == null) {
-			return;
+	String? _resolverOrigenId(_DatosTraspasos datos, Usuario? operador) {
+		if (operador != null && !PermisosUsuario.puedeGestionarTodasLasTiendas(operador)) {
+			return operador.tiendaId;
 		}
+		return _tiendaOrigenId ?? datos.origenes.firstOrNull?.id;
+	}
+
+	Future<void> _transferir({
+		required String origenId,
+		required String destinoId,
+		required String productoId,
+	}) async {
 		try {
-			await servicio.solicitarTraspaso(
-				tiendaDestinoId: destino,
-				productoId: producto,
+			final servicio = await ref.read(servicioAdminProvider.future);
+			final operador = ref.read(sesionUsuarioProvider);
+			await servicio.realizarTraspaso(
+				tiendaOrigenId: origenId,
+				tiendaDestinoId: destinoId,
+				productoId: productoId,
 				cantidad: double.tryParse(_cantidadController.text) ?? 0.0,
 				notas: _notasController.text.trim(),
+				operador: operador,
 			);
 			ref.invalidate(_traspasosDatosProvider);
 			if (!mounted) {
 				return;
 			}
 			ScaffoldMessenger.of(context).showSnackBar(
-				const SnackBar(content: Text('Traspaso solicitado')),
+				const SnackBar(content: Text('Traspaso realizado')),
 			);
 		} catch (error) {
 			if (!mounted) {
@@ -213,7 +262,7 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 		}
 	}
 
-	Future<void> _recibir(String traspasoId) async {
+	Future<void> _recibirPendiente(String traspasoId) async {
 		final servicio = await ref.read(servicioAdminProvider.future);
 		final ok = await servicio.recibirTraspaso(traspasoId);
 		if (!mounted) {
@@ -233,30 +282,34 @@ class _DatosTraspasos {
 	const _DatosTraspasos({
 		required this.traspasos,
 		required this.tiendas,
-		required this.destinos,
-		required this.productos,
+		required this.origenes,
+		required this.productosPorTienda,
 		required this.nombresTienda,
 	});
 
 	final List<Traspaso> traspasos;
 	final List<Tienda> tiendas;
-	final List<Tienda> destinos;
-	final List<Producto> productos;
+	final List<Tienda> origenes;
+	final Map<String, List<Producto>> productosPorTienda;
 	final Map<String, String> nombresTienda;
 }
 
 final _traspasosDatosProvider = FutureProvider<_DatosTraspasos>((ref) async {
 	final servicio = await ref.watch(servicioAdminProvider.future);
-	final tiendaActivaId = servicio.tiendaActivaId;
+	final operador = ref.watch(sesionUsuarioProvider);
 	final traspasos = await servicio.listarTraspasos();
-	final tiendas = await servicio.listarTiendasActivas();
-	final productos = await servicio.listarProductos();
+	final tiendas = await servicio.obtenerTiendasPermitidas(operador: operador);
 	final nombres = {for (final t in tiendas) t.id: t.nombre};
+	final productosPorTienda = <String, List<Producto>>{};
+	for (final tienda in tiendas) {
+		productosPorTienda[tienda.id] =
+			await servicio.listarProductosActivosPorTienda(tienda.id);
+	}
 	return _DatosTraspasos(
 		traspasos: traspasos,
 		tiendas: tiendas,
-		destinos: tiendas.where((t) => t.id != tiendaActivaId).toList(),
-		productos: productos,
+		origenes: tiendas,
+		productosPorTienda: productosPorTienda,
 		nombresTienda: nombres,
 	);
 });

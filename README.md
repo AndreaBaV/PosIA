@@ -33,22 +33,17 @@ POSIA/
 └── server/                 # Especificacion del hub de sync
 ```
 
-## Documentacion
+## Documentación
 
-| Documento | Descripcion |
+Índice completo: **[docs/README.md](docs/README.md)**
+
+| Documento | Descripción |
 |-----------|-------------|
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Arquitectura general del sistema |
-| [docs/CODING_STANDARDS.md](docs/CODING_STANDARDS.md) | Estandares de codificacion obligatorios |
-| [docs/MODULES.md](docs/MODULES.md) | Modulos activables por licencia |
-| [docs/SYNC.md](docs/SYNC.md) | Sincronizacion hub central y LAN |
-| [docs/PRICING.md](docs/PRICING.md) | Motor de precios mayoreo y preferencial |
-| [docs/HARDWARE.md](docs/HARDWARE.md) | Capa de hardware desacoplada |
-| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Despliegue y licenciamiento |
-| [docs/POS_DESKTOP.md](docs/POS_DESKTOP.md) | Funcionalidades del POS de escritorio |
-| [docs/MANUAL_USUARIO.md](docs/MANUAL_USUARIO.md) | Manual de usuario (caja y admin) |
-| [docs/ESTADO_PROYECTO.md](docs/ESTADO_PROYECTO.md) | Estado de madurez y limitaciones |
-| [docs/DATABASE.md](docs/DATABASE.md) | Esquema SQLite local |
-| [docs/UI_GUIDELINES.md](docs/UI_GUIDELINES.md) | Guia de interfaz para caja y admin |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Arquitectura del sistema |
+| [docs/MANUAL_USUARIO.md](docs/MANUAL_USUARIO.md) | Manual de operación (caja y admin) |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Despliegue, licencia y sync |
+| [docs/PUBLICACION_MOVIL.md](docs/PUBLICACION_MOVIL.md) | Google Play y App Store |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | Historial de versiones |
 
 ## Requisitos
 

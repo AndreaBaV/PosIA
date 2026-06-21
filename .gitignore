@@ -13,6 +13,9 @@ build/
 .env
 **/.env
 !.env.example
+**/android/key.properties
+**/*.keystore
+**/*.jks
 
 # Flutter
 **/flutter/ephemeral/

@@ -116,7 +116,7 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 									),
 									_metodoChip(MetodoPago.mixto, 'Mixto', Icons.call_split),
 									if (widget.creditoDisponible)
-										_metodoChip(MetodoPago.credito, 'Credito', Icons.handshake),
+										_metodoChip(MetodoPago.credito, 'Crédito', Icons.handshake),
 								],
 							),
 							if (_metodo == MetodoPago.efectivo) ...[

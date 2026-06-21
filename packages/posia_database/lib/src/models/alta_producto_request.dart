@@ -45,6 +45,8 @@ class InventarioAgrupado {
 		required this.productoId,
 		required this.nombreProducto,
 		required this.existenciasPorTienda,
+		required this.existenciasPorTiendaId,
+		required this.stockMinimoPorTiendaId,
 		required this.stockMinimoLocal,
 		required this.cantidadLocal,
 	});
@@ -52,15 +54,26 @@ class InventarioAgrupado {
 	final String productoId;
 	final String nombreProducto;
 	final Map<String, double> existenciasPorTienda;
+	final Map<String, double> existenciasPorTiendaId;
+	final Map<String, double> stockMinimoPorTiendaId;
 	final double stockMinimoLocal;
 	final double cantidadLocal;
 
 	double get totalGlobal {
 		var suma = 0.0;
-		for (final cantidad in existenciasPorTienda.values) {
+		for (final cantidad in existenciasPorTiendaId.values) {
 			suma = suma + cantidad;
 		}
 		return suma;
+	}
+
+	double cantidadEn(String tiendaId) => existenciasPorTiendaId[tiendaId] ?? 0.0;
+
+	double stockMinimoEn(String tiendaId) => stockMinimoPorTiendaId[tiendaId] ?? 0.0;
+
+	bool bajoMinimoEn(String tiendaId) {
+		final minimo = stockMinimoEn(tiendaId);
+		return cantidadEn(tiendaId) < minimo && minimo > 0.0;
 	}
 
 	bool get bajoMinimo => cantidadLocal < stockMinimoLocal && stockMinimoLocal > 0.0;

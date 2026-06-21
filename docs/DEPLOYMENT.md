@@ -1,90 +1,141 @@
-# Despliegue y licenciamiento POSIA
+# Despliegue y licenciamiento
 
-**Autor:** Equipo POSIA  
-**Matricula:** POSIA-2026-001  
-**Fecha creacion:** 2026-06-07 18:30:00 (UTC-6)  
-**Ultima modificacion:** 2026-06-11 16:20:00 (UTC-6)
+## Modelo comercial
 
----
+- **Licencia perpetua** (pago único); módulos adicionales por compra única
+- Primer año de soporte y sync hub incluido
+- Renovación anual opcional: actualizaciones + sync remoto + soporte
 
-## 1. Modelo comercial
-
-- **Licencia perpetua** (pago unico)
-- Modulos adicionales: compra unica por modulo
-- **Primer ano de soporte y sync hub** incluido
-- Renovacion anual opcional: actualizaciones + sync remoto + soporte
-
-Sin renovacion: las cajas siguen vendiendo offline; sync entre sucursales deja de actualizarse en nube.
+Sin renovación las cajas siguen vendiendo offline; la sync en nube deja de actualizarse.
 
 ---
 
-## 2. Despliegue por dispositivo
+## Builds por plataforma
 
-| Dispositivo | Plataforma | Rol | Comando de build |
-|-------------|------------|-----|------------------|
-| PC caja | Windows | Venta principal | `flutter build windows --release` |
-| Tablet / movil | Android | Caja alterna / inventario | `flutter build apk --release` |
-| Navegador | Web | Caja / consulta multiplataforma | `flutter build web --release` |
-| PC admin | Windows / Web | Reportes, configuracion | (mismos builds) |
+| Dispositivo | Plataforma | Comando |
+|-------------|------------|---------|
+| PC caja | Windows | `flutter build windows --release` |
+| Móvil / tablet | Android (Play Store) | `flutter build appbundle --release` |
+| Móvil / tablet | iOS (App Store) | `flutter build ipa --release` (requiere Mac) |
+| Navegador | Web | `flutter build web --release` |
 
-Las tres plataformas comparten el mismo codigo y la misma base SQLite local
-(archivo en escritorio/movil; IndexedDB via WASM en web). La base local se
-**crea y migra sola** en el primer arranque; no requiere pasos manuales.
+Scripts: `scripts/build_movil_release.ps1`, `scripts/generar_keystore_android.ps1`  
+Publicación móvil: [PUBLICACION_MOVIL.md](PUBLICACION_MOVIL.md)
 
-### Artefactos generados
+### Artefactos
 
-- Windows: `apps/posia_pos/build/windows/x64/runner/Release/` (carpeta completa distribuible)
-- Android: `apps/posia_pos/build/app/outputs/flutter-apk/app-release.apk`
-- Web: `apps/posia_pos/build/web/` (servir como sitio estatico; requiere `sqflite_sw.js` y `sqlite3.wasm` incluidos)
+| Plataforma | Ruta |
+|------------|------|
+| Windows | `apps/posia_pos/build/windows/x64/runner/Release/` |
+| Android AAB | `apps/posia_pos/build/app/outputs/bundle/release/app-release.aab` |
+| Android APK | `apps/posia_pos/build/app/outputs/flutter-apk/app-release.apk` |
+| Web | `apps/posia_pos/build/web/` |
 
----
-
-## 3. Hub de sincronizacion (nube)
-
-El hub vive en `server/sync_api` (Dart + shelf). Dos modos de almacenamiento:
-
-### Opcion recomendada: VPS multi-tenant con Docker
-
-- Hetzner / Vultr ~ USD 5-6/mes
-- `docker compose up -d --build` levanta Postgres + API
-- La base Postgres y la tabla `sync_events` se crean automaticamente
-- Un servidor sirve a multiples clientes (separados por `tenantId`)
-
-### Self-host simple (sin Docker)
-
-- Solo requiere Dart SDK: `dart run bin/server.dart`
-- Persiste en archivo JSONL local (`EVENTS_FILE`)
-- Adecuado para un solo negocio o pruebas
+SQLite local se crea y migra en el primer arranque. En web usa IndexedDB vía WASM (`sqflite_sw.js`, `sqlite3.wasm`).
 
 ---
 
-## 4. Instalacion caja
+## Instalación en caja
 
-1. Instalar `posia_pos` (carpeta Windows / APK / URL web)
-2. Importar archivo `posia.lic`
-3. En Admin > Sincronizacion, capturar URL del hub (ej. `http://servidor:8080`)
-4. Pulsar **Sincronizar ahora** para la carga inicial
-5. Configurar hardware (opcional)
+1. Instalar binario (carpeta Windows, AAB/APK o URL web)
+2. Importar `posia.lic`
+3. Seleccionar tienda e iniciar sesión
+4. Admin → Sincronización: URL del hub y API key (opcional)
+5. **Sincronizar ahora** para carga inicial
+6. Configurar impresora (opcional)
 
-La sincronizacion despues es **automatica**: al recuperar conexion y cada 60
-segundos la caja envia su cola pendiente y descarga eventos de otras cajas.
+Sync automática: cada 60 s y al recuperar red.
 
 ---
 
-## 5. Variables de entorno (hub)
+## Hub de sincronización
 
-| Variable | Descripcion |
+Código: `server/sync_api` (Dart + shelf). La caja solo habla HTTP con el hub; no conecta directo a Postgres.
+
+### Opción A — VPS con Docker (producción)
+
+```bash
+cd server/sync_api
+docker compose up -d --build
+```
+
+- Postgres + API en un servidor (~USD 5–6/mes en Hetzner/Vultr)
+- Tabla `sync_events` se crea al arrancar
+- Multi-tenant por `tenantId`
+
+### Opción B — Self-host sin Docker
+
+```bash
+cd server/sync_api
+dart run bin/server.dart
+```
+
+Persiste en JSONL (`EVENTS_FILE`). Adecuado para un negocio o desarrollo.
+
+### Opción C — Neon + Render (nube gratuita)
+
+| Componente | Servicio | Rol |
+|------------|----------|-----|
+| Postgres | [Neon](https://neon.tech) | Almacena `sync_events` |
+| API | [Render](https://render.com) | `POST/GET /v1/events` |
+| Caja | Local | SQLite + cola sync |
+
+**Neon:** crear proyecto → copiar connection string con `?sslmode=require`. No crear tablas manualmente.
+
+**Render:** Web Service, root `server/sync_api`, runtime Docker.
+
+| Variable | Valor |
+|----------|-------|
+| `DATABASE_URL` | Connection string Neon |
+| `API_KEY` | Clave secreta (`x-api-key`) |
+| `PORT` | `8080` |
+
+Verificar: `curl https://TU-URL.onrender.com/v1/health`
+
+> El plan free de Render duerme tras inactividad; la primera sync puede tardar ~30 s.
+
+**En cada caja:** Admin → Sincronizar → URL `https://TU-URL.onrender.com`, misma API key → Guardar → Sincronizar ahora.
+
+**Desarrollo local con Neon:**
+
+```powershell
+cd server\sync_api
+$env:DATABASE_URL="postgresql://...@ep-xxx.neon.tech/neondb?sslmode=require"
+$env:API_KEY="dev-secret"
+dart run bin/server.dart
+```
+
+Caja: URL `http://localhost:8080` y misma API key.
+
+### Variables de entorno (hub)
+
+| Variable | Descripción |
 |----------|-------------|
-| `DATABASE_URL` | Postgres connection; vacia = modo archivo |
-| `EVENTS_FILE` | Archivo JSONL en modo sin Postgres |
-| `API_KEY` | Clave compartida `x-api-key` (opcional) |
+| `DATABASE_URL` | Postgres; vacía = modo archivo JSONL |
+| `EVENTS_FILE` | Archivo JSONL sin Postgres |
+| `API_KEY` | Clave compartida (opcional) |
 | `PORT` | Puerto API (default 8080) |
 
+### Eventos sincronizados
+
+`saleCompleted`, `saleVoided`, `salePartialReturn`, `productUpserted`, `variantUpserted`, `categoryUpserted`, `customerUpserted`, `stockAdjusted`, `transferRequested`, `transferCompleted`
+
+### Solución de problemas (sync)
+
+| Problema | Solución |
+|----------|----------|
+| Hub no configurado | Admin → Sincronizar, capturar URL |
+| 401 Unauthorized | Igualar API key en servidor y caja |
+| SSL error | `?sslmode=require` en URL Neon |
+| Timeout primera sync | Render dormido — esperar o plan pago |
+| Eventos no llegan | Mismo `tenant_id` en licencia/config |
+
+Sin URL de hub la caja opera 100 % offline.
+
 ---
 
-## 6. Registro de cambios
+## Referencias
 
-| Fecha | Cambio |
-|-------|--------|
-| 2026-06-07 18:30 | Documento inicial |
-| 2026-06-11 16:20 | Hub implementado, web habilitada, sync automatica |
+- API del hub: `server/sync_api/README.md`
+- Operación diaria: [MANUAL_USUARIO.md](MANUAL_USUARIO.md) §10
+- Protocolo sync: [SYNC.md](SYNC.md)

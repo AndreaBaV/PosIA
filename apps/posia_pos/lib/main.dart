@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:posia_ui/posia_ui.dart';
 
 import 'screens/pantalla_acceso_tienda.dart';
+import 'screens/pantalla_inicio_sesion.dart';
 import 'bootstrap/inicializador_app.dart';
 import 'providers/admin_providers.dart';
 import 'providers/app_providers.dart';
@@ -32,15 +33,22 @@ class PosiaApp extends ConsumerWidget {
 	Widget build(BuildContext context, WidgetRef ref) {
 		final inicializado = ref.watch(estadoInicializacionProvider);
 		final tiendaConfirmada = ref.watch(sesionTiendaProvider);
+		final usuario = ref.watch(sesionUsuarioProvider);
 		ref.watch(sincronizadorAutomaticoProvider);
 		return MaterialApp(
 			title: 'POSIA',
 			debugShowCheckedModeBanner: false,
 			theme: PosiaTheme.construirTema(),
 			home: inicializado.when(
-				data: (_) => tiendaConfirmada != null
-					? const PantallaInicio()
-					: const PantallaAccesoTienda(),
+				data: (_) {
+					if (tiendaConfirmada == null) {
+						return const PantallaAccesoTienda();
+					}
+					if (usuario == null) {
+						return const PantallaInicioSesion();
+					}
+					return const PantallaInicio();
+				},
 				loading: () => const _PantallaCarga(),
 				error: (error, _) => _PantallaError(mensaje: error.toString()),
 			),
@@ -88,38 +96,44 @@ class _PantallaError extends StatelessWidget {
 	@override
 	Widget build(BuildContext context) {
 		return Scaffold(
-			body: Center(
-				child: Padding(
-					padding: const EdgeInsets.all(24.0),
-					child: ConstrainedBox(
-						constraints: const BoxConstraints(maxWidth: 420.0),
-						child: Column(
-							mainAxisAlignment: MainAxisAlignment.center,
-							children: [
-								const Icon(Icons.error_outline, size: 64.0, color: PosiaColors.cancelar),
-								const SizedBox(height: 16.0),
-								const Text(
-									'No se pudo iniciar POSIA',
-									style: TextStyle(fontSize: 20.0, fontWeight: FontWeight.bold),
-									textAlign: TextAlign.center,
+			body: LayoutBuilder(
+				builder: (context, constraints) {
+					return Center(
+						child: ConstrainedBox(
+							constraints: BoxConstraints(
+								maxWidth: LayoutResponsivo.anchoMaximoFormulario(constraints.maxWidth),
+							),
+							child: Padding(
+								padding: LayoutResponsivo.paddingTodo(context),
+								child: Column(
+									mainAxisAlignment: MainAxisAlignment.center,
+									children: [
+										const Icon(Icons.error_outline, size: 64.0, color: PosiaColors.cancelar),
+										const SizedBox(height: 16.0),
+										const Text(
+											'No se pudo iniciar POSIA',
+											style: TextStyle(fontSize: 20.0, fontWeight: FontWeight.bold),
+											textAlign: TextAlign.center,
+										),
+										const SizedBox(height: 12.0),
+										Text(
+											mensaje,
+											textAlign: TextAlign.center,
+											style: const TextStyle(color: Colors.grey),
+										),
+										const SizedBox(height: 24.0),
+										const Text(
+											'Cierra la app, verifica permisos de almacenamiento '
+											'y vuelve a abrir. Si persiste, reinstala desde la carpeta Release.',
+											textAlign: TextAlign.center,
+											style: TextStyle(fontSize: 13.0),
+										),
+									],
 								),
-								const SizedBox(height: 12.0),
-								Text(
-									mensaje,
-									textAlign: TextAlign.center,
-									style: const TextStyle(color: Colors.grey),
-								),
-								const SizedBox(height: 24.0),
-								const Text(
-									'Cierra la app, verifica permisos de almacenamiento '
-									'y vuelve a abrir. Si persiste, reinstala desde la carpeta Release.',
-									textAlign: TextAlign.center,
-									style: TextStyle(fontSize: 13.0),
-								),
-							],
+							),
 						),
-					),
-				),
+					);
+				},
 			),
 		);
 	}

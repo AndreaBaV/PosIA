@@ -86,7 +86,7 @@ class PantallaListasPreciosAdmin extends ConsumerWidget {
 			context: context,
 			builder: (ctx) => AlertDialog(
 				title: const Text('Eliminar lista'),
-				content: Text('Eliminar "${lista.nombre}" y sus precios?'),
+				content: Text('¿Eliminar "${lista.nombre}" y sus precios?'),
 				actions: [
 					TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No')),
 					FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Si')),

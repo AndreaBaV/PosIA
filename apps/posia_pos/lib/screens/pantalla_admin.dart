@@ -1,21 +1,18 @@
 /// Menu principal de administracion con accesos iconograficos.
-///
-/// Autor: Equipo POSIA
-/// Matricula: POSIA-2026-001
-/// Fecha creacion: 2026-06-07 19:45:00 (UTC-6)
-/// Ultima modificacion: 2026-06-11 22:00:00 (UTC-6)
 library;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:posia_core/posia_core.dart';
 import 'package:posia_ui/posia_ui.dart';
 
+import '../providers/admin_providers.dart';
 import 'pantalla_categorias_admin.dart';
 import 'pantalla_clientes_admin.dart';
 import 'pantalla_corte_caja.dart';
 import 'pantalla_historial_ventas.dart';
 import 'pantalla_inventario_admin.dart';
 import 'pantalla_listas_precios_admin.dart';
+import 'pantalla_mi_cuenta.dart';
 import 'pantalla_movimientos_inventario.dart';
 import 'pantalla_productos_admin.dart';
 import 'pantalla_proveedores_admin.dart';
@@ -24,110 +21,236 @@ import 'pantalla_configuracion_admin.dart';
 import 'pantalla_sync_admin.dart';
 import 'pantalla_tiendas_admin.dart';
 import 'pantalla_traspasos_admin.dart';
+import 'pantalla_usuarios_admin.dart';
 import 'pantalla_vendedores_admin.dart';
 import 'pantalla_ventas_dia.dart';
 
 /// Panel admin organizado por secciones operativas.
-class PantallaAdmin extends ConsumerWidget {
-	const PantallaAdmin({super.key});
+class PantallaAdmin extends StatelessWidget {
+	const PantallaAdmin({required this.usuario, super.key});
+
+	final Usuario usuario;
 
 	@override
-	Widget build(BuildContext context, WidgetRef ref) {
+	Widget build(BuildContext context) {
+		final tiles = _construirTiles(usuario);
+		final colorRol = PresentacionRol.color(usuario.rol);
 		return Scaffold(
 			appBar: AppBar(
-				title: const Row(
-					children: [
-						Icon(Icons.admin_panel_settings),
-						SizedBox(width: 8.0),
-						Text('Administracion'),
-					],
-				),
+				title: const Text('Administración'),
 			),
-			body: ListView(
-				padding: const EdgeInsets.all(16.0),
-				children: [
-					_seccion(context, 'Ventas', [
-						_tile(context, Icons.attach_money, 'Ventas hoy', 'Resumen del dia',
-							PosiaColors.cobrar, const PantallaVentasDia()),
-						_tile(context, Icons.history, 'Historial', 'Ventas y cancelaciones',
-							Colors.green, const PantallaHistorialVentas()),
-						_tile(context, Icons.point_of_sale, 'Corte de caja', 'Abrir / cerrar turno',
-							Colors.teal, const PantallaCorteCaja()),
-						_tile(context, Icons.badge, 'Vendedores', 'Personal de venta',
-							Colors.deepPurple, const PantallaVendedoresAdmin()),
-					]),
-					_seccion(context, 'Catalogo', [
-						_tile(context, Icons.category, 'Categorias', 'Iconos, color y orden',
-							Colors.orange, const PantallaCategoriasAdmin()),
-						_tile(context, Icons.inventory_2, 'Productos', 'Catalogo unificado',
-							PosiaColors.neutro, const PantallaProductosAdmin()),
-						_tile(context, Icons.sell, 'Listas precios', 'Mayoreo y distribuidor',
-							Colors.green, const PantallaListasPreciosAdmin()),
-					]),
-					_seccion(context, 'Inventario', [
-						_tile(context, Icons.warehouse, 'Existencias', 'Multi-tienda',
-							Colors.blueGrey, const PantallaInventarioAdmin()),
-						_tile(context, Icons.swap_vert, 'Movimientos', 'Entradas y salidas',
-							Colors.indigo, const PantallaMovimientosInventario()),
-						_tile(context, Icons.swap_horiz, 'Traspasos', 'Entre sucursales',
-							Colors.cyan, const PantallaTraspasosAdmin()),
-					]),
-					_seccion(context, 'Personas', [
-						_tile(context, Icons.people, 'Clientes', 'Gestion de clientes',
-							Colors.blue, const PantallaClientesAdmin()),
-						_tile(context, Icons.local_shipping, 'Proveedores', 'Gestion de proveedores',
-							Colors.brown, const PantallaProveedoresAdmin()),
-					]),
-					_seccion(context, 'Reportes y sistema', [
-						_tile(context, Icons.store, 'Tiendas', 'Alta, baja y limite 5',
-							Colors.deepOrange, const PantallaTiendasAdmin()),
-						_tile(context, Icons.assessment, 'Reportes', 'Ventas y alertas',
-							Colors.purple, const PantallaReportesAdmin()),
-						_tile(context, Icons.cloud_sync, 'Sincronizar', 'Estado de la nube',
-							Colors.indigo, const PantallaSyncAdmin()),
-						_tile(context, Icons.settings, 'Configuracion', 'PIN y dispositivo',
-							Colors.grey, const PantallaConfiguracionAdmin()),
-					]),
-				],
+			body: LayoutBuilder(
+				builder: (context, constraints) {
+					final padding = LayoutResponsivo.padding(constraints.maxWidth);
+					final columnas = LayoutResponsivo.columnasGrid(constraints.maxWidth);
+					final secciones = <Widget>[];
+					for (final entrada in tiles.entries) {
+						if (entrada.value.isEmpty) {
+							continue;
+						}
+						secciones.add(_seccion(context, entrada.key, entrada.value, columnas));
+					}
+					return ListView(
+						padding: EdgeInsets.all(padding),
+						children: [
+							Card(
+								color: colorRol.withValues(alpha: 0.08),
+								child: Padding(
+									padding: const EdgeInsets.all(16.0),
+									child: Row(
+										children: [
+											CircleAvatar(
+												radius: 26.0,
+												backgroundColor: colorRol.withValues(alpha: 0.15),
+												child: Icon(
+													PresentacionRol.icono(usuario.rol),
+													color: colorRol,
+													size: 28.0,
+												),
+											),
+											const SizedBox(width: 14.0),
+											Expanded(
+												child: Column(
+													crossAxisAlignment: CrossAxisAlignment.start,
+													children: [
+														Text(
+															usuario.nombre,
+															style: Theme.of(context).textTheme.titleMedium?.copyWith(
+																fontWeight: FontWeight.bold,
+															),
+														),
+														const SizedBox(height: 4.0),
+														InsigniaRol(rol: usuario.rol),
+														const SizedBox(height: 6.0),
+														Text(
+															PermisosUsuario.descripcionRol(usuario.rol),
+															style: Theme.of(context).textTheme.bodySmall?.copyWith(
+																color: Colors.grey.shade700,
+															),
+														),
+													],
+												),
+											),
+										],
+									),
+								),
+							),
+							...secciones,
+						],
+					);
+				},
 			),
 		);
 	}
 
-	Widget _seccion(BuildContext context, String titulo, List<Widget> hijos) {
+	Map<String, List<Widget>> _construirTiles(Usuario? usuario) {
+		Widget? tile(
+			String clave,
+			IconData icono,
+			String titulo,
+			String subtitulo,
+			Color color,
+			Widget destino,
+		) {
+			if (!tileAdminVisible(usuario, clave)) {
+				return null;
+			}
+			return _AdminTile(
+				icono: icono,
+				titulo: titulo,
+				subtitulo: subtitulo,
+				color: color,
+				destino: destino,
+			);
+		}
+
+		final cuenta = [
+			tile('mi_cuenta', Icons.account_circle, 'Mi cuenta', 'Perfil y PIN',
+				Colors.blueGrey, const PantallaMiCuenta()),
+			tile('usuarios', Icons.manage_accounts, 'Usuarios', 'Cuentas y roles',
+				Colors.blue, const PantallaUsuariosAdmin()),
+		].whereType<Widget>().toList();
+
+		final ventas = [
+			tile('ventas', Icons.attach_money, 'Ventas por tienda', 'Detalle multi-sucursal',
+				PosiaColors.cobrar, const PantallaVentasDia()),
+			tile('historial', Icons.history, 'Historial', 'Ventas y cancelaciones',
+				Colors.green, const PantallaHistorialVentas()),
+			tile('corte', Icons.point_of_sale, 'Corte de caja', 'Abrir / cerrar turno',
+				Colors.teal, const PantallaCorteCaja()),
+			tile('vendedores', Icons.badge, 'Vendedores', 'Personal de venta',
+				Colors.deepPurple, const PantallaVendedoresAdmin()),
+		].whereType<Widget>().toList();
+
+		final catalogo = [
+			tile('categorias', Icons.category, 'Categorías', 'Iconos, color y orden',
+				Colors.orange, const PantallaCategoriasAdmin()),
+			tile('productos', Icons.inventory_2, 'Productos', 'Catálogo unificado',
+				PosiaColors.neutro, const PantallaProductosAdmin()),
+			tile('precios', Icons.sell, 'Listas precios', 'Mayoreo y distribuidor',
+				Colors.green, const PantallaListasPreciosAdmin()),
+		].whereType<Widget>().toList();
+
+		final inventario = [
+			tile('existencias', Icons.warehouse, 'Existencias', 'Multi-tienda',
+				Colors.blueGrey, const PantallaInventarioAdmin()),
+			tile('movimientos', Icons.swap_vert, 'Movimientos', 'Entradas y salidas',
+				Colors.indigo, const PantallaMovimientosInventario()),
+			tile('traspasos', Icons.swap_horiz, 'Traspasos', 'Entre sucursales',
+				Colors.cyan, const PantallaTraspasosAdmin()),
+		].whereType<Widget>().toList();
+
+		final personas = [
+			tile('clientes', Icons.people, 'Clientes', 'Gestión de clientes',
+				Colors.blue, const PantallaClientesAdmin()),
+			tile('proveedores', Icons.local_shipping, 'Proveedores', 'Gestión de proveedores',
+				Colors.brown, const PantallaProveedoresAdmin()),
+		].whereType<Widget>().toList();
+
+		final sistema = [
+			tile('tiendas', Icons.store, 'Tiendas', 'Alta, baja y límite 5',
+				Colors.deepOrange, const PantallaTiendasAdmin()),
+			tile('reportes', Icons.assessment, 'Reportes', 'Ventas y alertas',
+				Colors.purple, const PantallaReportesAdmin()),
+			tile('sync', Icons.cloud_sync, 'Sincronizar', 'Estado de la nube',
+				Colors.indigo, const PantallaSyncAdmin()),
+			tile('config', Icons.settings, 'Configuración', 'PIN y dispositivo',
+				Colors.grey, const PantallaConfiguracionAdmin()),
+		].whereType<Widget>().toList();
+
+		return {
+			'Cuenta': cuenta,
+			'Ventas': ventas,
+			'Catálogo': catalogo,
+			'Inventario': inventario,
+			'Personas': personas,
+			'Reportes y sistema': sistema,
+		};
+	}
+
+	Widget _seccion(
+		BuildContext context,
+		String titulo,
+		List<Widget> hijos,
+		int columnas,
+	) {
 		return Column(
 			crossAxisAlignment: CrossAxisAlignment.start,
 			children: [
 				Padding(
-					padding: const EdgeInsets.only(bottom: 8.0, top: 8.0),
-					child: Text(
-						titulo,
-						style: Theme.of(context).textTheme.titleMedium?.copyWith(
-							fontWeight: FontWeight.bold,
-						),
+					padding: const EdgeInsets.only(bottom: 10.0, top: 12.0),
+					child: Row(
+						children: [
+							Container(
+								width: 4.0,
+								height: 22.0,
+								decoration: BoxDecoration(
+									color: PosiaColors.cobrar,
+									borderRadius: BorderRadius.circular(2.0),
+								),
+							),
+							const SizedBox(width: 10.0),
+							Text(
+								titulo,
+								style: Theme.of(context).textTheme.titleMedium?.copyWith(
+									fontWeight: FontWeight.bold,
+								),
+							),
+						],
 					),
 				),
 				GridView.count(
-					crossAxisCount: 3,
+					crossAxisCount: columnas,
 					shrinkWrap: true,
 					physics: const NeverScrollableScrollPhysics(),
 					mainAxisSpacing: 12.0,
 					crossAxisSpacing: 12.0,
-					childAspectRatio: 1.1,
+					childAspectRatio: columnas >= 4 ? 1.05 : 1.1,
 					children: hijos,
 				),
 				const SizedBox(height: 8.0),
 			],
 		);
 	}
+}
 
-	Widget _tile(
-		BuildContext context,
-		IconData icono,
-		String titulo,
-		String subtitulo,
-		Color color,
-		Widget destino,
-	) {
+class _AdminTile extends StatelessWidget {
+	const _AdminTile({
+		required this.icono,
+		required this.titulo,
+		required this.subtitulo,
+		required this.color,
+		required this.destino,
+	});
+
+	final IconData icono;
+	final String titulo;
+	final String subtitulo;
+	final Color color;
+	final Widget destino;
+
+	@override
+	Widget build(BuildContext context) {
 		return TarjetaMenuAdmin(
 			icono: icono,
 			titulo: titulo,

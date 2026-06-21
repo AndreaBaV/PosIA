@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:posia_core/posia_core.dart';
 
 import '../providers/admin_providers.dart';
+import 'seccion_descuentos_cliente.dart';
 
 class PantallaFichaCliente extends ConsumerStatefulWidget {
 	const PantallaFichaCliente({required this.cliente, super.key});
@@ -32,7 +33,7 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 	@override
 	void initState() {
 		super.initState();
-		_tabs = TabController(length: 2, vsync: this);
+		_tabs = TabController(length: 3, vsync: this);
 		final c = widget.cliente;
 		_nombreController = TextEditingController(text: c.nombre);
 		_telefonoController = TextEditingController(text: c.telefono);
@@ -68,6 +69,7 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 					controller: _tabs,
 					tabs: const [
 						Tab(text: 'Datos'),
+						Tab(text: 'Descuentos'),
 						Tab(text: 'Ventas'),
 					],
 				),
@@ -92,7 +94,7 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 							TextField(
 								controller: _telefonoController,
 								decoration: const InputDecoration(
-									labelText: 'Telefono',
+									labelText: 'Teléfono',
 									border: OutlineInputBorder(),
 								),
 							),
@@ -117,7 +119,7 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 								controller: _direccionController,
 								maxLines: 2,
 								decoration: const InputDecoration(
-									labelText: 'Direccion',
+									labelText: 'Dirección',
 									border: OutlineInputBorder(),
 								),
 							),
@@ -161,7 +163,7 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 								),
 							),
 							SwitchListTile(
-								title: const Text('Credito habilitado'),
+								title: const Text('Crédito habilitado'),
 								value: _credito,
 								onChanged: (v) => setState(() => _credito = v),
 							),
@@ -172,6 +174,7 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 							),
 						],
 					),
+					SeccionDescuentosCliente(clienteId: widget.cliente.id),
 					Column(
 						children: [
 							resumenAsync.when(

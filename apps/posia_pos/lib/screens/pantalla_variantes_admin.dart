@@ -62,7 +62,7 @@ class _PantallaVariantesAdminState extends ConsumerState<PantallaVariantesAdmin>
 						FilledButton.icon(
 							onPressed: _agregarVariante,
 							icon: const Icon(Icons.add),
-							label: const Text('Agregar presentacion'),
+							label: const Text('Agregar presentación'),
 						),
 					],
 				),
@@ -80,7 +80,7 @@ class _PantallaVariantesAdminState extends ConsumerState<PantallaVariantesAdmin>
 		final guardar = await showDialog<bool>(
 			context: context,
 			builder: (ctx) => AlertDialog(
-				title: const Text('Nueva presentacion'),
+				title: const Text('Nueva presentación'),
 				content: Column(
 					mainAxisSize: MainAxisSize.min,
 					children: [
@@ -94,7 +94,7 @@ class _PantallaVariantesAdminState extends ConsumerState<PantallaVariantesAdmin>
 						),
 						TextField(
 							controller: codigoController,
-							decoration: const InputDecoration(labelText: 'Codigo de barras'),
+							decoration: const InputDecoration(labelText: 'Código de barras'),
 						),
 						TextField(
 							controller: precioController,
@@ -143,7 +143,7 @@ class _PantallaVariantesAdminState extends ConsumerState<PantallaVariantesAdmin>
 		final guardar = await showDialog<bool>(
 			context: context,
 			builder: (ctx) => AlertDialog(
-				title: const Text('Editar presentacion'),
+				title: const Text('Editar presentación'),
 				content: Column(
 					mainAxisSize: MainAxisSize.min,
 					children: [
@@ -157,7 +157,7 @@ class _PantallaVariantesAdminState extends ConsumerState<PantallaVariantesAdmin>
 						),
 						TextField(
 							controller: codigoController,
-							decoration: const InputDecoration(labelText: 'Codigo de barras'),
+							decoration: const InputDecoration(labelText: 'Código de barras'),
 						),
 						TextField(
 							controller: precioController,

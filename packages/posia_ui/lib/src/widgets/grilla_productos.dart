@@ -20,11 +20,19 @@ class GrillaProductos extends StatelessWidget {
 	const GrillaProductos({
 		required this.productos,
 		required this.alSeleccionar,
+		this.categoriaId,
+		this.mensajeVacio = 'Sin productos en esta categoría',
 		super.key,
 	});
 
 	/// Productos disponibles en catalogo.
 	final List<Producto> productos;
+
+	/// Categoria activa (para conservar scroll al cambiar filtro).
+	final String? categoriaId;
+
+	/// Mensaje cuando no hay productos visibles.
+	final String mensajeVacio;
 
 	/// Accion al seleccionar producto.
 	final ValueChanged<Producto> alSeleccionar;
@@ -36,30 +44,33 @@ class GrillaProductos extends StatelessWidget {
 				child: Column(
 					mainAxisAlignment: MainAxisAlignment.center,
 					children: [
-						const Icon(Icons.inventory_2_outlined, size: 64.0, color: Colors.grey),
+						Icon(Icons.inventory_2_outlined, size: 64.0, color: Colors.grey.shade400),
 						const SizedBox(height: 12.0),
 						Text(
-							'Sin productos en esta categoria',
+							mensajeVacio,
 							style: Theme.of(context).textTheme.titleMedium?.copyWith(
-								color: Colors.grey,
+								color: Colors.grey.shade600,
 							),
+							textAlign: TextAlign.center,
 						),
 					],
 				),
 			);
 		}
 		return GridView.builder(
+			key: PageStorageKey<String>('grilla_${categoriaId ?? 'todos'}'),
 			padding: const EdgeInsets.all(12.0),
 			gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
 				crossAxisCount: 3,
-				mainAxisSpacing: 12.0,
-				crossAxisSpacing: 12.0,
-				childAspectRatio: 0.85,
+				mainAxisSpacing: 10.0,
+				crossAxisSpacing: 10.0,
+				childAspectRatio: 0.88,
 			),
 			itemCount: productos.length,
 			itemBuilder: (context, indice) {
 				final producto = productos[indice];
 				return _TarjetaProducto(
+					key: ValueKey(producto.id),
 					producto: producto,
 					alPresionar: () => alSeleccionar(producto),
 				);
@@ -73,6 +84,7 @@ class _TarjetaProducto extends StatelessWidget {
 	const _TarjetaProducto({
 		required this.producto,
 		required this.alPresionar,
+		super.key,
 	});
 
 	final Producto producto;
@@ -82,37 +94,48 @@ class _TarjetaProducto extends StatelessWidget {
 	Widget build(BuildContext context) {
 		return Material(
 			color: PosiaColors.tarjeta,
-			borderRadius: BorderRadius.circular(16.0),
-			elevation: 2.0,
+			borderRadius: BorderRadius.circular(14.0),
+			elevation: 1.0,
+			shadowColor: Colors.black.withValues(alpha: 0.08),
 			child: InkWell(
 				onTap: alPresionar,
-				borderRadius: BorderRadius.circular(16.0),
+				borderRadius: BorderRadius.circular(14.0),
 				child: Padding(
-					padding: const EdgeInsets.all(8.0),
+					padding: const EdgeInsets.all(10.0),
 					child: Column(
 						mainAxisAlignment: MainAxisAlignment.center,
 						children: [
-							Icon(
-								_resolverIconoProducto(producto),
-								size: 56.0,
-								color: PosiaColors.cobrar,
+							Container(
+								padding: const EdgeInsets.all(10.0),
+								decoration: BoxDecoration(
+									color: PosiaColors.cobrar.withValues(alpha: 0.1),
+									borderRadius: BorderRadius.circular(12.0),
+								),
+								child: Icon(
+									_resolverIconoProducto(producto),
+									size: 40.0,
+									color: PosiaColors.cobrar,
+								),
 							),
 							const SizedBox(height: 8.0),
 							Text(
 								formatearMoneda(producto.precioBase),
-								style: Theme.of(context).textTheme.titleLarge?.copyWith(
+								style: Theme.of(context).textTheme.titleMedium?.copyWith(
 									color: PosiaColors.cobrar,
+									fontWeight: FontWeight.bold,
 								),
 							),
 							if (producto.moduloVertical == ModuloVertical.carniceria)
-								const Text('/ kg', style: TextStyle(color: Colors.grey)),
+								Text('/ kg', style: TextStyle(color: Colors.grey.shade600, fontSize: 11.0)),
 							const SizedBox(height: 4.0),
 							Text(
 								producto.nombre,
 								textAlign: TextAlign.center,
 								maxLines: 2,
 								overflow: TextOverflow.ellipsis,
-								style: Theme.of(context).textTheme.bodyLarge,
+								style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+									fontWeight: FontWeight.w500,
+								),
 							),
 						],
 					),
@@ -121,10 +144,6 @@ class _TarjetaProducto extends StatelessWidget {
 		);
 	}
 
-	/// Resuelve icono Material segun tipo de producto demo.
-	///
-	/// [producto] Producto a representar visualmente.
-	/// Retorna icono apropiado cuando no hay imagen asset cargada.
 	IconData _resolverIconoProducto(Producto producto) {
 		final nombre = producto.nombre.toLowerCase();
 		if (nombre.contains('coca')) {

@@ -1,75 +1,123 @@
 /// Shell principal con navegacion entre caja y administracion.
-///
-/// Autor: Equipo POSIA
-/// Matricula: POSIA-2026-001
-/// Fecha creacion: 2026-06-07 19:45:00 (UTC-6)
-/// Ultima modificacion: 2026-06-07 19:45:00 (UTC-6)
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
+import '../providers/app_providers.dart';
 import '../util/plataforma_util.dart';
-import '../widgets/banner_listo_demo.dart';
-import 'pantalla_acceso_admin.dart';
 import 'pantalla_admin.dart';
 import 'pantalla_caja.dart';
 import 'pantalla_caja_movil.dart';
+import 'pantalla_mi_cuenta.dart';
 
 /// Contenedor raiz post-inicializacion con pestañas Caja y Admin.
-class PantallaInicio extends ConsumerWidget {
-	/// Crea shell de navegacion principal.
+class PantallaInicio extends ConsumerStatefulWidget {
 	const PantallaInicio({super.key});
 
 	@override
-	Widget build(BuildContext context, WidgetRef ref) {
-		final adminDesbloqueado = ref.watch(sesionAdminProvider);
+	ConsumerState<PantallaInicio> createState() => _PantallaInicioState();
+}
+
+class _PantallaInicioState extends ConsumerState<PantallaInicio> {
+	int _indicePestana = 0;
+
+	@override
+	void initState() {
+		super.initState();
+		WidgetsBinding.instance.addPostFrameCallback((_) => _sincronizarVendedorSesion());
+	}
+
+	Future<void> _sincronizarVendedorSesion() async {
+		final usuario = ref.read(sesionUsuarioProvider);
+		if (usuario == null) {
+			return;
+		}
+		final servicioCaja = await ref.read(servicioCajaProvider.future);
+		await servicioCaja.asegurarVendedorDesdeUsuario(usuario);
+		await ref.read(carritoNotifierProvider.notifier).recargar();
+	}
+
+	void _abrirMiCuenta(BuildContext context) {
+		Navigator.of(context).push(
+			MaterialPageRoute<void>(builder: (_) => const PantallaMiCuenta()),
+		);
+	}
+
+	@override
+	Widget build(BuildContext context) {
+		final usuario = ref.watch(sesionUsuarioProvider);
+		if (usuario == null) {
+			return const Scaffold(
+				body: Center(child: CircularProgressIndicator()),
+			);
+		}
+		final muestraAdmin = puedeAccederPanelAdmin(usuario);
 		final caja = esPlataformaMovilNativa()
 			? const PantallaCajaMovil()
 			: const PantallaCaja();
 		return Scaffold(
 			body: Column(
 				children: [
-					if (!adminDesbloqueado) const BannerListoDemo(),
+					BarraSesionUsuario(
+						nombreUsuario: usuario.nombre,
+						rol: usuario.rol,
+						nombreTienda: _nombreTienda(context, ref),
+						alAbrirMiCuenta: () => _abrirMiCuenta(context),
+						alCerrarSesion: () {
+							ref.read(sesionUsuarioProvider.notifier).cerrar();
+						},
+					),
 					Expanded(
-						child: IndexedStack(
-							index: adminDesbloqueado ? 1 : 0,
-							children: [
-								caja,
-								const PantallaAdmin(),
-							],
-						),
+						child: muestraAdmin
+							? IndexedStack(
+								index: _indicePestana,
+								children: [
+									caja,
+									PantallaAdmin(usuario: usuario),
+								],
+							)
+							: caja,
 					),
 				],
 			),
-			bottomNavigationBar: NavigationBar(
-				selectedIndex: adminDesbloqueado ? 1 : 0,
-				onDestinationSelected: (indice) {
-					if (indice == 0) {
-						ref.read(sesionAdminProvider.notifier).cerrar();
-						return;
-					}
-					if (adminDesbloqueado) {
-						return;
-					}
-					Navigator.of(context).push(
-						MaterialPageRoute<void>(
-							builder: (_) => const PantallaAccesoAdmin(),
+			bottomNavigationBar: muestraAdmin
+				? NavigationBar(
+					height: 68.0,
+					labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+					selectedIndex: _indicePestana,
+					onDestinationSelected: (indice) => setState(() => _indicePestana = indice),
+					destinations: const [
+						NavigationDestination(
+							icon: Icon(Icons.point_of_sale_outlined),
+							selectedIcon: Icon(Icons.point_of_sale),
+							label: 'Caja',
 						),
-					);
-				},
-				destinations: const [
-					NavigationDestination(
-						icon: Icon(Icons.point_of_sale),
-						label: 'Caja',
-					),
-					NavigationDestination(
-						icon: Icon(Icons.admin_panel_settings),
-						label: 'Admin',
-					),
-				],
-			),
+						NavigationDestination(
+							icon: Icon(Icons.admin_panel_settings_outlined),
+							selectedIcon: Icon(Icons.admin_panel_settings),
+							label: 'Admin',
+						),
+					],
+				)
+				: null,
+		);
+	}
+
+	String _nombreTienda(BuildContext context, WidgetRef ref) {
+		final tiendaAsync = ref.watch(_tiendaActivaNombreProvider);
+		return tiendaAsync.when(
+			data: (nombre) => nombre,
+			loading: () => 'Tienda',
+			error: (_, _) => 'Tienda',
 		);
 	}
 }
+
+final _tiendaActivaNombreProvider = FutureProvider<String>((ref) async {
+	final servicio = await ref.watch(servicioAdminProvider.future);
+	final tienda = await servicio.obtenerTiendaActiva();
+	return tienda?.nombre ?? 'Tienda';
+});

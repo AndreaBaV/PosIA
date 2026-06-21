@@ -21,6 +21,7 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 	final _busquedaController = TextEditingController();
 	String _filtro = '';
 	String? _categoriaFiltro;
+	_FiltroEstadoProducto _estadoFiltro = _FiltroEstadoProducto.activos;
 
 	@override
 	void dispose() {
@@ -48,6 +49,12 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 					final categorias = categoriasAsync.value ?? [];
 					final nombresCat = {for (final c in categorias) c.id: c.nombre};
 					final filtrados = productos.where((p) {
+						if (_estadoFiltro == _FiltroEstadoProducto.activos && !p.activo) {
+							return false;
+						}
+						if (_estadoFiltro == _FiltroEstadoProducto.inactivos && p.activo) {
+							return false;
+						}
 						if (_categoriaFiltro != null && p.categoriaId != _categoriaFiltro) {
 							return false;
 						}
@@ -69,6 +76,29 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 								sugerencia: 'Buscar producto...',
 								alCambiar: (v) => setState(() => _filtro = v.trim()),
 							),
+							Padding(
+								padding: const EdgeInsets.symmetric(horizontal: 12.0),
+								child: SegmentedButton<_FiltroEstadoProducto>(
+									segments: const [
+										ButtonSegment(
+											value: _FiltroEstadoProducto.activos,
+											label: Text('Activos'),
+										),
+										ButtonSegment(
+											value: _FiltroEstadoProducto.inactivos,
+											label: Text('Inactivos'),
+										),
+										ButtonSegment(
+											value: _FiltroEstadoProducto.todos,
+											label: Text('Todos'),
+										),
+									],
+									selected: {_estadoFiltro},
+									onSelectionChanged: (s) =>
+										setState(() => _estadoFiltro = s.first),
+								),
+							),
+							const SizedBox(height: 8.0),
 							if (categorias.isNotEmpty)
 								SizedBox(
 									height: 48.0,
@@ -108,8 +138,8 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 										itemBuilder: (context, indice) {
 											final producto = filtrados[indice];
 											final catNombre = producto.categoriaId == null
-												? 'Sin categoria'
-												: nombresCat[producto.categoriaId] ?? 'Categoria';
+												? 'Sin categoría'
+												: nombresCat[producto.categoriaId] ?? 'Categoría';
 											return Card(
 												margin: const EdgeInsets.symmetric(
 													horizontal: 12.0,
@@ -169,20 +199,7 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 															PopupMenuButton<String>(
 																onSelected: (accion) =>
 																	_accionProducto(context, accion, producto),
-																itemBuilder: (_) => const [
-																	PopupMenuItem(
-																		value: 'editar',
-																		child: Text('Editar'),
-																	),
-																	PopupMenuItem(
-																		value: 'variantes',
-																		child: Text('Variantes'),
-																	),
-																	PopupMenuItem(
-																		value: 'eliminar',
-																		child: Text('Desactivar'),
-																	),
-																],
+																itemBuilder: (_) => _menuProducto(producto),
 															),
 														],
 													),
@@ -231,12 +248,15 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 			);
 			return;
 		}
-		if (accion == 'eliminar') {
+		if (accion == 'desactivar') {
 			final confirmar = await showDialog<bool>(
 				context: context,
 				builder: (ctx) => AlertDialog(
 					title: const Text('Desactivar producto'),
-					content: Text('Desactivar "${producto.nombre}"?'),
+					content: Text(
+						'Desactivar "${producto.nombre}"?\n\n'
+						'Dejará de aparecer en caja, pero se conserva en el historial.',
+					),
 					actions: [
 						TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
 						FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Desactivar')),
@@ -254,13 +274,89 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 			ScaffoldMessenger.of(context).showSnackBar(
 				SnackBar(
 					content: Text(
-						ok ? 'Producto desactivado' : 'No se puede desactivar (hay stock)',
+						ok
+							? 'Producto desactivado'
+							: 'No se puede desactivar: hay existencias en alguna tienda',
+					),
+					backgroundColor: ok ? PosiaColors.cobrar : PosiaColors.cancelar,
+				),
+			);
+			ref.invalidate(_productosCatalogoProvider);
+			return;
+		}
+		if (accion == 'reactivar') {
+			final servicio = await ref.read(servicioAdminProvider.future);
+			final ok = await servicio.reactivarProducto(producto.id);
+			if (!context.mounted) {
+				return;
+			}
+			ScaffoldMessenger.of(context).showSnackBar(
+				SnackBar(
+					content: Text(ok ? 'Producto reactivado' : 'No se pudo reactivar'),
+					backgroundColor: ok ? PosiaColors.cobrar : PosiaColors.cancelar,
+				),
+			);
+			ref.invalidate(_productosCatalogoProvider);
+			return;
+		}
+		if (accion == 'eliminar_permanente') {
+			final confirmar = await showDialog<bool>(
+				context: context,
+				builder: (ctx) => AlertDialog(
+					title: const Text('Eliminar producto'),
+					content: Text(
+						'Eliminar permanentemente "${producto.nombre}"?\n\n'
+						'Se borrará del catálogo junto con variantes y precios. '
+						'Esta acción no se puede deshacer.',
+					),
+					actions: [
+						TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+						FilledButton(
+							style: FilledButton.styleFrom(backgroundColor: PosiaColors.cancelar),
+							onPressed: () => Navigator.pop(ctx, true),
+							child: const Text('Eliminar'),
+						),
+					],
+				),
+			);
+			if (confirmar != true) {
+				return;
+			}
+			final servicio = await ref.read(servicioAdminProvider.future);
+			final ok = await servicio.eliminarProductoPermanente(producto.id);
+			if (!context.mounted) {
+				return;
+			}
+			ScaffoldMessenger.of(context).showSnackBar(
+				SnackBar(
+					content: Text(
+						ok
+							? 'Producto eliminado del catálogo'
+							: 'No se puede eliminar: hay existencias en alguna tienda',
 					),
 					backgroundColor: ok ? PosiaColors.cobrar : PosiaColors.cancelar,
 				),
 			);
 			ref.invalidate(_productosCatalogoProvider);
 		}
+	}
+
+	List<PopupMenuEntry<String>> _menuProducto(Producto producto) {
+		return [
+			const PopupMenuItem(value: 'editar', child: Text('Editar')),
+			const PopupMenuItem(value: 'variantes', child: Text('Variantes')),
+			if (producto.activo)
+				const PopupMenuItem(value: 'desactivar', child: Text('Desactivar'))
+			else
+				const PopupMenuItem(value: 'reactivar', child: Text('Reactivar')),
+			PopupMenuItem(
+				value: 'eliminar_permanente',
+				child: Text(
+					'Eliminar del catálogo',
+					style: TextStyle(color: PosiaColors.cancelar),
+				),
+			),
+		];
 	}
 }
 
@@ -273,3 +369,5 @@ final _categoriasProductosProvider = FutureProvider<List<Categoria>>((ref) async
 	final servicio = await ref.watch(servicioAdminProvider.future);
 	return servicio.listarCategorias();
 });
+
+enum _FiltroEstadoProducto { activos, inactivos, todos }

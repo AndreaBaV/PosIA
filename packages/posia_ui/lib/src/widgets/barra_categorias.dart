@@ -8,6 +8,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:posia_core/posia_core.dart';
 
+import '../theme/posia_theme.dart';
 import '../utils/iconos_categoria.dart';
 
 /// Chips de categorias personalizables con opcion Todos.
@@ -26,15 +27,15 @@ class BarraCategorias extends StatelessWidget {
 	@override
 	Widget build(BuildContext context) {
 		return SizedBox(
-			height: 52.0,
+			height: 56.0,
 			child: ListView(
 				scrollDirection: Axis.horizontal,
-				padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
+				padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
 				children: [
 					_ChipCategoria(
 						etiqueta: 'Todos',
-						icono: Icons.apps,
-						color: Colors.blueGrey,
+						icono: Icons.apps_rounded,
+						color: PosiaColors.neutro,
 						seleccionado: categoriaSeleccionadaId == CATEGORIA_TODOS_ID,
 						alPresionar: () => alSeleccionar(CATEGORIA_TODOS_ID),
 					),
@@ -72,22 +73,34 @@ class _ChipCategoria extends StatelessWidget {
 	Widget build(BuildContext context) {
 		return Padding(
 			padding: const EdgeInsets.only(right: 8.0),
-			child: FilterChip(
-				selected: seleccionado,
-				label: Row(
-					mainAxisSize: MainAxisSize.min,
-					children: [
-						Icon(icono, size: 18.0, color: seleccionado ? Colors.white : color),
-						const SizedBox(width: 4.0),
-						Text(etiqueta),
-					],
+			child: Material(
+				color: seleccionado ? color : color.withValues(alpha: 0.1),
+				borderRadius: BorderRadius.circular(24.0),
+				child: InkWell(
+					onTap: alPresionar,
+					borderRadius: BorderRadius.circular(24.0),
+					child: Padding(
+						padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0),
+						child: Row(
+							mainAxisSize: MainAxisSize.min,
+							children: [
+								Icon(
+									icono,
+									size: 18.0,
+									color: seleccionado ? Colors.white : color,
+								),
+								const SizedBox(width: 6.0),
+								Text(
+									etiqueta,
+									style: TextStyle(
+										color: seleccionado ? Colors.white : PosiaColors.neutro,
+										fontWeight: FontWeight.w600,
+									),
+								),
+							],
+						),
+					),
 				),
-				selectedColor: color,
-				labelStyle: TextStyle(
-					color: seleccionado ? Colors.white : null,
-					fontWeight: FontWeight.w600,
-				),
-				onSelected: (_) => alPresionar(),
 			),
 		);
 	}

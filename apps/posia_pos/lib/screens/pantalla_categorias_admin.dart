@@ -35,7 +35,7 @@ class _PantallaCategoriasAdminState extends ConsumerState<PantallaCategoriasAdmi
 	Widget build(BuildContext context) {
 		final categoriasAsync = ref.watch(_categoriasProvider);
 		return Scaffold(
-			appBar: AppBar(title: const Text('Categorias')),
+			appBar: AppBar(title: const Text('Categorías')),
 			body: categoriasAsync.when(
 				data: (categorias) {
 					final filtradas = categorias.where((c) {
@@ -49,7 +49,7 @@ class _PantallaCategoriasAdminState extends ConsumerState<PantallaCategoriasAdmi
 						children: [
 							CampoBusqueda(
 								controlador: _busquedaController,
-								sugerencia: 'Buscar categoria...',
+								sugerencia: 'Buscar categoría...',
 								alCambiar: (v) => setState(() => _filtro = v.trim()),
 							),
 							...filtradas.asMap().entries.map((entry) {
@@ -105,7 +105,7 @@ class _PantallaCategoriasAdminState extends ConsumerState<PantallaCategoriasAdmi
 									crossAxisAlignment: CrossAxisAlignment.start,
 									children: [
 										const Text(
-											'Nueva categoria',
+											'Nueva categoría',
 											style: TextStyle(fontSize: 16.0, fontWeight: FontWeight.bold),
 										),
 										const SizedBox(height: 12.0),
@@ -152,7 +152,7 @@ class _PantallaCategoriasAdminState extends ConsumerState<PantallaCategoriasAdmi
 										FilledButton.icon(
 											onPressed: _agregarCategoria,
 											icon: const Icon(Icons.add),
-											label: const Text('Agregar categoria'),
+											label: const Text('Agregar categoría'),
 										),
 									],
 								),
@@ -190,7 +190,7 @@ class _PantallaCategoriasAdminState extends ConsumerState<PantallaCategoriasAdmi
 			context: context,
 			builder: (ctx) => StatefulBuilder(
 				builder: (context, setDialogState) => AlertDialog(
-					title: const Text('Editar categoria'),
+					title: const Text('Editar categoría'),
 					content: SingleChildScrollView(
 						child: Column(
 							mainAxisSize: MainAxisSize.min,

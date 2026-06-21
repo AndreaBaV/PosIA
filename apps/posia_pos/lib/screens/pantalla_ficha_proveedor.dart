@@ -102,7 +102,7 @@ class _PantallaFichaProveedorState extends ConsumerState<PantallaFichaProveedor>
 							TextField(
 								controller: _telefonoController,
 								decoration: const InputDecoration(
-									labelText: 'Telefono',
+									labelText: 'Teléfono',
 									border: OutlineInputBorder(),
 								),
 							),
@@ -127,7 +127,7 @@ class _PantallaFichaProveedorState extends ConsumerState<PantallaFichaProveedor>
 								controller: _direccionController,
 								maxLines: 2,
 								decoration: const InputDecoration(
-									labelText: 'Direccion',
+									labelText: 'Dirección',
 									border: OutlineInputBorder(),
 								),
 							),
@@ -136,7 +136,7 @@ class _PantallaFichaProveedorState extends ConsumerState<PantallaFichaProveedor>
 								controller: _diasCreditoController,
 								keyboardType: TextInputType.number,
 								decoration: const InputDecoration(
-									labelText: 'Dias de credito',
+									labelText: 'Días de crédito',
 									border: OutlineInputBorder(),
 								),
 							),

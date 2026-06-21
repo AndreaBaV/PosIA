@@ -6,6 +6,7 @@
 /// Ultima modificacion: 2026-06-07 18:30:00 (UTC-6)
 library;
 
+export 'src/calculador_descuentos_cliente.dart';
 export 'src/models/escala_mayoreo.dart';
 export 'src/models/precio_cliente_producto.dart';
 export 'src/motor_precio.dart';

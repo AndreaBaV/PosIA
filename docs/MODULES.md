@@ -1,11 +1,4 @@
-# Modulos POSIA
-
-**Autor:** Equipo POSIA  
-**Matricula:** POSIA-2026-001  
-**Fecha creacion:** 2026-06-07 18:30:00 (UTC-6)  
-**Ultima modificacion:** 2026-06-07 18:30:00 (UTC-6)
-
----
+# Módulos POSIA
 
 ## 1. Nucleo (siempre activo)
 
@@ -61,8 +54,24 @@ Validacion offline en `posia_licensing`.
 
 ---
 
-## 5. Registro de cambios
+## 5. Verticales de rubro
 
-| Fecha | Cambio |
-|-------|--------|
-| 2026-06-07 18:30 | Documento inicial |
+### Carnicería (`butcher`)
+
+Paquete: `packages/posia_module_butcher`
+
+- Venta por peso (kg), mínimo 100 g
+- Báscula vía `posia_hardware.Scale`
+- Mayoreo por escala de kg
+- Diálogo de captura de peso en caja
+
+### Farmacia (`pharmacy`)
+
+Paquete: `packages/posia_module_pharmacy`
+
+- Lotes con número y caducidad (`pharmacy_lots`)
+- Selección FEFO en caja
+- Alertas: normal, advertencia (30 días), crítico (7 días o vencido)
+- Descuento de stock por lote al cobrar
+
+En admin, carnicería y farmacia se gestionan como **categorías** dentro de Productos; no hay menús separados.

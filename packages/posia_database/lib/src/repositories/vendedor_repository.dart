@@ -14,17 +14,35 @@ class VendedorRepository {
 
 	final Database _baseDatos;
 
-	Future<List<Vendedor>> listarActivos() async {
+	Future<List<Vendedor>> listarActivos({String? tiendaId}) async {
+		if (tiendaId == null) {
+			final filas = await _baseDatos.query(
+				'vendedores',
+				where: 'activo = 1',
+				orderBy: 'nombre ASC',
+			);
+			return filas.map(_mapear).toList();
+		}
 		final filas = await _baseDatos.query(
 			'vendedores',
-			where: 'activo = 1',
+			where: 'activo = 1 AND (tienda_id IS NULL OR tienda_id = ?)',
+			whereArgs: [tiendaId],
 			orderBy: 'nombre ASC',
 		);
 		return filas.map(_mapear).toList();
 	}
 
-	Future<List<Vendedor>> listarTodos() async {
-		final filas = await _baseDatos.query('vendedores', orderBy: 'nombre ASC');
+	Future<List<Vendedor>> listarTodos({String? tiendaId}) async {
+		if (tiendaId == null) {
+			final filas = await _baseDatos.query('vendedores', orderBy: 'nombre ASC');
+			return filas.map(_mapear).toList();
+		}
+		final filas = await _baseDatos.query(
+			'vendedores',
+			where: 'tienda_id IS NULL OR tienda_id = ?',
+			whereArgs: [tiendaId],
+			orderBy: 'nombre ASC',
+		);
 		return filas.map(_mapear).toList();
 	}
 
@@ -41,7 +59,37 @@ class VendedorRepository {
 		return _mapear(filas.first);
 	}
 
+	Future<Vendedor?> obtenerPorCodigo(String codigo, {String? excluirId}) async {
+		final filas = await _baseDatos.query(
+			'vendedores',
+			where: excluirId == null ? 'codigo = ?' : 'codigo = ? AND id != ?',
+			whereArgs: excluirId == null ? [codigo] : [codigo, excluirId],
+			limit: 1,
+		);
+		if (filas.isEmpty) {
+			return null;
+		}
+		return _mapear(filas.first);
+	}
+
+	/// Genera el siguiente codigo secuencial disponible (001, 002, ...).
+	Future<String> generarSiguienteCodigo() async {
+		final todos = await listarTodos();
+		var maximo = 0;
+		for (final vendedor in todos) {
+			final numerico = int.tryParse(vendedor.codigo);
+			if (numerico != null && numerico > maximo) {
+				maximo = numerico;
+			}
+		}
+		return (maximo + 1).toString().padLeft(3, '0');
+	}
+
 	Future<void> guardar(Vendedor vendedor) async {
+		final duplicado = await obtenerPorCodigo(vendedor.codigo, excluirId: vendedor.id);
+		if (duplicado != null) {
+			throw StateError('Ya existe un vendedor con el codigo ${vendedor.codigo}');
+		}
 		await _baseDatos.insert(
 			'vendedores',
 			{
@@ -49,6 +97,7 @@ class VendedorRepository {
 				'nombre': vendedor.nombre,
 				'codigo': vendedor.codigo,
 				'activo': vendedor.activo ? 1 : 0,
+				'tienda_id': vendedor.tiendaId,
 			},
 			conflictAlgorithm: ConflictAlgorithm.replace,
 		);
@@ -60,6 +109,7 @@ class VendedorRepository {
 			nombre: fila['nombre'] as String,
 			codigo: fila['codigo'] as String,
 			activo: (fila['activo'] as int) == 1,
+			tiendaId: fila['tienda_id'] as String?,
 		);
 	}
 }

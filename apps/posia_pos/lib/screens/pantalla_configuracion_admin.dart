@@ -43,7 +43,7 @@ class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguraci
 		final impresoraAsync = ref.watch(configImpresoraProvider);
 		final tiendasAsync = ref.watch(_tiendasConfigProvider);
 		return Scaffold(
-			appBar: AppBar(title: const Text('Configuracion')),
+			appBar: AppBar(title: const Text('Configuración')),
 			body: pinAsync.when(
 				data: (pinActual) {
 					if (_pinController.text.isEmpty) {
@@ -145,7 +145,7 @@ class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguraci
 							const Text(
 								'Modo archivo guarda en Documents/POSIA/tickets. '
 								'Modo red usa ESC/POS por TCP (puerto 9100). '
-								'Ambos intenta red y respalda en archivo.',
+								'El modo ambos intenta la red y respalda en archivo.',
 							),
 							const SizedBox(height: 16.0),
 							impresoraAsync.when(
@@ -170,7 +170,7 @@ class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguraci
 												],
 												onChanged: (v) => setState(() => _modoImpresora = v ?? 'ambos'),
 												decoration: const InputDecoration(
-													labelText: 'Modo de impresion',
+													labelText: 'Modo de impresión',
 													border: OutlineInputBorder(),
 												),
 											),
@@ -208,7 +208,7 @@ class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguraci
 								style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
 							),
 							const SizedBox(height: 8.0),
-							const Text('4 digitos numericos para acceder al panel Admin.'),
+							const Text('4 dígitos numéricos para acceder al panel Admin.'),
 							const SizedBox(height: 16.0),
 							TextField(
 								controller: _pinController,
@@ -262,7 +262,7 @@ class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguraci
 		}
 		ScaffoldMessenger.of(context).showSnackBar(
 			const SnackBar(
-				content: Text('Configuracion guardada. Reinicia la app si cambiaste tenant o tienda.'),
+				content: Text('Configuración guardada. Reinicia la app si cambiaste tenant o tienda.'),
 			),
 		);
 	}
@@ -290,7 +290,7 @@ class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguraci
 		final pin = _pinController.text.trim();
 		if (pin.length != 4) {
 			ScaffoldMessenger.of(context).showSnackBar(
-				const SnackBar(content: Text('El PIN debe tener 4 digitos')),
+				const SnackBar(content: Text('El PIN debe tener 4 dígitos')),
 			);
 			return;
 		}

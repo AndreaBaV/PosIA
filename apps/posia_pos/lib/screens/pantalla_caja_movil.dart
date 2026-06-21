@@ -64,40 +64,62 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 	@override
 	Widget build(BuildContext context) {
 		final estado = ref.watch(carritoNotifierProvider);
+		final datos = estado.value;
 		return Scaffold(
 			appBar: AppBar(
-				title: estado.when(
-					data: (s) => Column(
+				title: datos != null
+					? Column(
 						crossAxisAlignment: CrossAxisAlignment.start,
 						children: [
 							const Text('POSIA', style: TextStyle(fontSize: 14.0)),
-							Text(s.nombreTienda, style: const TextStyle(fontSize: 18.0)),
+							Text(datos.nombreTienda, style: const TextStyle(fontSize: 18.0)),
 						],
+					)
+					: estado.when(
+						data: (s) => Column(
+							crossAxisAlignment: CrossAxisAlignment.start,
+							children: [
+								const Text('POSIA', style: TextStyle(fontSize: 14.0)),
+								Text(s.nombreTienda, style: const TextStyle(fontSize: 18.0)),
+							],
+						),
+						loading: () => const Text('POSIA'),
+						error: (_, _) => const Text('POSIA'),
 					),
-					loading: () => const Text('POSIA'),
-					error: (_, _) => const Text('POSIA'),
-				),
 				actions: [
-					estado.when(
-						data: (s) => Padding(
+					if (datos != null)
+						Padding(
 							padding: const EdgeInsets.only(right: 12.0),
 							child: Center(
 								child: Icon(
-									s.turnoAbierto ? Icons.lock_open : Icons.lock,
-									color: s.turnoAbierto ? PosiaColors.cobrar : PosiaColors.cancelar,
+									datos.turnoAbierto ? Icons.lock_open : Icons.lock,
+									color: datos.turnoAbierto ? PosiaColors.cobrar : PosiaColors.cancelar,
 								),
 							),
+						)
+					else
+						estado.when(
+							data: (s) => Padding(
+								padding: const EdgeInsets.only(right: 12.0),
+								child: Center(
+									child: Icon(
+										s.turnoAbierto ? Icons.lock_open : Icons.lock,
+										color: s.turnoAbierto ? PosiaColors.cobrar : PosiaColors.cancelar,
+									),
+								),
+							),
+							loading: () => const SizedBox(),
+							error: (_, _) => const SizedBox(),
 						),
-						loading: () => const SizedBox(),
-						error: (_, _) => const SizedBox(),
-					),
 				],
 			),
-			body: estado.when(
-				data: (s) => _construirCuerpo(context, s),
-				loading: () => const Center(child: CircularProgressIndicator()),
-				error: (e, _) => Center(child: Text('$e')),
-			),
+			body: datos != null
+				? _construirCuerpo(context, datos)
+				: estado.when(
+					data: (s) => _construirCuerpo(context, s),
+					loading: () => const Center(child: CircularProgressIndicator()),
+					error: (e, _) => Center(child: Text('$e')),
+				),
 		);
 	}
 
@@ -122,7 +144,7 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 							),
 							const SizedBox(height: 8.0),
 							Text(
-								'Ejemplo: "Genera el ticket: vendi un kilogramo de arroz, '
+								'Ejemplo: "Genera el ticket: vendí un kilogramo de arroz, '
 								'medio kilo de frijol peruano y 1 caja de leche"',
 								style: Theme.of(context).textTheme.bodySmall,
 							),

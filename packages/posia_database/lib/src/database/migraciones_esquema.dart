@@ -6,6 +6,7 @@
 /// Ultima modificacion: 2026-06-11 22:00:00 (UTC-6)
 library;
 
+import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
 /// Aplica cambios de esquema entre versiones.
@@ -67,6 +68,165 @@ class MigracionesEsquema {
 		await base.execute('ALTER TABLE $tabla ADD COLUMN $columna $definicion');
 	}
 
+	/// v6.3: codigo unico y automatico para vendedores.
+	static Future<void> migrarVersion6A7(Database base) async {
+		await _normalizarCodigosVendedores(base);
+		await base.execute(
+			'CREATE UNIQUE INDEX IF NOT EXISTS idx_vendedores_codigo ON vendedores(codigo)',
+		);
+	}
+
+	/// v6.4: cuentas de usuario con roles y alcance por tienda.
+	static Future<void> migrarVersion7A8(Database base) async {
+		await _agregarColumnaSiNoExiste(base, 'vendedores', 'tienda_id', 'TEXT');
+		await base.execute('''
+			CREATE TABLE IF NOT EXISTS usuarios (
+				id TEXT PRIMARY KEY,
+				nombre TEXT NOT NULL,
+				codigo TEXT NOT NULL,
+				pin TEXT NOT NULL,
+				rol TEXT NOT NULL,
+				tienda_id TEXT,
+				activo INTEGER NOT NULL
+			)
+		''');
+		await base.execute(
+			'CREATE UNIQUE INDEX IF NOT EXISTS idx_usuarios_codigo ON usuarios(codigo)',
+		);
+	}
+
+	/// v6.5: descuentos configurables por cliente.
+	static Future<void> migrarVersion8A9(Database base) async {
+		await base.execute('''
+			CREATE TABLE IF NOT EXISTS customer_discounts (
+				id TEXT PRIMARY KEY,
+				cliente_id TEXT NOT NULL,
+				tipo TEXT NOT NULL,
+				valor REAL NOT NULL,
+				producto_id TEXT,
+				condicion TEXT NOT NULL,
+				umbral REAL,
+				activo INTEGER NOT NULL DEFAULT 1,
+				descripcion TEXT NOT NULL DEFAULT ''
+			)
+		''');
+		await base.execute(
+			'CREATE INDEX IF NOT EXISTS idx_customer_discounts_cliente ON customer_discounts(cliente_id)',
+		);
+	}
+
+	/// v6.6: usuarios con PIN hasheado, codigo unico y auditoria.
+	static Future<void> migrarVersion9A10(Database base) async {
+		await _recrearTablaUsuariosSegura(base);
+	}
+
+	static Future<void> _recrearTablaUsuariosSegura(Database base) async {
+		final info = await base.rawQuery('PRAGMA table_info(usuarios)');
+		if (info.isEmpty) {
+			await _crearTablaUsuariosSegura(base);
+			return;
+		}
+		final tieneHash = info.any((fila) => fila['name'] == 'pin_hash');
+		if (tieneHash) {
+			return;
+		}
+
+		await base.execute('''
+			CREATE TABLE usuarios_seguro (
+				id TEXT PRIMARY KEY,
+				nombre TEXT NOT NULL,
+				codigo TEXT NOT NULL COLLATE NOCASE,
+				pin_hash TEXT NOT NULL,
+				pin_salt TEXT NOT NULL,
+				rol TEXT NOT NULL CHECK (rol IN ('administrador', 'supervisor', 'empleado')),
+				tienda_id TEXT,
+				activo INTEGER NOT NULL DEFAULT 1 CHECK (activo IN (0, 1)),
+				creado_en TEXT NOT NULL,
+				actualizado_en TEXT NOT NULL,
+				UNIQUE (codigo)
+			)
+		''');
+
+		final filas = await base.query('usuarios');
+		final ahora = DateTime.now().toUtc().toIso8601String();
+		for (final fila in filas) {
+			final pinPlano = fila['pin'] as String? ?? '';
+			final sal = HasherPin.generarSal();
+			final hash = HasherPin.hashPin(pinPlano, sal);
+			await base.insert('usuarios_seguro', {
+				'id': fila['id'],
+				'nombre': fila['nombre'],
+				'codigo': (fila['codigo'] as String).trim(),
+				'pin_hash': hash,
+				'pin_salt': sal,
+				'rol': fila['rol'],
+				'tienda_id': fila['tienda_id'],
+				'activo': fila['activo'],
+				'creado_en': ahora,
+				'actualizado_en': ahora,
+			});
+		}
+
+		await base.execute('DROP TABLE usuarios');
+		await base.execute('ALTER TABLE usuarios_seguro RENAME TO usuarios');
+		await base.execute(
+			'CREATE INDEX IF NOT EXISTS idx_usuarios_tienda ON usuarios(tienda_id)',
+		);
+		await base.execute(
+			'CREATE INDEX IF NOT EXISTS idx_usuarios_activo ON usuarios(activo)',
+		);
+	}
+
+	static Future<void> _crearTablaUsuariosSegura(Database base) async {
+		await base.execute('''
+			CREATE TABLE usuarios (
+				id TEXT PRIMARY KEY,
+				nombre TEXT NOT NULL,
+				codigo TEXT NOT NULL COLLATE NOCASE,
+				pin_hash TEXT NOT NULL,
+				pin_salt TEXT NOT NULL,
+				rol TEXT NOT NULL CHECK (rol IN ('administrador', 'supervisor', 'empleado')),
+				tienda_id TEXT,
+				activo INTEGER NOT NULL DEFAULT 1 CHECK (activo IN (0, 1)),
+				creado_en TEXT NOT NULL,
+				actualizado_en TEXT NOT NULL,
+				UNIQUE (codigo)
+			)
+		''');
+		await base.execute(
+			'CREATE INDEX IF NOT EXISTS idx_usuarios_tienda ON usuarios(tienda_id)',
+		);
+		await base.execute(
+			'CREATE INDEX IF NOT EXISTS idx_usuarios_activo ON usuarios(activo)',
+		);
+	}
+
+	static Future<void> _normalizarCodigosVendedores(Database base) async {
+		final filas = await base.query('vendedores', orderBy: 'nombre ASC');
+		final codigosUsados = <String>{};
+		var siguiente = 1;
+		for (final fila in filas) {
+			var codigo = fila['codigo'] as String;
+			if (codigosUsados.contains(codigo)) {
+				while (codigosUsados.contains(siguiente.toString().padLeft(3, '0'))) {
+					siguiente = siguiente + 1;
+				}
+				codigo = siguiente.toString().padLeft(3, '0');
+				await base.update(
+					'vendedores',
+					{'codigo': codigo},
+					where: 'id = ?',
+					whereArgs: [fila['id']],
+				);
+			}
+			codigosUsados.add(codigo);
+			final numerico = int.tryParse(codigo);
+			if (numerico != null && numerico >= siguiente) {
+				siguiente = numerico + 1;
+			}
+		}
+	}
+
 	/// Ejecuta migracion de version 2 a version 3.
 	///
 	/// [base] Conexion SQLite activa.
@@ -104,9 +264,34 @@ class MigracionesEsquema {
 				id TEXT PRIMARY KEY,
 				nombre TEXT NOT NULL,
 				codigo TEXT NOT NULL,
-				activo INTEGER NOT NULL
+				activo INTEGER NOT NULL,
+				tienda_id TEXT
 			)
 		''');
+		await base.execute(
+			'CREATE UNIQUE INDEX idx_vendedores_codigo ON vendedores(codigo)',
+		);
+		await base.execute('''
+			CREATE TABLE usuarios (
+				id TEXT PRIMARY KEY,
+				nombre TEXT NOT NULL,
+				codigo TEXT NOT NULL COLLATE NOCASE,
+				pin_hash TEXT NOT NULL,
+				pin_salt TEXT NOT NULL,
+				rol TEXT NOT NULL CHECK (rol IN ('administrador', 'supervisor', 'empleado')),
+				tienda_id TEXT,
+				activo INTEGER NOT NULL DEFAULT 1 CHECK (activo IN (0, 1)),
+				creado_en TEXT NOT NULL,
+				actualizado_en TEXT NOT NULL,
+				UNIQUE (codigo)
+			)
+		''');
+		await base.execute(
+			'CREATE INDEX idx_usuarios_tienda ON usuarios(tienda_id)',
+		);
+		await base.execute(
+			'CREATE INDEX idx_usuarios_activo ON usuarios(activo)',
+		);
 		await base.execute('''
 			CREATE TABLE proveedores (
 				id TEXT PRIMARY KEY,
@@ -279,6 +464,22 @@ class MigracionesEsquema {
 				PRIMARY KEY (cliente_id, producto_id)
 			)
 		''');
+		await base.execute('''
+			CREATE TABLE customer_discounts (
+				id TEXT PRIMARY KEY,
+				cliente_id TEXT NOT NULL,
+				tipo TEXT NOT NULL,
+				valor REAL NOT NULL,
+				producto_id TEXT,
+				condicion TEXT NOT NULL,
+				umbral REAL,
+				activo INTEGER NOT NULL DEFAULT 1,
+				descripcion TEXT NOT NULL DEFAULT ''
+			)
+		''');
+		await base.execute(
+			'CREATE INDEX idx_customer_discounts_cliente ON customer_discounts(cliente_id)',
+		);
 		await base.execute('''
 			CREATE TABLE price_lists (
 				id TEXT PRIMARY KEY,

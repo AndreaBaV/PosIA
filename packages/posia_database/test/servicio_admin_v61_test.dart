@@ -67,6 +67,25 @@ void main() {
 			await fixture.cerrar();
 		});
 
+		test('eliminarProductoPermanente borra producto sin stock', () async {
+			final fixture = await FixtureAdmin.abrir();
+			final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
+			final producto = await servicio.registrarProductoCompleto(
+				AltaProductoRequest(
+					nombre: 'Sin stock',
+					codigoBarras: '223',
+					precioBase: 5.0,
+					categoriaId: fixture.categoriaId,
+					stockInicial: 0.0,
+				),
+			);
+			final eliminado = await servicio.eliminarProductoPermanente(producto.id);
+			expect(eliminado, isTrue);
+			final restante = await servicio.obtenerProducto(producto.id);
+			expect(restante, isNull);
+			await fixture.cerrar();
+		});
+
 		test('movimiento ajuste fija cantidad absoluta', () async {
 			final fixture = await FixtureAdmin.abrir();
 			final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
@@ -83,7 +102,7 @@ void main() {
 				productoId: producto.id,
 				tipo: TipoMovimientoInventario.ajuste,
 				cantidad: 4.0,
-				motivo: 'Conteo fisico',
+				motivo: 'Conteo físico',
 			);
 			final stock = await fixture.inventarioRepository.obtenerStock(
 				producto.id,
@@ -95,9 +114,8 @@ void main() {
 
 		test('traspaso actualiza stock en origen y destino', () async {
 			final fixture = await FixtureAdmin.abrir();
-			final servicioOrigen = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
-			final servicioDestino = fixture.crearServicio(tiendaId: fixture.tiendaDestinoId);
-			final producto = await servicioOrigen.registrarProductoCompleto(
+			final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
+			final producto = await servicio.registrarProductoCompleto(
 				AltaProductoRequest(
 					nombre: 'Traspaso',
 					codigoBarras: '444',
@@ -106,7 +124,8 @@ void main() {
 					stockInicial: 20.0,
 				),
 			);
-			final traspaso = await servicioOrigen.solicitarTraspaso(
+			await servicio.realizarTraspaso(
+				tiendaOrigenId: fixture.tiendaOrigenId,
 				tiendaDestinoId: fixture.tiendaDestinoId,
 				productoId: producto.id,
 				cantidad: 7.0,
@@ -116,8 +135,6 @@ void main() {
 				fixture.tiendaOrigenId,
 			);
 			expect(stockOrigen?.cantidad, 13.0);
-			final recibido = await servicioDestino.recibirTraspaso(traspaso.id);
-			expect(recibido, isTrue);
 			final stockDestino = await fixture.inventarioRepository.obtenerStock(
 				producto.id,
 				fixture.tiendaDestinoId,

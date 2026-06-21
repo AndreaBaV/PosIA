@@ -103,7 +103,7 @@ class _PantallaTiendasAdminState extends ConsumerState<PantallaTiendasAdmin> {
 										TextField(
 											controller: _direccionController,
 											decoration: const InputDecoration(
-												labelText: 'Direccion',
+												labelText: 'Dirección',
 												border: OutlineInputBorder(),
 											),
 										),
@@ -160,7 +160,7 @@ class _PantallaTiendasAdminState extends ConsumerState<PantallaTiendasAdmin> {
 				}
 				ScaffoldMessenger.of(context).showSnackBar(
 					SnackBar(
-						content: Text('Limite de $LIMITE_MAX_TIENDAS tiendas activas'),
+						content: Text('Límite de $LIMITE_MAX_TIENDAS tiendas activas'),
 						backgroundColor: PosiaColors.cancelar,
 					),
 				);
@@ -196,7 +196,7 @@ class _PantallaTiendasAdminState extends ConsumerState<PantallaTiendasAdmin> {
 						),
 						TextField(
 							controller: direccionController,
-							decoration: const InputDecoration(labelText: 'Direccion'),
+							decoration: const InputDecoration(labelText: 'Dirección'),
 						),
 					],
 				),
@@ -230,7 +230,7 @@ class _PantallaTiendasAdminState extends ConsumerState<PantallaTiendasAdmin> {
 			context: context,
 			builder: (ctx) => AlertDialog(
 				title: const Text('Eliminar tienda'),
-				content: Text('Se eliminara "${tienda.nombre}" permanentemente.'),
+				content: Text('Se eliminará "${tienda.nombre}" permanentemente.'),
 				actions: [
 					TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
 					FilledButton(

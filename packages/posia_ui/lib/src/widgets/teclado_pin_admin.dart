@@ -35,23 +35,29 @@ class TecladoPinAdmin extends StatelessWidget {
 
 	@override
 	Widget build(BuildContext context) {
-		return Column(
-			mainAxisSize: MainAxisSize.min,
-			children: [
-				Row(
-					mainAxisAlignment: MainAxisAlignment.center,
-					children: _construirIndicadoresPin(),
-				),
-				const SizedBox(height: 24.0),
-				..._construirFilasTeclado(),
-			],
+		return LayoutBuilder(
+			builder: (context, constraints) {
+				final ancho = constraints.maxWidth.isFinite ? constraints.maxWidth : 320.0;
+				final tamTecla = (ancho / 3.6).clamp(56.0, 100.0);
+				final altoTecla = tamTecla * 0.78;
+				final tamFuente = tamTecla * 0.36;
+				final tamIndicador = tamTecla * 0.24;
+				return Column(
+					mainAxisSize: MainAxisSize.min,
+					children: [
+						Row(
+							mainAxisAlignment: MainAxisAlignment.center,
+							children: _construirIndicadoresPin(tamIndicador),
+						),
+						SizedBox(height: tamTecla * 0.28),
+						..._construirFilasTeclado(tamTecla, altoTecla, tamFuente),
+					],
+				);
+			},
 		);
 	}
 
-	/// Construye filas del teclado numerico 3x4.
-	///
-	/// Retorna lista de filas de botones.
-	List<Widget> _construirFilasTeclado() {
+	List<Widget> _construirFilasTeclado(double anchoTecla, double altoTecla, double tamFuente) {
 		final digitos = [
 			['1', '2', '3'],
 			['4', '5', '6'],
@@ -63,27 +69,33 @@ class TecladoPinAdmin extends StatelessWidget {
 			filas.add(
 				Row(
 					mainAxisAlignment: MainAxisAlignment.center,
-					children: fila.map(_construirTecla).toList(),
+					children: fila
+						.map(
+							(valor) => _construirTecla(
+								valor,
+								anchoTecla: anchoTecla,
+								altoTecla: altoTecla,
+								tamFuente: tamFuente,
+							),
+						)
+						.toList(),
 				),
 			);
-			filas.add(const SizedBox(height: 8.0));
+			filas.add(SizedBox(height: anchoTecla * 0.08));
 		}
 		return filas;
 	}
 
-	/// Construye indicadores visuales del PIN ingresado.
-	///
-	/// Retorna lista de iconos circulares.
-	List<Widget> _construirIndicadoresPin() {
+	List<Widget> _construirIndicadoresPin(double tamano) {
 		final indicadores = <Widget>[];
 		for (var indice = 0; indice < 4; indice = indice + 1) {
 			final lleno = indice < pinActual.length;
 			indicadores.add(
 				Padding(
-					padding: const EdgeInsets.symmetric(horizontal: 8.0),
+					padding: EdgeInsets.symmetric(horizontal: tamano * 0.35),
 					child: Icon(
 						lleno ? Icons.circle : Icons.circle_outlined,
-						size: 20.0,
+						size: tamano,
 						color: PosiaColors.neutro,
 					),
 				),
@@ -92,24 +104,29 @@ class TecladoPinAdmin extends StatelessWidget {
 		return indicadores;
 	}
 
-	/// Construye tecla individual del teclado.
-	///
-	/// [valor] Digito o accion especial.
-	/// Retorna widget de tecla tactil.
-	Widget _construirTecla(String valor) {
+	Widget _construirTecla(
+		String valor, {
+		required double anchoTecla,
+		required double altoTecla,
+		required double tamFuente,
+	}) {
 		if (valor.isEmpty) {
-			return const SizedBox(width: 80.0, height: 64.0);
+			return SizedBox(width: anchoTecla, height: altoTecla);
 		}
 		if (valor == 'del') {
 			return _TeclaPin(
-				contenido: const Icon(Icons.backspace, color: PosiaColors.neutro),
+				ancho: anchoTecla,
+				alto: altoTecla,
+				contenido: Icon(Icons.backspace, color: PosiaColors.neutro, size: tamFuente),
 				alPresionar: alBorrar,
 			);
 		}
 		return _TeclaPin(
+			ancho: anchoTecla,
+			alto: altoTecla,
 			contenido: Text(
 				valor,
-				style: const TextStyle(fontSize: 28.0, fontWeight: FontWeight.bold),
+				style: TextStyle(fontSize: tamFuente, fontWeight: FontWeight.bold),
 			),
 			alPresionar: () => alPresionarDigito(valor),
 		);
@@ -119,17 +136,21 @@ class TecladoPinAdmin extends StatelessWidget {
 /// Tecla tactil individual del teclado PIN.
 class _TeclaPin extends StatelessWidget {
 	const _TeclaPin({
+		required this.ancho,
+		required this.alto,
 		required this.contenido,
 		required this.alPresionar,
 	});
 
+	final double ancho;
+	final double alto;
 	final Widget contenido;
 	final VoidCallback alPresionar;
 
 	@override
 	Widget build(BuildContext context) {
 		return Padding(
-			padding: const EdgeInsets.all(4.0),
+			padding: EdgeInsets.all(ancho * 0.05),
 			child: Material(
 				color: PosiaColors.tarjeta,
 				borderRadius: BorderRadius.circular(12.0),
@@ -138,8 +159,8 @@ class _TeclaPin extends StatelessWidget {
 					onTap: alPresionar,
 					borderRadius: BorderRadius.circular(12.0),
 					child: SizedBox(
-						width: 80.0,
-						height: 64.0,
+						width: ancho,
+						height: alto,
 						child: Center(child: contenido),
 					),
 				),

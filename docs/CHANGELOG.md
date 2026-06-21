@@ -9,7 +9,7 @@ Historial consolidado de implementaciones del POS de escritorio.
 
 ## 2026-06-12 — v6.2 (multipago, descuentos, favoritos, reportes)
 
-Documentacion: [PENDIENTES_V6.2.md](PENDIENTES_V6.2.md)
+Documentacion: ver seccion v6.2 abajo.
 
 ### Caja
 - Dialogo de cobro: efectivo (cambio), tarjeta, transferencia, mixto, credito
@@ -29,7 +29,7 @@ Documentacion: [PENDIENTES_V6.2.md](PENDIENTES_V6.2.md)
 
 ## 2026-06-12 — v6.1 (productos, inventario, fichas)
 
-Documentacion: [PENDIENTES_V6.1.md](PENDIENTES_V6.1.md)
+Documentacion: [ADMIN.md](ADMIN.md), [MANUAL_USUARIO.md](MANUAL_USUARIO.md).
 
 ### Schema y modelos
 - Migracion schema v5: campos extendidos en clientes, proveedores y productos
@@ -57,14 +57,13 @@ Documentacion: [PENDIENTES_V6.1.md](PENDIENTES_V6.1.md)
 
 ## 2026-06-12 — Documentacion v6.1
 
-- Especificacion completa: [PENDIENTES_V6.1.md](PENDIENTES_V6.1.md)
-- Actualizados: [ADMIN.md](ADMIN.md), [PENDIENTES_V6.md](PENDIENTES_V6.md), [ESTADO_PROYECTO.md](ESTADO_PROYECTO.md)
+- Actualizados: [ADMIN.md](ADMIN.md), [MANUAL_USUARIO.md](MANUAL_USUARIO.md)
 
 ---
 
 ## 2026-06-12 — v6.0 (backlog operativo)
 
-Documentacion: [PENDIENTES_V6.md](PENDIENTES_V6.md)
+Documentacion: [CHANGELOG.md](CHANGELOG.md) (esta seccion).
 
 ### Acceso y tiendas
 - Pantalla de seleccion de tienda al iniciar (`pantalla_acceso_tienda.dart`)
@@ -121,7 +120,7 @@ Documentacion: [PENDIENTES_V6.md](PENDIENTES_V6.md)
 |--------|----------|
 | SSL automatico para hosts Neon | `almacen_eventos_postgres.dart` |
 | Dockerfile produccion + `render.yaml` | `server/sync_api/` |
-| Guia despliegue | `docs/DEPLOYMENT_NEON.md` |
+| Guia despliegue | `docs/DEPLOYMENT.md` |
 | API Key en pantalla sync | `pantalla_sync_admin.dart` |
 
 ### Sync completo local ↔ nube
@@ -202,7 +201,14 @@ Claves en `app_config`: `tenant_id`, `tienda_id`, `caja_id`, `caja_nombre`.
 - Sync: `saleVoided`, `categoryUpserted`
 - Asignacion de categoria y stock minimo desde admin
 
-Ver detalle en [ESTADO_PROYECTO.md](ESTADO_PROYECTO.md).
+---
+
+## 2026-06-21 — v1.0 móvil y usuarios seguros
+
+- Version tienda `1.0.0+1`; AAB firmado para Play Store
+- Usuarios: schema v10, PIN hasheado, roles y permisos por tienda
+- Documentacion consolidada en `docs/README.md`
+- Publicacion: [PUBLICACION_MOVIL.md](PUBLICACION_MOVIL.md), [PRIVACIDAD.md](PRIVACIDAD.md)
 
 ---
 
@@ -210,7 +216,7 @@ Ver detalle en [ESTADO_PROYECTO.md](ESTADO_PROYECTO.md).
 
 | Documento | Audiencia |
 |-----------|-----------|
-| [MANUAL_USUARIO.md](MANUAL_USUARIO.md) | Cajeros y duenos de tienda |
-| [ESTADO_PROYECTO.md](ESTADO_PROYECTO.md) | Madurez y pendientes |
-| [POS_DESKTOP.md](POS_DESKTOP.md) | Alcance tecnico y roadmap |
+| [MANUAL_USUARIO.md](MANUAL_USUARIO.md) | Cajeros y dueños de tienda |
 | [ADMIN.md](ADMIN.md) | Panel administrativo |
+| [DEPLOYMENT.md](DEPLOYMENT.md) | Despliegue e infraestructura |
+| [README.md](README.md) | Indice de documentacion |

@@ -1,0 +1,233 @@
+name: Mobile Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Plataforma a compilar
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - android
+          - ios
+  push:
+    tags:
+      - mobile-v*
+
+concurrency:
+  group: mobile-release-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: "3.41.5"
+  JAVA_VERSION: "17"
+  APP_DIR: apps/posia_pos
+
+jobs:
+  android:
+    name: Android AAB
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'push' ||
+      github.event.inputs.platform == 'all' ||
+      github.event.inputs.platform == 'android'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          flutter pub get
+          dart run flutter_launcher_icons
+          dart run flutter_native_splash:create
+
+      - name: Configure Android signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "::warning::ANDROID_KEYSTORE_BASE64 no configurado. El AAB usara firma debug."
+            exit 0
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > ${{ env.APP_DIR }}/android/posia-release.keystore
+          printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=../posia-release.keystore\n' \
+            "$ANDROID_KEYSTORE_PASSWORD" "$ANDROID_KEY_PASSWORD" "$ANDROID_KEY_ALIAS" \
+            > ${{ env.APP_DIR }}/android/key.properties
+
+      - name: Build App Bundle
+        working-directory: ${{ env.APP_DIR }}
+        run: flutter build appbundle --release
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: posia-android-aab
+          path: ${{ env.APP_DIR }}/build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Build APK (sideload)
+        working-directory: ${{ env.APP_DIR }}
+        run: flutter build apk --release
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: posia-android-apk
+          path: ${{ env.APP_DIR }}/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+  ios:
+    name: iOS IPA
+    runs-on: macos-latest
+    if: >-
+      github.event_name == 'push' ||
+      github.event.inputs.platform == 'all' ||
+      github.event.inputs.platform == 'ios'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify iOS signing secrets
+        id: signing
+        env:
+          IOS_CERT: ${{ secrets.IOS_DIST_CERTIFICATE_BASE64 }}
+          IOS_PROFILE: ${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$IOS_CERT" ] || [ -z "$IOS_PROFILE" ] || [ -z "$APPLE_TEAM_ID" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Secrets iOS incompletos. Configura IOS_DIST_CERTIFICATE_BASE64, IOS_DIST_CERTIFICATE_PASSWORD, IOS_PROVISION_PROFILE_BASE64, IOS_PROVISION_PROFILE_NAME y APPLE_TEAM_ID."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Flutter
+        if: steps.signing.outputs.configured == 'true'
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        if: steps.signing.outputs.configured == 'true'
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          flutter pub get
+          dart run flutter_launcher_icons
+          dart run flutter_native_splash:create
+
+      - name: Install Apple certificate and profile
+        if: steps.signing.outputs.configured == 'true'
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.IOS_DIST_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.IOS_DIST_CERTIFICATE_PASSWORD }}
+          BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          KC_PASS="${KEYCHAIN_PASSWORD:-posia_ci_keychain}"
+          CERTIFICATE_PATH="$RUNNER_TEMP/build_certificate.p12"
+          PP_PATH="$RUNNER_TEMP/build_pp.mobileprovision"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o "$CERTIFICATE_PATH"
+          echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o "$PP_PATH"
+          security create-keychain -p "$KC_PASS" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KC_PASS" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KC_PASS" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp "$PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles
+
+      - name: Prepare ExportOptions.plist
+        if: steps.signing.outputs.configured == 'true'
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          IOS_PROVISION_PROFILE_NAME: ${{ secrets.IOS_PROVISION_PROFILE_NAME }}
+        run: |
+          PLIST="${{ env.APP_DIR }}/ios/ExportOptions.plist"
+          /usr/libexec/PlistBuddy -c "Set :teamID $APPLE_TEAM_ID" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :provisioningProfiles:com.posia.posiaPos $IOS_PROVISION_PROFILE_NAME" "$PLIST"
+
+      - name: Build IPA
+        if: steps.signing.outputs.configured == 'true'
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          flutter build ipa --release \
+            --export-options-plist=ios/ExportOptions.plist
+
+      - name: Upload IPA artifact
+        if: steps.signing.outputs.configured == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: posia-ios-ipa
+          path: ${{ env.APP_DIR }}/build/ios/ipa/*.ipa
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: iOS skipped summary
+        if: steps.signing.outputs.configured != 'true'
+        run: |
+          echo "iOS no compilado: faltan secrets de firma Apple."
+          echo "Ver docs/PUBLICACION_MOVIL.md seccion GitHub Actions."
+
+  github-release:
+    name: GitHub Release
+    needs: [android, ios]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/mobile-v')
+    steps:
+      - name: Download Android AAB
+        uses: actions/download-artifact@v4
+        with:
+          name: posia-android-aab
+          path: dist/android
+
+      - name: Download Android APK
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: posia-android-apk
+          path: dist/android
+
+      - name: Download iOS IPA
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: posia-ios-ipa
+          path: dist/ios
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/android/**
+            dist/ios/**
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

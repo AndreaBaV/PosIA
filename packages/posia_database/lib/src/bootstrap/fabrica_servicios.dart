@@ -15,6 +15,7 @@ import 'package:posia_sync/posia_sync.dart';
 import '../database/posia_local_database.dart';
 import '../repositories/categoria_repository.dart';
 import '../repositories/cliente_repository.dart';
+import '../repositories/descuento_cliente_repository.dart';
 import '../repositories/config_repository.dart';
 import '../repositories/movimiento_inventario_repository.dart';
 import '../repositories/proveedor_repository.dart';
@@ -27,6 +28,7 @@ import '../repositories/sync_state_repository.dart';
 import '../repositories/tienda_repository.dart';
 import '../repositories/traspaso_repository.dart';
 import '../repositories/turno_caja_repository.dart';
+import '../repositories/usuario_repository.dart';
 import '../repositories/variante_repository.dart';
 import '../repositories/vendedor_repository.dart';
 import '../repositories/venta_repository.dart';
@@ -95,6 +97,7 @@ class FabricaServicios {
 		cajaId ??= configDispositivo.cajaId;
 		final productoRepo = ProductoRepository(baseDatos: base);
 		final clienteRepo = ClienteRepository(baseDatos: base);
+		final descuentoClienteRepo = DescuentoClienteRepository(baseDatos: base);
 		final ventaRepo = VentaRepository(baseDatos: base);
 		final precioRepo = PrecioRepository(baseDatos: base);
 		final inventarioRepo = InventarioRepository(baseDatos: base);
@@ -104,6 +107,7 @@ class FabricaServicios {
 		final estadoSyncRepo = SyncStateRepository(baseDatos: base);
 		final categoriaRepo = CategoriaRepository(baseDatos: base);
 		final vendedorRepo = VendedorRepository(baseDatos: base);
+		final usuarioRepo = UsuarioRepository(baseDatos: base);
 		final proveedorRepo = ProveedorRepository(baseDatos: base);
 		final movimientoRepo = MovimientoInventarioRepository(baseDatos: base);
 		final turnoRepo = TurnoCajaRepository(baseDatos: base);
@@ -143,6 +147,7 @@ class FabricaServicios {
 			productoRepository: productoRepo,
 			varianteRepository: varianteRepo,
 			clienteRepository: clienteRepo,
+			descuentoClienteRepository: descuentoClienteRepo,
 			ventaRepository: ventaRepo,
 			motorPrecio: motorPrecio,
 			gestorInventario: gestorInventario,
@@ -166,7 +171,9 @@ class FabricaServicios {
 			configRepository: configRepo,
 			categoriaRepository: categoriaRepo,
 			clienteRepository: clienteRepo,
+			descuentoClienteRepository: descuentoClienteRepo,
 			vendedorRepository: vendedorRepo,
+			usuarioRepository: usuarioRepo,
 			proveedorRepository: proveedorRepo,
 			precioRepository: precioRepo,
 			movimientoRepository: movimientoRepo,

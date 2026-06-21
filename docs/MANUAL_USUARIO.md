@@ -41,7 +41,7 @@ El panel de **Admin** (inventario, reportes, sync, configuracion) es el mismo en
 
 ### Forma de pago
 
-Hoy POSIA cobra **solo en efectivo**. No hay pago con tarjeta, mixto ni credito.
+POSIA soporta **efectivo, tarjeta, transferencia, mixto y crédito/fiado** en el diálogo de cobro.
 
 ---
 
@@ -87,31 +87,62 @@ Hoy POSIA cobra **solo en efectivo**. No hay pago con tarjeta, mixto ni credito.
 
 ## 3. Pantalla principal
 
-La barra inferior tiene dos pestanas:
+Tras elegir tienda e **iniciar sesión** (usuario + contraseña), la barra inferior muestra:
 
-| Pestaña | Funcion |
-|---------|---------|
-| **Caja** | Registrar ventas |
-| **Admin** | Configuracion, inventario y reportes (requiere PIN) |
+| Pestaña | Funcion | Quien la ve |
+|---------|---------|-------------|
+| **Caja** | Registrar ventas | Todos |
+| **Admin** | Configuracion, inventario y reportes | Supervisor y administrador |
+
+Los **empleados** solo ven **Caja**; **Mi cuenta** esta en el icono de perfil de la barra superior.
 
 - En **Windows** veras la grilla completa de productos.
 - En **iPhone/Android** veras la caja minimalista con boton **Hablar**.
 
 ---
 
-## 4. Acceso al panel de administracion
+## 4. Inicio de sesion y PINs
 
-1. Toca la pestaña **Admin**.
-2. Ingresa el PIN de 4 digitos.
-3. PIN por defecto en demo: **`1234`**.
-4. Cambialo en Admin → **Configuracion** → **Guardar PIN**.
-5. Para volver a caja, toca la pestaña **Caja** (la sesion admin se cierra sola).
+### Flujo
 
-> En produccion configura un PIN propio del negocio antes de operar.
+1. Al abrir la app, **selecciona la tienda**.
+2. En **Iniciar sesion**, ingresa tu **codigo de usuario** (numerico).
+3. Ingresa tu **contrasena** (PIN de 4 digitos) en el teclado numerico.
+
+### Cuentas por defecto (datos demo)
+
+| Usuario | Contrasena | Persona | Rol |
+|---------|------------|---------|-----|
+| `1000` | `1234` | Ana Administradora | Administrador |
+| `2001` | `2345` | Carlos Supervisor Centro | Supervisor |
+| `2002` | `2345` | Laura Supervisor Norte | Supervisor |
+| `3001` | `3456` | Pedro Empleado | Empleado |
+
+Respaldo admin del dispositivo: usuario `0000` + PIN de configuracion (demo: `1234`).
+
+### Administracion del PIN
+
+- **Usuarios:** Admin → **Usuarios** para crear cuentas y asignar PIN por persona.
+- **PIN del dispositivo (admin):** Admin → **Configuracion** → **Guardar PIN** (respaldo de acceso administrativo; demo: `1234`).
+- **Tu propio PIN:** Admin → **Mi cuenta** → **Cambiar PIN**.
+
+> En produccion configura PINs propios del negocio y desactiva o cambia las cuentas demo antes de operar.
 
 ---
 
-## 5. Flujo diario de caja
+## 5. Panel de administracion
+
+El acceso a Admin depende del rol con el que iniciaste sesion:
+
+- **Administrador:** todas las secciones.
+- **Supervisor:** usuarios de su tienda, inventario y operacion limitada.
+- **Empleado:** sin panel Admin (solo caja).
+
+Para volver a caja, toca la pestaña **Caja**. Para cerrar sesion, usa **Cerrar sesion** en la barra superior.
+
+---
+
+## 6. Flujo diario de caja
 
 Este flujo aplica en **todas** las plataformas.
 
@@ -361,7 +392,7 @@ Configura la impresora en Admin → **Configuracion**.
 
 ## 10. Sincronizacion con la nube
 
-POSIA puede sincronizar varias cajas contra un servidor en la nube (Neon + Render). Guia tecnica: [DEPLOYMENT_NEON.md](DEPLOYMENT_NEON.md).
+POSIA puede sincronizar varias cajas contra un servidor en la nube. Guía técnica: [DEPLOYMENT.md](DEPLOYMENT.md) § Hub de sincronización.
 
 ### Configuracion rapida
 
@@ -386,7 +417,7 @@ En Admin → **Configuracion**, el **Tenant ID** debe coincidir con el tenant en
 
 | Funcion | Estado |
 |---------|--------|
-| Pago con tarjeta / mixto / credito | No disponible |
+| Pago con tarjeta / mixto / crédito | Disponible en diálogo de cobro |
 | Escaneo por camara en movil | No disponible (usa voz o texto) |
 | Lector USB en movil | No aplica |
 | Admin completo en telefono | Disponible pero pensado para tablet o tareas puntuales |
@@ -398,7 +429,7 @@ En Admin → **Configuracion**, el **Tenant ID** debe coincidir con el tenant en
 | Problema | Solucion |
 |----------|----------|
 | No puedo cobrar | Abre turno en Admin → Corte de caja |
-| PIN incorrecto | Demo: `1234`; o el PIN que configuraste en Admin |
+| PIN incorrecto | Verifica usuario y contrasena; demo empleado: `3001` / `3456` |
 | Productos no aparecen | Verifica categoria asignada y que esten activos |
 | Voz no reconoce producto | Nombre debe parecerse al del catalogo; prueba por texto |
 | "1 caja" agrega cantidad incorrecta | Revisa `piezas_por_caja` del producto en catalogo |
@@ -419,9 +450,8 @@ En Admin → **Configuracion**, el **Tenant ID** debe coincidir con el tenant en
 
 ---
 
-## Documentacion relacionada
+## Documentación relacionada
 
-- [ESTADO_PROYECTO.md](ESTADO_PROYECTO.md) — madurez y funciones del sistema
-- [POS_MOBILE.md](POS_MOBILE.md) — detalle tecnico caja movil
-- [POS_DESKTOP.md](POS_DESKTOP.md) — detalle funciones escritorio
-- [DEPLOYMENT_NEON.md](DEPLOYMENT_NEON.md) — despliegue sync en nube
+- [ADMIN.md](ADMIN.md) — panel de administración
+- [DEPLOYMENT.md](DEPLOYMENT.md) — despliegue y sync en nube
+- [PUBLICACION_MOVIL.md](PUBLICACION_MOVIL.md) — tiendas móviles

@@ -29,18 +29,38 @@ class PantallaCaja extends ConsumerStatefulWidget {
 class _PantallaCajaState extends ConsumerState<PantallaCaja> {
 	StreamSubscription<String>? _suscripcionEscaner;
 	BarcodeScanner? _scanner;
+	final _busquedaController = TextEditingController();
+	final _busquedaFocus = FocusNode();
+	String? _ultimoCodigoProcesado;
+	DateTime? _ultimoCodigoProcesadoEn;
 
 	@override
 	void initState() {
 		super.initState();
-		WidgetsBinding.instance.addPostFrameCallback((_) => _iniciarEscaner());
+		WidgetsBinding.instance.addPostFrameCallback((_) {
+			_iniciarEscaner();
+			_enfocarBusqueda();
+		});
 	}
 
 	@override
 	void dispose() {
 		_suscripcionEscaner?.cancel();
 		_scanner?.detener();
+		_busquedaController.dispose();
+		_busquedaFocus.dispose();
 		super.dispose();
+	}
+
+	void _enfocarBusqueda() {
+		if (!mounted) {
+			return;
+		}
+		WidgetsBinding.instance.addPostFrameCallback((_) {
+			if (mounted && _busquedaFocus.canRequestFocus) {
+				_busquedaFocus.requestFocus();
+			}
+		});
 	}
 
 	Future<void> _iniciarEscaner() async {
@@ -52,24 +72,96 @@ class _PantallaCajaState extends ConsumerState<PantallaCaja> {
 	}
 
 	Future<void> _procesarCodigoBarras(String codigo) async {
-		final servicio = await ref.read(servicioCajaProvider.future);
-		final agregado = await servicio.agregarPorCodigoBarras(codigo);
-		await ref.read(carritoNotifierProvider.notifier).recargar();
-		if (!agregado && mounted) {
+		await _intentarAgregarCodigo(codigo);
+	}
+
+	Future<void> _procesarEntradaBusqueda(String texto) async {
+		final agregado = await _intentarAgregarCodigo(texto);
+		if (agregado) {
+			return;
+		}
+		final productos = ref.read(carritoNotifierProvider).value?.productos ?? [];
+		if (productos.length == 1) {
+			await ref.read(carritoNotifierProvider.notifier).agregarProducto(productos.first);
+			_busquedaController.clear();
+			ref.read(carritoNotifierProvider.notifier).limpiarBusqueda();
+			_enfocarBusqueda();
+			return;
+		}
+		if (!mounted) {
+			return;
+		}
+		if (texto.trim().isNotEmpty && productos.isEmpty) {
 			ScaffoldMessenger.of(context).showSnackBar(
 				SnackBar(
-					content: Text('Producto no encontrado: $codigo'),
+					content: Text('Sin resultados para "${texto.trim()}"'),
 					backgroundColor: PosiaColors.cancelar,
 				),
 			);
 		}
 	}
 
+	Future<bool> _intentarAgregarCodigo(String codigo) async {
+		final normalizado = codigo.trim();
+		if (normalizado.isEmpty) {
+			return false;
+		}
+		final ahora = DateTime.now();
+		if (_ultimoCodigoProcesado == normalizado &&
+			_ultimoCodigoProcesadoEn != null &&
+			ahora.difference(_ultimoCodigoProcesadoEn!) < const Duration(milliseconds: 400)) {
+			return true;
+		}
+		final servicio = await ref.read(servicioCajaProvider.future);
+		final agregado = await servicio.agregarPorCodigoBarras(normalizado);
+		if (agregado) {
+			_ultimoCodigoProcesado = normalizado;
+			_ultimoCodigoProcesadoEn = ahora;
+			_busquedaController.clear();
+			ref.read(carritoNotifierProvider.notifier).limpiarBusqueda();
+			await ref.read(carritoNotifierProvider.notifier).recargar();
+			_enfocarBusqueda();
+			return true;
+		}
+		if (!mounted) {
+			return false;
+		}
+		if (RegExp(r'^\d{4,}$').hasMatch(normalizado)) {
+			ScaffoldMessenger.of(context).showSnackBar(
+				SnackBar(
+					content: Text('Código no encontrado: $normalizado'),
+					backgroundColor: PosiaColors.cancelar,
+				),
+			);
+		}
+		return false;
+	}
+
 	@override
 	Widget build(BuildContext context) {
 		final estadoCarrito = ref.watch(carritoNotifierProvider);
+		final estado = estadoCarrito.value;
+		if (estado != null) {
+			return _ConstruirLayoutCaja(
+				estado: estado,
+				busquedaController: _busquedaController,
+				busquedaFocus: _busquedaFocus,
+				alCambiarBusqueda: (texto) =>
+					ref.read(carritoNotifierProvider.notifier).establecerBusqueda(texto),
+				alEnviarBusqueda: _procesarEntradaBusqueda,
+				alEnfocarBusqueda: _enfocarBusqueda,
+			);
+		}
 		return estadoCarrito.when(
-			data: (estado) => _ConstruirLayoutCaja(estado: estado),
+			data: (data) => _ConstruirLayoutCaja(
+				estado: data,
+				busquedaController: _busquedaController,
+				busquedaFocus: _busquedaFocus,
+				alCambiarBusqueda: (texto) =>
+					ref.read(carritoNotifierProvider.notifier).establecerBusqueda(texto),
+				alEnviarBusqueda: _procesarEntradaBusqueda,
+				alEnfocarBusqueda: _enfocarBusqueda,
+			),
 			loading: () => const Scaffold(
 				body: Center(child: CircularProgressIndicator()),
 			),
@@ -82,61 +174,102 @@ class _PantallaCajaState extends ConsumerState<PantallaCaja> {
 
 /// Layout interno de caja con paneles y acciones.
 class _ConstruirLayoutCaja extends ConsumerWidget {
-	const _ConstruirLayoutCaja({required this.estado});
+	const _ConstruirLayoutCaja({
+		required this.estado,
+		required this.busquedaController,
+		required this.busquedaFocus,
+		required this.alCambiarBusqueda,
+		required this.alEnviarBusqueda,
+		required this.alEnfocarBusqueda,
+	});
 
 	final EstadoCarrito estado;
+	final TextEditingController busquedaController;
+	final FocusNode busquedaFocus;
+	final ValueChanged<String> alCambiarBusqueda;
+	final ValueChanged<String> alEnviarBusqueda;
+	final VoidCallback alEnfocarBusqueda;
 
 	@override
 	Widget build(BuildContext context, WidgetRef ref) {
 		return Scaffold(
+			backgroundColor: PosiaColors.fondo,
 			body: Column(
 				children: [
 					PanelTotal(
 						nombreTienda: estado.nombreTienda,
 						total: estado.total,
+						nombreVendedor: estado.nombreVendedor,
+						turnoAbierto: estado.turnoAbierto,
 					),
 					if (!estado.turnoAbierto)
-						Container(
-							width: double.infinity,
-							color: Colors.orange.shade100,
-							padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
-							child: const Row(
-								children: [
-									Icon(Icons.warning_amber, color: Colors.orange, size: 20.0),
-									SizedBox(width: 8.0),
-									Expanded(
-										child: Text(
-											'Sin turno abierto — Admin > Corte de caja',
-											style: TextStyle(fontWeight: FontWeight.w600),
+						Material(
+							color: Colors.orange.shade50,
+							child: Container(
+								width: double.infinity,
+								padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+								child: Row(
+									children: [
+										Icon(Icons.warning_amber_rounded, color: Colors.orange.shade800, size: 20.0),
+										const SizedBox(width: 8.0),
+										Expanded(
+											child: Text(
+												'Sin turno abierto — Admin › Corte de caja',
+												style: TextStyle(
+													fontWeight: FontWeight.w600,
+													color: Colors.orange.shade900,
+												),
+											),
 										),
-									),
-								],
+									],
+								),
 							),
 						),
 					if (estado.categorias.isNotEmpty)
-						BarraCategorias(
-							categorias: estado.categorias,
-							categoriaSeleccionadaId: estado.categoriaSeleccionadaId,
-							alSeleccionar: (id) {
-								ref.read(carritoNotifierProvider.notifier).seleccionarCategoria(id);
-							},
+						DecoratedBox(
+							decoration: BoxDecoration(
+								color: PosiaColors.tarjeta,
+								boxShadow: [
+									BoxShadow(
+										color: Colors.black.withValues(alpha: 0.04),
+										blurRadius: 6.0,
+										offset: const Offset(0.0, 2.0),
+									),
+								],
+							),
+							child: BarraCategorias(
+								categorias: estado.categorias,
+								categoriaSeleccionadaId: estado.categoriaSeleccionadaId,
+								alSeleccionar: (id) {
+									ref.read(carritoNotifierProvider.notifier).seleccionarCategoria(id);
+								},
+							),
 						),
+					CampoBusquedaCaja(
+						controlador: busquedaController,
+						focusNode: busquedaFocus,
+						alCambiar: alCambiarBusqueda,
+						alEnviar: alEnviarBusqueda,
+					),
 					if (estado.favoritos.isNotEmpty)
-						SizedBox(
-							height: 72.0,
+						Container(
+							height: 56.0,
+							margin: const EdgeInsets.only(top: 4.0),
 							child: ListView.separated(
 								scrollDirection: Axis.horizontal,
-								padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+								padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
 								itemCount: estado.favoritos.length,
 								separatorBuilder: (_, __) => const SizedBox(width: 8.0),
 								itemBuilder: (context, indice) {
 									final producto = estado.favoritos[indice];
 									return ActionChip(
-										avatar: const Icon(Icons.star, size: 18.0, color: Colors.amber),
+										avatar: Icon(Icons.star_rounded, size: 18.0, color: Colors.amber.shade700),
 										label: Text(
 											producto.nombre,
 											overflow: TextOverflow.ellipsis,
 										),
+										backgroundColor: Colors.amber.shade50,
+										side: BorderSide(color: Colors.amber.shade200),
 										onPressed: () {
 											_manejarSeleccionProducto(context, ref, producto);
 										},
@@ -145,33 +278,55 @@ class _ConstruirLayoutCaja extends ConsumerWidget {
 							),
 						),
 					Expanded(
-						child: Row(
-							children: [
-								Expanded(
-									flex: 3,
-									child: GrillaProductos(
-										productos: estado.productos,
-										alSeleccionar: (producto) {
-											_manejarSeleccionProducto(context, ref, producto);
-										},
+						child: Padding(
+							padding: const EdgeInsets.fromLTRB(8.0, 8.0, 8.0, 0.0),
+							child: Row(
+								crossAxisAlignment: CrossAxisAlignment.stretch,
+								children: [
+									Expanded(
+										flex: 3,
+										child: Card(
+											margin: EdgeInsets.zero,
+											clipBehavior: Clip.antiAlias,
+											child: GrillaProductos(
+												categoriaId: estado.categoriaSeleccionadaId,
+												productos: estado.productos,
+												mensajeVacio: busquedaController.text.trim().isNotEmpty
+													? 'Sin coincidencias para "${busquedaController.text.trim()}"'
+													: 'Sin productos en esta categoría',
+												alSeleccionar: (producto) async {
+													await _manejarSeleccionProducto(context, ref, producto);
+													alEnfocarBusqueda();
+												},
+											),
+										),
 									),
-								),
-								Expanded(
-									flex: 2,
-									child: PanelCarrito(
-										lineas: estado.lineas,
-										alEliminarLinea: (indice) {
-											ref.read(carritoNotifierProvider.notifier).eliminarLinea(indice);
-										},
-										alTocarLinea: (indice) {
-											_mostrarDescuentoLinea(context, ref, indice, estado.lineas[indice]);
-										},
+									const SizedBox(width: 8.0),
+									Expanded(
+										flex: 2,
+										child: Card(
+											margin: EdgeInsets.zero,
+											clipBehavior: Clip.antiAlias,
+											child: PanelCarrito(
+												lineas: estado.lineas,
+												total: estado.total,
+												alEliminarLinea: (indice) {
+													ref.read(carritoNotifierProvider.notifier).eliminarLinea(indice);
+												},
+												alTocarLinea: (indice) {
+													_mostrarDescuentoLinea(context, ref, indice, estado.lineas[indice]);
+												},
+											),
+										),
 									),
-								),
-							],
+								],
+							),
 						),
 					),
-					_BarraAccionesCaja(total: estado.total, estado: estado),
+					_BarraAccionesCaja(
+						total: estado.total,
+						estado: estado,
+					),
 				],
 			),
 		);
@@ -223,7 +378,7 @@ class _ConstruirLayoutCaja extends ConsumerWidget {
 		await showDialog<void>(
 			context: context,
 			builder: (dialogContext) => AlertDialog(
-				title: Text('Presentacion: ${producto.nombre}'),
+				title: Text('Presentación: ${producto.nombre}'),
 				content: SizedBox(
 					width: 320.0,
 					child: ListView(
@@ -379,7 +534,10 @@ class _ConstruirLayoutCaja extends ConsumerWidget {
 
 /// Barra inferior fija con acciones iconograficas de caja.
 class _BarraAccionesCaja extends ConsumerWidget {
-	const _BarraAccionesCaja({required this.total, required this.estado});
+	const _BarraAccionesCaja({
+		required this.total,
+		required this.estado,
+	});
 
 	final double total;
 	final EstadoCarrito estado;
@@ -392,18 +550,6 @@ class _BarraAccionesCaja extends ConsumerWidget {
 			color: PosiaColors.tarjeta,
 			child: Row(
 				children: [
-					BotonAccionCaja(
-						icono: Icons.qr_code_scanner,
-						etiqueta: 'Escanear',
-						colorFondo: Colors.blueGrey,
-						alPresionar: () => _escanearManual(context, ref),
-					),
-					BotonAccionCaja(
-						icono: Icons.badge,
-						etiqueta: estado.nombreVendedor ?? 'Vendedor',
-						colorFondo: Colors.deepPurple,
-						alPresionar: () => _mostrarSelectorVendedor(context, ref),
-					),
 					BotonAccionCaja(
 						icono: Icons.person,
 						etiqueta: 'Cliente',
@@ -428,64 +574,18 @@ class _BarraAccionesCaja extends ConsumerWidget {
 		);
 	}
 
-	/// Abre dialogo para ingresar codigo de barras manualmente.
-	Future<void> _escanearManual(BuildContext context, WidgetRef ref) async {
-		final controller = TextEditingController();
-		final codigo = await showDialog<String>(
-			context: context,
-			builder: (ctx) => AlertDialog(
-				title: const Text('Codigo de barras'),
-				content: TextField(
-					controller: controller,
-					autofocus: true,
-					keyboardType: TextInputType.number,
-					decoration: const InputDecoration(
-						labelText: 'Escanear o escribir codigo',
-						border: OutlineInputBorder(),
-					),
-					onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
-				),
-				actions: [
-					TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
-					FilledButton(
-						onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-						child: const Text('Agregar'),
-					),
-				],
-			),
-		);
-		controller.dispose();
-		if (codigo == null || codigo.isEmpty) {
-			return;
-		}
-		final servicio = await ref.read(servicioCajaProvider.future);
-		final agregado = await servicio.agregarPorCodigoBarras(codigo);
-		await ref.read(carritoNotifierProvider.notifier).recargar();
-		if (!context.mounted) {
-			return;
-		}
-		if (!agregado) {
-			ScaffoldMessenger.of(context).showSnackBar(
-				SnackBar(
-					content: Text('Producto no encontrado: $codigo'),
-					backgroundColor: PosiaColors.cancelar,
-				),
-			);
-		}
-	}
-
 	/// Pide confirmacion antes de vaciar el carrito.
 	Future<void> _confirmarVaciarCarrito(BuildContext context, WidgetRef ref) async {
 		final confirmar = await showDialog<bool>(
 			context: context,
 			builder: (ctx) => AlertDialog(
 				title: const Text('Vaciar carrito'),
-				content: const Text('Se eliminaran todas las lineas del carrito.'),
+				content: const Text('Se eliminarán todas las líneas del carrito.'),
 				actions: [
 					TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No')),
 					FilledButton(
 						onPressed: () => Navigator.pop(ctx, true),
-						child: const Text('Si, vaciar'),
+						child: const Text('Sí, vaciar'),
 					),
 				],
 			),
@@ -493,45 +593,6 @@ class _BarraAccionesCaja extends ConsumerWidget {
 		if (confirmar == true) {
 			await ref.read(carritoNotifierProvider.notifier).vaciarCarrito();
 		}
-	}
-
-	/// Muestra dialogo de seleccion de vendedor activo.
-	Future<void> _mostrarSelectorVendedor(BuildContext context, WidgetRef ref) async {
-		final servicio = await ref.read(servicioCajaProvider.future);
-		final vendedores = await servicio.listarVendedores();
-		if (!context.mounted) {
-			return;
-		}
-		await showDialog<void>(
-			context: context,
-			builder: (dialogContext) {
-				return AlertDialog(
-					title: const Text('Seleccionar vendedor'),
-					content: SizedBox(
-						width: 320.0,
-						child: ListView(
-							shrinkWrap: true,
-							children: vendedores
-								.map(
-									(vendedor) => ListTile(
-										leading: const Icon(Icons.badge),
-										title: Text(vendedor.nombre),
-										subtitle: Text('Codigo ${vendedor.codigo}'),
-										onTap: () async {
-											await servicio.seleccionarVendedor(vendedor);
-											if (dialogContext.mounted) {
-												Navigator.of(dialogContext).pop();
-											}
-											await ref.read(carritoNotifierProvider.notifier).recargar();
-										},
-									),
-								)
-								.toList(),
-						),
-					),
-				);
-			},
-		);
 	}
 
 	/// Muestra dialogo simplificado de seleccion de cliente.
@@ -562,7 +623,9 @@ class _BarraAccionesCaja extends ConsumerWidget {
 										if (dialogContext.mounted) {
 											Navigator.of(dialogContext).pop();
 										}
-										await ref.read(carritoNotifierProvider.notifier).recargar();
+										await ref.read(carritoNotifierProvider.notifier).recargar(
+											invalidarCatalogo: true,
+										);
 									},
 								),
 								...clientes.map(
@@ -574,7 +637,9 @@ class _BarraAccionesCaja extends ConsumerWidget {
 											if (dialogContext.mounted) {
 												Navigator.of(dialogContext).pop();
 											}
-											await ref.read(carritoNotifierProvider.notifier).recargar();
+											await ref.read(carritoNotifierProvider.notifier).recargar(
+											invalidarCatalogo: true,
+										);
 										},
 									),
 								),

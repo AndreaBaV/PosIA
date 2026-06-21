@@ -51,6 +51,30 @@ class PosiaTheme {
 			useMaterial3: true,
 			colorScheme: esquema,
 			scaffoldBackgroundColor: PosiaColors.fondo,
+			cardTheme: CardThemeData(
+				color: PosiaColors.tarjeta,
+				elevation: 1.0,
+				shadowColor: Colors.black.withValues(alpha: 0.06),
+				shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.0)),
+			),
+			navigationBarTheme: NavigationBarThemeData(
+				backgroundColor: PosiaColors.tarjeta,
+				indicatorColor: PosiaColors.cobrar.withValues(alpha: 0.15),
+				labelTextStyle: WidgetStateProperty.resolveWith((states) {
+					if (states.contains(WidgetState.selected)) {
+						return const TextStyle(
+							fontWeight: FontWeight.w600,
+							color: PosiaColors.cobrar,
+						);
+					}
+					return const TextStyle(color: PosiaColors.neutro);
+				}),
+			),
+			appBarTheme: const AppBarTheme(
+				centerTitle: false,
+				elevation: 0.0,
+				scrolledUnderElevation: 1.0,
+			),
 			textTheme: const TextTheme(
 				headlineLarge: TextStyle(
 					fontSize: 36.0,

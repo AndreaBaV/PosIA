@@ -45,7 +45,7 @@ final sincronizadorAutomaticoProvider = FutureProvider<SincronizadorAutomatico>(
 final licenciaProvider = FutureProvider<Licencia>((ref) async {
 	final contenedor = await ref.watch(contenedorServiciosProvider.future);
 	final config = await contenedor.servicioAdmin.obtenerConfigDispositivo();
-	final tenantId = config.tenantId.isNotEmpty ? config.tenantId : TENANT_DEMO_ID;
+	final tenantId = config.tenantId;
 	return Licencia(
 		tenantId: tenantId,
 		modulos: [
@@ -191,21 +191,66 @@ class EstadoCarrito {
 /// Gestiona estado reactivo del carrito conectado a [ServicioCaja].
 class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 	String _categoriaSeleccionadaId = CATEGORIA_TODOS_ID;
+	String _textoBusqueda = '';
+	List<Producto>? _catalogoCompleto;
+	List<Categoria>? _categoriasCache;
 
 	@override
 	Future<EstadoCarrito> build() async {
 		return _cargarEstadoInicial();
 	}
 
-	/// Cambia categoria activa y recarga productos filtrados.
-	Future<void> seleccionarCategoria(String categoriaId) async {
+	/// Cambia categoria activa filtrando el catalogo en memoria (sin parpadeo).
+	void seleccionarCategoria(String categoriaId) {
 		_categoriaSeleccionadaId = categoriaId;
-		await recargar();
+		final actual = state.value;
+		if (actual == null || _catalogoCompleto == null) {
+			recargar(mostrarCarga: true);
+			return;
+		}
+		state = AsyncData(
+			actual.copiarCon(
+				categoriaSeleccionadaId: categoriaId,
+				productos: _filtrarProductos(_catalogoCompleto!, categoriaId, _textoBusqueda),
+			),
+		);
+	}
+
+	/// Filtra productos visibles por nombre o codigo de barras.
+	void establecerBusqueda(String texto) {
+		_textoBusqueda = texto.trim().toLowerCase();
+		final actual = state.value;
+		if (actual == null || _catalogoCompleto == null) {
+			return;
+		}
+		state = AsyncData(
+			actual.copiarCon(
+				productos: _filtrarProductos(
+					_catalogoCompleto!,
+					_categoriaSeleccionadaId,
+					_textoBusqueda,
+				),
+			),
+		);
+	}
+
+	/// Limpia el texto de busqueda y restaura la grilla.
+	void limpiarBusqueda() {
+		establecerBusqueda('');
 	}
 
 	/// Recarga catalogo y carrito desde servicio de caja.
-	Future<void> recargar() async {
-		state = const AsyncLoading();
+	Future<void> recargar({
+		bool mostrarCarga = false,
+		bool invalidarCatalogo = false,
+	}) async {
+		if (invalidarCatalogo) {
+			_catalogoCompleto = null;
+			_categoriasCache = null;
+		}
+		if (mostrarCarga || !state.hasValue) {
+			state = const AsyncLoading();
+		}
 		state = AsyncData(await _cargarEstadoInicial());
 	}
 
@@ -215,7 +260,7 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 	Future<void> agregarProducto(Producto producto) async {
 		final servicio = await ref.read(servicioCajaProvider.future);
 		await servicio.agregarProducto(producto);
-		await recargar();
+		await _refrescarDespuesDeOperacionCarrito();
 	}
 
 	/// Elimina linea del carrito por indice.
@@ -223,32 +268,92 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 	/// [indice] Posicion de linea a eliminar.
 	Future<void> eliminarLinea(int indice) async {
 		final servicio = await ref.read(servicioCajaProvider.future);
-		servicio.eliminarLinea(indice);
-		await recargar();
+		await servicio.eliminarLinea(indice);
+		await _refrescarDespuesDeOperacionCarrito();
 	}
 
 	/// Vacia carrito activo.
 	Future<void> vaciarCarrito() async {
 		final servicio = await ref.read(servicioCajaProvider.future);
 		servicio.vaciarCarrito();
-		await recargar();
+		await _refrescarDespuesDeOperacionCarrito();
 	}
 
 	/// Ejecuta cobro con parametros de multipago.
 	Future<double?> cobrar(CobroRequest request) async {
 		final servicio = await ref.read(servicioCajaProvider.future);
 		final venta = await servicio.cobrar(request);
-		await recargar();
+		await recargar(invalidarCatalogo: true);
 		return venta?.total;
+	}
+
+	/// Actualiza lineas y total sin mostrar pantalla de carga.
+	Future<void> _refrescarDespuesDeOperacionCarrito({
+		bool invalidarCatalogo = false,
+	}) async {
+		final actual = state.value;
+		if (actual == null) {
+			await recargar(mostrarCarga: true, invalidarCatalogo: invalidarCatalogo);
+			return;
+		}
+		if (invalidarCatalogo) {
+			_catalogoCompleto = null;
+		}
+		final servicio = await ref.read(servicioCajaProvider.future);
+		await _asegurarCatalogo();
+		final contenedor = await ref.read(contenedorServiciosProvider.future);
+		final turno = await contenedor.servicioAdmin
+			.obtenerServicioCorteCaja()
+			?.obtenerTurnoAbierto();
+		state = AsyncData(
+			actual.copiarCon(
+				lineas: servicio.obtenerCarrito(),
+				total: servicio.calcularTotalCarrito(),
+				productos: _filtrarProductos(_catalogoCompleto!, _categoriaSeleccionadaId, _textoBusqueda),
+				turnoAbierto: turno != null,
+				nombreVendedor: servicio.obtenerVendedorActivo()?.nombre,
+				favoritos: await servicio.listarFavoritosCaja(),
+			),
+		);
+	}
+
+	Future<void> _asegurarCatalogo() async {
+		if (_catalogoCompleto != null) {
+			return;
+		}
+		final servicio = await ref.read(servicioCajaProvider.future);
+		_catalogoCompleto = await servicio.listarProductos();
+	}
+
+	List<Producto> _filtrarProductos(
+		List<Producto> todos,
+		String categoriaId,
+		String textoBusqueda,
+	) {
+		Iterable<Producto> lista = todos;
+		if (categoriaId != CATEGORIA_TODOS_ID) {
+			lista = lista.where((producto) => producto.categoriaId == categoriaId);
+		}
+		if (textoBusqueda.isNotEmpty) {
+			lista = lista.where(
+				(producto) =>
+					producto.nombre.toLowerCase().contains(textoBusqueda) ||
+					producto.codigoBarras.contains(textoBusqueda),
+			);
+		}
+		return lista.toList();
 	}
 
 	/// Construye estado inicial desde servicio de caja.
 	Future<EstadoCarrito> _cargarEstadoInicial() async {
 		final servicio = await ref.read(servicioCajaProvider.future);
 		final contenedor = await ref.read(contenedorServiciosProvider.future);
-		final categorias = await servicio.listarCategorias();
-		final productos = await servicio.listarProductos(
-			categoriaId: _categoriaSeleccionadaId,
+		await _asegurarCatalogo();
+		_categoriasCache ??= await servicio.listarCategorias();
+		final productos = _filtrarProductos(
+			_catalogoCompleto!,
+			_categoriaSeleccionadaId,
+			_textoBusqueda,
 		);
 		final favoritos = await servicio.listarFavoritosCaja();
 		final vendedor = servicio.obtenerVendedorActivo();
@@ -258,7 +363,7 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 		final tienda = await contenedor.servicioAdmin.obtenerTiendaActiva();
 		return EstadoCarrito(
 			productos: productos,
-			categorias: categorias,
+			categorias: _categoriasCache!,
 			categoriaSeleccionadaId: _categoriaSeleccionadaId,
 			lineas: servicio.obtenerCarrito(),
 			total: servicio.calcularTotalCarrito(),

@@ -1,0 +1,7 @@
+# Copia este archivo a android/key.properties y reemplaza los valores.
+# NO subas key.properties ni el keystore al repositorio.
+
+storePassword=TU_PASSWORD_KEYSTORE
+keyPassword=TU_PASSWORD_KEY
+keyAlias=posia
+storeFile=../posia-release.keystore

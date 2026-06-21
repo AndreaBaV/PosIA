@@ -21,12 +21,16 @@ class PanelCarrito extends StatelessWidget {
 	const PanelCarrito({
 		required this.lineas,
 		required this.alEliminarLinea,
+		this.total = 0.0,
 		this.alTocarLinea,
 		super.key,
 	});
 
 	/// Lineas del carrito activo.
 	final List<LineaCarrito> lineas;
+
+	/// Total actual del carrito.
+	final double total;
 
 	/// Accion al eliminar linea por indice.
 	final ValueChanged<int> alEliminarLinea;
@@ -36,21 +40,52 @@ class PanelCarrito extends StatelessWidget {
 
 	@override
 	Widget build(BuildContext context) {
-		return Container(
-			color: PosiaColors.tarjeta,
+		return ColoredBox(
+			color: PosiaColors.fondo,
 			child: Column(
 				crossAxisAlignment: CrossAxisAlignment.stretch,
 				children: [
-					Padding(
-						padding: const EdgeInsets.all(12.0),
+					Container(
+						padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+						color: PosiaColors.tarjeta,
 						child: Row(
 							children: [
-								const Icon(Icons.shopping_cart, size: 28.0),
-								const SizedBox(width: 8.0),
-								Text(
-									'Carrito',
-									style: Theme.of(context).textTheme.titleLarge,
+								Container(
+									padding: const EdgeInsets.all(8.0),
+									decoration: BoxDecoration(
+										color: PosiaColors.cobrar.withValues(alpha: 0.12),
+										borderRadius: BorderRadius.circular(10.0),
+									),
+									child: const Icon(Icons.shopping_cart_outlined, color: PosiaColors.cobrar),
 								),
+								const SizedBox(width: 10.0),
+								Expanded(
+									child: Column(
+										crossAxisAlignment: CrossAxisAlignment.start,
+										children: [
+											Text(
+												'Carrito',
+												style: Theme.of(context).textTheme.titleMedium?.copyWith(
+													fontWeight: FontWeight.bold,
+												),
+											),
+											Text(
+												'${lineas.length} artículo(s)',
+												style: Theme.of(context).textTheme.bodySmall?.copyWith(
+													color: Colors.grey.shade600,
+												),
+											),
+										],
+									),
+								),
+								if (lineas.isNotEmpty)
+									Text(
+										formatearMoneda(total),
+										style: Theme.of(context).textTheme.titleMedium?.copyWith(
+											color: PosiaColors.cobrar,
+											fontWeight: FontWeight.bold,
+										),
+									),
 							],
 						),
 					),
@@ -58,49 +93,95 @@ class PanelCarrito extends StatelessWidget {
 					Expanded(
 						child: lineas.isEmpty
 							? Center(
-								child: Column(
-									mainAxisAlignment: MainAxisAlignment.center,
-									children: [
-										const Icon(
-											Icons.remove_shopping_cart,
-											size: 64.0,
-											color: Colors.grey,
-										),
-										const SizedBox(height: 12.0),
-										Text(
-											'Carrito vacio',
-											style: Theme.of(context).textTheme.titleMedium?.copyWith(
-												color: Colors.grey,
+								child: Padding(
+									padding: const EdgeInsets.all(24.0),
+									child: Column(
+										mainAxisAlignment: MainAxisAlignment.center,
+										children: [
+											Icon(
+												Icons.remove_shopping_cart_outlined,
+												size: 56.0,
+												color: Colors.grey.shade400,
 											),
-										),
-										const SizedBox(height: 4.0),
-										const Text(
-											'Toca un producto o escanea',
-											style: TextStyle(color: Colors.grey),
-										),
-									],
+											const SizedBox(height: 12.0),
+											Text(
+												'Carrito vacío',
+												style: Theme.of(context).textTheme.titleMedium?.copyWith(
+													color: Colors.grey.shade600,
+												),
+											),
+											const SizedBox(height: 4.0),
+											Text(
+												'Toca un producto o escanea',
+												style: TextStyle(color: Colors.grey.shade500),
+											),
+										],
+									),
 								),
 							)
-							: ListView.builder(
+							: ListView.separated(
+								padding: const EdgeInsets.all(8.0),
 								itemCount: lineas.length,
+								separatorBuilder: (_, _) => const SizedBox(height: 6.0),
 								itemBuilder: (context, indice) {
 									final linea = lineas[indice];
-									return ListTile(
-										onTap: alTocarLinea != null
-											? () => alTocarLinea!(indice)
-											: null,
-										leading: CircleAvatar(
-											backgroundColor: PosiaColors.cobrar,
-											child: Text(
-												'${linea.cantidad.toStringAsFixed(linea.cantidad == linea.cantidad.roundToDouble() ? 0 : 1)}',
-												style: const TextStyle(color: Colors.white),
+									final subtotal = linea.calcularSubtotal();
+									return Material(
+										color: PosiaColors.tarjeta,
+										borderRadius: BorderRadius.circular(12.0),
+										elevation: 0.5,
+										child: ListTile(
+											contentPadding: const EdgeInsets.symmetric(
+												horizontal: 12.0,
+												vertical: 4.0,
 											),
-										),
-										title: Text(linea.producto.nombre),
-										subtitle: Text(_construirSubtituloLinea(linea)),
-										trailing: IconButton(
-											icon: const Icon(Icons.delete, color: PosiaColors.cancelar),
-											onPressed: () => alEliminarLinea(indice),
+											shape: RoundedRectangleBorder(
+												borderRadius: BorderRadius.circular(12.0),
+											),
+											onTap: alTocarLinea != null
+												? () => alTocarLinea!(indice)
+												: null,
+											leading: CircleAvatar(
+												backgroundColor: PosiaColors.cobrar,
+												radius: 18.0,
+												child: Text(
+													linea.cantidad.toStringAsFixed(
+														linea.cantidad == linea.cantidad.roundToDouble() ? 0 : 1,
+													),
+													style: const TextStyle(
+														color: Colors.white,
+														fontSize: 12.0,
+														fontWeight: FontWeight.bold,
+													),
+												),
+											),
+											title: Text(
+												linea.producto.nombre,
+												maxLines: 2,
+												overflow: TextOverflow.ellipsis,
+												style: const TextStyle(fontWeight: FontWeight.w600),
+											),
+											subtitle: Text(_construirSubtituloLinea(linea)),
+											trailing: Column(
+												mainAxisAlignment: MainAxisAlignment.center,
+												crossAxisAlignment: CrossAxisAlignment.end,
+												children: [
+													Text(
+														formatearMoneda(subtotal),
+														style: const TextStyle(
+															fontWeight: FontWeight.bold,
+															color: PosiaColors.cobrar,
+														),
+													),
+													IconButton(
+														icon: const Icon(Icons.close, size: 18.0),
+														color: PosiaColors.cancelar,
+														padding: EdgeInsets.zero,
+														constraints: const BoxConstraints(),
+														onPressed: () => alEliminarLinea(indice),
+													),
+												],
+											),
 										),
 									);
 								},
@@ -112,9 +193,6 @@ class PanelCarrito extends StatelessWidget {
 	}
 
 	/// Construye subtitulo de linea con peso, lote o precio unitario.
-	///
-	/// [linea] Linea del carrito activo.
-	/// Retorna texto descriptivo para cajero.
 	String _construirSubtituloLinea(LineaCarrito linea) {
 		if (linea.etiquetaLote != null && linea.producto.moduloVertical == ModuloVertical.farmacia) {
 			return '${linea.etiquetaLote} · ${formatearMoneda(linea.precioUnitario)}';

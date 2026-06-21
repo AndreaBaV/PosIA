@@ -72,6 +72,15 @@ class InventarioRepository implements RepositorioInventario {
 		return filas.map(_mapearStock).toList();
 	}
 
+	/// Elimina registros de stock del producto en todas las tiendas.
+	Future<void> eliminarStockPorProducto(String productoId) async {
+		await _baseDatos.delete(
+			'stock_levels',
+			where: 'producto_id = ?',
+			whereArgs: [productoId],
+		);
+	}
+
 	StockNivel _mapearStock(Map<String, Object?> fila) {
 		return StockNivel(
 			productoId: fila['producto_id'] as String,

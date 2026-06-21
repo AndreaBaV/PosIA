@@ -1,5 +1,5 @@
 # Despliegue gratuito en Render.com con Neon PostgreSQL.
-# Ver docs/DEPLOYMENT_NEON.md
+# Ver docs/DEPLOYMENT.md
 services:
   - type: web
     name: posia-sync-api

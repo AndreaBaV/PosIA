@@ -79,12 +79,15 @@ class VentaRepository {
 
 	/// Lista ventas con filtros de historial.
 	Future<List<Venta>> listarConFiltro(FiltroVentas filtro) async {
-		final condiciones = <String>['tienda_id = ?', 'creada_en >= ?', 'creada_en <= ?'];
+		final condiciones = <String>['creada_en >= ?', 'creada_en <= ?'];
 		final argumentos = <Object?>[
-			filtro.tiendaId,
 			filtro.desde.toIso8601String(),
 			filtro.hasta.toIso8601String(),
 		];
+		if (filtro.tiendaId != null) {
+			condiciones.add('tienda_id = ?');
+			argumentos.add(filtro.tiendaId);
+		}
 		if (filtro.vendedorId != null) {
 			condiciones.add('vendedor_id = ?');
 			argumentos.add(filtro.vendedorId);
@@ -180,6 +183,29 @@ class VentaRepository {
 		final lista = acumulado.values.toList()
 			..sort((a, b) => b.totalVendido.compareTo(a.totalVendido));
 		return lista;
+	}
+
+	/// Resumen de ventas agrupado por hora del dia (hora local).
+	Future<List<ResumenVentasHora>> resumenPorHora(FiltroVentas filtro) async {
+		final ventas = await listarConFiltro(filtro);
+		final cantidadPorHora = List<int>.filled(24, 0);
+		final totalPorHora = List<double>.filled(24, 0.0);
+		for (final venta in ventas) {
+			if (venta.estado != EstadoVenta.completada) {
+				continue;
+			}
+			final hora = venta.creadaEn.toLocal().hour;
+			cantidadPorHora[hora] = cantidadPorHora[hora] + 1;
+			totalPorHora[hora] = redondearMonto(totalPorHora[hora] + venta.total);
+		}
+		return List.generate(
+			24,
+			(h) => ResumenVentasHora(
+				hora: h,
+				cantidadVentas: cantidadPorHora[h],
+				totalVendido: totalPorHora[h],
+			),
+		);
 	}
 
 	/// Totales de ventas por metodo de pago en periodo.

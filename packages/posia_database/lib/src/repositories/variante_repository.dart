@@ -72,6 +72,14 @@ class VarianteRepository {
 		);
 	}
 
+	Future<void> eliminarPorProductoPadre(String productoPadreId) async {
+		await _baseDatos.delete(
+			'product_variants',
+			where: 'producto_padre_id = ?',
+			whereArgs: [productoPadreId],
+		);
+	}
+
 	VarianteProducto _mapear(Map<String, Object?> fila) {
 		return VarianteProducto(
 			id: fila['id'] as String,

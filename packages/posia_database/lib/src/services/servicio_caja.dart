@@ -16,6 +16,7 @@ import 'package:uuid/uuid.dart';
 
 import '../repositories/categoria_repository.dart';
 import '../repositories/cliente_repository.dart';
+import '../repositories/descuento_cliente_repository.dart';
 import '../repositories/producto_repository.dart';
 import '../repositories/variante_repository.dart';
 import '../repositories/vendedor_repository.dart';
@@ -41,6 +42,7 @@ class ServicioCaja {
 		required ProductoRepository productoRepository,
 		VarianteRepository? varianteRepository,
 		required ClienteRepository clienteRepository,
+		DescuentoClienteRepository? descuentoClienteRepository,
 		required VentaRepository ventaRepository,
 		required MotorPrecio motorPrecio,
 		required GestorInventario gestorInventario,
@@ -56,6 +58,7 @@ class ServicioCaja {
 	}) : _productoRepository = productoRepository,
 	     _varianteRepository = varianteRepository,
 	     _clienteRepository = clienteRepository,
+	     _descuentoClienteRepository = descuentoClienteRepository,
 	     _ventaRepository = ventaRepository,
 	     _motorPrecio = motorPrecio,
 	     _gestorInventario = gestorInventario,
@@ -72,6 +75,7 @@ class ServicioCaja {
 	final ProductoRepository _productoRepository;
 	final VarianteRepository? _varianteRepository;
 	final ClienteRepository _clienteRepository;
+	final DescuentoClienteRepository? _descuentoClienteRepository;
 	final VentaRepository _ventaRepository;
 	final MotorPrecio _motorPrecio;
 	final GestorInventario _gestorInventario;
@@ -89,6 +93,10 @@ class ServicioCaja {
 	final List<LineaCarrito> _lineasCarrito = [];
 	Cliente? _clienteActivo;
 	Vendedor? _vendedorActivo;
+	double _descuentoTicketCliente = 0.0;
+
+	/// Descuento automatico del cliente activo sobre el ticket.
+	double obtenerDescuentoTicketCliente() => _descuentoTicketCliente;
 
 	/// Expone servicio de carniceria para UI especializada.
 	///
@@ -123,7 +131,7 @@ class ServicioCaja {
 	/// [cliente] Cliente seleccionado o null para mostrador.
 	Future<void> seleccionarCliente(Cliente? cliente) async {
 		_clienteActivo = cliente;
-		await _recalcularPreciosCarrito();
+		await _sincronizarClienteEnCarrito();
 	}
 
 	/// Vendedor seleccionado para la venta actual.
@@ -132,6 +140,38 @@ class ServicioCaja {
 	/// Asigna vendedor activo de la venta.
 	Future<void> seleccionarVendedor(Vendedor? vendedor) async {
 		_vendedorActivo = vendedor;
+	}
+
+	/// Vincula el vendedor de caja con el usuario que inicio sesion.
+	Future<Vendedor> asegurarVendedorDesdeUsuario(Usuario usuario) async {
+		final repo = _vendedorRepository;
+		final idVendedor = 'vend-${usuario.id}';
+		if (repo != null) {
+			final existente = await repo.obtenerPorId(idVendedor);
+			if (existente != null) {
+				_vendedorActivo = existente;
+				return existente;
+			}
+			final vendedor = Vendedor(
+				id: idVendedor,
+				nombre: usuario.nombre,
+				codigo: usuario.codigo,
+				activo: true,
+				tiendaId: usuario.tiendaId,
+			);
+			await repo.guardar(vendedor);
+			_vendedorActivo = vendedor;
+			return vendedor;
+		}
+		final vendedor = Vendedor(
+			id: idVendedor,
+			nombre: usuario.nombre,
+			codigo: usuario.codigo,
+			activo: true,
+			tiendaId: usuario.tiendaId,
+		);
+		_vendedorActivo = vendedor;
+		return vendedor;
 	}
 
 	/// Lista categorias activas para barra de caja.
@@ -304,17 +344,19 @@ class ServicioCaja {
 	/// Elimina linea del carrito por indice.
 	///
 	/// [indice] Posicion de la linea a eliminar.
-	void eliminarLinea(int indice) {
+	Future<void> eliminarLinea(int indice) async {
 		if (indice < 0 || indice >= _lineasCarrito.length) {
 			return;
 		}
 		_lineasCarrito.removeAt(indice);
+		await _aplicarDescuentosCliente();
 	}
 
 	/// Vacia el carrito activo sin persistir venta.
 	void vaciarCarrito() {
 		_lineasCarrito.clear();
 		_clienteActivo = null;
+		_descuentoTicketCliente = 0.0;
 	}
 
 	/// Calcula total del carrito activo.
@@ -325,7 +367,8 @@ class ServicioCaja {
 		for (final linea in _lineasCarrito) {
 			acumulado = acumulado + linea.calcularSubtotal();
 		}
-		return redondearMonto(acumulado);
+		final neto = acumulado - _descuentoTicketCliente;
+		return redondearMonto(neto < 0.0 ? 0.0 : neto);
 	}
 
 	/// Cierra venta, persiste, ajusta inventario y encola sync.
@@ -357,7 +400,7 @@ class ServicioCaja {
 		final turno = await _servicioCorteCaja?.obtenerTurnoAbierto();
 		final total = Venta.calcularTotalDesdeLineas(
 			lineasVenta,
-			descuentoTicket: request.descuentoTicket,
+			descuentoTicket: request.descuentoTicket + _descuentoTicketCliente,
 		);
 		double? montoEfectivo;
 		double? montoTarjeta;
@@ -387,7 +430,7 @@ class ServicioCaja {
 			creadaEn: DateTime.now().toUtc(),
 			vendedorId: _vendedorActivo?.id,
 			turnoCajaId: turno?.id,
-			descuentoTicket: request.descuentoTicket,
+			descuentoTicket: request.descuentoTicket + _descuentoTicketCliente,
 			montoEfectivo: montoEfectivo,
 			montoTarjeta: montoTarjeta,
 			montoTransferencia: montoTransferencia,
@@ -499,6 +542,7 @@ class ServicioCaja {
 					precioUnitario: precioActualizado.precioUnitario,
 					reglaPrecio: precioActualizado.reglaAplicada,
 				);
+				await _aplicarDescuentosCliente();
 				return;
 			}
 		}
@@ -512,6 +556,39 @@ class ServicioCaja {
 				etiquetaLote: etiquetaLote,
 			),
 		);
+		await _aplicarDescuentosCliente();
+	}
+
+	Future<void> _sincronizarClienteEnCarrito() async {
+		await _recalcularPreciosCarrito();
+		await _aplicarDescuentosCliente();
+	}
+
+	Future<void> _aplicarDescuentosCliente() async {
+		final cliente = _clienteActivo;
+		if (cliente == null) {
+			_descuentoTicketCliente = 0.0;
+			for (var i = 0; i < _lineasCarrito.length; i++) {
+				_lineasCarrito[i] = _lineasCarrito[i].copiarCon(descuentoLinea: 0.0);
+			}
+			return;
+		}
+		final repo = _descuentoClienteRepository;
+		if (repo == null) {
+			_descuentoTicketCliente = 0.0;
+			return;
+		}
+		final descuentos = await repo.listarActivosPorCliente(cliente.id);
+		final resultado = CalculadorDescuentosCliente.calcular(
+			descuentos: descuentos,
+			lineas: _lineasCarrito,
+		);
+		_descuentoTicketCliente = resultado.descuentoTicket;
+		for (var i = 0; i < _lineasCarrito.length; i++) {
+			_lineasCarrito[i] = _lineasCarrito[i].copiarCon(
+				descuentoLinea: resultado.descuentosPorLinea[i],
+			);
+		}
 	}
 
 	/// Recalcula precio unitario de cada linea segun cliente activo.

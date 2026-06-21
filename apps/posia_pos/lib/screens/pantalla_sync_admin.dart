@@ -43,7 +43,7 @@ class _PantallaSyncAdminState extends ConsumerState<PantallaSyncAdmin> {
 		final estadoAsync = ref.watch(_estadoSyncProvider);
 		return Scaffold(
 			appBar: AppBar(
-				title: const Text('Sincronizacion'),
+				title: const Text('Sincronización'),
 			),
 			body: estadoAsync.when(
 				data: (estado) {
@@ -77,7 +77,7 @@ class _PantallaSyncAdminState extends ConsumerState<PantallaSyncAdmin> {
 			_sincronizando = false;
 			_mensajeResultado = resultado.hubDisponible
 				? 'Enviados: ${resultado.eventosEnviados} · Recibidos: ${resultado.eventosRecibidos}'
-				: 'Hub no configurado o sin conexion';
+				: 'Hub no configurado o sin conexión';
 		});
 	}
 
