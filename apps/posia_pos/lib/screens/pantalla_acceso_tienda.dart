@@ -207,5 +207,6 @@ class _PantallaAccesoTiendaState extends ConsumerState<PantallaAccesoTienda> {
 final _tiendasAccesoProvider = FutureProvider<List<Tienda>>((ref) async {
 	await ref.watch(estadoInicializacionProvider.future);
 	final contenedor = await ref.watch(contenedorServiciosProvider.future);
-	return contenedor.servicioAdmin.listarTiendasActivas();
+	final usuario = ref.watch(sesionUsuarioProvider);
+	return contenedor.servicioAdmin.obtenerTiendasPermitidas(operador: usuario);
 });

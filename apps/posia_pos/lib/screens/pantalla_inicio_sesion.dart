@@ -341,7 +341,11 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 			await ref.read(contenedorServiciosProvider.future);
 
 			final servicio = await ref.read(servicioAdminProvider.future);
-			await servicio.activarSesionTrasLogin(usuario, tenantId);
+			await servicio.activarSesionTrasLogin(
+				usuario,
+				tenantId,
+				tiendasDesdeHub: resultado.tiendas,
+			);
 
 			if (usuario.rol != RolUsuario.administrador) {
 				final tiendaId = usuario.tiendaId;
