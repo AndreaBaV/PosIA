@@ -31,10 +31,10 @@ En **Settings** del servicio:
 | Campo | Valor |
 |-------|-------|
 | **Root Directory** | *(vacío — raíz del repo)* |
-| **Dockerfile Path** | `server/sync_api/Dockerfile.render` |
+| **Dockerfile Path** | `Dockerfile` |
 | **Docker Context** | `.` |
 
-Si dejas Dockerfile Path en `Dockerfile`, falla con *"no such file or directory"* porque el Dockerfile no está en la raíz.
+> Render busca `Dockerfile` en la **raíz** del repo por defecto. El archivo ya está en la raíz del monorepo.
 
 ### Variables de entorno
 
@@ -53,18 +53,27 @@ Debe responder `{"status":"ok"}`.
 
 ---
 
-## Paso 2 — Que no se duerma (recomendado, $0)
+## Paso 2 — Evitar que Render se duerma ($0)
 
-Render Free se apaga tras ~15 min sin tráfico. Para varias cajas en producción:
+Render Free se apaga tras ~15 min sin tráfico. Tres capas (usa al menos una):
 
-1. [UptimeRobot](https://uptimerobot.com) — cuenta gratis
-2. **Add monitor** → HTTP(s)
-3. URL: `https://TU-URL.onrender.com/v1/health`
-4. Intervalo: **5 minutos**
+### A. UptimeRobot (recomendado, gratis)
 
-Así el hub queda despierto la mayor parte del tiempo sin pagar.
+1. [uptimerobot.com](https://uptimerobot.com) → monitor HTTP cada **5 min**
+2. URL: `https://TU-URL.onrender.com/v1/health`
 
-> Las cajas hacen sync cada 60 s; con UptimeRobot el hub casi nunca duerme.
+### B. Las cajas despiertan el hub solas (ya en la app)
+
+Con la app abierta, cada caja hace un ping silencioso cada **10 min** al hub (timeout largo para el arranque en frío). Si hay cajas encendidas en horario de tienda, el hub suele permanecer activo.
+
+### C. Sync en segundo plano (ya en la app)
+
+- **Cada 60 s** la app sincroniza en silencio (no bloquea la venta).
+- Si el hub no responde, **la caja sigue vendiendo** con su SQLite local.
+- Cuando el hub vuelve, aplica inventario y ventas de otras tiendas automáticamente.
+- El cajero **no ve error** en pantalla de venta; solo Admin → Estado de la nube muestra el detalle.
+
+No hace falta bajar a “cada hora”: ya es más frecuente, pero **sin molestar al usuario**.
 
 ---
 

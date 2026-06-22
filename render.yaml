@@ -3,7 +3,7 @@ services:
   - type: web
     name: posia-sync-api
     runtime: docker
-    dockerfilePath: server/sync_api/Dockerfile.render
+    dockerfilePath: ./Dockerfile
     dockerContext: .
     plan: free
     healthCheckPath: /v1/health
