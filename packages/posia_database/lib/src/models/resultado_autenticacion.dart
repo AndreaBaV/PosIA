@@ -12,6 +12,7 @@ class ResultadoAutenticacion {
 		this.pinSalt,
 		this.creadoEn,
 		this.actualizadoEn,
+		this.tiendas = const [],
 	});
 
 	final Usuario usuario;
@@ -20,6 +21,7 @@ class ResultadoAutenticacion {
 	final String? pinSalt;
 	final String? creadoEn;
 	final String? actualizadoEn;
+	final List<Tienda> tiendas;
 
 	bool get desdeHub => pinHash != null && pinSalt != null;
 }

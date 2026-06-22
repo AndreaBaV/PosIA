@@ -79,4 +79,35 @@ class AlmacenUsuariosPostgres {
 			'activo': (cols['activo'] as int? ?? 0) == 1,
 		};
 	}
+
+	/// Tiendas activas del tenant (administradores operan sobre todas).
+	Future<List<Map<String, Object?>>> listarTiendasActivasPorTenant(
+		String tenantId,
+	) async {
+		final limpio = tenantId.trim();
+		if (limpio.isEmpty) {
+			return [];
+		}
+		final filas = await _conexion.execute(
+			Sql.named('''
+				SELECT id, nombre, direccion, activa
+				FROM stores
+				WHERE tenant_id = @tenant AND activa = 1
+				ORDER BY nombre
+			'''),
+			parameters: {'tenant': limpio},
+		);
+		return filas
+			.map((fila) {
+				final cols = fila.toColumnMap();
+				return {
+					'id': cols['id'] as String? ?? '',
+					'nombre': cols['nombre'] as String? ?? '',
+					'direccion': cols['direccion'] as String? ?? '',
+					'activa': (cols['activa'] as int? ?? 0) == 1,
+				};
+			})
+			.where((t) => (t['id'] as String).isNotEmpty)
+			.toList();
+	}
 }

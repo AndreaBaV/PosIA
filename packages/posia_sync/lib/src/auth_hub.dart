@@ -1,6 +1,21 @@
 /// Modelos de autenticacion contra el hub central.
 library;
 
+/// Sucursal del tenant devuelta por el hub al iniciar sesion.
+class TiendaHub {
+	const TiendaHub({
+		required this.id,
+		required this.nombre,
+		required this.direccion,
+		required this.activa,
+	});
+
+	final String id;
+	final String nombre;
+	final String direccion;
+	final bool activa;
+}
+
 /// Perfil publico de usuario (sin credenciales).
 class PerfilUsuarioHub {
 	const PerfilUsuarioHub({
@@ -30,6 +45,7 @@ class RespuestaLoginHub {
 		required this.pinSalt,
 		required this.creadoEn,
 		required this.actualizadoEn,
+		this.tiendas = const [],
 	});
 
 	final PerfilUsuarioHub perfil;
@@ -37,4 +53,5 @@ class RespuestaLoginHub {
 	final String pinSalt;
 	final String creadoEn;
 	final String actualizadoEn;
+	final List<TiendaHub> tiendas;
 }

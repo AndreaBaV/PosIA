@@ -66,6 +66,14 @@ $env:DATABASE_URL="postgresql://...@ep-xxx.neon.tech/neondb?sslmode=require"
 dart run bin/posia_tenants.dart provision --tenant <TENANT_ID>
 ```
 
+Si provisionaste antes de junio 2026 y las tiendas en Neon no tienen `tenant_id`, ejecuta una sola vez:
+
+```powershell
+dart run bin/backfill_tenant_stores.dart
+```
+
+Eso lee el registro local (`registro_tenants.db`), asigna `tenant_id` en Neon y publica eventos `storeUpserted` para que las cajas sincronicen.
+
 ## Panel web de administración
 
 Interfaz local para listar negocios, crear tenants, agregar tiendas/usuarios, publicar en Neon y restablecer PINs.

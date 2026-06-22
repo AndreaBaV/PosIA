@@ -164,6 +164,16 @@ class ServicioAutenticacion {
 			pinSalt: login.pinSalt,
 			creadoEn: login.creadoEn,
 			actualizadoEn: login.actualizadoEn,
+			tiendas: login.tiendas
+				.map(
+					(t) => Tienda(
+						id: t.id,
+						nombre: t.nombre,
+						direccion: t.direccion,
+						activa: t.activa,
+					),
+				)
+				.toList(),
 		);
 	}
 }

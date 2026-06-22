@@ -14,8 +14,15 @@ class EsquemaPosPostgres {
 				id TEXT PRIMARY KEY,
 				nombre TEXT NOT NULL,
 				direccion TEXT NOT NULL,
-				activa INTEGER NOT NULL
+				activa INTEGER NOT NULL,
+				tenant_id TEXT
 			)
+		''');
+		await conexion.execute('''
+			ALTER TABLE stores ADD COLUMN IF NOT EXISTS tenant_id TEXT
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_stores_tenant ON stores(tenant_id)
 		''');
 		await conexion.execute('''
 			CREATE TABLE IF NOT EXISTS categories (

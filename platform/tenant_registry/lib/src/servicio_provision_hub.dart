@@ -1,11 +1,15 @@
 /// Publica tiendas y usuarios del registro local en Postgres (Neon).
 library;
 
+import 'dart:convert';
+
 import 'package:posia_core/posia_core.dart';
 import 'package:postgres/postgres.dart';
 import 'package:posia_sync_api/posia_sync_api.dart';
+import 'package:uuid/uuid.dart';
 
 import 'repositorio_tenants.dart';
+import 'modelos/tenant_registro.dart';
 
 /// Resultado de aprovisionar un tenant en el hub.
 class ResultadoProvision {
@@ -31,6 +35,7 @@ class ServicioProvisionHub {
 	final String _urlConexion;
 	final RepositorioTenants? _repositorio;
 	Connection? _conexion;
+	static const _uuid = Uuid();
 
 	Future<ResultadoProvision> provisionarTenant(
 		String tenantId, {
@@ -59,20 +64,23 @@ class ServicioProvisionHub {
 		for (final tienda in tiendas) {
 			await conexion.execute(
 				Sql.named('''
-					INSERT INTO stores (id, nombre, direccion, activa)
-					VALUES (@id, @nombre, @direccion, @activa)
+					INSERT INTO stores (id, nombre, direccion, activa, tenant_id)
+					VALUES (@id, @nombre, @direccion, @activa, @tenant)
 					ON CONFLICT (id) DO UPDATE SET
 						nombre = EXCLUDED.nombre,
 						direccion = EXCLUDED.direccion,
-						activa = EXCLUDED.activa
+						activa = EXCLUDED.activa,
+						tenant_id = EXCLUDED.tenant_id
 				'''),
 				parameters: {
 					'id': tienda.id,
 					'nombre': tienda.nombre,
 					'direccion': tienda.direccion,
 					'activa': tienda.activa ? 1 : 0,
+					'tenant': tenantId,
 				},
 			);
+			await _publicarEventoTienda(conexion, tenantId, tienda);
 			tiendasOk++;
 		}
 
@@ -180,6 +188,37 @@ class ServicioProvisionHub {
 	Future<void> cerrar() async {
 		await _conexion?.close();
 		_conexion = null;
+	}
+
+	Future<void> _publicarEventoTienda(
+		Connection conexion,
+		String tenantId,
+		TiendaRegistro tienda,
+	) async {
+		final ahora = DateTime.now().toUtc();
+		await conexion.execute(
+			Sql.named('''
+				INSERT INTO sync_events
+					(id, tenant_id, store_id, device_id, type, payload, created_at)
+				VALUES
+					(@id, @tenant, @store, @device, @type, @payload, @created)
+				ON CONFLICT (id) DO NOTHING
+			'''),
+			parameters: {
+				'id': _uuid.v4(),
+				'tenant': tenantId,
+				'store': tienda.id,
+				'device': 'provision-bootstrap',
+				'type': 'storeUpserted',
+				'payload': jsonEncode({
+					'id': tienda.id,
+					'nombre': tienda.nombre,
+					'direccion': tienda.direccion,
+					'activa': tienda.activa,
+				}),
+				'created': ahora,
+			},
+		);
 	}
 
 	Future<Connection> _abrirConexion() async {

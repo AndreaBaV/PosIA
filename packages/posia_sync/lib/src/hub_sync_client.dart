@@ -186,6 +186,7 @@ class HubSyncClient {
 				pinSalt: pinSalt,
 				creadoEn: json['creadoEn'] as String? ?? '',
 				actualizadoEn: json['actualizadoEn'] as String? ?? '',
+				tiendas: _mapearTiendas(json['tiendas']),
 			);
 		} on http.ClientException {
 			return null;
@@ -211,6 +212,31 @@ class HubSyncClient {
 		);
 	}
 
+	List<TiendaHub> _mapearTiendas(Object? crudo) {
+		if (crudo is! List<Object?>) {
+			return const [];
+		}
+		final tiendas = <TiendaHub>[];
+		for (final item in crudo) {
+			if (item is! Map<String, Object?>) {
+				continue;
+			}
+			final id = item['id'] as String? ?? '';
+			if (id.isEmpty) {
+				continue;
+			}
+			tiendas.add(
+				TiendaHub(
+					id: id,
+					nombre: item['nombre'] as String? ?? '',
+					direccion: item['direccion'] as String? ?? '',
+					activa: item['activa'] as bool? ?? true,
+				),
+			);
+		}
+		return tiendas;
+	}
+
 	/// Verifica disponibilidad del hub.
 	///
 	/// Retorna verdadero si /v1/health responde ok.
@@ -223,6 +249,29 @@ class HubSyncClient {
 			return respuesta.statusCode >= 200 && respuesta.statusCode < 300;
 		} on Object {
 			return false;
+		}
+	}
+
+	/// Lista tiendas activas del tenant en el hub (bootstrap tras login admin).
+	Future<List<TiendaHub>> obtenerTiendasPorTenant(String tenantId) async {
+		final limpio = tenantId.trim();
+		if (limpio.isEmpty) {
+			return const [];
+		}
+		final uri = Uri.parse('$_urlBase/v1/stores').replace(
+			queryParameters: {'tenantId': limpio},
+		);
+		try {
+			final respuesta = await _clienteHttp
+				.get(uri, headers: _construirCabeceras())
+				.timeout(const Duration(seconds: TIMEOUT_HUB_SYNC_SEGUNDOS));
+			if (respuesta.statusCode != 200) {
+				return const [];
+			}
+			final json = jsonDecode(respuesta.body) as Map<String, Object?>;
+			return _mapearTiendas(json['tiendas']);
+		} on Object {
+			return const [];
 		}
 	}
 

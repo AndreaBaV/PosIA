@@ -41,6 +41,7 @@ class EnrutadorApi {
 			..get('/v1/health', _manejarHealth)
 			..get('/v1/auth/preview', _manejarVistaPreviaAuth)
 			..post('/v1/auth/login', _manejarLoginAuth)
+			..get('/v1/stores', _manejarListarTiendas)
 			..post('/v1/events', _manejarEnvioEventos)
 			..get('/v1/events', _manejarConsultaEventos);
 		return const Pipeline()
@@ -93,7 +94,24 @@ class EnrutadorApi {
 		if (resultado == null) {
 			return _respuestaJson({'error': 'Credenciales invalidas'}, codigo: 401);
 		}
-		return _respuestaJson(resultado);
+		final tenantId = resultado['tenantId'] as String? ?? '';
+		final tiendas = tenantId.isEmpty
+			? <Map<String, Object?>>[]
+			: await almacen.listarTiendasActivasPorTenant(tenantId);
+		return _respuestaJson({...resultado, 'tiendas': tiendas});
+	}
+
+	Future<Response> _manejarListarTiendas(Request solicitud) async {
+		final almacen = _usuarios;
+		if (almacen == null) {
+			return _respuestaJson({'error': 'Auth no disponible sin Postgres'}, codigo: 503);
+		}
+		final tenantId = solicitud.url.queryParameters['tenantId'] ?? '';
+		if (tenantId.trim().isEmpty) {
+			return _respuestaJson({'error': 'tenantId es obligatorio'}, codigo: 400);
+		}
+		final tiendas = await almacen.listarTiendasActivasPorTenant(tenantId);
+		return _respuestaJson({'tiendas': tiendas});
 	}
 
 	/// Recibe lote de eventos de un dispositivo.

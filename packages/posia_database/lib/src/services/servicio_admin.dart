@@ -910,7 +910,12 @@ class ServicioAdmin {
 	}
 
 	/// Aplica tenant resuelto en login, tienda del usuario y sync inicial.
-	Future<void> activarSesionTrasLogin(Usuario usuario, String tenantId) async {
+	Future<void> activarSesionTrasLogin(
+		Usuario usuario,
+		String tenantId, {
+		List<Tienda> tiendasDesdeHub = const [],
+		Future<List<Tienda>> Function(String tenantId)? obtenerTiendasRemotas,
+	}) async {
 		final tenantLimpio = tenantId.trim();
 		if (tenantLimpio.isEmpty) {
 			throw StateError('Tenant invalido');
@@ -933,10 +938,19 @@ class ServicioAdmin {
 				throw StateError('Usuario sin tienda asignada');
 			}
 			await cambiarTiendaActiva(tiendaId);
+		} else if (tiendasDesdeHub.isNotEmpty) {
+			await importarTiendasDesdeHub(tiendasDesdeHub);
 		}
 		final hub = await _configRepository.obtenerHubUrl();
 		if (hub != null && hub.isNotEmpty) {
 			await sincronizarManual();
+		}
+		if (usuario.rol == RolUsuario.administrador) {
+			await _asegurarTiendasAdministrador(
+				tenantId: tenantLimpio,
+				tiendasIniciales: tiendasDesdeHub,
+				obtenerRemotas: obtenerTiendasRemotas,
+			);
 		}
 	}
 
@@ -1418,6 +1432,40 @@ class ServicioAdmin {
 
 	Future<List<Tienda>> listarTiendasActivas() async {
 		return _tiendaRepository.listarActivas();
+	}
+
+	/// Replica en SQLite local las tiendas activas del tenant (login hub).
+	Future<void> importarTiendasDesdeHub(List<Tienda> tiendas) async {
+		for (final tienda in tiendas) {
+			if (!tienda.activa) {
+				continue;
+			}
+			await _tiendaRepository.guardar(tienda);
+		}
+	}
+
+	Future<void> _asegurarTiendasAdministrador({
+		required String tenantId,
+		List<Tienda> tiendasIniciales = const [],
+		Future<List<Tienda>> Function(String tenantId)? obtenerRemotas,
+	}) async {
+		if ((await listarTiendasActivas()).isNotEmpty) {
+			return;
+		}
+		if (tiendasIniciales.isNotEmpty) {
+			await importarTiendasDesdeHub(tiendasIniciales);
+			if ((await listarTiendasActivas()).isNotEmpty) {
+				return;
+			}
+		}
+		final fetch = obtenerRemotas;
+		if (fetch == null) {
+			return;
+		}
+		final remotas = await fetch(tenantId);
+		if (remotas.isNotEmpty) {
+			await importarTiendasDesdeHub(remotas);
+		}
 	}
 
 	Future<List<Tienda>> listarTodasLasTiendas() async {

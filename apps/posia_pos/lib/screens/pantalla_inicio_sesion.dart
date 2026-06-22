@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:posia_core/posia_core.dart';
 import 'package:posia_database/posia_database.dart';
+import 'package:posia_sync/posia_sync.dart';
 import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
@@ -341,11 +342,33 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 			await ref.read(contenedorServiciosProvider.future);
 
 			final servicio = await ref.read(servicioAdminProvider.future);
+			final hubUrl = await configRepo.obtenerHubUrl();
+			final hubApiKey = await configRepo.obtenerValor(CLAVE_CONFIG_HUB_API_KEY);
+			HubSyncClient? clienteHub;
+			if (hubUrl != null && hubUrl.isNotEmpty) {
+				clienteHub = HubSyncClient(urlBase: hubUrl, claveApi: hubApiKey);
+			}
 			await servicio.activarSesionTrasLogin(
 				usuario,
 				tenantId,
 				tiendasDesdeHub: resultado.tiendas,
+				obtenerTiendasRemotas: clienteHub == null
+					? null
+					: (id) async {
+						final remotas = await clienteHub!.obtenerTiendasPorTenant(id);
+						return remotas
+							.map(
+								(t) => Tienda(
+									id: t.id,
+									nombre: t.nombre,
+									direccion: t.direccion,
+									activa: t.activa,
+								),
+							)
+							.toList();
+					},
 			);
+			ref.invalidate(contenedorServiciosProvider);
 
 			if (usuario.rol != RolUsuario.administrador) {
 				final tiendaId = usuario.tiendaId;
