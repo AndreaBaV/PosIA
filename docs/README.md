@@ -31,6 +31,7 @@
 | Documento | Contenido |
 |-----------|-----------|
 | [DEPLOYMENT.md](DEPLOYMENT.md) | Builds, licencia, hub (VPS, Docker, Neon+Render) |
+| [../platform/README.md](../platform/README.md) | Registro maestro de tenants y aprovisionamiento Neon |
 | [PUBLICACION_MOVIL.md](PUBLICACION_MOVIL.md) | Google Play y App Store |
 | [PRIVACIDAD.md](PRIVACIDAD.md) | Política de privacidad (URL para tiendas) |
 

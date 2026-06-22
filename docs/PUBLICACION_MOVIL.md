@@ -38,6 +38,17 @@ Desde Windows, genera el base64 del keystore:
 
 Sin estos secrets el CI compila con firma debug (no valido para Play Store).
 
+#### Hub sync (recomendado para produccion)
+
+Embebe la conexión al hub en el binario; el tenant **no** va en el build.
+
+| Secret | Valor |
+|--------|-------|
+| `POSIA_HUB_URL` | `https://tu-api.onrender.com` |
+| `POSIA_HUB_API_KEY` | Misma clave que `API_KEY` del servidor sync |
+
+Sin estos secrets la app puede operar offline si ya hubo un login previo; el primer acceso requiere hub o copia local del tenant.
+
 #### iOS (App Store sin Mac)
 
 | Secret | Valor |
@@ -80,6 +91,8 @@ Crea un Release en GitHub con los binarios adjuntos.
 ### Android
 
 ```powershell
+$env:POSIA_HUB_URL="https://tu-api.onrender.com"
+$env:POSIA_HUB_API_KEY="tu-clave"
 .\scripts\generar_keystore_android.ps1   # una sola vez
 .\scripts\build_movil_release.ps1 -Plataforma android
 ```
@@ -101,7 +114,7 @@ flutter build ipa --release --export-options-plist=ios/ExportOptions.plist
 2. Produccion → Subir `app-release.aab`
 3. Politica de privacidad: publicar [PRIVACIDAD.md](PRIVACIDAD.md) en URL publica
 4. Capturas, clasificacion IARC, seguridad de datos
-5. **Notas para el revisor:** tienda cualquiera, usuario `1000`, PIN `1234`
+5. **Notas para el revisor:** describe cómo obtener credenciales de prueba del negocio (no hay cuentas precargadas).
 
 ---
 
@@ -111,7 +124,7 @@ flutter build ipa --release --export-options-plist=ios/ExportOptions.plist
 2. Bundle ID: `com.posia.posiaPos`
 3. App Privacy: microfono y voz para caja; sin seguimiento
 4. Export compliance: `ITSAppUsesNonExemptEncryption = false` (ya en Info.plist)
-5. Mismas credenciales demo en notas para el revisor
+5. Credenciales de prueba proporcionadas por el negocio (la app no incluye cuentas precargadas).
 
 ---
 

@@ -16,12 +16,14 @@ class Licencia {
 	/// [modulos] Modulos habilitados.
 	/// [maxTiendas] Numero maximo de sucursales.
 	/// [maxCajas] Numero maximo de cajas registradoras.
+	/// [maxUsuarios] Numero maximo de cuentas activas del tenant.
 	/// [soporteExpiraEn] Fecha limite de soporte y sync incluido.
 	const Licencia({
 		required this.tenantId,
 		required this.modulos,
 		required this.maxTiendas,
 		required this.maxCajas,
+		required this.maxUsuarios,
 		required this.soporteExpiraEn,
 	});
 
@@ -36,6 +38,9 @@ class Licencia {
 
 	/// Limite de cajas permitidas.
 	final int maxCajas;
+
+	/// Limite de cuentas de usuario activas.
+	final int maxUsuarios;
 
 	/// Fecha de expiracion de soporte anual.
 	final DateTime soporteExpiraEn;

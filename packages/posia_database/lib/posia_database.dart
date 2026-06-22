@@ -7,6 +7,8 @@
 library;
 
 export 'src/bootstrap/fabrica_servicios.dart';
+export 'src/bootstrap/aprovisionador_dispositivo.dart';
+export 'src/bootstrap/aprovisionador_offline.dart';
 export 'src/database/migraciones_esquema.dart';
 export 'src/database/posia_local_database.dart';
 export 'src/models/alta_producto_request.dart';
@@ -36,8 +38,11 @@ export 'src/repositories/turno_caja_repository.dart';
 export 'src/repositories/variante_repository.dart';
 export 'src/repositories/vendedor_repository.dart';
 export 'src/repositories/venta_repository.dart';
-export 'src/seed/datos_demo.dart';
 export 'src/services/servicio_admin.dart';
+export 'src/services/servicio_autenticacion.dart';
+export 'src/services/servicio_configuracion_dispositivo.dart';
+export 'src/models/resultado_autenticacion.dart';
+export 'src/models/motivo_fallo_auth.dart';
 export 'src/services/servicio_caja.dart';
 export 'src/services/servicio_corte_caja.dart';
 export 'src/sync/aplicador_eventos_sqlite.dart';

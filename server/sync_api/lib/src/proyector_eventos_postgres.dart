@@ -34,6 +34,10 @@ class ProyectorEventosPostgres {
 				await _traspaso(evento, completado: true);
 			case 'salePartialReturn':
 				await _devolucionParcial(evento);
+			case 'storeUpserted':
+				await _tienda(evento);
+			case 'userUpserted':
+				await _usuario(evento);
 			default:
 				break;
 		}
@@ -468,6 +472,86 @@ class ProyectorEventosPostgres {
 			parameters: {
 				'id': tiendaId,
 				'nombre': tiendaId,
+			},
+		);
+	}
+
+	Future<void> _tienda(EventoHub evento) async {
+		final p = evento.payload;
+		final id = p['id'] as String? ?? '';
+		if (id.isEmpty) {
+			return;
+		}
+		await _conexion.execute(
+			Sql.named('''
+				INSERT INTO stores (id, nombre, direccion, activa)
+				VALUES (@id, @nombre, @direccion, @activa)
+				ON CONFLICT (id) DO UPDATE SET
+					nombre = EXCLUDED.nombre,
+					direccion = EXCLUDED.direccion,
+					activa = EXCLUDED.activa
+			'''),
+			parameters: {
+				'id': id,
+				'nombre': p['nombre'] ?? '',
+				'direccion': p['direccion'] ?? '',
+				'activa': (p['activa'] as bool? ?? true) ? 1 : 0,
+			},
+		);
+	}
+
+	Future<void> _usuario(EventoHub evento) async {
+		final p = evento.payload;
+		final id = p['id'] as String? ?? '';
+		final pinHash = p['pinHash'] as String? ?? '';
+		final pinSalt = p['pinSalt'] as String? ?? '';
+		if (id.isEmpty || pinHash.isEmpty || pinSalt.isEmpty) {
+			return;
+		}
+		final actualizadoEn = p['actualizadoEn'] as String? ?? evento.creadoEn.toUtc().toIso8601String();
+		final existente = await _conexion.execute(
+			Sql.named('SELECT actualizado_en FROM users WHERE id = @id'),
+			parameters: {'id': id},
+		);
+		if (existente.isNotEmpty) {
+			final local = existente.first.toColumnMap()['actualizado_en'] as String? ?? '';
+			if (local.compareTo(actualizadoEn) > 0) {
+				return;
+			}
+		}
+		await _conexion.execute(
+			Sql.named('''
+				INSERT INTO users (
+					id, tenant_id, nombre, codigo, rol, tienda_id, activo,
+					pin_hash, pin_salt, creado_en, actualizado_en
+				) VALUES (
+					@id, @tenant, @nombre, @codigo, @rol, @tienda, @activo,
+					@hash, @salt, @creado, @actualizado
+				)
+				ON CONFLICT (id) DO UPDATE SET
+					tenant_id = EXCLUDED.tenant_id,
+					nombre = EXCLUDED.nombre,
+					codigo = EXCLUDED.codigo,
+					rol = EXCLUDED.rol,
+					tienda_id = EXCLUDED.tienda_id,
+					activo = EXCLUDED.activo,
+					pin_hash = EXCLUDED.pin_hash,
+					pin_salt = EXCLUDED.pin_salt,
+					creado_en = EXCLUDED.creado_en,
+					actualizado_en = EXCLUDED.actualizado_en
+			'''),
+			parameters: {
+				'id': id,
+				'tenant': evento.tenantId,
+				'nombre': p['nombre'] ?? '',
+				'codigo': p['codigo'] ?? '',
+				'rol': p['rol'] ?? 'empleado',
+				'tienda': p['tiendaId'],
+				'activo': (p['activo'] as bool? ?? true) ? 1 : 0,
+				'hash': pinHash,
+				'salt': pinSalt,
+				'creado': p['creadoEn'] as String? ?? evento.creadoEn.toUtc().toIso8601String(),
+				'actualizado': actualizadoEn,
 			},
 		);
 	}

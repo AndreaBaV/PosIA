@@ -6,6 +6,7 @@
 /// Ultima modificacion: 2026-06-11 15:30:00 (UTC-6)
 library;
 
+export 'src/auth_hub.dart';
 export 'src/almacen_cursor_sync.dart';
 export 'src/aplicador_eventos_remotos.dart';
 export 'src/hub_sync_client.dart';

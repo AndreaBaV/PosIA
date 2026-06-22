@@ -59,8 +59,8 @@ POSIA soporta **efectivo, tarjeta, transferencia, mixto y crédito/fiado** en el
 **Primer arranque:**
 
 1. Ejecuta `posia_pos.exe` desde la carpeta `Release`.
-2. La app crea la base de datos local (`posia_local.db`).
-3. En instalacion nueva carga datos de demostracion (productos, categorias, vendedores).
+2. La app crea la base de datos local (`posia_local.db`) vacía.
+3. Usuarios y catálogo llegan por **sync con el hub** o se cargan en Admin.
 
 ### iPhone
 
@@ -74,7 +74,7 @@ POSIA soporta **efectivo, tarjeta, transferencia, mixto y crédito/fiado** en el
 
 1. Instala la app en el iPhone (Xcode o `flutter run -d <tu-iphone>`).
 2. Acepta permiso de microfono cuando aparezca.
-3. La base local y datos demo se crean igual que en escritorio.
+3. La base local se crea vacía; los datos operativos llegan por sync o Admin.
 
 ### Android
 
@@ -87,7 +87,7 @@ POSIA soporta **efectivo, tarjeta, transferencia, mixto y crédito/fiado** en el
 
 ## 3. Pantalla principal
 
-Tras elegir tienda e **iniciar sesión** (usuario + contraseña), la barra inferior muestra:
+Tras **iniciar sesión** (usuario + contraseña), el administrador elige tienda; supervisor y empleado entran directo. La barra inferior muestra:
 
 | Pestaña | Funcion | Quien la ve |
 |---------|---------|-------------|
@@ -105,28 +105,15 @@ Los **empleados** solo ven **Caja**; **Mi cuenta** esta en el icono de perfil de
 
 ### Flujo
 
-1. Al abrir la app, **selecciona la tienda**.
-2. En **Iniciar sesion**, ingresa tu **codigo de usuario** (numerico).
-3. Ingresa tu **contrasena** (PIN de 4 digitos) en el teclado numerico.
+1. Ingresa tu **código de usuario** (numérico) y pulsa Continuar.
+2. Confirma tu **contraseña** (PIN de 4 dígitos) en el teclado de tu rol.
+3. **Administrador:** elige la tienda. **Supervisor / empleado:** entran directo a su tienda.
 
-### Cuentas por defecto (datos demo)
+### Administración del PIN
 
-| Usuario | Contrasena | Persona | Rol |
-|---------|------------|---------|-----|
-| `1000` | `1234` | Ana Administradora | Administrador |
-| `2001` | `2345` | Carlos Supervisor Centro | Supervisor |
-| `2002` | `2345` | Laura Supervisor Norte | Supervisor |
-| `3001` | `3456` | Pedro Empleado | Empleado |
-
-Respaldo admin del dispositivo: usuario `0000` + PIN de configuracion (demo: `1234`).
-
-### Administracion del PIN
-
-- **Usuarios:** Admin → **Usuarios** para crear cuentas y asignar PIN por persona.
-- **PIN del dispositivo (admin):** Admin → **Configuracion** → **Guardar PIN** (respaldo de acceso administrativo; demo: `1234`).
+- **Usuarios:** Admin → **Usuarios** para crear cuentas (máx. 15 activas por licencia).
+- **PIN del dispositivo (admin):** Admin → **Configuración** → **Guardar PIN** (respaldo técnico con usuario `0000`).
 - **Tu propio PIN:** Admin → **Mi cuenta** → **Cambiar PIN**.
-
-> En produccion configura PINs propios del negocio y desactiva o cambia las cuentas demo antes de operar.
 
 ---
 
@@ -284,7 +271,7 @@ Palabras clave que entiende el sistema:
 
 Cuando dices *"1 caja de leche"*, POSIA consulta el catalogo para saber si la caja es **una unidad de venta** o un **empaque con varias piezas**:
 
-| Producto (demo) | Unidad de venta | Piezas por caja | Si dices "1 caja de..." |
+| Producto (ejemplo) | Unidad de venta | Piezas por caja | Si dices "1 caja de..." |
 |-----------------|-----------------|-----------------|-------------------------|
 | Leche 1L | litro | 12 | Agrega **12 litros** |
 | Atun lata | pieza | 24 | Agrega **24 latas** |
@@ -392,24 +379,26 @@ Configura la impresora en Admin → **Configuracion**.
 
 ## 10. Sincronizacion con la nube
 
-POSIA puede sincronizar varias cajas contra un servidor en la nube. Guía técnica: [DEPLOYMENT.md](DEPLOYMENT.md) § Hub de sincronización.
+La conexion al hub va **incluida en la app** al publicarla (Play Store / App Store). El usuario **no** configura Tenant ID ni URL.
 
-### Configuracion rapida
+Al abrir la app por primera vez:
+1. Selecciona tienda
+2. Inicia sesion con su codigo y PIN
+3. La sync con la nube corre sola cada 60 s si hay internet
 
-1. Admin → **Sincronizar**
-2. **URL del hub:** `https://tu-api.onrender.com`
-3. **API Key:** la clave configurada en el servidor
-4. **Guardar** → **Sincronizar ahora**
+### Para quien publica la app (una sola vez)
 
-### Comportamiento
+Al compilar el release, embeber hub y tenant con variables de entorno o `--dart-define` (ver [DEPLOYMENT.md](DEPLOYMENT.md)). Cada dispositivo recibe un identificador de caja unico automaticamente.
 
-- Sync automatico cada 60 segundos cuando hay internet.
-- Reintenta al recuperar conexion.
-- Replica: ventas, catalogo, variantes, movimientos, devoluciones, anulaciones.
+### Para soporte tecnico (casos excepcionales)
 
-### Tenant ID
+- **Configuracion tecnica** en la pantalla de login (PIN del dispositivo) para cambiar hub o tenant sin reinstalar.
 
-En Admin → **Configuracion**, el **Tenant ID** debe coincidir con el tenant en la nube. Si lo cambias, **reinicia la app**.
+### Para administradores de tienda
+
+- Admin → **Estado de la nube**: ver pendientes y forzar sync manual si hace falta.
+
+Guia de despliegue del hub: [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ---
 
@@ -429,7 +418,7 @@ En Admin → **Configuracion**, el **Tenant ID** debe coincidir con el tenant en
 | Problema | Solucion |
 |----------|----------|
 | No puedo cobrar | Abre turno en Admin → Corte de caja |
-| PIN incorrecto | Verifica usuario y contrasena; demo empleado: `3001` / `3456` |
+| PIN incorrecto | Verifica usuario y contraseña con el administrador del negocio |
 | Productos no aparecen | Verifica categoria asignada y que esten activos |
 | Voz no reconoce producto | Nombre debe parecerse al del catalogo; prueba por texto |
 | "1 caja" agrega cantidad incorrecta | Revisa `piezas_por_caja` del producto en catalogo |

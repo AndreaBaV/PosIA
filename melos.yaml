@@ -4,6 +4,7 @@ repository: https://github.com/posia/posia
 packages:
   - apps/**
   - packages/**
+  - platform/**
 
 command:
   bootstrap:

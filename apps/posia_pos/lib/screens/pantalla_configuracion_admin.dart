@@ -17,10 +17,9 @@ class PantallaConfiguracionAdmin extends ConsumerStatefulWidget {
 		_PantallaConfiguracionAdminState();
 }
 
-class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguracionAdmin> {
+	class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguracionAdmin> {
 	final _pinController = TextEditingController();
 	final _nombreCajaController = TextEditingController();
-	final _tenantController = TextEditingController();
 	final _hostImpresoraController = TextEditingController();
 	final _puertoImpresoraController = TextEditingController(text: '9100');
 	String? _tiendaSeleccionadaId;
@@ -30,7 +29,6 @@ class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguraci
 	void dispose() {
 		_pinController.dispose();
 		_nombreCajaController.dispose();
-		_tenantController.dispose();
 		_hostImpresoraController.dispose();
 		_puertoImpresoraController.dispose();
 		super.dispose();
@@ -58,21 +56,21 @@ class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguraci
 							),
 							const SizedBox(height: 8.0),
 							const Text(
-								'Define tenant y tienda de esta caja. '
-								'Reinicia la app si cambias tenant o tienda.',
+								'Define tienda y caja de este equipo. '
+								'La conexión a la nube se configura solo en la instalación técnica.',
 							),
 							const SizedBox(height: 16.0),
 							configAsync.when(
 								data: (config) {
-									if (_tenantController.text.isEmpty) {
-										_tenantController.text = config.tenantId;
-									}
-									return TextField(
-										controller: _tenantController,
-										decoration: const InputDecoration(
-											labelText: 'Tenant ID (UUID)',
-											border: OutlineInputBorder(),
-											helperText: 'Debe coincidir con el tenant en Neon/sync',
+									return Card(
+										child: ListTile(
+											leading: const Icon(Icons.badge_outlined),
+											title: const Text('Tenant del negocio'),
+											subtitle: Text(
+												config.tenantId,
+												maxLines: 2,
+												overflow: TextOverflow.ellipsis,
+											),
 										),
 									);
 								},
@@ -242,18 +240,10 @@ class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguraci
 			);
 			return;
 		}
-		final tenantId = _tenantController.text.trim();
-		if (tenantId.isEmpty) {
-			ScaffoldMessenger.of(context).showSnackBar(
-				const SnackBar(content: Text('Ingresa el Tenant ID')),
-			);
-			return;
-		}
 		final servicio = await ref.read(servicioAdminProvider.future);
 		await servicio.guardarConfigDispositivo(
 			tiendaId: tiendaId,
 			nombreCaja: _nombreCajaController.text.trim(),
-			tenantId: tenantId,
 		);
 		ref.invalidate(configDispositivoProvider);
 		ref.invalidate(licenciaProvider);
@@ -262,7 +252,7 @@ class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguraci
 		}
 		ScaffoldMessenger.of(context).showSnackBar(
 			const SnackBar(
-				content: Text('Configuración guardada. Reinicia la app si cambiaste tenant o tienda.'),
+				content: Text('Configuración guardada. Reinicia la app si cambiaste de tienda.'),
 			),
 		);
 	}

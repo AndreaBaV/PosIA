@@ -1,0 +1,63 @@
+/// Configuracion del dispositivo (hub, caja) sin depender del tenant activo.
+library;
+
+import 'package:posia_core/posia_core.dart';
+
+import '../bootstrap/aprovisionador_offline.dart';
+import '../repositories/config_repository.dart';
+
+/// Opera sobre la base SQLite del dispositivo antes o despues del login.
+class ServicioConfiguracionDispositivo {
+	ServicioConfiguracionDispositivo({required ConfigRepository config})
+		: _config = config;
+
+	final ConfigRepository _config;
+
+	Future<String?> obtenerHubUrl() => _config.obtenerHubUrl();
+
+	Future<String> obtenerHubApiKey() async {
+		return (await _config.obtenerValor(CLAVE_CONFIG_HUB_API_KEY)) ?? '';
+	}
+
+	/// Guarda URL y clave del hub; no modifica el tenant (se resuelve al login).
+	Future<bool> guardarConexionHub({
+		String hubUrl = '',
+		String hubApiKey = '',
+		bool soloOffline = false,
+		String pinTecnico = '',
+		String nombreNegocio = '',
+		String nombreTienda = '',
+		String nombreAdmin = '',
+		String codigoAdmin = '',
+		String pinAdmin = '',
+	}) async {
+		final usarHub = !soloOffline && hubUrl.trim().isNotEmpty;
+		if (!usarHub) {
+			await _config.guardarHubUrl('');
+			await _config.guardarHubApiKey('');
+			final actual = await _config.obtenerConfigDispositivo();
+			if (actual.tenantId.isEmpty && pinAdmin.trim().length == LONGITUD_PIN_ADMIN) {
+				await AprovisionadorOffline.aprovisionar(
+					config: _config,
+					nombreNegocio: nombreNegocio,
+					nombreTienda: nombreTienda,
+					nombreAdmin: nombreAdmin,
+					codigoAdmin: codigoAdmin.isEmpty ? '1001' : codigoAdmin,
+					pinAdmin: pinAdmin,
+				);
+			}
+		} else {
+			await _config.guardarHubUrl(hubUrl);
+			await _config.guardarHubApiKey(hubApiKey);
+		}
+		final pin = pinTecnico.trim();
+		if (pin.isNotEmpty) {
+			if (pin.length != LONGITUD_PIN_ADMIN) {
+				throw StateError('El PIN técnico debe tener $LONGITUD_PIN_ADMIN dígitos');
+			}
+			await _config.guardarValor(CLAVE_CONFIG_PIN_ADMIN, pin);
+		}
+		await _config.marcarInstalacionCompleta();
+		return usarHub;
+	}
+}

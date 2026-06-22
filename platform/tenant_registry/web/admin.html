@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>POSIA — Admin Tenants</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a2332;
+      --border: #2d3a4f;
+      --text: #e8edf5;
+      --muted: #8b9cb3;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --ok: #22c55e;
+      --warn: #f59e0b;
+      --danger: #ef4444;
+      --radius: 10px;
+      font-family: "Segoe UI", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    header {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    header h1 { margin: 0; font-size: 1.25rem; font-weight: 600; }
+    .layout {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      min-height: calc(100vh - 65px);
+    }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+    aside {
+      border-right: 1px solid var(--border);
+      padding: 1rem;
+      overflow-y: auto;
+    }
+    main { padding: 1.25rem 1.5rem; overflow-y: auto; }
+    input, select, textarea, button {
+      font: inherit;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      padding: 0.55rem 0.75rem;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: 2px solid var(--accent);
+      border-color: transparent;
+    }
+    button {
+      cursor: pointer;
+      background: var(--accent);
+      border: none;
+      font-weight: 600;
+    }
+    button:hover { background: var(--accent-hover); }
+    button.secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    button.danger { background: var(--danger); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .token-bar {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+    .token-bar input { width: 220px; }
+    .tenant-list { list-style: none; padding: 0; margin: 0.75rem 0 0; }
+    .tenant-list li {
+      padding: 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 0.5rem;
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    .tenant-list li:hover, .tenant-list li.active {
+      border-color: var(--accent);
+      background: rgba(59, 130, 246, 0.08);
+    }
+    .tenant-list .name { font-weight: 600; }
+    .tenant-list .meta { font-size: 0.8rem; color: var(--muted); margin-top: 0.25rem; }
+    .badge {
+      display: inline-block;
+      font-size: 0.7rem;
+      padding: 0.15rem 0.45rem;
+      border-radius: 999px;
+      font-weight: 600;
+    }
+    .badge.ok { background: rgba(34, 197, 94, 0.2); color: var(--ok); }
+    .badge.pending { background: rgba(245, 158, 11, 0.2); color: var(--warn); }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .card h2 { margin: 0 0 0.75rem; font-size: 1rem; }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+    @media (max-width: 600px) { .grid-2 { grid-template-columns: 1fr; } }
+    label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.25rem; }
+    .field { margin-bottom: 0.75rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th, td { text-align: left; padding: 0.5rem 0.4rem; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; }
+    .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1rem; }
+    .empty { color: var(--muted); padding: 2rem; text-align: center; }
+    .toast {
+      position: fixed;
+      bottom: 1.25rem;
+      right: 1.25rem;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: 0.75rem 1rem;
+      border-radius: var(--radius);
+      max-width: 360px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+      z-index: 100;
+      display: none;
+    }
+    .toast.show { display: block; }
+    .toast.error { border-color: var(--danger); }
+    dialog {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--panel);
+      color: var(--text);
+      padding: 1.25rem;
+      max-width: 480px;
+      width: calc(100% - 2rem);
+    }
+    dialog::backdrop { background: rgba(0,0,0,0.55); }
+    dialog h3 { margin: 0 0 1rem; }
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
+    code { background: var(--bg); padding: 0.1rem 0.35rem; border-radius: 4px; font-size: 0.85em; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>POSIA — Catálogo de tenants</h1>
+    <div class="token-bar">
+      <label for="token" style="margin:0">Token</label>
+      <input id="token" type="password" placeholder="ADMIN_TOKEN" />
+      <button type="button" id="btnConectar">Conectar</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside>
+      <button type="button" id="btnNuevoTenant" style="width:100%">+ Nuevo negocio</button>
+      <ul class="tenant-list" id="listaTenants"></ul>
+    </aside>
+    <main id="detalle">
+      <div class="empty">Selecciona un negocio o crea uno nuevo.</div>
+    </main>
+  </div>
+
+  <dialog id="dlgNuevoTenant">
+    <h3>Nuevo negocio</h3>
+    <div class="field"><label>Nombre *</label><input id="ntNombre" /></div>
+    <div class="grid-2">
+      <div class="field"><label>Contacto</label><input id="ntContacto" /></div>
+      <div class="field"><label>Email</label><input id="ntEmail" type="email" /></div>
+    </div>
+    <div class="field"><label>Teléfono</label><input id="ntTelefono" /></div>
+    <div class="field"><label>Notas</label><textarea id="ntNotas" rows="2" style="width:100%"></textarea></div>
+    <div class="dialog-actions">
+      <button type="button" class="secondary" id="ntCancelar">Cancelar</button>
+      <button type="button" id="ntGuardar">Crear</button>
+    </div>
+  </dialog>
+
+  <dialog id="dlgResetPin">
+    <h3>Restablecer PIN</h3>
+    <p id="resetUsuarioLabel" style="color:var(--muted);margin-top:0"></p>
+    <div class="field"><label>Nuevo PIN (4 dígitos)</label><input id="resetPin" maxlength="4" inputmode="numeric" /></div>
+    <div class="dialog-actions">
+      <button type="button" class="secondary" id="resetCancelar">Cancelar</button>
+      <button type="button" class="danger" id="resetConfirmar">Actualizar PIN</button>
+    </div>
+  </dialog>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let token = localStorage.getItem('posia_admin_token') || '';
+    let tenantActivo = null;
+    let resetUsuarioId = null;
+
+    $('token').value = token;
+
+    function toast(msg, esError) {
+      const el = $('toast');
+      el.textContent = msg;
+      el.className = 'toast show' + (esError ? ' error' : '');
+      setTimeout(() => el.classList.remove('show'), 4000);
+    }
+
+    async function api(ruta, opts = {}) {
+      const headers = { 'Content-Type': 'application/json', 'X-Admin-Token': token };
+      const res = await fetch(ruta, { ...opts, headers: { ...headers, ...(opts.headers || {}) } });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || res.statusText);
+      return data;
+    }
+
+    async function cargarTenants() {
+      const tenants = await api('/api/tenants');
+      const ul = $('listaTenants');
+      ul.innerHTML = '';
+      tenants.forEach((t) => {
+        const li = document.createElement('li');
+        li.dataset.id = t.id;
+        if (tenantActivo === t.id) li.classList.add('active');
+        li.innerHTML = `
+          <div class="name">${esc(t.nombre)}</div>
+          <div class="meta">
+            <span class="badge ${t.provisionadoEnHub ? 'ok' : 'pending'}">${t.provisionadoEnHub ? 'En hub' : 'Pendiente'}</span>
+            <span style="margin-left:0.35rem">${t.id.slice(0, 8)}…</span>
+          </div>`;
+        li.onclick = () => seleccionarTenant(t.id);
+        ul.appendChild(li);
+      });
+    }
+
+    function esc(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    async function seleccionarTenant(id) {
+      tenantActivo = id;
+      document.querySelectorAll('.tenant-list li').forEach((li) => {
+        li.classList.toggle('active', li.dataset.id === id);
+      });
+      const data = await api('/api/tenants/' + id);
+      renderDetalle(data);
+    }
+
+    function renderDetalle(data) {
+      const t = data.tenant;
+      const tiendasOpts = data.tiendas.map((ti) =>
+        `<option value="${ti.id}">${esc(ti.nombre)}</option>`).join('');
+      $('detalle').innerHTML = `
+        <div class="card">
+          <h2>${esc(t.nombre)}</h2>
+          <p style="color:var(--muted);margin:0 0 0.5rem">ID: <code>${t.id}</code></p>
+          <p style="margin:0.25rem 0"><strong>Contacto:</strong> ${esc(t.contacto || '—')} · ${esc(t.email || '')}</p>
+          <p style="margin:0.25rem 0"><strong>Tel:</strong> ${esc(t.telefono || '—')}</p>
+          <p style="margin:0.5rem 0">
+            <span class="badge ${t.provisionadoEnHub ? 'ok' : 'pending'}">
+              ${t.provisionadoEnHub ? 'Provisionado en Neon' : 'Sin publicar en hub'}
+            </span>
+          </p>
+          <div class="actions">
+            <button type="button" id="btnProvision">${t.provisionadoEnHub ? 'Re-provisionar' : 'Publicar en Neon'}</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Tiendas (${data.tiendas.length})</h2>
+          <table>
+            <thead><tr><th>Nombre</th><th>ID</th></tr></thead>
+            <tbody>${data.tiendas.map((ti) =>
+              `<tr><td>${esc(ti.nombre)}</td><td><code>${ti.id.slice(0,8)}…</code></td></tr>`
+            ).join('') || '<tr><td colspan="2">Sin tiendas</td></tr>'}</tbody>
+          </table>
+          <div class="grid-2" style="margin-top:0.75rem">
+            <div class="field"><label>Nueva tienda</label><input id="nuevaTiendaNombre" placeholder="Sucursal principal" /></div>
+            <div class="field"><label>Dirección</label><input id="nuevaTiendaDir" /></div>
+          </div>
+          <button type="button" class="secondary" id="btnAddTienda">Agregar tienda</button>
+        </div>
+
+        <div class="card">
+          <h2>Usuarios (${data.usuarios.length})</h2>
+          <table>
+            <thead><tr><th>Código</th><th>Nombre</th><th>Rol</th><th>Hub</th><th></th></tr></thead>
+            <tbody>${data.usuarios.map((u) => `
+              <tr>
+                <td><code>${esc(u.codigo)}</code></td>
+                <td>${esc(u.nombre)}</td>
+                <td>${esc(u.rol)}</td>
+                <td>${u.provisionadoEnHub ? '✓' : '—'}</td>
+                <td><button type="button" class="secondary btn-reset" data-id="${u.id}" data-label="${esc(u.codigo)} ${esc(u.nombre)}">PIN</button></td>
+              </tr>`).join('') || '<tr><td colspan="5">Sin usuarios</td></tr>'}
+            </tbody>
+          </table>
+          <h2 style="margin-top:1.25rem;font-size:0.9rem">Nuevo usuario</h2>
+          <div class="grid-2">
+            <div class="field"><label>Nombre *</label><input id="nuNombre" /></div>
+            <div class="field"><label>Código (vacío = auto)</label><input id="nuCodigo" placeholder="ADM001, CAJERO1…" /></div>
+            <div class="field"><label>PIN *</label><input id="nuPin" maxlength="4" inputmode="numeric" /></div>
+            <div class="field"><label>Rol</label>
+              <select id="nuRol">
+                <option value="administrador">Administrador</option>
+                <option value="supervisor">Supervisor</option>
+                <option value="empleado">Empleado</option>
+              </select>
+            </div>
+            <div class="field"><label>Tienda (supervisor/empleado)</label>
+              <select id="nuTienda"><option value="">—</option>${tiendasOpts}</select>
+            </div>
+          </div>
+          <button type="button" id="btnAddUsuario">Agregar usuario</button>
+        </div>`;
+
+      $('btnProvision').onclick = async () => {
+        try {
+          const r = await api('/api/tenants/' + t.id + '/provision', { method: 'POST', body: '{}' });
+          toast(`Publicado: ${r.tiendas} tiendas, ${r.usuarios} usuarios`);
+          await cargarTenants();
+          await seleccionarTenant(t.id);
+        } catch (e) { toast(e.message, true); }
+      };
+      $('btnAddTienda').onclick = async () => {
+        const nombre = $('nuevaTiendaNombre').value.trim();
+        if (!nombre) return toast('Nombre de tienda obligatorio', true);
+        try {
+          await api('/api/tenants/' + t.id + '/tiendas', {
+            method: 'POST',
+            body: JSON.stringify({ nombre, direccion: $('nuevaTiendaDir').value.trim() }),
+          });
+          toast('Tienda agregada');
+          await seleccionarTenant(t.id);
+        } catch (e) { toast(e.message, true); }
+      };
+      $('btnAddUsuario').onclick = async () => {
+        const body = {
+          nombre: $('nuNombre').value.trim(),
+          codigo: $('nuCodigo').value.trim(),
+          pin: $('nuPin').value.trim(),
+          rol: $('nuRol').value,
+          tiendaId: $('nuTienda').value || null,
+        };
+        try {
+          const u = await api('/api/tenants/' + t.id + '/usuarios', {
+            method: 'POST', body: JSON.stringify(body),
+          });
+          toast(`Usuario ${u.codigo} creado`);
+          await seleccionarTenant(t.id);
+        } catch (e) { toast(e.message, true); }
+      };
+      document.querySelectorAll('.btn-reset').forEach((btn) => {
+        btn.onclick = () => abrirReset(btn.dataset.id, btn.dataset.label);
+      });
+    }
+
+    function abrirReset(id, label) {
+      resetUsuarioId = id;
+      $('resetUsuarioLabel').textContent = label;
+      $('resetPin').value = '';
+      $('dlgResetPin').showModal();
+    }
+
+    $('btnConectar').onclick = async () => {
+      token = $('token').value.trim();
+      localStorage.setItem('posia_admin_token', token);
+      try {
+        await cargarTenants();
+        toast('Conectado');
+      } catch (e) { toast(e.message, true); }
+    };
+
+    $('btnNuevoTenant').onclick = () => $('dlgNuevoTenant').showModal();
+    $('ntCancelar').onclick = () => $('dlgNuevoTenant').close();
+    $('ntGuardar').onclick = async () => {
+      const body = {
+        nombre: $('ntNombre').value.trim(),
+        contacto: $('ntContacto').value.trim(),
+        email: $('ntEmail').value.trim(),
+        telefono: $('ntTelefono').value.trim(),
+        notas: $('ntNotas').value.trim(),
+      };
+      try {
+        const t = await api('/api/tenants', { method: 'POST', body: JSON.stringify(body) });
+        $('dlgNuevoTenant').close();
+        toast('Negocio creado');
+        await cargarTenants();
+        await seleccionarTenant(t.id);
+      } catch (e) { toast(e.message, true); }
+    };
+
+    $('resetCancelar').onclick = () => $('dlgResetPin').close();
+    $('resetConfirmar').onclick = async () => {
+      const pin = $('resetPin').value.trim();
+      try {
+        await api('/api/usuarios/' + resetUsuarioId + '/reset-pin', {
+          method: 'POST', body: JSON.stringify({ pin }),
+        });
+        $('dlgResetPin').close();
+        toast('PIN actualizado');
+        if (tenantActivo) await seleccionarTenant(tenantActivo);
+      } catch (e) { toast(e.message, true); }
+    };
+
+    if (token) {
+      cargarTenants().catch(() => {});
+    }
+  </script>
+</body>
+</html>

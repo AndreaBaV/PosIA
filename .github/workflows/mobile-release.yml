@@ -68,6 +68,10 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
           if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            if [ "${{ github.event_name }}" = "push" ]; then
+              echo "::error::ANDROID_KEYSTORE_BASE64 requerido para releases con tag."
+              exit 1
+            fi
             echo "::warning::ANDROID_KEYSTORE_BASE64 no configurado. El AAB usara firma debug."
             exit 0
           fi
@@ -78,7 +82,20 @@ jobs:
 
       - name: Build App Bundle
         working-directory: ${{ env.APP_DIR }}
-        run: flutter build appbundle --release
+        env:
+          POSIA_HUB_URL: ${{ secrets.POSIA_HUB_URL }}
+          POSIA_HUB_API_KEY: ${{ secrets.POSIA_HUB_API_KEY }}
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            if [ -z "$POSIA_HUB_URL" ] || [ -z "$POSIA_HUB_API_KEY" ]; then
+              echo "::error::POSIA_HUB_URL y POSIA_HUB_API_KEY son obligatorios en releases con tag."
+              exit 1
+            fi
+          fi
+          ARGS=""
+          [ -n "$POSIA_HUB_URL" ] && ARGS="$ARGS --dart-define=POSIA_HUB_URL=$POSIA_HUB_URL"
+          [ -n "$POSIA_HUB_API_KEY" ] && ARGS="$ARGS --dart-define=POSIA_HUB_API_KEY=$POSIA_HUB_API_KEY"
+          flutter build appbundle --release $ARGS
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
@@ -90,7 +107,14 @@ jobs:
 
       - name: Build APK (sideload)
         working-directory: ${{ env.APP_DIR }}
-        run: flutter build apk --release
+        env:
+          POSIA_HUB_URL: ${{ secrets.POSIA_HUB_URL }}
+          POSIA_HUB_API_KEY: ${{ secrets.POSIA_HUB_API_KEY }}
+        run: |
+          ARGS=""
+          [ -n "$POSIA_HUB_URL" ] && ARGS="$ARGS --dart-define=POSIA_HUB_URL=$POSIA_HUB_URL"
+          [ -n "$POSIA_HUB_API_KEY" ] && ARGS="$ARGS --dart-define=POSIA_HUB_API_KEY=$POSIA_HUB_API_KEY"
+          flutter build apk --release $ARGS
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -119,6 +143,10 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           if [ -z "$IOS_CERT" ] || [ -z "$IOS_PROFILE" ] || [ -z "$APPLE_TEAM_ID" ]; then
+            if [ "${{ github.event_name }}" = "push" ]; then
+              echo "::error::Secrets iOS incompletos para releases con tag."
+              exit 1
+            fi
             echo "configured=false" >> "$GITHUB_OUTPUT"
             echo "::warning::Secrets iOS incompletos. Configura IOS_DIST_CERTIFICATE_BASE64, IOS_DIST_CERTIFICATE_PASSWORD, IOS_PROVISION_PROFILE_BASE64, IOS_PROVISION_PROFILE_NAME y APPLE_TEAM_ID."
           else
@@ -177,9 +205,16 @@ jobs:
       - name: Build IPA
         if: steps.signing.outputs.configured == 'true'
         working-directory: ${{ env.APP_DIR }}
+        env:
+          POSIA_HUB_URL: ${{ secrets.POSIA_HUB_URL }}
+          POSIA_HUB_API_KEY: ${{ secrets.POSIA_HUB_API_KEY }}
         run: |
+          ARGS=""
+          [ -n "$POSIA_HUB_URL" ] && ARGS="$ARGS --dart-define=POSIA_HUB_URL=$POSIA_HUB_URL"
+          [ -n "$POSIA_HUB_API_KEY" ] && ARGS="$ARGS --dart-define=POSIA_HUB_API_KEY=$POSIA_HUB_API_KEY"
           flutter build ipa --release \
-            --export-options-plist=ios/ExportOptions.plist
+            --export-options-plist=ios/ExportOptions.plist \
+            $ARGS
 
       - name: Upload IPA artifact
         if: steps.signing.outputs.configured == 'true'

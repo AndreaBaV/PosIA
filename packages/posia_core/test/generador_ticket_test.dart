@@ -5,7 +5,7 @@ void main() {
 	test('generarTextoTicket incluye total y tienda', () {
 		final venta = Venta(
 			id: 'venta-test-001',
-			tiendaId: TIENDA_DEMO_CENTRO_ID,
+			tiendaId: 'tienda-test',
 			cajaId: 'caja-1',
 			clienteId: null,
 			total: 100.0,
@@ -31,7 +31,7 @@ void main() {
 	test('generarTextoCorteCaja incluye efectivo esperado', () {
 		final turno = TurnoCaja(
 			id: 'turno-test-001',
-			tiendaId: TIENDA_DEMO_CENTRO_ID,
+			tiendaId: 'tienda-test',
 			cajaId: 'caja-1',
 			vendedorId: null,
 			fondoInicial: 500.0,

@@ -6,6 +6,7 @@
 /// Ultima modificacion: 2026-06-11 15:10:00 (UTC-6)
 library;
 
+export 'src/almacen_usuarios_postgres.dart';
 export 'src/almacen_eventos.dart';
 export 'src/almacen_eventos_archivo.dart';
 export 'src/almacen_eventos_postgres.dart';

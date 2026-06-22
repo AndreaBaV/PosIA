@@ -16,6 +16,7 @@ build/
 **/android/key.properties
 **/*.keystore
 **/*.jks
+**/KEYSTORE_BASE64.txt
 
 # Flutter
 **/flutter/ephemeral/

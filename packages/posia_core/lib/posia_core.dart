@@ -6,7 +6,9 @@
 /// Ultima modificacion: 2026-06-07 18:30:00 (UTC-6)
 library;
 
+export 'src/config/configuracion_entorno.dart';
 export 'src/constants/posia_constants.dart';
+export 'src/constants/configuracion_despliegue.dart';
 export 'src/constants/motivos_inventario.dart';
 export 'src/enums/canal_venta.dart';
 export 'src/enums/condicion_descuento_cliente.dart';
@@ -52,4 +54,5 @@ export 'src/utils/etiquetas_descuento_cliente.dart';
 export 'src/utils/generador_ticket.dart';
 export 'src/utils/hasher_pin.dart';
 export 'src/utils/permisos_usuario.dart';
+export 'src/utils/validador_codigo_usuario.dart';
 export 'src/utils/moneda_util.dart';

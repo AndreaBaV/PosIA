@@ -83,6 +83,11 @@ class SyncOrchestrator {
 		return _clienteHub != null;
 	}
 
+	/// Ping de mantenimiento para hubs que se duermen (Render free).
+	Future<void> mantenerHubVivo() async {
+		await _clienteHub?.mantenerHubVivo();
+	}
+
 	/// Registra evento de dominio en cola local.
 	///
 	/// [evento] Evento generado por operacion de negocio.
@@ -118,6 +123,14 @@ class SyncOrchestrator {
 	Future<ResultadoSync> sincronizarCompleto() async {
 		final clienteHub = _clienteHub;
 		if (clienteHub == null) {
+			return const ResultadoSync(
+				eventosEnviados: 0,
+				eventosRecibidos: 0,
+				hubDisponible: false,
+			);
+		}
+		final hubOk = await clienteHub.verificarSalud();
+		if (!hubOk) {
 			return const ResultadoSync(
 				eventosEnviados: 0,
 				eventosRecibidos: 0,

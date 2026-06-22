@@ -19,6 +19,7 @@ import '../models/estado_sync_admin.dart';
 import '../models/resumen_vendedor.dart';
 import '../models/resumen_ventas_dia.dart';
 import '../models/stock_por_tienda.dart';
+import '../database/posia_local_database.dart';
 import '../repositories/categoria_repository.dart';
 import '../repositories/cliente_repository.dart';
 import '../repositories/config_repository.dart';
@@ -498,6 +499,42 @@ class ServicioAdmin {
 		await _configRepository.guardarValor(CLAVE_CONFIG_HUB_API_KEY, clave.trim());
 	}
 
+	/// Verifica si el dispositivo ya paso por el asistente de instalacion tecnica.
+	Future<bool> esInstalacionCompleta() async {
+		if (await _configRepository.esInstalacionCompleta()) {
+			return true;
+		}
+		final hub = await _configRepository.obtenerHubUrl();
+		if (hub != null && hub.isNotEmpty) {
+			await _configRepository.marcarInstalacionCompleta();
+			return true;
+		}
+		return false;
+	}
+
+	/// Guarda hub y marca instalacion completada (el tenant se resuelve al login).
+	Future<bool> completarInstalacionTecnico({
+		String hubUrl = '',
+		String hubApiKey = '',
+		bool soloOffline = false,
+	}) async {
+		final usarHub = !soloOffline && hubUrl.trim().isNotEmpty;
+		if (!usarHub) {
+			await guardarHubUrl('');
+			await guardarHubApiKey('');
+		} else {
+			await guardarHubUrl(hubUrl);
+			await guardarHubApiKey(hubApiKey);
+		}
+		await _configRepository.marcarInstalacionCompleta();
+		return usarHub;
+	}
+
+	/// Habilita de nuevo el asistente de instalacion (modo tecnico).
+	Future<void> reiniciarInstalacionTecnica() async {
+		await _configRepository.reiniciarInstalacion();
+	}
+
 	// --- Categorias ---
 
 	Future<List<Categoria>> listarCategorias() async {
@@ -867,6 +904,42 @@ class ServicioAdmin {
 		return _usuarioRepository?.autenticar(codigo, pin);
 	}
 
+	/// Busca cuenta por codigo sin validar contrasena (paso previo al PIN).
+	Future<Usuario?> buscarUsuarioPorCodigo(String codigo) async {
+		return _usuarioRepository?.obtenerPorCodigo(codigo.trim());
+	}
+
+	/// Aplica tenant resuelto en login, tienda del usuario y sync inicial.
+	Future<void> activarSesionTrasLogin(Usuario usuario, String tenantId) async {
+		final tenantLimpio = tenantId.trim();
+		if (tenantLimpio.isEmpty) {
+			throw StateError('Tenant invalido');
+		}
+		await PosiaLocalDatabase.obtenerInstancia().establecerTenant(tenantLimpio);
+		final config = await _configRepository.obtenerConfigDispositivo();
+		if (config.tenantId != tenantLimpio) {
+			await _configRepository.guardarConfigDispositivo(
+				ConfigDispositivo(
+					tenantId: tenantLimpio,
+					tiendaId: config.tiendaId,
+					cajaId: config.cajaId,
+					nombreCaja: config.nombreCaja,
+				),
+			);
+		}
+		if (usuario.rol != RolUsuario.administrador) {
+			final tiendaId = usuario.tiendaId;
+			if (tiendaId == null || tiendaId.isEmpty) {
+				throw StateError('Usuario sin tienda asignada');
+			}
+			await cambiarTiendaActiva(tiendaId);
+		}
+		final hub = await _configRepository.obtenerHubUrl();
+		if (hub != null && hub.isNotEmpty) {
+			await sincronizarManual();
+		}
+	}
+
 	Future<Usuario?> autenticarUsuarioPorPin(String pin) async {
 		return _usuarioRepository?.autenticarPorPin(pin);
 	}
@@ -932,6 +1005,10 @@ class ServicioAdmin {
 		if (operador?.rol == RolUsuario.supervisor && rol != RolUsuario.empleado) {
 			throw StateError('Los supervisores solo pueden crear empleados');
 		}
+		final activos = await repo.contarActivos();
+		if (activos >= LIMITE_MAX_USUARIOS) {
+			throw StateError('Limite de $LIMITE_MAX_USUARIOS cuentas activas alcanzado');
+		}
 		final codigo = await repo.generarSiguienteCodigo(rol);
 		final usuario = Usuario(
 			id: _generadorId.v4(),
@@ -946,6 +1023,7 @@ class ServicioAdmin {
 			throw StateError('Sin permiso para crear este usuario');
 		}
 		await repo.guardar(usuario);
+		await _registrarEventoUsuario(usuario);
 		return usuario;
 	}
 
@@ -1023,6 +1101,7 @@ class ServicioAdmin {
 			limpiarTiendaId: limpiarTiendaId,
 		);
 		await repo.guardar(actualizado);
+		await _registrarEventoUsuario(actualizado);
 		return actualizado;
 	}
 
@@ -1086,6 +1165,7 @@ class ServicioAdmin {
 			throw StateError('El PIN debe tener $LONGITUD_PIN_ADMIN digitos');
 		}
 		await repo.guardar(existente.copiarCon(pin: pinNuevo.trim()));
+		await _registrarEventoUsuario(existente);
 	}
 
 	String? _resolverTiendaOperacion(Usuario? operador, String? tiendaId) {
@@ -1156,11 +1236,7 @@ class ServicioAdmin {
 	// --- Configuracion ---
 
 	Future<String> obtenerPinAdmin() async {
-		final pin = await _configRepository.obtenerValor(CLAVE_CONFIG_PIN_ADMIN);
-		if (pin == null || pin.isEmpty) {
-			return PIN_ADMIN_DEMO;
-		}
-		return pin;
+		return await _configRepository.obtenerValor(CLAVE_CONFIG_PIN_ADMIN) ?? '';
 	}
 
 	Future<void> guardarPinAdmin(String pin) async {
@@ -1364,11 +1440,13 @@ class ServicioAdmin {
 			activa: true,
 		);
 		await _tiendaRepository.guardar(tienda);
+		await _registrarEventoTienda(tienda);
 		return tienda;
 	}
 
 	Future<void> actualizarTienda(Tienda tienda) async {
 		await _tiendaRepository.guardar(tienda);
+		await _registrarEventoTienda(tienda);
 	}
 
 	Future<void> desactivarTienda(String tiendaId) async {
@@ -1376,14 +1454,14 @@ class ServicioAdmin {
 		if (tienda == null) {
 			return;
 		}
-		await _tiendaRepository.guardar(
-			Tienda(
-				id: tienda.id,
-				nombre: tienda.nombre,
-				direccion: tienda.direccion,
-				activa: false,
-			),
+		final inactiva = Tienda(
+			id: tienda.id,
+			nombre: tienda.nombre,
+			direccion: tienda.direccion,
+			activa: false,
 		);
+		await _tiendaRepository.guardar(inactiva);
+		await _registrarEventoTienda(inactiva);
 	}
 
 	Future<bool> eliminarTienda(String tiendaId) async {
@@ -2045,6 +2123,58 @@ class ServicioAdmin {
 				'ventaId': venta.id,
 				'montoDevuelto': montoDevuelto,
 				'lineas': lineas,
+			},
+			creadoEn: DateTime.now().toUtc(),
+			estado: EstadoSyncEvento.pendiente,
+		);
+		await _syncOrchestrator.registrarEvento(evento);
+	}
+
+	Future<void> _registrarEventoTienda(Tienda tienda) async {
+		final evento = SyncEvent(
+			id: _generadorId.v4(),
+			tenantId: _tenantId,
+			tiendaId: _tiendaActivaId,
+			dispositivoId: _cajaId,
+			tipo: TipoSyncEvento.storeUpserted,
+			payload: {
+				'id': tienda.id,
+				'nombre': tienda.nombre,
+				'direccion': tienda.direccion,
+				'activa': tienda.activa,
+			},
+			creadoEn: DateTime.now().toUtc(),
+			estado: EstadoSyncEvento.pendiente,
+		);
+		await _syncOrchestrator.registrarEvento(evento);
+	}
+
+	Future<void> _registrarEventoUsuario(Usuario usuario) async {
+		final repo = _usuarioRepository;
+		if (repo == null) {
+			return;
+		}
+		final snapshot = await repo.obtenerSnapshotSync(usuario.id);
+		if (snapshot == null) {
+			return;
+		}
+		final evento = SyncEvent(
+			id: _generadorId.v4(),
+			tenantId: _tenantId,
+			tiendaId: _tiendaActivaId,
+			dispositivoId: _cajaId,
+			tipo: TipoSyncEvento.userUpserted,
+			payload: {
+				'id': usuario.id,
+				'nombre': usuario.nombre,
+				'codigo': usuario.codigo,
+				'rol': usuario.rol.name,
+				'tiendaId': usuario.tiendaId,
+				'activo': usuario.activo,
+				'pinHash': snapshot.pinHash,
+				'pinSalt': snapshot.pinSalt,
+				'creadoEn': snapshot.creadoEn,
+				'actualizadoEn': snapshot.actualizadoEn,
 			},
 			creadoEn: DateTime.now().toUtc(),
 			estado: EstadoSyncEvento.pendiente,

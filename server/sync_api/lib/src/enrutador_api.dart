@@ -12,6 +12,7 @@ import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 
 import 'almacen_eventos.dart';
+import 'almacen_usuarios_postgres.dart';
 import 'evento_hub.dart';
 
 /// Construye el enrutador REST sobre un [AlmacenEventos].
@@ -22,11 +23,14 @@ class EnrutadorApi {
 	/// [claveApi] Clave compartida; null desactiva autenticacion.
 	EnrutadorApi({
 		required AlmacenEventos almacen,
+		AlmacenUsuariosPostgres? usuarios,
 		String? claveApi,
 	}) : _almacen = almacen,
+	     _usuarios = usuarios,
 	     _claveApi = claveApi;
 
 	final AlmacenEventos _almacen;
+	final AlmacenUsuariosPostgres? _usuarios;
 	final String? _claveApi;
 
 	/// Construye handler shelf con middleware y rutas v1.
@@ -35,6 +39,8 @@ class EnrutadorApi {
 	Handler construirHandler() {
 		final enrutador = Router()
 			..get('/v1/health', _manejarHealth)
+			..get('/v1/auth/preview', _manejarVistaPreviaAuth)
+			..post('/v1/auth/login', _manejarLoginAuth)
 			..post('/v1/events', _manejarEnvioEventos)
 			..get('/v1/events', _manejarConsultaEventos);
 		return const Pipeline()
@@ -49,6 +55,45 @@ class EnrutadorApi {
 	/// Retorna 200 con estado ok.
 	Future<Response> _manejarHealth(Request solicitud) async {
 		return _respuestaJson({'status': 'ok'});
+	}
+
+	Future<Response> _manejarVistaPreviaAuth(Request solicitud) async {
+		final almacen = _usuarios;
+		if (almacen == null) {
+			return _respuestaJson({'error': 'Auth no disponible sin Postgres'}, codigo: 503);
+		}
+		final codigo = solicitud.url.queryParameters['codigo'] ?? '';
+		if (codigo.trim().isEmpty) {
+			return _respuestaJson({'error': 'codigo es obligatorio'}, codigo: 400);
+		}
+		final perfil = await almacen.obtenerPerfilPorCodigo(codigo);
+		if (perfil == null) {
+			return _respuestaJson({'error': 'Usuario no encontrado'}, codigo: 404);
+		}
+		return _respuestaJson(perfil);
+	}
+
+	Future<Response> _manejarLoginAuth(Request solicitud) async {
+		final almacen = _usuarios;
+		if (almacen == null) {
+			return _respuestaJson({'error': 'Auth no disponible sin Postgres'}, codigo: 503);
+		}
+		final Map<String, Object?> cuerpo;
+		try {
+			cuerpo = jsonDecode(await solicitud.readAsString()) as Map<String, Object?>;
+		} on FormatException {
+			return _respuestaJson({'error': 'JSON invalido'}, codigo: 400);
+		}
+		final codigo = cuerpo['codigo'] as String? ?? '';
+		final pin = cuerpo['pin'] as String? ?? '';
+		if (codigo.trim().isEmpty || pin.isEmpty) {
+			return _respuestaJson({'error': 'codigo y pin son obligatorios'}, codigo: 400);
+		}
+		final resultado = await almacen.autenticar(codigo: codigo, pin: pin);
+		if (resultado == null) {
+			return _respuestaJson({'error': 'Credenciales invalidas'}, codigo: 401);
+		}
+		return _respuestaJson(resultado);
 	}
 
 	/// Recibe lote de eventos de un dispositivo.
@@ -121,6 +166,10 @@ class EnrutadorApi {
 	Middleware _validarClaveApi() {
 		return (Handler siguiente) {
 			return (Request solicitud) {
+				final ruta = solicitud.requestedUri.path;
+				if (ruta == '/v1/health' || ruta.endsWith('/v1/health')) {
+					return siguiente(solicitud);
+				}
 				final clave = _claveApi;
 				if (clave == null || clave.isEmpty) {
 					return siguiente(solicitud);

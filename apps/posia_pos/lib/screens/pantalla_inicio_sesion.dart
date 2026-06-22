@@ -1,16 +1,20 @@
-/// Inicio de sesion: codigo de usuario y contrasena (PIN).
+/// Inicio de sesion: usuario, contrasena y activacion por rol.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:posia_core/posia_core.dart';
+import 'package:posia_database/posia_database.dart';
 import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
+import 'pantalla_instalacion_tecnico.dart';
 
-/// Pantalla de autenticacion con usuario y contrasena.
+enum _PasoInicioSesion { identificacion, contrasena }
+
+/// Pantalla de autenticacion con flujo por rol.
 class PantallaInicioSesion extends ConsumerStatefulWidget {
 	const PantallaInicioSesion({super.key});
 
@@ -21,6 +25,8 @@ class PantallaInicioSesion extends ConsumerStatefulWidget {
 class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 	final _codigoController = TextEditingController();
 	final _codigoFocus = FocusNode();
+	_PasoInicioSesion _paso = _PasoInicioSesion.identificacion;
+	Usuario? _usuarioIdentificado;
 	String _pinIngresado = '';
 	String? _mensajeError;
 	bool _validando = false;
@@ -34,79 +40,151 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 
 	@override
 	Widget build(BuildContext context) {
-		final tiendaAsync = ref.watch(_tiendaSesionProvider);
 		return Scaffold(
 			backgroundColor: PosiaColors.fondo,
-			body: tiendaAsync.when(
-				data: (tienda) => MarcoAutenticacion(
-					titulo: 'Iniciar sesión',
-					subtitulo: 'Ingresa tu usuario y contraseña para operar la caja',
-					etiquetaTienda: tienda?.nombre,
-					icono: Icons.lock_person,
-					contenido: _tarjetaCredenciales(context),
-					pie: TextButton.icon(
-						onPressed: _cambiarTienda,
-						icon: const Icon(Icons.store_outlined, size: 20.0),
-						label: const Text('Cambiar tienda'),
-					),
+			body: MarcoAutenticacion(
+				titulo: _paso == _PasoInicioSesion.identificacion
+					? 'Iniciar sesión'
+					: 'Confirma tu acceso',
+				subtitulo: _paso == _PasoInicioSesion.identificacion
+					? 'Ingresa tu usuario para continuar'
+					: _subtituloPasoPin(),
+				icono: _paso == _PasoInicioSesion.identificacion
+					? Icons.lock_person
+					: PresentacionRol.icono(_usuarioIdentificado!.rol),
+				contenido: _paso == _PasoInicioSesion.identificacion
+					? _tarjetaIdentificacion(context)
+					: _tarjetaContrasena(context),
+				pie: Column(
+					crossAxisAlignment: CrossAxisAlignment.stretch,
+					children: [
+						if (_paso == _PasoInicioSesion.contrasena)
+							TextButton.icon(
+								onPressed: _validando ? null : _volverIdentificacion,
+								icon: const Icon(Icons.arrow_back, size: 20.0),
+								label: const Text('Cambiar usuario'),
+							),
+						TextButton.icon(
+							onPressed: () => abrirInstalacionTecnica(context, ref),
+							icon: const Icon(Icons.engineering, size: 18.0),
+							label: const Text('Configuración técnica'),
+						),
+					],
 				),
-				loading: () => const Center(child: CircularProgressIndicator()),
-				error: (e, _) => Center(child: Text('$e')),
 			),
 		);
 	}
 
-	Widget _tarjetaCredenciales(BuildContext context) {
-		final dosColumnas = LayoutResponsivo.usarPanelLateral(
-			MediaQuery.sizeOf(context).width,
-			MediaQuery.sizeOf(context).height,
-		);
+	String _subtituloPasoPin() {
+		final usuario = _usuarioIdentificado;
+		if (usuario == null) {
+			return 'Ingresa tu contraseña';
+		}
+		final rol = PermisosUsuario.etiquetaRol(usuario.rol);
+		if (usuario.rol == RolUsuario.administrador) {
+			return 'Hola ${usuario.nombre}. Como $rol podrás elegir la tienda después.';
+		}
+		return 'Hola ${usuario.nombre}. Acceso como $rol a tu tienda asignada.';
+	}
+
+	Widget _tarjetaIdentificacion(BuildContext context) {
 		return Card(
-			elevation: dosColumnas ? 0.0 : 1.0,
-			shape: RoundedRectangleBorder(
-				borderRadius: BorderRadius.circular(16.0),
-				side: dosColumnas
-					? BorderSide(color: Colors.grey.shade200)
-					: BorderSide.none,
-			),
+			shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.0)),
 			child: Padding(
-				padding: EdgeInsets.all(dosColumnas ? 24.0 : 20.0),
+				padding: const EdgeInsets.all(20.0),
 				child: Column(
 					crossAxisAlignment: CrossAxisAlignment.stretch,
 					children: [
-						Text(
-							'Credenciales',
-							style: Theme.of(context).textTheme.titleLarge?.copyWith(
-								fontWeight: FontWeight.w600,
-							),
-						),
-						const SizedBox(height: 6.0),
-						Text(
-							'Usuario y contraseña de 4 dígitos',
-							style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-								color: Theme.of(context).colorScheme.outline,
-							),
-						),
-						const SizedBox(height: 24.0),
 						TextField(
 							controller: _codigoController,
 							focusNode: _codigoFocus,
-							keyboardType: TextInputType.number,
-							textInputAction: TextInputAction.next,
-							style: Theme.of(context).textTheme.titleMedium,
-							inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+							autofocus: true,
+							keyboardType: TextInputType.text,
+							textCapitalization: TextCapitalization.characters,
+							autocorrect: false,
+							enableSuggestions: false,
+							textInputAction: TextInputAction.done,
+							inputFormatters: [
+								FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9._-]')),
+							],
 							decoration: InputDecoration(
 								labelText: 'Usuario',
-								hintText: 'Código numérico',
+								hintText: 'Ej. ADM001 o CAJERO1',
 								prefixIcon: const Icon(Icons.person_outline),
 								border: OutlineInputBorder(
 									borderRadius: BorderRadius.circular(12.0),
 								),
 								filled: true,
 							),
+							onSubmitted: (_) => _continuarIdentificacion(),
 							onChanged: (_) => setState(() => _mensajeError = null),
 						),
-						const SizedBox(height: 24.0),
+						if (_mensajeError != null) ...[
+							const SizedBox(height: 12.0),
+							Text(
+								_mensajeError!,
+								style: const TextStyle(color: PosiaColors.cancelar),
+								textAlign: TextAlign.center,
+							),
+						],
+						const SizedBox(height: 20.0),
+						SizedBox(
+							height: 48.0,
+							child: FilledButton(
+								onPressed: _validando ? null : _continuarIdentificacion,
+								child: _validando
+									? const SizedBox(
+										width: 22.0,
+										height: 22.0,
+										child: CircularProgressIndicator(strokeWidth: 2.0),
+									)
+									: const Text('Continuar'),
+							),
+						),
+					],
+				),
+			),
+		);
+	}
+
+	Widget _tarjetaContrasena(BuildContext context) {
+		final usuario = _usuarioIdentificado!;
+		final colorRol = PresentacionRol.color(usuario.rol);
+		return Card(
+			shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.0)),
+			child: Padding(
+				padding: const EdgeInsets.all(20.0),
+				child: Column(
+					crossAxisAlignment: CrossAxisAlignment.stretch,
+					children: [
+						Row(
+							children: [
+								CircleAvatar(
+									backgroundColor: colorRol.withValues(alpha: 0.12),
+									child: Icon(
+										PresentacionRol.icono(usuario.rol),
+										color: colorRol,
+									),
+								),
+								const SizedBox(width: 12.0),
+								Expanded(
+									child: Column(
+										crossAxisAlignment: CrossAxisAlignment.start,
+										children: [
+											Text(
+												usuario.nombre,
+												style: Theme.of(context).textTheme.titleMedium?.copyWith(
+													fontWeight: FontWeight.w600,
+												),
+											),
+											const SizedBox(height: 4.0),
+											InsigniaRol(rol: usuario.rol, compacto: true),
+										],
+									),
+								),
+							],
+						),
+						const SizedBox(height: 20.0),
 						Text(
 							'Contraseña',
 							style: Theme.of(context).textTheme.titleSmall?.copyWith(
@@ -116,11 +194,9 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 						const SizedBox(height: 12.0),
 						DecoratedBox(
 							decoration: BoxDecoration(
-								color: PosiaColors.cobrar.withValues(alpha: 0.04),
+								color: colorRol.withValues(alpha: 0.06),
 								borderRadius: BorderRadius.circular(16.0),
-								border: Border.all(
-									color: PosiaColors.cobrar.withValues(alpha: 0.15),
-								),
+								border: Border.all(color: colorRol.withValues(alpha: 0.25)),
 							),
 							child: Padding(
 								padding: const EdgeInsets.symmetric(vertical: 20.0, horizontal: 12.0),
@@ -129,23 +205,10 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 										if (_mensajeError != null)
 											Padding(
 												padding: const EdgeInsets.only(bottom: 12.0),
-												child: Row(
-													mainAxisAlignment: MainAxisAlignment.center,
-													children: [
-														const Icon(
-															Icons.error_outline,
-															color: PosiaColors.cancelar,
-															size: 18.0,
-														),
-														const SizedBox(width: 8.0),
-														Flexible(
-															child: Text(
-																_mensajeError!,
-																style: const TextStyle(color: PosiaColors.cancelar),
-																textAlign: TextAlign.center,
-															),
-														),
-													],
+												child: Text(
+													_mensajeError!,
+													style: const TextStyle(color: PosiaColors.cancelar),
+													textAlign: TextAlign.center,
 												),
 											),
 										if (_validando)
@@ -169,9 +232,46 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 		);
 	}
 
-	void _cambiarTienda() {
-		ref.read(sesionTiendaProvider.notifier).cerrar();
-		ref.read(sesionUsuarioProvider.notifier).cerrar();
+	Future<void> _continuarIdentificacion() async {
+		final codigo = ValidadorCodigoUsuario.normalizar(_codigoController.text);
+		final errorFormato = ValidadorCodigoUsuario.validar(codigo);
+		if (errorFormato != null) {
+			setState(() => _mensajeError = errorFormato);
+			return;
+		}
+		setState(() {
+			_validando = true;
+			_mensajeError = null;
+		});
+		final auth = await ref.read(servicioAutenticacionProvider.future);
+		final busqueda = await auth.buscarPerfilPorCodigo(codigo);
+		if (!mounted) {
+			return;
+		}
+		if (!busqueda.exitoso) {
+			setState(() {
+				_validando = false;
+				_mensajeError = busqueda.motivoFallo?.mensajeUsuario ?? 'Usuario no encontrado';
+			});
+			return;
+		}
+		final usuario = busqueda.usuario!;
+		setState(() {
+			_validando = false;
+			_usuarioIdentificado = usuario;
+			_paso = _PasoInicioSesion.contrasena;
+			_pinIngresado = '';
+			_mensajeError = null;
+		});
+	}
+
+	void _volverIdentificacion() {
+		setState(() {
+			_paso = _PasoInicioSesion.identificacion;
+			_usuarioIdentificado = null;
+			_pinIngresado = '';
+			_mensajeError = null;
+		});
 	}
 
 	void _agregarDigito(String digito) {
@@ -199,54 +299,62 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 	}
 
 	Future<void> _validarAcceso() async {
-		final codigo = _codigoController.text.trim();
+		final codigo = ValidadorCodigoUsuario.normalizar(_codigoController.text);
 		final pin = _pinIngresado;
-
-		if (codigo.isEmpty) {
-			setState(() {
-				_pinIngresado = '';
-				_mensajeError = 'Ingresa tu código de usuario';
-			});
-			_codigoFocus.requestFocus();
-			return;
-		}
-
 		setState(() => _validando = true);
-		final servicio = await ref.read(servicioAdminProvider.future);
-		final tiendaId = ref.read(sesionTiendaProvider);
-		var usuario = await servicio.autenticarUsuario(codigo, pin);
 
-		if (usuario == null && codigo == '0000') {
-			final pinDispositivo = await ref.read(pinAdminProvider.future);
-			if (pin == pinDispositivo) {
-				usuario = Usuario(
-					id: 'device-admin',
-					nombre: 'Administrador dispositivo',
-					codigo: '0000',
-					pin: pinDispositivo,
-					rol: RolUsuario.administrador,
-					activo: true,
-				);
+		final auth = await ref.read(servicioAutenticacionProvider.future);
+		final intento = await auth.autenticar(codigo, pin);
+
+		if (!intento.exitoso) {
+			if (!mounted) {
+				return;
 			}
-		}
-
-		String? mensajeError;
-		if (usuario != null &&
-			tiendaId != null &&
-			usuario.rol != RolUsuario.administrador &&
-			usuario.tiendaId != null &&
-			usuario.tiendaId != tiendaId) {
-			mensajeError = 'Este usuario no está asignado a la tienda seleccionada';
-			usuario = null;
-		}
-
-		if (!mounted) {
+			setState(() {
+				_validando = false;
+				_pinIngresado = '';
+				_mensajeError = intento.motivoFallo?.mensajeUsuario ?? 'Contraseña incorrecta';
+			});
 			return;
 		}
-		if (usuario != null) {
+
+		final resultado = intento.resultado!;
+		final usuario = resultado.usuario;
+		final tenantId = resultado.tenantId;
+
+		try {
+			await PosiaLocalDatabase.obtenerInstancia().establecerTenant(tenantId);
+			final configRepo = await ref.read(configDispositivoRepoProvider.future);
+			final config = await configRepo.obtenerConfigDispositivo();
+			await configRepo.guardarConfigDispositivo(
+				ConfigDispositivo(
+					tenantId: tenantId,
+					tiendaId: config.tiendaId,
+					cajaId: config.cajaId,
+					nombreCaja: config.nombreCaja,
+				),
+			);
+			await auth.guardarUsuarioRemoto(resultado);
+
+			ref.read(sesionUsuarioProvider.notifier).iniciar(usuario);
+			ref.invalidate(contenedorServiciosProvider);
+			await ref.read(contenedorServiciosProvider.future);
+
+			final servicio = await ref.read(servicioAdminProvider.future);
+			await servicio.activarSesionTrasLogin(usuario, tenantId);
+
+			if (usuario.rol != RolUsuario.administrador) {
+				final tiendaId = usuario.tiendaId;
+				if (tiendaId == null) {
+					throw StateError('Usuario sin tienda asignada');
+				}
+				ref.read(sesionTiendaProvider.notifier).confirmar(tiendaId);
+			}
+
 			ref.read(sesionUsuarioProvider.notifier).iniciar(usuario);
 			final servicioCaja = await ref.read(servicioCajaProvider.future);
 			await servicioCaja.asegurarVendedorDesdeUsuario(usuario);
+
 			if (!mounted) {
 				return;
 			}
@@ -259,22 +367,15 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 					backgroundColor: PresentacionRol.color(usuario.rol),
 				),
 			);
-			return;
+		} on Object catch (error) {
+			if (!mounted) {
+				return;
+			}
+			setState(() {
+				_validando = false;
+				_pinIngresado = '';
+				_mensajeError = '$error';
+			});
 		}
-
-		setState(() {
-			_validando = false;
-			_pinIngresado = '';
-			_mensajeError = mensajeError ?? 'Usuario o contraseña incorrectos';
-		});
 	}
 }
-
-final _tiendaSesionProvider = FutureProvider<Tienda?>((ref) async {
-	final tiendaId = ref.watch(sesionTiendaProvider);
-	if (tiendaId == null) {
-		return null;
-	}
-	final servicio = await ref.watch(servicioAdminProvider.future);
-	return servicio.obtenerTiendaActiva();
-});

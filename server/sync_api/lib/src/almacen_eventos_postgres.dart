@@ -15,6 +15,7 @@ import 'almacen_eventos.dart';
 import 'esquema_pos_postgres.dart';
 import 'evento_hub.dart';
 import 'proyector_eventos_postgres.dart';
+import 'almacen_usuarios_postgres.dart';
 
 /// Implementa [AlmacenEventos] con tabla sync_events en Postgres.
 class AlmacenEventosPostgres implements AlmacenEventos {
@@ -101,6 +102,11 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 	Future<void> cerrar() async {
 		await _conexion?.close();
 		_conexion = null;
+	}
+
+	/// Acceso a usuarios para endpoints de autenticacion.
+	Future<AlmacenUsuariosPostgres> obtenerAlmacenUsuarios() async {
+		return AlmacenUsuariosPostgres(await _abrirConexion());
 	}
 
 	/// Abre o reutiliza conexion activa a Postgres.

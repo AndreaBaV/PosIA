@@ -56,6 +56,13 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 					return ListView(
 						padding: const EdgeInsets.only(bottom: 88.0),
 						children: [
+							Padding(
+								padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 0.0),
+								child: Text(
+									'${datos.usuarios.where((u) => u.activo).length} de $LIMITE_MAX_USUARIOS cuentas activas',
+									style: Theme.of(context).textTheme.bodySmall,
+								),
+							),
 							CampoBusqueda(
 								controlador: _busquedaController,
 								sugerencia: 'Buscar usuario...',

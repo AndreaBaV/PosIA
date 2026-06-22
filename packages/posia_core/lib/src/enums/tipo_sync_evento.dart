@@ -37,4 +37,10 @@ enum TipoSyncEvento {
 
 	/// Devolucion parcial de lineas de una venta.
 	salePartialReturn,
+
+	/// Tienda o sucursal creada o actualizada.
+	storeUpserted,
+
+	/// Cuenta de usuario creada o actualizada (PIN solo como hash).
+	userUpserted,
 }

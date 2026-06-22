@@ -1,15 +1,16 @@
-/// Pantalla de acceso: seleccion de tienda al iniciar sesion.
+/// Seleccion de tienda solo para administradores tras iniciar sesion.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:posia_core/posia_core.dart';
+import 'package:posia_database/posia_database.dart';
 import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
 
-/// Muestra tiendas activas para confirmar identidad operativa.
+/// Permite al administrador elegir la tienda operativa de la sesion.
 class PantallaAccesoTienda extends ConsumerStatefulWidget {
 	const PantallaAccesoTienda({super.key});
 
@@ -25,11 +26,15 @@ class _PantallaAccesoTiendaState extends ConsumerState<PantallaAccesoTienda> {
 	Widget build(BuildContext context) {
 		final tiendasAsync = ref.watch(_tiendasAccesoProvider);
 		final configAsync = ref.watch(configDispositivoProvider);
+		final usuario = ref.watch(sesionUsuarioProvider);
 		return Scaffold(
 			backgroundColor: PosiaColors.fondo,
 			body: MarcoAutenticacion(
-				titulo: 'Bienvenido',
-				subtitulo: 'Selecciona la tienda donde operará esta caja',
+				titulo: 'Selecciona tienda',
+				subtitulo: usuario == null
+					? 'Elige la sucursal donde operarás'
+					: '${usuario.nombre}, elige la sucursal donde operarás',
+				etiquetaTienda: null,
 				icono: Icons.store,
 				contenido: tiendasAsync.when(
 					data: (tiendas) {
@@ -43,31 +48,57 @@ class _PantallaAccesoTiendaState extends ConsumerState<PantallaAccesoTienda> {
 						}
 						_tiendaSeleccionadaId ??=
 							configAsync.value?.tiendaId ?? tiendas.first.id;
-						return _listaTiendas(context, tiendas);
+						return Column(
+							crossAxisAlignment: CrossAxisAlignment.stretch,
+							children: [
+								if (usuario != null) ...[
+									InsigniaRol(rol: usuario.rol),
+									const SizedBox(height: 16.0),
+								],
+								_listaTiendas(context, tiendas),
+							],
+						);
 					},
 					loading: () => const Center(child: CircularProgressIndicator()),
 					error: (e, _) => Text('$e'),
 				),
-				pie: SizedBox(
-					width: double.infinity,
-					height: 52.0,
-					child: FilledButton.icon(
-						onPressed: _tiendaSeleccionadaId == null || _ingresando ? null : _ingresar,
-						icon: _ingresando
-							? const SizedBox(
-								width: 20.0,
-								height: 20.0,
-								child: CircularProgressIndicator(
-									strokeWidth: 2.0,
-									color: Colors.white,
-								),
-							)
-							: const Icon(Icons.login),
-						label: Text(_ingresando ? 'Conectando...' : 'Continuar'),
-					),
+				pie: Column(
+					crossAxisAlignment: CrossAxisAlignment.stretch,
+					children: [
+						SizedBox(
+							width: double.infinity,
+							height: 52.0,
+							child: FilledButton.icon(
+								onPressed: _tiendaSeleccionadaId == null || _ingresando ? null : _ingresar,
+								icon: _ingresando
+									? const SizedBox(
+										width: 20.0,
+										height: 20.0,
+										child: CircularProgressIndicator(
+											strokeWidth: 2.0,
+											color: Colors.white,
+										),
+									)
+									: const Icon(Icons.check),
+								label: Text(_ingresando ? 'Conectando...' : 'Entrar a la caja'),
+							),
+						),
+						TextButton.icon(
+							onPressed: _ingresando ? null : _cerrarSesion,
+							icon: const Icon(Icons.logout, size: 18.0),
+							label: const Text('Cerrar sesión'),
+						),
+					],
 				),
 			),
 		);
+	}
+
+	void _cerrarSesion() async {
+		await PosiaLocalDatabase.obtenerInstancia().liberarTenant();
+		ref.read(sesionUsuarioProvider.notifier).cerrar();
+		ref.read(sesionTiendaProvider.notifier).cerrar();
+		ref.invalidate(contenedorServiciosProvider);
 	}
 
 	Widget _listaTiendas(BuildContext context, List<Tienda> tiendas) {

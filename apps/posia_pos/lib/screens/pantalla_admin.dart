@@ -172,7 +172,7 @@ class PantallaAdmin extends StatelessWidget {
 				Colors.deepOrange, const PantallaTiendasAdmin()),
 			tile('reportes', Icons.assessment, 'Reportes', 'Ventas y alertas',
 				Colors.purple, const PantallaReportesAdmin()),
-			tile('sync', Icons.cloud_sync, 'Sincronizar', 'Estado de la nube',
+			tile('sync', Icons.cloud_sync, 'Estado de la nube', 'Sync automática',
 				Colors.indigo, const PantallaSyncAdmin()),
 			tile('config', Icons.settings, 'Configuración', 'PIN y dispositivo',
 				Colors.grey, const PantallaConfiguracionAdmin()),

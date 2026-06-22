@@ -183,5 +183,23 @@ class EsquemaPosPostgres {
 			CREATE INDEX IF NOT EXISTS idx_sync_events_tenant_seq
 			ON sync_events (tenant_id, seq)
 		''');
+		await conexion.execute('''
+			CREATE TABLE IF NOT EXISTS users (
+				id TEXT PRIMARY KEY,
+				tenant_id TEXT NOT NULL,
+				nombre TEXT NOT NULL,
+				codigo TEXT NOT NULL UNIQUE,
+				rol TEXT NOT NULL,
+				tienda_id TEXT,
+				activo INTEGER NOT NULL DEFAULT 1,
+				pin_hash TEXT NOT NULL,
+				pin_salt TEXT NOT NULL,
+				creado_en TEXT NOT NULL,
+				actualizado_en TEXT NOT NULL
+			)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_users_codigo ON users(codigo)
+		''');
 	}
 }

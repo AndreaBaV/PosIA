@@ -13,7 +13,8 @@ POSIA usa **event log append-only** para sincronizacion entre cajas y tiendas.
 
 Cada dispositivo mantiene:
 
-- SQLite local (datos operativos)
+- `posia_dispositivo.db` — config (caja, hub, último tenant)
+- `posia_t_{tenantId}.db` — datos operativos aislados por negocio
 - Tabla `sync_event_queue` (eventos pendientes de envio)
 - Cursor `last_synced_event_id` (ultimo evento recibido del hub)
 
@@ -47,6 +48,10 @@ Cada dispositivo mantiene:
 | `TransferRequested` | Solicitud entre tiendas | Estado maquina |
 | `TransferCompleted` | Recepcion confirmada | Append |
 | `CustomerUpserted` | Cliente / precio preferencial | Last-write-wins |
+| `StoreUpserted` | Tienda / sucursal | Last-write-wins |
+| `UserUpserted` | Usuario y credenciales (hash PIN) | Last-write-wins por `actualizadoEn` |
+
+`UserUpserted` replica `pinHash` y `pinSalt`; nunca el PIN en claro. Tras sync en un dispositivo nuevo, el operador entra con el mismo codigo y PIN definidos en el dispositivo maestro.
 
 ---
 
@@ -75,6 +80,18 @@ Envia lote de eventos del dispositivo.
 ### GET /v1/events?since={eventId}&tenantId={id}
 
 Recibe eventos nuevos del hub para el tenant.
+
+### GET /v1/auth/preview?codigo={codigo}
+
+Devuelve perfil publico (rol, nombre, tenant) sin validar PIN. Un solo APK consulta el hub y descubre a qué tenant pertenece la cuenta.
+
+### POST /v1/auth/login
+
+```json
+{ "codigo": "1001", "pin": "1234" }
+```
+
+Respuesta incluye `tenantId`, datos del usuario y `pinHash`/`pinSalt` para replicar la cuenta en SQLite local (`posia_t_{tenantId}.db`).
 
 ---
 
@@ -131,5 +148,6 @@ La caja **no** conecta directo a Neon. Tras cambiar de equipo: configurar hub en
 
 | Fecha | Cambio |
 |-------|--------|
+| 2026-06-17 | Sync de tiendas (`storeUpserted`) y usuarios (`userUpserted`) |
 | 2026-06-12 | Proyector hub → Postgres espejo (Neon) |
 | 2026-06-07 18:30 | Documento inicial |

@@ -24,10 +24,48 @@ final estadoInicializacionProvider = FutureProvider<void>((ref) async {
 	await InicializadorApp.preparar();
 });
 
-/// Contenedor de servicios de dominio y persistencia.
+/// Usuario autenticado en la sesion actual.
+final sesionUsuarioProvider = NotifierProvider<SesionUsuarioNotifier, Usuario?>(
+	SesionUsuarioNotifier.new,
+);
+
+/// Gestiona la cuenta de usuario activa.
+class SesionUsuarioNotifier extends Notifier<Usuario?> {
+	@override
+	Usuario? build() => null;
+
+	void iniciar(Usuario usuario) => state = usuario;
+
+	void cerrar() => state = null;
+}
+
+/// Gestiona confirmacion de tienda al iniciar la aplicacion.
+final sesionTiendaProvider = NotifierProvider<SesionTiendaNotifier, String?>(
+	SesionTiendaNotifier.new,
+);
+
+/// Estado de tienda confirmada en la sesion actual.
+class SesionTiendaNotifier extends Notifier<String?> {
+	@override
+	String? build() => null;
+
+	void confirmar(String tiendaId) => state = tiendaId;
+
+	void cerrar() => state = null;
+}
+
+/// Contenedor de servicios de dominio (requiere sesion con tenant).
 final contenedorServiciosProvider = FutureProvider<ContenedorServicios>((ref) async {
 	await ref.watch(estadoInicializacionProvider.future);
-	return FabricaServicios.construir();
+	final usuario = ref.watch(sesionUsuarioProvider);
+	if (usuario == null) {
+		throw StateError('Inicie sesion para cargar servicios del tenant');
+	}
+	final tenantId = usuario.tenantId;
+	if (tenantId == null || tenantId.isEmpty) {
+		throw StateError('Usuario sin tenant asignado');
+	}
+	return FabricaServicios.construir(tenantId: tenantId);
 });
 
 /// Sincronizador automatico activo mientras vive la app.
@@ -61,6 +99,7 @@ final licenciaProvider = FutureProvider<Licencia>((ref) async {
 		],
 		maxTiendas: 5,
 		maxCajas: 10,
+		maxUsuarios: LIMITE_MAX_USUARIOS,
 		soporteExpiraEn: DateTime.utc(2027, 6, 7),
 	);
 });

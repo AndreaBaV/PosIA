@@ -8,14 +8,16 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:posia_core/posia_core.dart';
 import 'package:posia_ui/posia_ui.dart';
 
 import 'screens/pantalla_acceso_tienda.dart';
 import 'screens/pantalla_inicio_sesion.dart';
 import 'bootstrap/inicializador_app.dart';
-import 'providers/admin_providers.dart';
 import 'providers/app_providers.dart';
 import 'screens/pantalla_inicio.dart';
+import 'screens/pantalla_instalacion_tecnico.dart';
+import 'providers/admin_providers.dart';
 
 /// Inicia runtime Flutter y arranca aplicacion POSIA.
 Future<void> main() async {
@@ -32,23 +34,33 @@ class PosiaApp extends ConsumerWidget {
 	@override
 	Widget build(BuildContext context, WidgetRef ref) {
 		final inicializado = ref.watch(estadoInicializacionProvider);
+		final instalacionAsync = ref.watch(instalacionCompletaProvider);
 		final tiendaConfirmada = ref.watch(sesionTiendaProvider);
 		final usuario = ref.watch(sesionUsuarioProvider);
-		ref.watch(sincronizadorAutomaticoProvider);
+		if (usuario != null) {
+			ref.watch(sincronizadorAutomaticoProvider);
+		}
 		return MaterialApp(
 			title: 'POSIA',
 			debugShowCheckedModeBanner: false,
 			theme: PosiaTheme.construirTema(),
 			home: inicializado.when(
-				data: (_) {
-					if (tiendaConfirmada == null) {
-						return const PantallaAccesoTienda();
-					}
-					if (usuario == null) {
-						return const PantallaInicioSesion();
-					}
-					return const PantallaInicio();
-				},
+				data: (_) => instalacionAsync.when(
+					data: (instalacionLista) {
+						if (!instalacionLista && usuario == null) {
+							return const PantallaInstalacionTecnico();
+						}
+						if (usuario == null) {
+							return const PantallaInicioSesion();
+						}
+						if (usuario.rol == RolUsuario.administrador && tiendaConfirmada == null) {
+							return const PantallaAccesoTienda();
+						}
+						return const PantallaInicio();
+					},
+					loading: () => const _PantallaCarga(),
+					error: (error, _) => _PantallaError(mensaje: error.toString()),
+				),
 				loading: () => const _PantallaCarga(),
 				error: (error, _) => _PantallaError(mensaje: error.toString()),
 			),

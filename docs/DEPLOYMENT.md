@@ -38,13 +38,13 @@ SQLite local se crea y migra en el primer arranque. En web usa IndexedDB vía WA
 ## Instalación en caja
 
 1. Instalar binario (carpeta Windows, AAB/APK o URL web)
-2. Importar `posia.lic`
-3. Seleccionar tienda e iniciar sesión
-4. Admin → Sincronización: URL del hub y API key (opcional)
-5. **Sincronizar ahora** para carga inicial
+2. **Asistente de instalación técnica** (opcional): URL del hub y API key
+3. Importar `posia.lic` si aplica
+4. **Iniciar sesión** con usuario y contraseña del negocio (el tenant se resuelve automáticamente)
+5. Administrador: elegir tienda. Supervisor/empleado: tienda asignada
 6. Configurar impresora (opcional)
 
-Sync automática: cada 60 s y al recuperar red.
+La sync es automática cada 60 s. Reconfigurar hub: **Configuración técnica** en login (PIN del dispositivo).
 
 ---
 
@@ -72,13 +72,35 @@ dart run bin/server.dart
 
 Persiste en JSONL (`EVENTS_FILE`). Adecuado para un negocio o desarrollo.
 
-### Opción C — Neon + Render (nube gratuita)
+### Opción C — Neon + Render (nube gratuita, se duerme)
 
 | Componente | Servicio | Rol |
 |------------|----------|-----|
 | Postgres | [Neon](https://neon.tech) | Almacena `sync_events` |
 | API | [Render](https://render.com) | `POST/GET /v1/events` |
 | Caja | Local | SQLite + cola sync |
+
+> El plan free de Render duerme tras inactividad; la primera sync puede tardar ~30 s.
+
+### Opción D — Neon + Oracle Always Free (recomendado $0)
+
+| Componente | Servicio | Rol |
+|------------|----------|-----|
+| Postgres | Neon | Base de datos |
+| API | VM ARM Oracle | Hub 24/7 + HTTPS (Caddy) |
+| Caja | Local | SQLite + cola sync |
+
+Guía paso a paso: **[ORACLE_ALWAYS_FREE.md](ORACLE_ALWAYS_FREE.md)**
+
+```bash
+cd server/sync_api
+cp deploy/oracle/.env.example .env   # editar DATABASE_URL, API_KEY, dominio
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Verificar: `curl https://TU-DOMINIO/v1/health`
+
+### Opción C (detalle) — Neon + Render
 
 **Neon:** crear proyecto → copiar connection string con `?sslmode=require`. No crear tablas manualmente.
 
@@ -94,7 +116,17 @@ Verificar: `curl https://TU-URL.onrender.com/v1/health`
 
 > El plan free de Render duerme tras inactividad; la primera sync puede tardar ~30 s.
 
-**En cada caja:** Admin → Sincronizar → URL `https://TU-URL.onrender.com`, misma API key → Guardar → Sincronizar ahora.
+**En cada caja:** un solo APK/AAB sirve para **todos los tenants**. El build puede incluir URL del hub y API key (`POSIA_HUB_URL`, `POSIA_HUB_API_KEY`). Al abrir la app, el dispositivo se auto-registra con un `caja_id` único. El **tenant se resuelve al iniciar sesión** (usuario + contraseña contra el hub).
+
+**Build de producción (una vez, para todos los negocios):**
+
+```powershell
+$env:POSIA_HUB_URL="https://tu-api.onrender.com"
+$env:POSIA_HUB_API_KEY="tu-clave-secreta"
+.\scripts\build_movil_release.ps1
+```
+
+Cada tenant tiene su propia base SQLite local (`posia_t_{tenantId}.db`) y su espacio en Postgres, aislados por `tenantId`.
 
 **Desarrollo local con Neon:**
 
@@ -118,7 +150,7 @@ Caja: URL `http://localhost:8080` y misma API key.
 
 ### Eventos sincronizados
 
-`saleCompleted`, `saleVoided`, `salePartialReturn`, `productUpserted`, `variantUpserted`, `categoryUpserted`, `customerUpserted`, `stockAdjusted`, `transferRequested`, `transferCompleted`
+`saleCompleted`, `saleVoided`, `salePartialReturn`, `productUpserted`, `variantUpserted`, `categoryUpserted`, `customerUpserted`, `stockAdjusted`, `transferRequested`, `transferCompleted`, `storeUpserted`, `userUpserted`
 
 ### Solución de problemas (sync)
 

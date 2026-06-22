@@ -33,6 +33,9 @@ const String CLAVE_CONFIG_CAJA_ID = 'caja_id';
 /// Clave de configuracion para nombre legible de caja.
 const String CLAVE_CONFIG_CAJA_NOMBRE = 'caja_nombre';
 
+/// Marca que el tecnico completo la instalacion inicial del dispositivo.
+const String CLAVE_CONFIG_INSTALACION_COMPLETA = 'instalacion_completada';
+
 /// Clave de modo de impresora (archivo, red, ambos).
 const String CLAVE_CONFIG_IMPRESORA_MODO = 'printer_mode';
 
@@ -101,16 +104,21 @@ class ConfigRepository {
 		await guardarValor(CLAVE_CONFIG_HUB_URL, url.trim());
 	}
 
-	/// Lee identidad operativa del dispositivo con valores demo por defecto.
+	/// Guarda clave API del hub central.
+	Future<void> guardarHubApiKey(String clave) async {
+		await guardarValor(CLAVE_CONFIG_HUB_API_KEY, clave.trim());
+	}
+
+	/// Lee identidad operativa del dispositivo (vacios hasta aprovisionar o sincronizar).
 	Future<ConfigDispositivo> obtenerConfigDispositivo() async {
 		final tenantId = await obtenerValor(CLAVE_CONFIG_TENANT_ID);
 		final tiendaId = await obtenerValor(CLAVE_CONFIG_TIENDA_ID);
 		final cajaId = await obtenerValor(CLAVE_CONFIG_CAJA_ID);
 		final nombreCaja = await obtenerValor(CLAVE_CONFIG_CAJA_NOMBRE);
 		return ConfigDispositivo(
-			tenantId: tenantId ?? TENANT_DEMO_ID,
-			tiendaId: tiendaId ?? TIENDA_DEMO_CENTRO_ID,
-			cajaId: cajaId ?? CAJA_DEMO_1_ID,
+			tenantId: tenantId ?? '',
+			tiendaId: tiendaId ?? '',
+			cajaId: cajaId ?? '',
 			nombreCaja: nombreCaja,
 		);
 	}
@@ -140,5 +148,21 @@ class ConfigRepository {
 		await guardarValor(CLAVE_CONFIG_IMPRESORA_MODO, config.modo);
 		await guardarValor(CLAVE_CONFIG_IMPRESORA_HOST, config.hostRed);
 		await guardarValor(CLAVE_CONFIG_IMPRESORA_PUERTO, config.puertoRed.toString());
+	}
+
+	/// Indica si el tecnico ya configuro tenant y conexion al hub.
+	Future<bool> esInstalacionCompleta() async {
+		final valor = await obtenerValor(CLAVE_CONFIG_INSTALACION_COMPLETA);
+		return valor == '1';
+	}
+
+	/// Marca la instalacion tecnica como finalizada.
+	Future<void> marcarInstalacionCompleta() async {
+		await guardarValor(CLAVE_CONFIG_INSTALACION_COMPLETA, '1');
+	}
+
+	/// Permite repetir el asistente de instalacion (modo tecnico).
+	Future<void> reiniciarInstalacion() async {
+		await guardarValor(CLAVE_CONFIG_INSTALACION_COMPLETA, '0');
 	}
 }

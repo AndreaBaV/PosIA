@@ -78,4 +78,9 @@ class ValidadorLicencia {
 	bool validarLimiteCajas(int cajasActivas) {
 		return cajasActivas <= _licencia.maxCajas;
 	}
+
+	/// Valida limite de cuentas activas contra conteo actual.
+	bool validarLimiteUsuarios(int usuariosActivos) {
+		return usuariosActivos <= _licencia.maxUsuarios;
+	}
 }

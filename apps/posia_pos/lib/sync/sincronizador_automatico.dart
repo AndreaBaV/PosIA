@@ -23,6 +23,7 @@ class SincronizadorAutomatico {
 	final SyncOrchestrator _orquestador;
 	StreamSubscription<List<ConnectivityResult>>? _suscripcionConectividad;
 	Timer? _temporizador;
+	Timer? _temporizadorMantenerHub;
 	bool _sincronizando = false;
 
 	/// Inicia escucha de conectividad y ciclo periodico.
@@ -39,6 +40,11 @@ class SincronizadorAutomatico {
 			const Duration(seconds: INTERVALO_SYNC_PERIODICO_SEGUNDOS),
 			(_) => _intentarSincronizar(),
 		);
+		_temporizadorMantenerHub = Timer.periodic(
+			const Duration(seconds: INTERVALO_MANTENER_HUB_VIVO_SEGUNDOS),
+			(_) => unawaited(_orquestador.mantenerHubVivo()),
+		);
+		unawaited(_orquestador.mantenerHubVivo());
 		unawaited(_intentarSincronizar());
 	}
 
@@ -46,8 +52,10 @@ class SincronizadorAutomatico {
 	void detener() {
 		unawaited(_suscripcionConectividad?.cancel());
 		_temporizador?.cancel();
+		_temporizadorMantenerHub?.cancel();
 		_suscripcionConectividad = null;
 		_temporizador = null;
+		_temporizadorMantenerHub = null;
 	}
 
 	/// Reacciona a cambios de conectividad del dispositivo.
@@ -62,7 +70,7 @@ class SincronizadorAutomatico {
 		}
 	}
 
-	/// Ejecuta ciclo de sync evitando ejecuciones simultaneas.
+	/// Ejecuta ciclo de sync evitando ejecuciones simultaneas (silencioso, no bloquea UI).
 	Future<void> _intentarSincronizar() async {
 		if (_sincronizando) {
 			return;
@@ -70,6 +78,8 @@ class SincronizadorAutomatico {
 		_sincronizando = true;
 		try {
 			await _orquestador.sincronizarCompleto();
+		} on Object {
+			// Reintenta en el siguiente ciclo; la caja sigue operando con datos locales.
 		} finally {
 			_sincronizando = false;
 		}

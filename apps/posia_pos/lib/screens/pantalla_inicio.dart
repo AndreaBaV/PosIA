@@ -3,6 +3,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:posia_database/posia_database.dart';
 import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
@@ -66,8 +67,11 @@ class _PantallaInicioState extends ConsumerState<PantallaInicio> {
 						rol: usuario.rol,
 						nombreTienda: _nombreTienda(context, ref),
 						alAbrirMiCuenta: () => _abrirMiCuenta(context),
-						alCerrarSesion: () {
+						alCerrarSesion: () async {
+							await PosiaLocalDatabase.obtenerInstancia().liberarTenant();
 							ref.read(sesionUsuarioProvider.notifier).cerrar();
+							ref.read(sesionTiendaProvider.notifier).cerrar();
+							ref.invalidate(contenedorServiciosProvider);
 						},
 					),
 					Expanded(

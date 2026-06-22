@@ -1,0 +1,7 @@
+tenant_registry/data/*.db
+tenant_registry/data/*.db-journal
+tenant_registry/data/*.db-wal
+tenant_registry/data/*.db-shm
+data/*.db
+data/*.db-journal
+.env

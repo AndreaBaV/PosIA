@@ -9,20 +9,16 @@
 
 ## Acceso
 
-1. Al **iniciar la app**: pantalla de seleccion de tienda (`PantallaAccesoTienda`).
-2. **Inicio de sesion**: codigo de usuario y contrasena (PIN de 4 digitos) (`PantallaInicioSesion`).
+1. **Iniciar sesión**: código de usuario y contraseña (PIN de 4 dígitos).
+2. El sistema resuelve el tenant, identifica el rol y muestra el teclado PIN con estilo del rol.
+3. **Administrador**: elige la tienda donde operará en esta sesión.
+4. **Supervisor / empleado**: entran directo a su tienda asignada (sin elegir sucursal).
 
-### Cuentas demo
+Licencia estándar: hasta **15 cuentas activas** por tenant (`LIMITE_MAX_USUARIOS`).
 
-| Usuario | Contrasena | Rol |
-|---------|------------|-----|
-| `1000` | `1234` | Administrador (Ana Administradora) |
-| `2001` / `2002` | `2345` | Supervisor (Centro / Norte) |
-| `3001` | `3456` | Empleado (Pedro Empleado) |
-| `0000` | PIN dispositivo | Admin de respaldo (configuracion) |
-
-- Teclado numerico visual en pantalla de inicio de sesion.
-- En produccion: crear usuarios en Admin → Usuarios y cambiar PINs antes de operar.
+- Teclado numérico visual en pantalla de inicio de sesión.
+- Las cuentas se crean en Admin → Usuarios o llegan por sync desde el hub.
+- Respaldo técnico: usuario `0000` + PIN del dispositivo (Admin → Configuración).
 
 ---
 

@@ -13,7 +13,7 @@ void main() {
 			unidadMedida: UnidadMedida.pieza,
 			rutaImagen: '',
 			activo: true,
-			tiendaId: TIENDA_DEMO_CENTRO_ID,
+			tiendaId: 'tienda-test',
 		),
 		const Producto(
 			id: 'prod-frijol-peruano',
@@ -23,7 +23,7 @@ void main() {
 			unidadMedida: UnidadMedida.kilogramo,
 			rutaImagen: '',
 			activo: true,
-			tiendaId: TIENDA_DEMO_CENTRO_ID,
+			tiendaId: 'tienda-test',
 		),
 		const Producto(
 			id: 'prod-leche-1l',
@@ -34,7 +34,7 @@ void main() {
 			piezasPorCaja: 12,
 			rutaImagen: '',
 			activo: true,
-			tiendaId: TIENDA_DEMO_CENTRO_ID,
+			tiendaId: 'tienda-test',
 		),
 		const Producto(
 			id: 'prod-atun-lata',
@@ -45,7 +45,7 @@ void main() {
 			piezasPorCaja: 24,
 			rutaImagen: '',
 			activo: true,
-			tiendaId: TIENDA_DEMO_CENTRO_ID,
+			tiendaId: 'tienda-test',
 		),
 		const Producto(
 			id: 'prod-huevo-carton',
@@ -55,7 +55,7 @@ void main() {
 			unidadMedida: UnidadMedida.caja,
 			rutaImagen: '',
 			activo: true,
-			tiendaId: TIENDA_DEMO_CENTRO_ID,
+			tiendaId: 'tienda-test',
 		),
 	];
 

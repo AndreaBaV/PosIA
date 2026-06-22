@@ -12,35 +12,25 @@ flutter run -d windows   # o android / ios
 
 ## Flujo de acceso
 
-1. **Seleccionar tienda** — pantalla inicial al abrir la app.
-2. **Iniciar sesión** — código de **usuario** y **contraseña** (PIN de 4 dígitos).
-3. **Caja** — operación diaria; **Admin** según permisos del rol.
+1. **Iniciar sesión** — código de **usuario** y **contraseña** (PIN de 4 dígitos).
+2. **Administrador** — elige la tienda de la sesión.
+3. **Supervisor / empleado** — entran directo a su tienda asignada.
+4. **Caja** — operación diaria; **Admin** según permisos del rol.
 
-## Cuentas de demostración
+## Primera instalación
 
-Los datos demo se cargan automáticamente en una base vacía:
+La base local arranca **vacía**. Usuarios, tiendas y catálogo llegan por **sincronización con el hub** o se crean en Admin tras el primer acceso con cuenta provisionada.
 
-| Usuario | Contraseña | Persona | Rol |
-|---------|------------|---------|-----|
-| `1000` | `1234` | Ana Administradora | Administrador |
-| `2001` | `2345` | Carlos Supervisor Centro | Supervisor |
-| `2002` | `2345` | Laura Supervisor Norte | Supervisor |
-| `3001` | `3456` | Pedro Empleado | Empleado |
-
-### Notas
-
-- **Usuario** = código numérico asignado en Admin → Usuarios (visible en cada tarjeta).
+- **Usuario** = código numérico asignado en Admin → Usuarios.
 - **Contraseña** = PIN de 4 dígitos (`LONGITUD_PIN_ADMIN`).
-- Respaldo administrativo del dispositivo: usuario `0000` + PIN configurado en Admin → Configuración (demo: `1234`).
-- Supervisores y empleados solo pueden entrar en la **tienda asignada**.
-- En producción, crea usuarios propios y cambia las contraseñas antes de operar.
+- Respaldo técnico del dispositivo: usuario `0000` + PIN configurado en Admin → Configuración (solo si ya se guardó un PIN).
+- Licencia estándar: hasta **15 cuentas activas** por tenant.
 
 ### Seguridad de usuarios (esquema v10)
 
 - Código de usuario **único** (índice `UNIQUE` en SQLite).
 - Contraseñas almacenadas como **hash + sal** (`pin_hash`, `pin_salt`); nunca en texto plano.
 - Validación de rol y estado activo en la tabla (`CHECK` constraints).
-- Al actualizar la app, las bases existentes migran automáticamente de PIN plano a hash.
 
 ## Documentación adicional
 

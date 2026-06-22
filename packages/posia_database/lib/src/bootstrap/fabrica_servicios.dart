@@ -89,12 +89,17 @@ class FabricaServicios {
 		String? cajaId,
 	}) async {
 		final gestor = PosiaLocalDatabase.obtenerInstancia();
-		final base = await gestor.obtenerBaseDatos();
-		final configRepo = ConfigRepository(baseDatos: base);
+		final baseDispositivo = await gestor.obtenerBaseDatosDispositivo();
+		final configRepo = ConfigRepository(baseDatos: baseDispositivo);
 		final configDispositivo = await configRepo.obtenerConfigDispositivo();
 		tenantId ??= configDispositivo.tenantId;
+		if (tenantId.isEmpty) {
+			throw StateError('Sin tenant activo. Inicie sesion primero.');
+		}
+		await gestor.establecerTenant(tenantId);
 		tiendaId ??= configDispositivo.tiendaId;
 		cajaId ??= configDispositivo.cajaId;
+		final base = await gestor.obtenerBaseDatos();
 		final productoRepo = ProductoRepository(baseDatos: base);
 		final clienteRepo = ClienteRepository(baseDatos: base);
 		final descuentoClienteRepo = DescuentoClienteRepository(baseDatos: base);
@@ -131,6 +136,8 @@ class FabricaServicios {
 			categoriaRepository: categoriaRepo,
 			traspasoRepository: traspasoRepo,
 			varianteRepository: varianteRepo,
+			tiendaRepository: tiendaRepo,
+			usuarioRepository: usuarioRepo,
 		);
 		final clienteHub = await _crearClienteHub(configRepo);
 		final sync = SyncOrchestrator(

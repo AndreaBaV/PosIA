@@ -69,12 +69,12 @@ void main() {
 				unidadMedida: UnidadMedida.pieza,
 				rutaImagen: '',
 				activo: true,
-				tiendaId: TIENDA_DEMO_CENTRO_ID,
+				tiendaId: 'tienda-test',
 			);
 			final contexto = ContextoPrecio(
 				producto: producto,
 				cantidad: 12.0,
-				tiendaId: TIENDA_DEMO_CENTRO_ID,
+				tiendaId: 'tienda-test',
 				cliente: null,
 				canal: CanalVenta.mayoreo,
 			);
@@ -94,12 +94,12 @@ void main() {
 				unidadMedida: UnidadMedida.pieza,
 				rutaImagen: '',
 				activo: true,
-				tiendaId: TIENDA_DEMO_CENTRO_ID,
+				tiendaId: 'tienda-test',
 			);
 			final contexto = ContextoPrecio(
 				producto: producto,
 				cantidad: 1.0,
-				tiendaId: TIENDA_DEMO_CENTRO_ID,
+				tiendaId: 'tienda-test',
 				cliente: null,
 				canal: CanalVenta.mostrador,
 			);

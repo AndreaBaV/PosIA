@@ -1,0 +1,5 @@
+# Sustituye por tu dominio (DuckDNS, subdominio propio, etc.)
+# Ejemplo: posia-hub.duckdns.org
+{$POSIA_HUB_DOMAIN} {
+	reverse_proxy sync_api:8080
+}

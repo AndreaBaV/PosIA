@@ -18,10 +18,19 @@ import 'package:shelf/shelf_io.dart' as shelf_io;
 /// PORT: puerto HTTP; default 8080.
 Future<void> main() async {
 	final config = await ConfigEntorno.cargar();
+	config.validarProduccion();
 	final almacen = _crearAlmacen(config.urlBaseDatos, config.rutaArchivoEventos);
 	await almacen.inicializar();
+	AlmacenUsuariosPostgres? usuarios;
+	if (almacen is AlmacenEventosPostgres) {
+		usuarios = await almacen.obtenerAlmacenUsuarios();
+	}
 
-	final enrutador = EnrutadorApi(almacen: almacen, claveApi: config.claveApi);
+	final enrutador = EnrutadorApi(
+		almacen: almacen,
+		usuarios: usuarios,
+		claveApi: config.claveApi,
+	);
 	final servidor = await shelf_io.serve(
 		enrutador.construirHandler(),
 		InternetAddress.anyIPv4,

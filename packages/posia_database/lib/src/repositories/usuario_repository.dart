@@ -24,6 +24,14 @@ class UsuarioRepository {
 		return filas.map(_mapear).toList();
 	}
 
+	/// Cuenta usuarios activos para validar limite de licencia.
+	Future<int> contarActivos() async {
+		final resultado = Sqflite.firstIntValue(
+			await _baseDatos.rawQuery('SELECT COUNT(*) FROM usuarios WHERE activo = 1'),
+		);
+		return resultado ?? 0;
+	}
+
 	Future<List<Usuario>> listarPorTienda(String? tiendaId) async {
 		if (tiendaId == null) {
 			return listarTodos();
@@ -51,7 +59,7 @@ class UsuarioRepository {
 	}
 
 	Future<Usuario?> obtenerPorCodigo(String codigo, {String? excluirId}) async {
-		final codigoLimpio = codigo.trim();
+		final codigoLimpio = ValidadorCodigoUsuario.normalizar(codigo);
 		final filas = await _baseDatos.query(
 			'usuarios',
 			where: excluirId == null ? 'codigo = ?' : 'codigo = ? AND id != ?',
@@ -68,7 +76,7 @@ class UsuarioRepository {
 		final filas = await _baseDatos.query(
 			'usuarios',
 			where: 'codigo = ? AND activo = 1',
-			whereArgs: [codigo.trim()],
+			whereArgs: [ValidadorCodigoUsuario.normalizar(codigo)],
 			limit: 1,
 		);
 		if (filas.isEmpty) {
@@ -130,23 +138,28 @@ class UsuarioRepository {
 
 	Future<String> generarSiguienteCodigo(RolUsuario rol) async {
 		final prefijo = switch (rol) {
-			RolUsuario.administrador => 1000,
-			RolUsuario.supervisor => 2000,
-			RolUsuario.empleado => 3000,
+			RolUsuario.administrador => 'ADM',
+			RolUsuario.supervisor => 'SUP',
+			RolUsuario.empleado => 'EMP',
 		};
 		final todos = await listarTodos();
-		var maximo = prefijo;
+		var maximo = 0;
 		for (final usuario in todos) {
-			final numerico = int.tryParse(usuario.codigo);
-			if (numerico != null && numerico > maximo && numerico < prefijo + 1000) {
+			final codigo = ValidadorCodigoUsuario.normalizar(usuario.codigo);
+			if (!codigo.startsWith(prefijo) || codigo.length <= prefijo.length) {
+				continue;
+			}
+			final numerico = int.tryParse(codigo.substring(prefijo.length));
+			if (numerico != null && numerico > maximo) {
 				maximo = numerico;
 			}
 		}
-		return (maximo + 1).toString();
+		final siguiente = (maximo + 1).toString().padLeft(3, '0');
+		return '$prefijo$siguiente';
 	}
 
 	Future<void> guardar(Usuario usuario) async {
-		final codigoLimpio = usuario.codigo.trim();
+		final codigoLimpio = ValidadorCodigoUsuario.normalizar(usuario.codigo);
 		final duplicado = await obtenerPorCodigo(codigoLimpio, excluirId: usuario.id);
 		if (duplicado != null) {
 			throw StateError('Ya existe un usuario con el codigo $codigoLimpio');
@@ -200,6 +213,84 @@ class UsuarioRepository {
 		}
 	}
 
+	/// Persiste usuario recibido por sync (hash de PIN ya calculado).
+	///
+	/// Retorna false si la copia local es mas reciente que el evento remoto.
+	Future<bool> guardarRemoto({
+		required String id,
+		required String nombre,
+		required String codigo,
+		required RolUsuario rol,
+		String? tiendaId,
+		required bool activo,
+		required String pinHash,
+		required String pinSalt,
+		required String creadoEn,
+		required String actualizadoEn,
+	}) async {
+		final filaExistente = await _baseDatos.query(
+			'usuarios',
+			where: 'id = ?',
+			whereArgs: [id],
+			limit: 1,
+		);
+		if (filaExistente.isNotEmpty) {
+			final localActualizado =
+				filaExistente.first['actualizado_en'] as String? ?? '';
+			if (localActualizado.compareTo(actualizadoEn) > 0) {
+				return false;
+			}
+		}
+		final codigoLimpio = ValidadorCodigoUsuario.normalizar(codigo);
+		final duplicado = await obtenerPorCodigo(codigoLimpio, excluirId: id);
+		if (duplicado != null) {
+			return false;
+		}
+		await _baseDatos.insert(
+			'usuarios',
+			{
+				'id': id,
+				'nombre': nombre.trim(),
+				'codigo': codigoLimpio,
+				'pin_hash': pinHash,
+				'pin_salt': pinSalt,
+				'rol': rol.name,
+				'tienda_id': tiendaId,
+				'activo': activo ? 1 : 0,
+				'creado_en': creadoEn,
+				'actualizado_en': actualizadoEn,
+			},
+			conflictAlgorithm: ConflictAlgorithm.replace,
+		);
+		return true;
+	}
+
+	/// Lee credenciales y marcas de tiempo para replicar por sync.
+	Future<UsuarioSnapshotSync?> obtenerSnapshotSync(String id) async {
+		final filas = await _baseDatos.query(
+			'usuarios',
+			where: 'id = ?',
+			whereArgs: [id],
+			limit: 1,
+		);
+		if (filas.isEmpty) {
+			return null;
+		}
+		final fila = filas.first;
+		final hash = fila['pin_hash'] as String?;
+		final sal = fila['pin_salt'] as String?;
+		if (hash == null || sal == null) {
+			return null;
+		}
+		return UsuarioSnapshotSync(
+			pinHash: hash,
+			pinSalt: sal,
+			creadoEn: fila['creado_en'] as String? ?? DateTime.now().toUtc().toIso8601String(),
+			actualizadoEn:
+				fila['actualizado_en'] as String? ?? DateTime.now().toUtc().toIso8601String(),
+		);
+	}
+
 	bool _verificarFila(Map<String, Object?> fila, String pin) {
 		final hash = fila['pin_hash'] as String?;
 		final sal = fila['pin_salt'] as String?;
@@ -219,4 +310,19 @@ class UsuarioRepository {
 			activo: (fila['activo'] as int) == 1,
 		);
 	}
+}
+
+/// Datos de usuario necesarios para eventos de sincronizacion.
+class UsuarioSnapshotSync {
+	const UsuarioSnapshotSync({
+		required this.pinHash,
+		required this.pinSalt,
+		required this.creadoEn,
+		required this.actualizadoEn,
+	});
+
+	final String pinHash;
+	final String pinSalt;
+	final String creadoEn;
+	final String actualizadoEn;
 }

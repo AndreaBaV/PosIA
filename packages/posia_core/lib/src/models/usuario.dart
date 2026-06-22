@@ -13,6 +13,7 @@ class Usuario {
 		required this.rol,
 		required this.activo,
 		this.tiendaId,
+		this.tenantId,
 	});
 
 	final String id;
@@ -27,6 +28,9 @@ class Usuario {
 	/// Tienda asignada; null solo para administrador global.
 	final String? tiendaId;
 
+	/// Tenant al que pertenece la cuenta (resuelto al autenticar).
+	final String? tenantId;
+
 	Usuario copiarCon({
 		String? id,
 		String? nombre,
@@ -35,6 +39,7 @@ class Usuario {
 		RolUsuario? rol,
 		bool? activo,
 		String? tiendaId,
+		String? tenantId,
 		bool limpiarTiendaId = false,
 	}) {
 		return Usuario(
@@ -45,6 +50,7 @@ class Usuario {
 			rol: rol ?? this.rol,
 			activo: activo ?? this.activo,
 			tiendaId: limpiarTiendaId ? null : (tiendaId ?? this.tiendaId),
+			tenantId: tenantId ?? this.tenantId,
 		);
 	}
 }

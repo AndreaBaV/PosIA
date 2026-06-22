@@ -66,5 +66,53 @@ void main() {
 			expect(ok?.pin, isNull);
 			expect(mal, isNull);
 		});
+
+		test('guardarRemoto replica hash y respeta actualizadoEn', () async {
+			await repo.guardar(
+				const Usuario(
+					id: 'u-local',
+					nombre: 'Local',
+					codigo: '3002',
+					pin: '3456',
+					rol: RolUsuario.empleado,
+					activo: true,
+					tiendaId: 't-1',
+				),
+			);
+			final snapshot = await repo.obtenerSnapshotSync('u-local');
+			expect(snapshot, isNotNull);
+
+			final aplicado = await repo.guardarRemoto(
+				id: 'u-remoto',
+				nombre: 'Remoto',
+				codigo: '3003',
+				rol: RolUsuario.empleado,
+				tiendaId: 't-1',
+				activo: true,
+				pinHash: snapshot!.pinHash,
+				pinSalt: snapshot.pinSalt,
+				creadoEn: snapshot.creadoEn,
+				actualizadoEn: snapshot.actualizadoEn,
+			);
+			expect(aplicado, isTrue);
+			final remoto = await repo.autenticar('3003', '3456');
+			expect(remoto?.nombre, 'Remoto');
+
+			final rechazado = await repo.guardarRemoto(
+				id: 'u-local',
+				nombre: 'Viejo',
+				codigo: '3002',
+				rol: RolUsuario.empleado,
+				tiendaId: 't-1',
+				activo: true,
+				pinHash: snapshot.pinHash,
+				pinSalt: snapshot.pinSalt,
+				creadoEn: '2020-01-01T00:00:00.000Z',
+				actualizadoEn: '2020-01-01T00:00:00.000Z',
+			);
+			expect(rechazado, isFalse);
+			final sigue = await repo.obtenerPorId('u-local');
+			expect(sigue?.nombre, 'Local');
+		});
 	});
 }

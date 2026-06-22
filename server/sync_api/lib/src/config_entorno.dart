@@ -61,4 +61,32 @@ class ConfigEntorno {
 
 	/// Ruta JSONL cuando no hay Postgres.
 	String get rutaArchivoEventos => obtener('EVENTS_FILE') ?? 'posia_sync_events.jsonl';
+
+	/// Produccion: Render, o POSIA_ENV=production.
+	bool get esProduccion {
+		final env = obtener('POSIA_ENV')?.toLowerCase();
+		if (env == 'production' || env == 'prod') {
+			return true;
+		}
+		return obtener('RENDER') == 'true';
+	}
+
+	/// Valida configuracion minima para desplegar en produccion.
+	void validarProduccion() {
+		if (!esProduccion) {
+			return;
+		}
+		final faltantes = <String>[];
+		if (urlBaseDatos == null || urlBaseDatos!.isEmpty) {
+			faltantes.add('DATABASE_URL');
+		}
+		if (claveApi == null || claveApi!.isEmpty) {
+			faltantes.add('API_KEY');
+		}
+		if (faltantes.isNotEmpty) {
+			throw StateError(
+				'Configuracion de produccion incompleta. Defina: ${faltantes.join(', ')}',
+			);
+		}
+	}
 }

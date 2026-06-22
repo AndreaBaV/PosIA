@@ -12,9 +12,11 @@ import 'package:sqflite/sqflite.dart';
 
 import '../repositories/categoria_repository.dart';
 import '../repositories/cliente_repository.dart';
+import '../repositories/tienda_repository.dart';
 import '../repositories/traspaso_repository.dart';
 import '../repositories/inventario_repository.dart';
 import '../repositories/producto_repository.dart';
+import '../repositories/usuario_repository.dart';
 import '../repositories/variante_repository.dart';
 import '../repositories/venta_repository.dart';
 
@@ -36,6 +38,8 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		CategoriaRepository? categoriaRepository,
 		TraspasoRepository? traspasoRepository,
 		VarianteRepository? varianteRepository,
+		TiendaRepository? tiendaRepository,
+		UsuarioRepository? usuarioRepository,
 	}) : _baseDatos = baseDatos,
 	     _productoRepository = productoRepository,
 	     _clienteRepository = clienteRepository,
@@ -43,7 +47,9 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 	     _inventarioRepository = inventarioRepository,
 	     _categoriaRepository = categoriaRepository,
 	     _traspasoRepository = traspasoRepository,
-	     _varianteRepository = varianteRepository;
+	     _varianteRepository = varianteRepository,
+	     _tiendaRepository = tiendaRepository,
+	     _usuarioRepository = usuarioRepository;
 
 	final Database _baseDatos;
 	final ProductoRepository _productoRepository;
@@ -53,6 +59,8 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 	final CategoriaRepository? _categoriaRepository;
 	final TraspasoRepository? _traspasoRepository;
 	final VarianteRepository? _varianteRepository;
+	final TiendaRepository? _tiendaRepository;
+	final UsuarioRepository? _usuarioRepository;
 
 	@override
 	Future<void> aplicarEvento(SyncEvent evento) async {
@@ -77,7 +85,63 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 				await _aplicarVarianteRemota(evento);
 			case TipoSyncEvento.salePartialReturn:
 				await _aplicarDevolucionParcialRemota(evento);
+			case TipoSyncEvento.storeUpserted:
+				await _aplicarTiendaRemota(evento);
+			case TipoSyncEvento.userUpserted:
+				await _aplicarUsuarioRemoto(evento);
 		}
+	}
+
+	Future<void> _aplicarTiendaRemota(SyncEvent evento) async {
+		final repo = _tiendaRepository;
+		if (repo == null) {
+			return;
+		}
+		final payload = evento.payload;
+		final id = payload['id'] as String? ?? '';
+		if (id.isEmpty) {
+			return;
+		}
+		await repo.guardar(
+			Tienda(
+				id: id,
+				nombre: payload['nombre'] as String? ?? '',
+				direccion: payload['direccion'] as String? ?? '',
+				activa: payload['activa'] as bool? ?? true,
+			),
+		);
+	}
+
+	Future<void> _aplicarUsuarioRemoto(SyncEvent evento) async {
+		final repo = _usuarioRepository;
+		if (repo == null) {
+			return;
+		}
+		final payload = evento.payload;
+		final id = payload['id'] as String? ?? '';
+		final pinHash = payload['pinHash'] as String?;
+		final pinSalt = payload['pinSalt'] as String?;
+		if (id.isEmpty || pinHash == null || pinSalt == null) {
+			return;
+		}
+		final rolNombre = payload['rol'] as String? ?? RolUsuario.empleado.name;
+		final rol = RolUsuario.values.firstWhere(
+			(valor) => valor.name == rolNombre,
+			orElse: () => RolUsuario.empleado,
+		);
+		await repo.guardarRemoto(
+			id: id,
+			nombre: payload['nombre'] as String? ?? '',
+			codigo: payload['codigo'] as String? ?? '',
+			rol: rol,
+			tiendaId: payload['tiendaId'] as String?,
+			activo: payload['activo'] as bool? ?? true,
+			pinHash: pinHash,
+			pinSalt: pinSalt,
+			creadoEn: payload['creadoEn'] as String? ?? evento.creadoEn.toIso8601String(),
+			actualizadoEn:
+				payload['actualizadoEn'] as String? ?? evento.creadoEn.toIso8601String(),
+		);
 	}
 
 	Future<void> _aplicarVarianteRemota(SyncEvent evento) async {

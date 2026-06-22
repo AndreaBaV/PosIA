@@ -9,6 +9,8 @@ library;
 import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../seed/placeholders_ejemplo.dart';
+
 /// Aplica cambios de esquema entre versiones.
 class MigracionesEsquema {
 	MigracionesEsquema._();
@@ -401,6 +403,17 @@ class MigracionesEsquema {
 		await base.execute('ALTER TABLE sale_lines ADD COLUMN etiqueta_lote TEXT');
 	}
 
+	/// Esquema minimo del dispositivo (sin datos de negocio).
+	static Future<void> crearEsquemaDispositivo(Database base, int version) async {
+		await base.execute('''
+			CREATE TABLE app_config (
+				clave TEXT PRIMARY KEY,
+				valor TEXT NOT NULL
+			)
+		''');
+		await PlaceholdersEjemplo.insertarGuiaDispositivo(base);
+	}
+
 	/// Crea esquema completo para instalacion nueva en la version actual.
 	///
 	/// [base] Conexion SQLite activa.
@@ -565,6 +578,12 @@ class MigracionesEsquema {
 		''');
 		await crearTablasVerticales(base);
 		await crearTablasOperaciones(base);
+		await PlaceholdersEjemplo.insertarGuiaTenant(base);
+	}
+
+	/// Tabla guia `ejemplo` en bases ya existentes (v10 → v11).
+	static Future<void> migrarVersion10A11(Database base) async {
+		await PlaceholdersEjemplo.insertarGuiaTenant(base);
 	}
 
 	/// Crea tablas verticales en instalacion nueva version 2.
