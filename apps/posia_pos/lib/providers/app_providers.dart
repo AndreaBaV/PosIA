@@ -172,6 +172,7 @@ class EstadoCarrito {
 		this.turnoAbierto = false,
 		this.favoritos = const [],
 		this.ticketsEnEspera = 0,
+		this.indiceBusquedaSeleccionado = 0,
 	});
 
 	/// Catalogo visible en grilla.
@@ -204,6 +205,9 @@ class EstadoCarrito {
 	/// Carritos apartados en esta caja.
 	final int ticketsEnEspera;
 
+	/// Producto resaltado al buscar con teclado.
+	final int indiceBusquedaSeleccionado;
+
 	/// Genera copia con campos actualizados.
 	EstadoCarrito copiarCon({
 		List<Producto>? productos,
@@ -216,6 +220,7 @@ class EstadoCarrito {
 		bool? turnoAbierto,
 		List<Producto>? favoritos,
 		int? ticketsEnEspera,
+		int? indiceBusquedaSeleccionado,
 	}) {
 		return EstadoCarrito(
 			productos: productos ?? this.productos,
@@ -229,12 +234,16 @@ class EstadoCarrito {
 			turnoAbierto: turnoAbierto ?? this.turnoAbierto,
 			favoritos: favoritos ?? this.favoritos,
 			ticketsEnEspera: ticketsEnEspera ?? this.ticketsEnEspera,
+			indiceBusquedaSeleccionado:
+				indiceBusquedaSeleccionado ?? this.indiceBusquedaSeleccionado,
 		);
 	}
 }
 
 /// Gestiona estado reactivo del carrito conectado a [ServicioCaja].
 class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
+	static const int _columnasGrillaBusqueda = 3;
+
 	String _categoriaSeleccionadaId = CATEGORIA_TODOS_ID;
 	String _textoBusqueda = '';
 	List<Producto>? _catalogoCompleto;
@@ -257,6 +266,7 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 			actual.copiarCon(
 				categoriaSeleccionadaId: categoriaId,
 				productos: _filtrarProductos(_catalogoCompleto!, categoriaId, _textoBusqueda),
+				indiceBusquedaSeleccionado: 0,
 			),
 		);
 	}
@@ -268,14 +278,58 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 		if (actual == null || _catalogoCompleto == null) {
 			return;
 		}
+		final productos = _filtrarProductos(
+			_catalogoCompleto!,
+			_categoriaSeleccionadaId,
+			_textoBusqueda,
+		);
 		state = AsyncData(
 			actual.copiarCon(
-				productos: _filtrarProductos(
-					_catalogoCompleto!,
-					_categoriaSeleccionadaId,
-					_textoBusqueda,
-				),
+				productos: productos,
+				indiceBusquedaSeleccionado: 0,
 			),
+		);
+	}
+
+	/// Mueve el resaltado de busqueda en la grilla (flechas del teclado).
+	void moverSeleccionBusqueda({
+		required int deltaColumna,
+		required int deltaFila,
+	}) {
+		if (_textoBusqueda.isEmpty) {
+			return;
+		}
+		final actual = state.value;
+		if (actual == null || actual.productos.isEmpty) {
+			return;
+		}
+		final columnas = _columnasGrillaBusqueda;
+		final indiceActual = actual.indiceBusquedaSeleccionado.clamp(
+			0,
+			actual.productos.length - 1,
+		);
+		var fila = indiceActual ~/ columnas;
+		var columna = indiceActual % columnas;
+		fila = fila + deltaFila;
+		columna = columna + deltaColumna;
+		if (columna < 0) {
+			columna = columnas - 1;
+			fila = fila - 1;
+		} else if (columna >= columnas) {
+			columna = 0;
+			fila = fila + 1;
+		}
+		var nuevoIndice = fila * columnas + columna;
+		if (nuevoIndice < 0) {
+			nuevoIndice = actual.productos.length - 1;
+		} else if (nuevoIndice >= actual.productos.length) {
+			nuevoIndice = 0;
+		}
+		if (nuevoIndice == indiceActual) {
+			return;
+		}
+		state = AsyncData(
+			actual.copiarCon(indiceBusquedaSeleccionado: nuevoIndice),
 		);
 	}
 
@@ -302,9 +356,13 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 	/// Agrega producto al carrito y actualiza estado UI.
 	///
 	/// [producto] Producto seleccionado en grilla.
-	Future<void> agregarProducto(Producto producto) async {
+	/// [cantidad] Unidades a agregar; default 1.0.
+	Future<void> agregarProducto(
+		Producto producto, {
+		double cantidad = 1.0,
+	}) async {
 		final servicio = await ref.read(servicioCajaProvider.future);
-		await servicio.agregarProducto(producto);
+		await servicio.agregarProducto(producto, cantidad: cantidad);
 		await _refrescarDespuesDeOperacionCarrito();
 	}
 

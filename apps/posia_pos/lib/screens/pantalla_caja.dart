@@ -43,7 +43,6 @@ class _PantallaCajaState extends ConsumerState<PantallaCaja> {
 	void initState() {
 		super.initState();
 		_busquedaFocus = FocusNode(onKeyEvent: _manejarTeclaEnBusqueda);
-		HardwareKeyboard.instance.addHandler(_manejarTeclaHardwareCaja);
 		WidgetsBinding.instance.addPostFrameCallback((_) {
 			_iniciarEscaner();
 			_enfocarBusqueda();
@@ -52,7 +51,6 @@ class _PantallaCajaState extends ConsumerState<PantallaCaja> {
 
 	@override
 	void dispose() {
-		HardwareKeyboard.instance.removeHandler(_manejarTeclaHardwareCaja);
 		_suscripcionEscaner?.cancel();
 		_scanner?.detener();
 		_busquedaController.dispose();
@@ -88,24 +86,32 @@ class _PantallaCajaState extends ConsumerState<PantallaCaja> {
 		if (agregado) {
 			return;
 		}
-		final productos = ref.read(carritoNotifierProvider).value?.productos ?? [];
-		if (productos.length == 1) {
-			await ref.read(carritoNotifierProvider.notifier).agregarProducto(productos.first);
-			_busquedaController.clear();
-			ref.read(carritoNotifierProvider.notifier).limpiarBusqueda();
-			_enfocarBusqueda();
-			return;
-		}
+		final estado = ref.read(carritoNotifierProvider).value;
+		final productos = estado?.productos ?? [];
 		if (!mounted) {
 			return;
 		}
-		if (texto.trim().isNotEmpty && productos.isEmpty) {
-			ScaffoldMessenger.of(context).showSnackBar(
-				SnackBar(
-					content: Text('Sin resultados para "${texto.trim()}"'),
-					backgroundColor: PosiaColors.cancelar,
-				),
-			);
+		if (productos.isEmpty) {
+			if (texto.trim().isNotEmpty) {
+				ScaffoldMessenger.of(context).showSnackBar(
+					SnackBar(
+						content: Text('Sin resultados para "${texto.trim()}"'),
+						backgroundColor: PosiaColors.cancelar,
+					),
+				);
+			}
+			return;
+		}
+		final indice = (estado?.indiceBusquedaSeleccionado ?? 0).clamp(0, productos.length - 1);
+		final agregadoProducto = await seleccionarProductoEnCaja(
+			context,
+			ref,
+			productos[indice],
+		);
+		if (agregadoProducto) {
+			_busquedaController.clear();
+			ref.read(carritoNotifierProvider.notifier).limpiarBusqueda();
+			_enfocarBusqueda();
 		}
 	}
 
@@ -145,45 +151,40 @@ class _PantallaCajaState extends ConsumerState<PantallaCaja> {
 		return false;
 	}
 
-	bool _hayDialogoModalAbierto() {
-		final foco = FocusManager.instance.primaryFocus;
-		if (foco == null || !foco.hasFocus) {
-			return false;
-		}
-		return foco.context?.findAncestorWidgetOfExactType<Dialog>() != null;
-	}
-
-	bool _manejarTeclaHardwareCaja(KeyEvent event) {
-		if (!mounted || event is! KeyDownEvent || _hayDialogoModalAbierto()) {
-			return false;
-		}
-		final teclaCobrar = parsearTeclaConfigurada(
-			ref.read(teclaCobrarConfigProvider).value ?? teclaCobrarPredeterminada,
-		);
-		if (event.logicalKey != teclaCobrar) {
-			return false;
-		}
-		final estado = ref.read(carritoNotifierProvider).value;
-		if (estado == null || estado.total <= 0.0) {
-			return false;
-		}
-		ejecutarCobroCaja(context, ref);
-		return true;
-	}
-
 	KeyEventResult _manejarTeclaEnBusqueda(FocusNode node, KeyEvent event) {
 		if (event is! KeyDownEvent) {
 			return KeyEventResult.ignored;
 		}
-		final teclaCobrar = parsearTeclaConfigurada(
-			ref.read(teclaCobrarConfigProvider).value ?? teclaCobrarPredeterminada,
-		);
-		if (event.logicalKey == teclaCobrar) {
-			final estado = ref.read(carritoNotifierProvider).value;
-			if (estado != null && estado.total > 0.0) {
-				ejecutarCobroCaja(context, ref);
-			}
+		final atajos = ref.read(atajosCajaConfigProvider).value ?? AtajosCajaConfig.predeterminados();
+		if (procesarAtajoTecladoEnCaja(
+			event: event,
+			context: context,
+			ref: ref,
+			atajos: atajos,
+		)) {
 			return KeyEventResult.handled;
+		}
+		if (_busquedaController.text.trim().isNotEmpty) {
+			final productos = ref.read(carritoNotifierProvider).value?.productos ?? [];
+			if (productos.isNotEmpty) {
+				final notifier = ref.read(carritoNotifierProvider.notifier);
+				if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+					notifier.moverSeleccionBusqueda(deltaColumna: 0, deltaFila: 1);
+					return KeyEventResult.handled;
+				}
+				if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+					notifier.moverSeleccionBusqueda(deltaColumna: 0, deltaFila: -1);
+					return KeyEventResult.handled;
+				}
+				if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+					notifier.moverSeleccionBusqueda(deltaColumna: 1, deltaFila: 0);
+					return KeyEventResult.handled;
+				}
+				if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+					notifier.moverSeleccionBusqueda(deltaColumna: -1, deltaFila: 0);
+					return KeyEventResult.handled;
+				}
+			}
 		}
 		return KeyEventResult.ignored;
 	}
@@ -243,7 +244,8 @@ class _ConstruirLayoutCaja extends ConsumerWidget {
 
 	@override
 	Widget build(BuildContext context, WidgetRef ref) {
-		final teclaConfig = ref.watch(teclaCobrarConfigProvider).value ?? teclaCobrarPredeterminada;
+		final teclaConfig = ref.watch(atajosCajaConfigProvider).value ?? AtajosCajaConfig.predeterminados();
+		final etiquetaCobrar = etiquetaAtajoConfigurado(teclaConfig.atajo(atajoAccionCobrar));
 		return Scaffold(
 			backgroundColor: PosiaColors.fondo,
 			body: Column(
@@ -322,8 +324,15 @@ class _ConstruirLayoutCaja extends ConsumerWidget {
 										),
 										backgroundColor: Colors.amber.shade50,
 										side: BorderSide(color: Colors.amber.shade200),
-										onPressed: () {
-											_manejarSeleccionProducto(context, ref, producto);
+										onPressed: () async {
+											final agregado = await seleccionarProductoEnCaja(
+												context,
+												ref,
+												producto,
+											);
+											if (agregado) {
+												alEnfocarBusqueda();
+											}
 										},
 									);
 								},
@@ -343,12 +352,21 @@ class _ConstruirLayoutCaja extends ConsumerWidget {
 											child: GrillaProductos(
 												categoriaId: estado.categoriaSeleccionadaId,
 												productos: estado.productos,
+												indiceSeleccionado: busquedaController.text.trim().isNotEmpty
+													? estado.indiceBusquedaSeleccionado
+													: null,
 												mensajeVacio: busquedaController.text.trim().isNotEmpty
 													? 'Sin coincidencias para "${busquedaController.text.trim()}"'
 													: 'Sin productos en esta categoría',
 												alSeleccionar: (producto) async {
-													await _manejarSeleccionProducto(context, ref, producto);
-													alEnfocarBusqueda();
+													final agregado = await seleccionarProductoEnCaja(
+														context,
+														ref,
+														producto,
+													);
+													if (agregado) {
+														alEnfocarBusqueda();
+													}
 												},
 											),
 										),
@@ -375,172 +393,172 @@ class _ConstruirLayoutCaja extends ConsumerWidget {
 					_BarraAccionesCaja(
 						total: estado.total,
 						estado: estado,
-						etiquetaTeclaCobrar: etiquetaTeclaConfigurada(teclaConfig),
+						etiquetaTeclaCobrar: etiquetaCobrar,
 					),
 				],
 			),
 		);
 	}
+}
 
-	/// Enruta seleccion de producto segun modulo vertical activo.
-	///
-	/// [context] Contexto para dialogos modales.
-	/// [ref] Referencia Riverpod.
-	/// [producto] Producto seleccionado en grilla.
-	Future<void> _manejarSeleccionProducto(
-		BuildContext context,
-		WidgetRef ref,
-		Producto producto,
-	) async {
-		if (producto.moduloVertical == ModuloVertical.farmacia) {
-			await _agregarProductoFarmacia(context, ref, producto);
-			return;
-		}
-		if (producto.moduloVertical == ModuloVertical.carniceria || producto.requierePeso()) {
-			await _agregarProductoCarniceria(context, ref, producto);
-			return;
-		}
-		final servicio = await ref.read(servicioCajaProvider.future);
-		if (!context.mounted) {
-			return;
-		}
-		if (await servicio.productoTieneVariantes(producto.id)) {
-			if (!context.mounted) {
-				return;
-			}
-			await _seleccionarVariante(context, ref, producto);
-			return;
-		}
-		await ref.read(carritoNotifierProvider.notifier).agregarProducto(producto);
+/// Enruta seleccion de producto segun modulo vertical activo.
+///
+/// Retorna true si el producto quedo agregado al carrito.
+Future<bool> seleccionarProductoEnCaja(
+	BuildContext context,
+	WidgetRef ref,
+	Producto producto,
+) async {
+	if (producto.moduloVertical == ModuloVertical.farmacia) {
+		return _agregarProductoFarmacia(context, ref, producto);
 	}
-
-	/// Muestra dialogo de presentaciones activas del producto.
-	Future<void> _seleccionarVariante(
-		BuildContext context,
-		WidgetRef ref,
-		Producto producto,
-	) async {
-		final servicio = await ref.read(servicioCajaProvider.future);
-		final variantes = await servicio.listarVariantesActivas(producto.id);
-		if (!context.mounted || variantes.isEmpty) {
-			return;
+	if (producto.moduloVertical == ModuloVertical.carniceria || producto.requierePeso()) {
+		return _agregarProductoCarniceria(context, ref, producto);
+	}
+	final servicio = await ref.read(servicioCajaProvider.future);
+	if (!context.mounted) {
+		return false;
+	}
+	if (await servicio.productoTieneVariantes(producto.id)) {
+		if (!context.mounted) {
+			return false;
 		}
-		await showDialog<void>(
-			context: context,
-			builder: (dialogContext) => AlertDialog(
-				title: Text('Presentación: ${producto.nombre}'),
-				content: SizedBox(
-					width: 320.0,
-					child: ListView(
-						shrinkWrap: true,
-						children: variantes
-							.map(
-								(v) => ListTile(
-									title: Text(v.nombre),
-									subtitle: Text(v.codigoBarras),
-									trailing: Text(formatearMoneda(v.precioBase)),
-									onTap: () async {
-										await servicio.agregarVariante(v);
-										if (dialogContext.mounted) {
-											Navigator.of(dialogContext).pop();
-										}
-										await ref.read(carritoNotifierProvider.notifier).recargar();
-									},
-								),
-							)
-							.toList(),
-					),
+		return _seleccionarVariante(context, ref, producto);
+	}
+	if (!context.mounted) {
+		return false;
+	}
+	final resultado = await DialogoCantidadProducto.mostrar(context, producto);
+	if (!resultado.confirmado) {
+		return false;
+	}
+	await ref.read(carritoNotifierProvider.notifier).agregarProducto(
+		producto,
+		cantidad: resultado.cantidad,
+	);
+	return true;
+}
+
+/// Muestra dialogo de presentaciones activas del producto.
+Future<bool> _seleccionarVariante(
+	BuildContext context,
+	WidgetRef ref,
+	Producto producto,
+) async {
+	final servicio = await ref.read(servicioCajaProvider.future);
+	final variantes = await servicio.listarVariantesActivas(producto.id);
+	if (!context.mounted || variantes.isEmpty) {
+		return false;
+	}
+	var agregado = false;
+	await showDialog<void>(
+		context: context,
+		builder: (dialogContext) => AlertDialog(
+			title: Text('Presentación: ${producto.nombre}'),
+			content: SizedBox(
+				width: 320.0,
+				child: ListView(
+					shrinkWrap: true,
+					children: variantes
+						.map(
+							(v) => ListTile(
+								title: Text(v.nombre),
+								subtitle: Text(v.codigoBarras),
+								trailing: Text(formatearMoneda(v.precioBase)),
+								onTap: () async {
+									await servicio.agregarVariante(v);
+									agregado = true;
+									if (dialogContext.mounted) {
+										Navigator.of(dialogContext).pop();
+									}
+									await ref.read(carritoNotifierProvider.notifier).recargar();
+								},
+							),
+						)
+						.toList(),
 				),
 			),
-		);
-	}
+		),
+	);
+	return agregado;
+}
 
-	/// Muestra dialogo de peso y agrega corte al carrito.
-	///
-	/// [context] Contexto de navegacion.
-	/// [ref] Referencia Riverpod.
-	/// [producto] Producto vendido por kilogramo.
-	Future<void> _agregarProductoCarniceria(
-		BuildContext context,
-		WidgetRef ref,
-		Producto producto,
-	) async {
-		final resultado = await DialogoPesoCarniceria.mostrar(context, producto);
-		if (!resultado.confirmado) {
-			return;
-		}
-		final servicio = await ref.read(servicioCajaProvider.future);
-		final error = await servicio.agregarProductoConPeso(producto, resultado.pesoKg);
-		if (error.isNotEmpty && context.mounted) {
-			await _mostrarError(context, error);
-			return;
-		}
-		await ref.read(carritoNotifierProvider.notifier).recargar();
+/// Muestra dialogo de peso y agrega corte al carrito.
+Future<bool> _agregarProductoCarniceria(
+	BuildContext context,
+	WidgetRef ref,
+	Producto producto,
+) async {
+	final resultado = await DialogoPesoCarniceria.mostrar(context, producto);
+	if (!resultado.confirmado) {
+		return false;
 	}
+	final servicio = await ref.read(servicioCajaProvider.future);
+	final error = await servicio.agregarProductoConPeso(producto, resultado.pesoKg);
+	if (error.isNotEmpty && context.mounted) {
+		await _mostrarErrorCaja(context, error);
+		return false;
+	}
+	await ref.read(carritoNotifierProvider.notifier).recargar();
+	return true;
+}
 
-	/// Muestra dialogo de lote FEFO y agrega medicamento al carrito.
-	///
-	/// [context] Contexto de navegacion.
-	/// [ref] Referencia Riverpod.
-	/// [producto] Producto farmaceutico.
-	Future<void> _agregarProductoFarmacia(
-		BuildContext context,
-		WidgetRef ref,
-		Producto producto,
-	) async {
-		final contenedor = await ref.read(contenedorServiciosProvider.future);
-		final servicioFarmacia = contenedor.servicioFarmacia;
-		final servicioCaja = contenedor.servicioCaja;
-		final tiendaId = contenedor.servicioAdmin.tiendaActivaId;
-		final lotes = await servicioFarmacia.listarLotesParaVenta(
-			producto.id,
-			tiendaId,
-		);
-		if (!context.mounted) {
-			return;
-		}
-		final resultado = await DialogoLoteFarmacia.mostrar(
-			context: context,
-			producto: producto,
-			lotes: lotes,
-			servicioFarmacia: servicioFarmacia,
-		);
-		if (!resultado.confirmado || resultado.lote == null) {
-			return;
-		}
-		final error = await servicioCaja.agregarProductoConLote(
-			producto,
-			resultado.lote!,
-			resultado.cantidad,
-		);
-		if (error.isNotEmpty && context.mounted) {
-			await _mostrarError(context, error);
-			return;
-		}
-		await ref.read(carritoNotifierProvider.notifier).recargar();
+/// Muestra dialogo de lote FEFO y agrega medicamento al carrito.
+Future<bool> _agregarProductoFarmacia(
+	BuildContext context,
+	WidgetRef ref,
+	Producto producto,
+) async {
+	final contenedor = await ref.read(contenedorServiciosProvider.future);
+	final servicioFarmacia = contenedor.servicioFarmacia;
+	final servicioCaja = contenedor.servicioCaja;
+	final tiendaId = contenedor.servicioAdmin.tiendaActivaId;
+	final lotes = await servicioFarmacia.listarLotesParaVenta(
+		producto.id,
+		tiendaId,
+	);
+	if (!context.mounted) {
+		return false;
 	}
+	final resultado = await DialogoLoteFarmacia.mostrar(
+		context: context,
+		producto: producto,
+		lotes: lotes,
+		servicioFarmacia: servicioFarmacia,
+	);
+	if (!resultado.confirmado || resultado.lote == null) {
+		return false;
+	}
+	final error = await servicioCaja.agregarProductoConLote(
+		producto,
+		resultado.lote!,
+		resultado.cantidad,
+	);
+	if (error.isNotEmpty && context.mounted) {
+		await _mostrarErrorCaja(context, error);
+		return false;
+	}
+	await ref.read(carritoNotifierProvider.notifier).recargar();
+	return true;
+}
 
-	/// Muestra alerta visual de error en operacion de caja.
-	///
-	/// [context] Contexto de navegacion.
-	/// [mensaje] Texto de error para el cajero.
-	Future<void> _mostrarError(BuildContext context, String mensaje) async {
-		await showDialog<void>(
-			context: context,
-			builder: (dialogContext) {
-				return AlertDialog(
-					icon: const Icon(Icons.error_outline, color: PosiaColors.cancelar, size: 48.0),
-					content: Text(mensaje, textAlign: TextAlign.center),
-					actions: [
-						TextButton(
-							onPressed: () => Navigator.of(dialogContext).pop(),
-							child: const Text('OK'),
-						),
-					],
-				);
-			},
-		);
-	}
+/// Muestra alerta visual de error en operacion de caja.
+Future<void> _mostrarErrorCaja(BuildContext context, String mensaje) async {
+	await showDialog<void>(
+		context: context,
+		builder: (dialogContext) {
+			return AlertDialog(
+				icon: const Icon(Icons.error_outline, color: PosiaColors.cancelar, size: 48.0),
+				content: Text(mensaje, textAlign: TextAlign.center),
+				actions: [
+					TextButton(
+						onPressed: () => Navigator.of(dialogContext).pop(),
+						child: const Text('OK'),
+					),
+				],
+			);
+		},
+	);
 }
 
 /// Aparta el carrito actual para atender otro cliente.
@@ -749,6 +767,88 @@ Future<void> mostrarTicketsEnEspera(BuildContext context, WidgetRef ref) async {
 	);
 }
 
+/// Pide confirmacion antes de vaciar el carrito.
+Future<void> confirmarVaciarCarritoCaja(BuildContext context, WidgetRef ref) async {
+	final confirmar = await showDialog<bool>(
+		context: context,
+		builder: (ctx) => AlertDialog(
+			title: const Text('Vaciar carrito'),
+			content: const Text('Se eliminarán todas las líneas del carrito.'),
+			actions: [
+				TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No')),
+				FilledButton(
+					onPressed: () => Navigator.pop(ctx, true),
+					child: const Text('Sí, vaciar'),
+				),
+			],
+		),
+	);
+	if (confirmar == true) {
+		await ref.read(carritoNotifierProvider.notifier).vaciarCarrito();
+	}
+}
+
+/// Procesa atajos de caja (cobrar, espera, cotizar, etc.).
+///
+/// Retorna true si el evento fue consumido.
+bool procesarAtajoTecladoEnCaja({
+	required KeyEvent event,
+	required BuildContext context,
+	required WidgetRef ref,
+	required AtajosCajaConfig atajos,
+	void Function(String claveAdmin)? alAbrirSeccionAdmin,
+	void Function()? alIrAdmin,
+}) {
+	if (event is! KeyDownEvent || hayDialogoModalConFoco()) {
+		return false;
+	}
+	if (coincideAtajoConfigurado(event, atajos.atajo(atajoAccionCobrar))) {
+		final estado = ref.read(carritoNotifierProvider).value;
+		if (estado != null && estado.total > 0.0) {
+			ejecutarCobroCaja(context, ref);
+			return true;
+		}
+		return false;
+	}
+	if (coincideAtajoConfigurado(event, atajos.atajo(atajoAccionPonerEspera))) {
+		ejecutarPonerEnEspera(context, ref);
+		return true;
+	}
+	if (coincideAtajoConfigurado(event, atajos.atajo(atajoAccionRecuperarEspera))) {
+		mostrarTicketsEnEspera(context, ref);
+		return true;
+	}
+	if (coincideAtajoConfigurado(event, atajos.atajo(atajoAccionCotizar))) {
+		ejecutarCotizacionCaja(context, ref);
+		return true;
+	}
+	if (coincideAtajoConfigurado(event, atajos.atajo(atajoAccionVaciarCarrito))) {
+		confirmarVaciarCarritoCaja(context, ref);
+		return true;
+	}
+	if (coincideAtajoConfigurado(event, atajos.atajo(atajoAccionCreditos))) {
+		if (alAbrirSeccionAdmin != null) {
+			alAbrirSeccionAdmin('creditos');
+			return true;
+		}
+		ref.read(solicitudNavegacionDesdeCajaProvider.notifier).solicitar(
+			const SolicitudNavegacionDesdeCaja.seccion('creditos'),
+		);
+		return true;
+	}
+	if (coincideAtajoConfigurado(event, atajos.atajo(atajoAccionAdmin))) {
+		if (alIrAdmin != null) {
+			alIrAdmin();
+			return true;
+		}
+		ref.read(solicitudNavegacionDesdeCajaProvider.notifier).solicitar(
+			const SolicitudNavegacionDesdeCaja.admin(),
+		);
+		return true;
+	}
+	return false;
+}
+
 /// Ejecuta cobro con dialogo multipago e impresion.
 Future<void> ejecutarCobroCaja(BuildContext context, WidgetRef ref) async {
 	final servicio = await ref.read(servicioCajaProvider.future);
@@ -901,78 +1001,81 @@ class _BarraAccionesCaja extends ConsumerWidget {
 	@override
 	Widget build(BuildContext context, WidgetRef ref) {
 		final puedeCobrar = total > 0.0;
-		return Container(
-			padding: const EdgeInsets.all(8.0),
-			color: PosiaColors.tarjeta,
-			child: SingleChildScrollView(
-				scrollDirection: Axis.horizontal,
-				child: Row(
-				children: [
-					BotonAccionCaja(
-						icono: Icons.person,
-						etiqueta: 'Cliente',
-						colorFondo: PosiaColors.neutro,
-						alPresionar: () => _mostrarSelectorCliente(context, ref),
-					),
-					BotonAccionCaja(
-						icono: Icons.pause_circle_outline,
-						etiqueta: 'En espera',
-						colorFondo: PosiaColors.neutro,
-						habilitado: puedeCobrar,
-						alPresionar: () => ejecutarPonerEnEspera(context, ref),
-					),
-					if (estado.ticketsEnEspera > 0)
-						BotonAccionCaja(
-							icono: Icons.playlist_play,
-							etiqueta: 'Recuperar (${estado.ticketsEnEspera})',
-							colorFondo: Colors.orange.shade800,
-							alPresionar: () => mostrarTicketsEnEspera(context, ref),
+		return SafeArea(
+			top: false,
+			child: DecoratedBox(
+				decoration: BoxDecoration(
+					color: PosiaColors.tarjeta,
+					boxShadow: [
+						BoxShadow(
+							color: Colors.black.withValues(alpha: 0.08),
+							blurRadius: 8.0,
+							offset: const Offset(0.0, -2.0),
 						),
-					BotonAccionCaja(
-						icono: Icons.clear,
-						etiqueta: 'Cancelar',
-						colorFondo: PosiaColors.cancelar,
-						alPresionar: () => _confirmarVaciarCarrito(context, ref),
+					],
+				),
+				child: Padding(
+					padding: const EdgeInsets.fromLTRB(8.0, 10.0, 8.0, 10.0),
+					child: Row(
+						children: [
+							Expanded(
+								child: BotonAccionCaja(
+									icono: Icons.person,
+									etiqueta: 'Cliente',
+									colorFondo: PosiaColors.neutro,
+									alPresionar: () => _mostrarSelectorCliente(context, ref),
+								),
+							),
+							Expanded(
+								child: BotonAccionCaja(
+									icono: Icons.pause_circle_outline,
+									etiqueta: 'En espera',
+									colorFondo: PosiaColors.neutro,
+									habilitado: puedeCobrar,
+									alPresionar: () => ejecutarPonerEnEspera(context, ref),
+								),
+							),
+							if (estado.ticketsEnEspera > 0)
+								Expanded(
+									child: BotonAccionCaja(
+										icono: Icons.playlist_play,
+										etiqueta: 'Recuperar (${estado.ticketsEnEspera})',
+										colorFondo: Colors.orange.shade800,
+										alPresionar: () => mostrarTicketsEnEspera(context, ref),
+									),
+								),
+							Expanded(
+								child: BotonAccionCaja(
+									icono: Icons.clear,
+									etiqueta: 'Cancelar',
+									colorFondo: PosiaColors.cancelar,
+									alPresionar: () => confirmarVaciarCarritoCaja(context, ref),
+								),
+							),
+							Expanded(
+								child: BotonAccionCaja(
+									icono: Icons.request_quote,
+									etiqueta: 'Cotizar',
+									colorFondo: PosiaColors.neutro,
+									habilitado: puedeCobrar,
+									alPresionar: () => ejecutarCotizacionCaja(context, ref),
+								),
+							),
+							Expanded(
+								flex: 2,
+								child: BotonAccionCaja(
+									icono: Icons.payments,
+									etiqueta: 'COBRAR ($etiquetaTeclaCobrar)',
+									colorFondo: PosiaColors.cobrar,
+									habilitado: puedeCobrar,
+									alPresionar: () => ejecutarCobroCaja(context, ref),
+								),
+							),
+						],
 					),
-					BotonAccionCaja(
-						icono: Icons.request_quote,
-						etiqueta: 'Cotizar',
-						colorFondo: PosiaColors.neutro,
-						habilitado: puedeCobrar,
-						alPresionar: () => ejecutarCotizacionCaja(context, ref),
-					),
-					BotonAccionCaja(
-						icono: Icons.payments,
-						etiqueta: 'COBRAR ($etiquetaTeclaCobrar)',
-						colorFondo: PosiaColors.cobrar,
-						habilitado: puedeCobrar,
-						alPresionar: () => ejecutarCobroCaja(context, ref),
-					),
-				],
 				),
 			),
 		);
-	}
-
-	/// Pide confirmacion antes de vaciar el carrito.
-	Future<void> _confirmarVaciarCarrito(BuildContext context, WidgetRef ref) async {
-		final confirmar = await showDialog<bool>(
-			context: context,
-			builder: (ctx) => AlertDialog(
-				title: const Text('Vaciar carrito'),
-				content: const Text('Se eliminarán todas las líneas del carrito.'),
-				actions: [
-					TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No')),
-					FilledButton(
-						onPressed: () => Navigator.pop(ctx, true),
-						child: const Text('Sí, vaciar'),
-					),
-				],
-			),
-		);
-		if (confirmar == true) {
-			await ref.read(carritoNotifierProvider.notifier).vaciarCarrito();
-		}
 	}
 
 	/// Muestra dialogo simplificado de seleccion de cliente.

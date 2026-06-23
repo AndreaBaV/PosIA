@@ -2,6 +2,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:posia_core/posia_core.dart';
 import 'package:posia_database/posia_database.dart';
@@ -9,6 +10,7 @@ import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
+import '../util/destinos_admin.dart';
 import '../util/plataforma_util.dart';
 import 'pantalla_admin.dart';
 import 'pantalla_caja.dart';
@@ -30,7 +32,57 @@ class _PantallaInicioState extends ConsumerState<PantallaInicio> {
 	@override
 	void initState() {
 		super.initState();
+		if (!esPlataformaMovilNativa()) {
+			HardwareKeyboard.instance.addHandler(_manejarAtajosGlobalesCaja);
+		}
 		WidgetsBinding.instance.addPostFrameCallback((_) => _sincronizarVendedorSesion());
+	}
+
+	@override
+	void dispose() {
+		if (!esPlataformaMovilNativa()) {
+			HardwareKeyboard.instance.removeHandler(_manejarAtajosGlobalesCaja);
+		}
+		super.dispose();
+	}
+
+	bool _manejarAtajosGlobalesCaja(KeyEvent event) {
+		if (!mounted || _indicePestana != 0 || esPlataformaMovilNativa()) {
+			return false;
+		}
+		final usuario = ref.read(sesionUsuarioProvider);
+		if (usuario == null) {
+			return false;
+		}
+		final atajos = ref.read(atajosCajaConfigProvider).value ?? AtajosCajaConfig.predeterminados();
+		return procesarAtajoTecladoEnCaja(
+			event: event,
+			context: context,
+			ref: ref,
+			atajos: atajos,
+			alIrAdmin: puedeAccederPanelAdmin(usuario)
+				? () => setState(() => _indicePestana = 1)
+				: null,
+			alAbrirSeccionAdmin: puedeAccederPanelAdmin(usuario)
+				? (clave) => _abrirSeccionAdmin(clave, usuario)
+				: null,
+		);
+	}
+
+	void _abrirSeccionAdmin(String clave, Usuario usuario) {
+		final destino = construirDestinoAdmin(clave, usuario);
+		if (destino == null) {
+			return;
+		}
+		setState(() => _indicePestana = 1);
+		WidgetsBinding.instance.addPostFrameCallback((_) {
+			if (!mounted) {
+				return;
+			}
+			Navigator.of(context).push(
+				MaterialPageRoute<void>(builder: (_) => destino),
+			);
+		});
 	}
 
 	Future<void> _sincronizarVendedorSesion() async {
@@ -51,6 +103,26 @@ class _PantallaInicioState extends ConsumerState<PantallaInicio> {
 
 	@override
 	Widget build(BuildContext context) {
+		ref.listen<SolicitudNavegacionDesdeCaja?>(
+			solicitudNavegacionDesdeCajaProvider,
+			(prev, next) {
+				if (next == null) {
+					return;
+				}
+				final usuario = ref.read(sesionUsuarioProvider);
+				if (usuario == null) {
+					return;
+				}
+				ref.read(solicitudNavegacionDesdeCajaProvider.notifier).limpiar();
+				if (next.esAdmin) {
+					if (puedeAccederPanelAdmin(usuario)) {
+						setState(() => _indicePestana = 1);
+					}
+					return;
+				}
+				_abrirSeccionAdmin(next.clave!, usuario);
+			},
+		);
 		final usuario = ref.watch(sesionUsuarioProvider);
 		if (usuario == null) {
 			return const Scaffold(

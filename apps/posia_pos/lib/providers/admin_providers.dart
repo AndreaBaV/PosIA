@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:posia_core/posia_core.dart';
 import 'package:posia_database/posia_database.dart';
 import 'package:posia_sync/posia_sync.dart';
+import 'package:posia_ui/posia_ui.dart';
 
 import 'app_providers.dart';
 
@@ -88,10 +89,46 @@ final configImpresoraProvider = FutureProvider<ConfigImpresora>((ref) async {
 	return servicio.obtenerConfigImpresora();
 });
 
-/// Tecla configurada para cobrar en caja (ej. F12).
-final teclaCobrarConfigProvider = FutureProvider<String>((ref) async {
+/// Solicitud de navegacion disparada por atajos desde caja.
+class SolicitudNavegacionDesdeCaja {
+	const SolicitudNavegacionDesdeCaja.admin() : clave = null;
+	const SolicitudNavegacionDesdeCaja.seccion(this.clave);
+
+	final String? clave;
+
+	bool get esAdmin => clave == null;
+}
+
+/// Canal para que caja pida abrir Admin o una seccion concreta.
+final solicitudNavegacionDesdeCajaProvider =
+	NotifierProvider<SolicitudNavegacionDesdeCajaNotifier, SolicitudNavegacionDesdeCaja?>(
+		SolicitudNavegacionDesdeCajaNotifier.new,
+	);
+
+class SolicitudNavegacionDesdeCajaNotifier extends Notifier<SolicitudNavegacionDesdeCaja?> {
+	@override
+	SolicitudNavegacionDesdeCaja? build() => null;
+
+	void solicitar(SolicitudNavegacionDesdeCaja solicitud) {
+		state = solicitud;
+	}
+
+	void limpiar() {
+		state = null;
+	}
+}
+
+/// Atajos de teclado personalizables en pantalla de caja.
+final atajosCajaConfigProvider = FutureProvider<AtajosCajaConfig>((ref) async {
 	final servicio = await ref.watch(servicioAdminProvider.future);
-	return servicio.obtenerTeclaCobrar();
+	final json = await servicio.obtenerAtajosCajaJson();
+	return AtajosCajaConfig.desdeJson(json);
+});
+
+/// Tecla configurada para cobrar en caja (derivada de atajos).
+final teclaCobrarConfigProvider = FutureProvider<String>((ref) async {
+	final atajos = await ref.watch(atajosCajaConfigProvider.future);
+	return atajos.atajo(atajoAccionCobrar);
 });
 
 /// Empleados activos que pueden recibir pedidos asignados.

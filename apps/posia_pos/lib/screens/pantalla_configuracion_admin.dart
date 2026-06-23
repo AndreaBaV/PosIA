@@ -18,14 +18,15 @@ class PantallaConfiguracionAdmin extends ConsumerStatefulWidget {
 		_PantallaConfiguracionAdminState();
 }
 
-	class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguracionAdmin> {
+class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguracionAdmin> {
 	final _pinController = TextEditingController();
 	final _nombreCajaController = TextEditingController();
 	final _hostImpresoraController = TextEditingController();
 	final _puertoImpresoraController = TextEditingController(text: '9100');
 	String? _tiendaSeleccionadaId;
 	String _modoImpresora = 'ambos';
-	String _teclaCobrar = teclaCobrarPredeterminada;
+	AtajosCajaConfig _atajosCaja = AtajosCajaConfig.predeterminados();
+	var _atajosInicializados = false;
 
 	@override
 	void dispose() {
@@ -41,7 +42,7 @@ class PantallaConfiguracionAdmin extends ConsumerStatefulWidget {
 		final pinAsync = ref.watch(pinAdminProvider);
 		final configAsync = ref.watch(configDispositivoProvider);
 		final impresoraAsync = ref.watch(configImpresoraProvider);
-		final teclaAsync = ref.watch(teclaCobrarConfigProvider);
+		final atajosAsync = ref.watch(atajosCajaConfigProvider);
 		final tiendasAsync = ref.watch(_tiendasConfigProvider);
 		return Scaffold(
 			appBar: AppBar(title: const Text('Configuración')),
@@ -209,35 +210,66 @@ class PantallaConfiguracionAdmin extends ConsumerStatefulWidget {
 								style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
 							),
 							const SizedBox(height: 8.0),
-							const Text('Tecla para cobrar e imprimir ticket desde la pantalla de venta.'),
+							const Text(
+								'Combinaciones de teclado en la pantalla de venta. '
+								'F12 suele estar bloqueada en Windows; prueba F2, ESCAPE o CTRL+ENTER.',
+							),
 							const SizedBox(height: 16.0),
-							teclaAsync.when(
-								data: (tecla) {
-									_teclaCobrar = tecla;
-									return DropdownButtonFormField<String>(
-										key: ValueKey(_teclaCobrar),
-										initialValue: _teclaCobrar,
-										items: List.generate(
-											12,
-											(i) => DropdownMenuItem(
-												value: 'F${i + 1}',
-												child: Text('F${i + 1}'),
-											),
-										),
-										onChanged: (v) => setState(() => _teclaCobrar = v ?? teclaCobrarPredeterminada),
-										decoration: const InputDecoration(
-											labelText: 'Tecla cobrar',
-											border: OutlineInputBorder(),
-										),
+							atajosAsync.when(
+								data: (atajos) {
+									if (!_atajosInicializados) {
+										_atajosCaja = atajos;
+										_atajosInicializados = true;
+									}
+									return Column(
+										children: [
+											for (final def in definicionesAtajosCaja) ...[
+												Align(
+													alignment: Alignment.centerLeft,
+													child: Text(
+														def.etiqueta,
+														style: const TextStyle(fontWeight: FontWeight.w600),
+													),
+												),
+												const SizedBox(height: 4.0),
+												Text(
+													def.descripcion,
+													style: TextStyle(color: Colors.grey.shade700, fontSize: 13.0),
+												),
+												const SizedBox(height: 8.0),
+												CampoAtajoTeclado(
+													valor: _atajosCaja.atajo(def.id),
+													alCambiar: (nuevo) {
+														setState(() {
+															final valor = nuevo.trim().isEmpty
+																? def.valorPredeterminado
+																: nuevo;
+															_atajosCaja = _atajosCaja.conAtajo(def.id, valor);
+														});
+													},
+												),
+												const SizedBox(height: 16.0),
+											],
+										],
 									);
 								},
 								loading: () => const LinearProgressIndicator(),
 								error: (e, _) => Text('$e'),
 							),
+							const SizedBox(height: 8.0),
+							OutlinedButton.icon(
+								onPressed: () {
+									setState(() {
+										_atajosCaja = AtajosCajaConfig.predeterminados();
+									});
+								},
+								icon: const Icon(Icons.restore),
+								label: const Text('Restaurar atajos predeterminados'),
+							),
 							const SizedBox(height: 12.0),
 							FilledButton(
-								onPressed: _guardarTeclaCobrar,
-								child: const Text('Guardar tecla cobrar'),
+								onPressed: _guardarAtajosCaja,
+								child: const Text('Guardar atajos de caja'),
 							),
 							const Divider(height: 40.0),
 							const Text(
@@ -314,15 +346,16 @@ class PantallaConfiguracionAdmin extends ConsumerStatefulWidget {
 		);
 	}
 
-	Future<void> _guardarTeclaCobrar() async {
+	Future<void> _guardarAtajosCaja() async {
 		final servicio = await ref.read(servicioAdminProvider.future);
-		await servicio.guardarTeclaCobrar(_teclaCobrar);
+		await servicio.guardarAtajosCajaJson(_atajosCaja.aJson());
+		ref.invalidate(atajosCajaConfigProvider);
 		ref.invalidate(teclaCobrarConfigProvider);
 		if (!mounted) {
 			return;
 		}
 		ScaffoldMessenger.of(context).showSnackBar(
-			SnackBar(content: Text('Tecla cobrar: $_teclaCobrar')),
+			const SnackBar(content: Text('Atajos de caja guardados')),
 		);
 	}
 
