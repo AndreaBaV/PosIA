@@ -52,19 +52,23 @@ class _PantallaClientesAdminState extends ConsumerState<PantallaClientesAdmin> {
 						if (filtrados.isEmpty)
 							const Center(child: Text('Sin clientes registrados')),
 						...filtrados.map(
-							(c) => ListTile(
+							(c) {
+								final detalle = [
+									if (c.telefono.isNotEmpty) c.telefono,
+									if (c.creditoHabilitado) 'Crédito',
+								].join(' · ');
+								return ListTile(
 								title: Text(c.nombre),
-								subtitle: Text(c.activo ? 'Activo' : 'Inactivo'),
-								trailing: Switch(
-									value: c.activo,
-									onChanged: (activo) async {
-										final servicio = await ref.read(servicioAdminProvider.future);
-										await servicio.actualizarCliente(c.copiarCon(activo: activo));
-										ref.invalidate(_clientesProvider);
-									},
+								subtitle: detalle.isEmpty ? null : Text(detalle),
+								trailing: IconButton(
+									icon: const Icon(Icons.delete_outline),
+									color: PosiaColors.cancelar,
+									tooltip: 'Eliminar cliente',
+									onPressed: () => _confirmarEliminar(c),
 								),
 								onTap: () => _abrirFicha(c),
-							),
+							);
+							},
 						),
 						const Divider(),
 						TextField(
@@ -101,6 +105,55 @@ class _PantallaClientesAdminState extends ConsumerState<PantallaClientesAdmin> {
 		await servicio.registrarCliente(nombre: nombre);
 		_nombreController.clear();
 		ref.invalidate(_clientesProvider);
+	}
+
+	Future<void> _confirmarEliminar(Cliente cliente) async {
+		final confirmar = await showDialog<bool>(
+			context: context,
+			builder: (ctx) => AlertDialog(
+				title: const Text('Eliminar cliente'),
+				content: Text(
+					'¿Eliminar permanentemente a "${cliente.nombre}"?\n\n'
+					'Esta acción no se puede deshacer. '
+					'No es posible si el cliente tiene ventas, pedidos o cotizaciones.',
+				),
+				actions: [
+					TextButton(
+						onPressed: () => Navigator.pop(ctx, false),
+						child: const Text('Cancelar'),
+					),
+					FilledButton(
+						style: FilledButton.styleFrom(backgroundColor: PosiaColors.cancelar),
+						onPressed: () => Navigator.pop(ctx, true),
+						child: const Text('Eliminar'),
+					),
+				],
+			),
+		);
+		if (confirmar != true || !mounted) {
+			return;
+		}
+		try {
+			final servicio = await ref.read(servicioAdminProvider.future);
+			await servicio.eliminarCliente(cliente.id);
+			ref.invalidate(_clientesProvider);
+			if (!mounted) {
+				return;
+			}
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(content: Text('Cliente eliminado')),
+			);
+		} on StateError catch (e) {
+			if (!mounted) {
+				return;
+			}
+			ScaffoldMessenger.of(context).showSnackBar(
+				SnackBar(
+					content: Text(e.message),
+					backgroundColor: PosiaColors.cancelar,
+				),
+			);
+		}
 	}
 }
 

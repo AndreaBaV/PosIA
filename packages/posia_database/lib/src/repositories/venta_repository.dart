@@ -165,6 +165,9 @@ class VentaRepository {
 	}
 
 	/// Resumen de ventas agrupado por producto en periodo.
+	///
+	/// Agrupa por nombre normalizado para evitar duplicados cuando el mismo
+	/// articulo se vendio con distintos IDs (varias tiendas o catalogo recreado).
 	Future<List<ResumenProductoVenta>> resumenPorProducto(FiltroVentas filtro) async {
 		final ventas = await listarConFiltro(filtro);
 		final acumulado = <String, ResumenProductoVenta>{};
@@ -173,10 +176,14 @@ class VentaRepository {
 				continue;
 			}
 			for (final linea in venta.lineas) {
-				final previo = acumulado[linea.productoId];
-				acumulado[linea.productoId] = ResumenProductoVenta(
-					productoId: linea.productoId,
-					nombreProducto: linea.nombreProducto,
+				final clave = linea.nombreProducto.trim().toLowerCase();
+				if (clave.isEmpty) {
+					continue;
+				}
+				final previo = acumulado[clave];
+				acumulado[clave] = ResumenProductoVenta(
+					productoId: previo?.productoId ?? linea.productoId,
+					nombreProducto: previo?.nombreProducto ?? linea.nombreProducto,
 					cantidadVendida: (previo?.cantidadVendida ?? 0.0) + linea.cantidad,
 					totalVendido: redondearMonto(
 						(previo?.totalVendido ?? 0.0) + linea.calcularSubtotal(),
@@ -234,6 +241,15 @@ class VentaRepository {
 			where: 'id = ?',
 			whereArgs: [ventaId],
 		);
+	}
+
+	/// Cuenta ventas asociadas a un cliente.
+	Future<int> contarPorCliente(String clienteId) async {
+		final filas = await _baseDatos.rawQuery(
+			'SELECT COUNT(*) AS total FROM sales WHERE cliente_id = ?',
+			[clienteId],
+		);
+		return (filas.first['total'] as int?) ?? 0;
 	}
 
 	/// Lista ventas a credito pendientes de liquidar.

@@ -171,6 +171,7 @@ class EstadoCarrito {
 		this.nombreVendedor,
 		this.turnoAbierto = false,
 		this.favoritos = const [],
+		this.ticketsEnEspera = 0,
 	});
 
 	/// Catalogo visible en grilla.
@@ -200,6 +201,9 @@ class EstadoCarrito {
 	/// Productos favoritos para venta rapida.
 	final List<Producto> favoritos;
 
+	/// Carritos apartados en esta caja.
+	final int ticketsEnEspera;
+
 	/// Genera copia con campos actualizados.
 	EstadoCarrito copiarCon({
 		List<Producto>? productos,
@@ -211,6 +215,7 @@ class EstadoCarrito {
 		String? nombreVendedor,
 		bool? turnoAbierto,
 		List<Producto>? favoritos,
+		int? ticketsEnEspera,
 	}) {
 		return EstadoCarrito(
 			productos: productos ?? this.productos,
@@ -223,6 +228,7 @@ class EstadoCarrito {
 			nombreVendedor: nombreVendedor ?? this.nombreVendedor,
 			turnoAbierto: turnoAbierto ?? this.turnoAbierto,
 			favoritos: favoritos ?? this.favoritos,
+			ticketsEnEspera: ticketsEnEspera ?? this.ticketsEnEspera,
 		);
 	}
 }
@@ -318,6 +324,27 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 		await _refrescarDespuesDeOperacionCarrito();
 	}
 
+	/// Aparta el carrito actual en espera.
+	Future<void> ponerCarritoEnEspera({String notas = ''}) async {
+		final servicio = await ref.read(servicioCajaProvider.future);
+		await servicio.ponerCarritoEnEspera(notas: notas);
+		await recargar(invalidarCatalogo: false);
+	}
+
+	/// Restaura un ticket apartado al carrito.
+	Future<void> recuperarTicketEnEspera(String ticketId) async {
+		final servicio = await ref.read(servicioCajaProvider.future);
+		await servicio.recuperarTicketEnEspera(ticketId);
+		await _refrescarDespuesDeOperacionCarrito();
+	}
+
+	/// Elimina un ticket apartado sin recuperarlo.
+	Future<void> eliminarTicketEnEspera(String ticketId) async {
+		final servicio = await ref.read(servicioCajaProvider.future);
+		await servicio.eliminarTicketEnEspera(ticketId);
+		await _refrescarContadorTicketsEnEspera();
+	}
+
 	/// Ejecuta cobro con parametros de multipago.
 	Future<double?> cobrar(CobroRequest request) async {
 		final servicio = await ref.read(servicioCajaProvider.future);
@@ -352,6 +379,20 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 				turnoAbierto: turno != null,
 				nombreVendedor: servicio.obtenerVendedorActivo()?.nombre,
 				favoritos: await servicio.listarFavoritosCaja(),
+				ticketsEnEspera: await servicio.contarTicketsEnEspera(),
+			),
+		);
+	}
+
+	Future<void> _refrescarContadorTicketsEnEspera() async {
+		final actual = state.value;
+		if (actual == null) {
+			return;
+		}
+		final servicio = await ref.read(servicioCajaProvider.future);
+		state = AsyncData(
+			actual.copiarCon(
+				ticketsEnEspera: await servicio.contarTicketsEnEspera(),
 			),
 		);
 	}
@@ -406,6 +447,7 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 			nombreVendedor: vendedor?.nombre,
 			turnoAbierto: turno != null,
 			favoritos: favoritos,
+			ticketsEnEspera: await servicio.contarTicketsEnEspera(),
 		);
 	}
 }

@@ -247,11 +247,10 @@ class PantallaConfiguracionAdmin extends ConsumerStatefulWidget {
 							const SizedBox(height: 8.0),
 							const Text('4 dígitos numéricos para acceder al panel Admin.'),
 							const SizedBox(height: 16.0),
-							TextField(
+							CampoSecreto(
 								controller: _pinController,
 								keyboardType: TextInputType.number,
 								maxLength: 4,
-								obscureText: true,
 								decoration: const InputDecoration(
 									labelText: 'Nuevo PIN',
 									border: OutlineInputBorder(),

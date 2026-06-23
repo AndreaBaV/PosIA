@@ -17,6 +17,7 @@ export 'src/widgets/barra_sesion_usuario.dart';
 export 'src/widgets/boton_accion_caja.dart';
 export 'src/widgets/campo_busqueda.dart';
 export 'src/widgets/campo_busqueda_caja.dart';
+export 'src/widgets/campo_secreto.dart';
 export 'src/widgets/dialogo_lote_farmacia.dart';
 export 'src/widgets/dialogo_peso_carniceria.dart';
 export 'src/widgets/grilla_productos.dart';

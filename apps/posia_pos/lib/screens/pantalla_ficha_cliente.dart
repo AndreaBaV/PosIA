@@ -4,8 +4,10 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:posia_core/posia_core.dart';
+import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
+import 'pantalla_registrar_credito.dart';
 
 class PantallaFichaCliente extends ConsumerStatefulWidget {
 	const PantallaFichaCliente({required this.cliente, super.key});
@@ -27,7 +29,6 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 	late final TextEditingController _notasController;
 	late final TextEditingController _diasCreditoController;
 	late bool _credito;
-	late bool _activo;
 	String? _listaPreciosId;
 
 	@override
@@ -43,7 +44,6 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 		_notasController = TextEditingController(text: c.notas);
 		_diasCreditoController = TextEditingController(text: c.diasCredito.toString());
 		_credito = c.creditoHabilitado;
-		_activo = c.activo;
 		_listaPreciosId = c.listaPreciosId;
 	}
 
@@ -75,6 +75,12 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 					],
 				),
 				actions: [
+					IconButton(
+						icon: const Icon(Icons.delete_outline),
+						color: PosiaColors.cancelar,
+						tooltip: 'Eliminar cliente',
+						onPressed: _confirmarEliminar,
+					),
 					IconButton(icon: const Icon(Icons.save), onPressed: _guardar),
 				],
 			),
@@ -183,11 +189,19 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 								value: _credito,
 								onChanged: (v) => setState(() => _credito = v),
 							),
-							SwitchListTile(
-								title: const Text('Activo'),
-								value: _activo,
-								onChanged: (v) => setState(() => _activo = v),
-							),
+							if (clientePuedeRecibirCredito(widget.cliente.copiarCon(
+								creditoHabilitado: _credito,
+								telefono: _telefonoController.text,
+								direccion: _direccionController.text,
+							)))
+								Padding(
+									padding: const EdgeInsets.only(top: 8.0),
+									child: OutlinedButton.icon(
+										onPressed: _abrirRegistrarCredito,
+										icon: const Icon(Icons.handshake),
+										label: const Text('Registrar nuevo crédito'),
+									),
+								),
 						],
 					),
 					Column(
@@ -258,7 +272,7 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 			direccion: _direccionController.text.trim(),
 			notas: _notasController.text.trim(),
 			creditoHabilitado: _credito,
-			activo: _activo,
+			activo: true,
 			listaPreciosId: _listaPreciosId,
 			diasCredito: diasCredito,
 		);
@@ -279,6 +293,59 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 		ScaffoldMessenger.of(context).showSnackBar(
 			const SnackBar(content: Text('Cliente actualizado')),
 		);
+	}
+
+	Future<void> _abrirRegistrarCredito() async {
+		await Navigator.of(context).push<void>(
+			MaterialPageRoute<void>(
+				builder: (_) => PantallaRegistrarCredito(clienteInicial: widget.cliente),
+			),
+		);
+	}
+
+	Future<void> _confirmarEliminar() async {
+		final confirmar = await showDialog<bool>(
+			context: context,
+			builder: (ctx) => AlertDialog(
+				title: const Text('Eliminar cliente'),
+				content: Text(
+					'¿Eliminar permanentemente a "${widget.cliente.nombre}"?\n\n'
+					'No es posible si tiene ventas, pedidos o cotizaciones registradas.',
+				),
+				actions: [
+					TextButton(
+						onPressed: () => Navigator.pop(ctx, false),
+						child: const Text('Cancelar'),
+					),
+					FilledButton(
+						style: FilledButton.styleFrom(backgroundColor: PosiaColors.cancelar),
+						onPressed: () => Navigator.pop(ctx, true),
+						child: const Text('Eliminar'),
+					),
+				],
+			),
+		);
+		if (confirmar != true || !mounted) {
+			return;
+		}
+		try {
+			final servicio = await ref.read(servicioAdminProvider.future);
+			await servicio.eliminarCliente(widget.cliente.id);
+			if (!mounted) {
+				return;
+			}
+			Navigator.of(context).pop();
+		} on StateError catch (e) {
+			if (!mounted) {
+				return;
+			}
+			ScaffoldMessenger.of(context).showSnackBar(
+				SnackBar(
+					content: Text(e.message),
+					backgroundColor: PosiaColors.cancelar,
+				),
+			);
+		}
 	}
 }
 

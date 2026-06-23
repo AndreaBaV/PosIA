@@ -21,8 +21,10 @@ import '../repositories/cliente_repository.dart';
 import '../repositories/cotizacion_repository.dart';
 import '../repositories/descuento_cliente_repository.dart';
 import '../repositories/producto_repository.dart';
+import '../repositories/ticket_espera_repository.dart';
 import '../repositories/variante_repository.dart';
 import '../repositories/vendedor_repository.dart';
+import '../utils/sincronizador_vendedor_usuario.dart';
 import '../repositories/venta_repository.dart';
 import 'servicio_corte_caja.dart';
 
@@ -55,6 +57,7 @@ class ServicioCaja {
     CategoriaRepository? categoriaRepository,
     VendedorRepository? vendedorRepository,
     CotizacionRepository? cotizacionRepository,
+    TicketEsperaRepository? ticketEsperaRepository,
     ServicioCorteCaja? servicioCorteCaja,
     required String tenantId,
     required String tiendaId,
@@ -72,6 +75,7 @@ class ServicioCaja {
        _categoriaRepository = categoriaRepository,
        _vendedorRepository = vendedorRepository,
        _cotizacionRepository = cotizacionRepository,
+       _ticketEsperaRepository = ticketEsperaRepository,
        _servicioCorteCaja = servicioCorteCaja,
        _tenantId = tenantId,
        _tiendaId = tiendaId,
@@ -90,6 +94,7 @@ class ServicioCaja {
   final CategoriaRepository? _categoriaRepository;
   final VendedorRepository? _vendedorRepository;
   final CotizacionRepository? _cotizacionRepository;
+  final TicketEsperaRepository? _ticketEsperaRepository;
   final ServicioCorteCaja? _servicioCorteCaja;
   final String _tenantId;
   final String _tiendaId;
@@ -151,29 +156,19 @@ class ServicioCaja {
   /// Vincula el vendedor de caja con el usuario que inicio sesion.
   Future<Vendedor> asegurarVendedorDesdeUsuario(Usuario usuario) async {
     final repo = _vendedorRepository;
-    final idVendedor = 'vend-${usuario.id}';
     if (repo != null) {
-      final existente = await repo.obtenerPorId(idVendedor);
-      if (existente != null) {
-        _vendedorActivo = existente;
-        return existente;
-      }
-      final vendedor = Vendedor(
-        id: idVendedor,
-        nombre: usuario.nombre,
-        codigo: usuario.codigo,
-        activo: true,
-        tiendaId: usuario.tiendaId,
+      final vendedor = await SincronizadorVendedorUsuario.sincronizar(
+        repo: repo,
+        usuario: usuario,
       );
-      await repo.guardar(vendedor);
       _vendedorActivo = vendedor;
       return vendedor;
     }
     final vendedor = Vendedor(
-      id: idVendedor,
+      id: SincronizadorVendedorUsuario.idVendedorParaUsuario(usuario.id),
       nombre: usuario.nombre,
       codigo: usuario.codigo,
-      activo: true,
+      activo: usuario.activo,
       tiendaId: usuario.tiendaId,
     );
     _vendedorActivo = vendedor;
@@ -387,6 +382,94 @@ class ServicioCaja {
     _clienteActivo = null;
     _descuentoTicketCliente = 0.0;
   }
+
+  /// Lista tickets apartados en esta tienda y caja.
+  Future<List<TicketEnEspera>> listarTicketsEnEspera() async {
+    final repo = _ticketEsperaRepository;
+    if (repo == null) {
+      return [];
+    }
+    return repo.listarPorTiendaCaja(_tiendaId, _cajaId);
+  }
+
+  /// Cantidad de carritos apartados en esta caja.
+  Future<int> contarTicketsEnEspera() async {
+    final repo = _ticketEsperaRepository;
+    if (repo == null) {
+      return 0;
+    }
+    return repo.contarPorTiendaCaja(_tiendaId, _cajaId);
+  }
+
+  /// Guarda el carrito actual en espera y deja la caja libre.
+  Future<String> ponerCarritoEnEspera({String notas = ''}) async {
+    if (_lineasCarrito.isEmpty) {
+      throw StateError('El carrito esta vacio');
+    }
+    final repo = _ticketEsperaRepository;
+    if (repo == null) {
+      throw StateError('Tickets en espera no disponibles');
+    }
+    final ticket = TicketEnEspera(
+      id: _generadorId.v4(),
+      tiendaId: _tiendaId,
+      cajaId: _cajaId,
+      clienteId: _clienteActivo?.id,
+      nombreCliente: _clienteActivo?.nombre,
+      vendedorId: _vendedorActivo?.id,
+      notas: notas.trim(),
+      descuentoTicket: _descuentoTicketCliente,
+      total: calcularTotalCarrito(),
+      creadoEn: DateTime.now().toUtc(),
+      lineas: _lineasCarrito
+          .map(LineaTicketEspera.desdeLineaCarrito)
+          .toList(),
+    );
+    await repo.guardar(ticket);
+    vaciarCarrito();
+    return ticket.id;
+  }
+
+  /// Restaura un ticket apartado al carrito activo.
+  Future<void> recuperarTicketEnEspera(String ticketId) async {
+    final repo = _ticketEsperaRepository;
+    if (repo == null) {
+      throw StateError('Tickets en espera no disponibles');
+    }
+    final ticket = await repo.obtenerPorId(ticketId);
+    if (ticket == null) {
+      throw StateError('Ticket en espera no encontrado');
+    }
+    _lineasCarrito.clear();
+    _clienteActivo = null;
+    if (ticket.clienteId != null) {
+      _clienteActivo = await _clienteRepository.obtenerPorId(ticket.clienteId!);
+    }
+    _vendedorActivo = null;
+    if (ticket.vendedorId != null) {
+      _vendedorActivo = await _vendedorRepository?.obtenerPorId(ticket.vendedorId!);
+    }
+    _descuentoTicketCliente = ticket.descuentoTicket;
+    for (final linea in ticket.lineas) {
+      final producto = await _productoRepository.obtenerPorId(linea.productoId);
+      _lineasCarrito.add(
+        linea.aLineaCarrito(producto ?? linea.productoRespaldo(_tiendaId)),
+      );
+    }
+    await repo.eliminar(ticketId);
+  }
+
+  /// Elimina un ticket apartado sin recuperarlo.
+  Future<void> eliminarTicketEnEspera(String ticketId) async {
+    final repo = _ticketEsperaRepository;
+    if (repo == null) {
+      throw StateError('Tickets en espera no disponibles');
+    }
+    await repo.eliminar(ticketId);
+  }
+
+  /// Indica si el carrito activo tiene lineas.
+  bool carritoTieneLineas() => _lineasCarrito.isNotEmpty;
 
   /// Calcula total del carrito activo.
   ///

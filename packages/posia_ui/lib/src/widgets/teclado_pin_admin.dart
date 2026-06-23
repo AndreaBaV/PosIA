@@ -1,9 +1,4 @@
 /// Teclado numerico visual para acceso admin con PIN.
-///
-/// Autor: Equipo POSIA
-/// Matricula: POSIA-2026-001
-/// Fecha creacion: 2026-06-07 19:45:00 (UTC-6)
-/// Ultima modificacion: 2026-06-07 19:45:00 (UTC-6)
 library;
 
 import 'package:flutter/material.dart';
@@ -11,12 +6,7 @@ import 'package:flutter/material.dart';
 import '../theme/posia_theme.dart';
 
 /// Captura PIN numerico mediante botones grandes.
-class TecladoPinAdmin extends StatelessWidget {
-	/// Crea teclado PIN con callback de digitos.
-	///
-	/// [pinActual] Cadena parcial ingresada.
-	/// [alPresionarDigito] Callback al pulsar digito 0-9.
-	/// [alBorrar] Callback al borrar ultimo digito.
+class TecladoPinAdmin extends StatefulWidget {
 	const TecladoPinAdmin({
 		required this.pinActual,
 		required this.alPresionarDigito,
@@ -24,14 +14,24 @@ class TecladoPinAdmin extends StatelessWidget {
 		super.key,
 	});
 
-	/// PIN parcial visible como puntos.
 	final String pinActual;
-
-	/// Accion al pulsar digito numerico.
 	final ValueChanged<String> alPresionarDigito;
-
-	/// Accion al borrar ultimo digito.
 	final VoidCallback alBorrar;
+
+	@override
+	State<TecladoPinAdmin> createState() => _TecladoPinAdminState();
+}
+
+class _TecladoPinAdminState extends State<TecladoPinAdmin> {
+	var _mostrarPin = false;
+
+	@override
+	void didUpdateWidget(covariant TecladoPinAdmin oldWidget) {
+		super.didUpdateWidget(oldWidget);
+		if (widget.pinActual.isEmpty && oldWidget.pinActual.isNotEmpty) {
+			_mostrarPin = false;
+		}
+	}
 
 	@override
 	Widget build(BuildContext context) {
@@ -45,16 +45,64 @@ class TecladoPinAdmin extends StatelessWidget {
 				return Column(
 					mainAxisSize: MainAxisSize.min,
 					children: [
-						Row(
-							mainAxisAlignment: MainAxisAlignment.center,
-							children: _construirIndicadoresPin(tamIndicador),
-						),
+						_construirIndicadoresPin(tamIndicador),
 						SizedBox(height: tamTecla * 0.28),
 						..._construirFilasTeclado(tamTecla, altoTecla, tamFuente),
 					],
 				);
 			},
 		);
+	}
+
+	Widget _construirIndicadoresPin(double tamano) {
+		return Row(
+			mainAxisAlignment: MainAxisAlignment.center,
+			children: [
+				if (_mostrarPin)
+					Padding(
+						padding: EdgeInsets.symmetric(horizontal: tamano * 0.35),
+						child: Text(
+							widget.pinActual.isEmpty ? '—' : widget.pinActual,
+							style: TextStyle(
+								fontSize: tamano * 1.35,
+								fontWeight: FontWeight.bold,
+								letterSpacing: 6.0,
+							),
+						),
+					)
+				else
+					..._construirPuntosPin(tamano),
+				IconButton(
+					tooltip: _mostrarPin ? 'Ocultar' : 'Mostrar',
+					icon: Icon(
+						_mostrarPin ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+						size: tamano * 1.1,
+						color: PosiaColors.neutro,
+					),
+					onPressed: widget.pinActual.isEmpty
+						? null
+						: () => setState(() => _mostrarPin = !_mostrarPin),
+				),
+			],
+		);
+	}
+
+	List<Widget> _construirPuntosPin(double tamano) {
+		final indicadores = <Widget>[];
+		for (var indice = 0; indice < 4; indice++) {
+			final lleno = indice < widget.pinActual.length;
+			indicadores.add(
+				Padding(
+					padding: EdgeInsets.symmetric(horizontal: tamano * 0.35),
+					child: Icon(
+						lleno ? Icons.circle : Icons.circle_outlined,
+						size: tamano,
+						color: PosiaColors.neutro,
+					),
+				),
+			);
+		}
+		return indicadores;
 	}
 
 	List<Widget> _construirFilasTeclado(double anchoTecla, double altoTecla, double tamFuente) {
@@ -86,24 +134,6 @@ class TecladoPinAdmin extends StatelessWidget {
 		return filas;
 	}
 
-	List<Widget> _construirIndicadoresPin(double tamano) {
-		final indicadores = <Widget>[];
-		for (var indice = 0; indice < 4; indice = indice + 1) {
-			final lleno = indice < pinActual.length;
-			indicadores.add(
-				Padding(
-					padding: EdgeInsets.symmetric(horizontal: tamano * 0.35),
-					child: Icon(
-						lleno ? Icons.circle : Icons.circle_outlined,
-						size: tamano,
-						color: PosiaColors.neutro,
-					),
-				),
-			);
-		}
-		return indicadores;
-	}
-
 	Widget _construirTecla(
 		String valor, {
 		required double anchoTecla,
@@ -118,7 +148,7 @@ class TecladoPinAdmin extends StatelessWidget {
 				ancho: anchoTecla,
 				alto: altoTecla,
 				contenido: Icon(Icons.backspace, color: PosiaColors.neutro, size: tamFuente),
-				alPresionar: alBorrar,
+				alPresionar: widget.alBorrar,
 			);
 		}
 		return _TeclaPin(
@@ -128,12 +158,11 @@ class TecladoPinAdmin extends StatelessWidget {
 				valor,
 				style: TextStyle(fontSize: tamFuente, fontWeight: FontWeight.bold),
 			),
-			alPresionar: () => alPresionarDigito(valor),
+			alPresionar: () => widget.alPresionarDigito(valor),
 		);
 	}
 }
 
-/// Tecla tactil individual del teclado PIN.
 class _TeclaPin extends StatelessWidget {
 	const _TeclaPin({
 		required this.ancho,

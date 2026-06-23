@@ -9,6 +9,7 @@ library;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:posia_core/posia_core.dart';
 import 'package:posia_hardware/posia_hardware.dart';
@@ -20,11 +21,6 @@ import '../providers/app_providers.dart';
 import '../utils/ticket_credito_util.dart';
 import '../utils/ticket_venta_util.dart';
 import '../widgets/dialogo_cobro.dart';
-
-/// Atajo de teclado para cobrar venta.
-class CobrarIntent extends Intent {
-	const CobrarIntent();
-}
 
 /// Interfaz de venta con grilla de productos, carrito y barra de acciones.
 class PantallaCaja extends ConsumerStatefulWidget {
@@ -39,13 +35,15 @@ class _PantallaCajaState extends ConsumerState<PantallaCaja> {
 	StreamSubscription<String>? _suscripcionEscaner;
 	BarcodeScanner? _scanner;
 	final _busquedaController = TextEditingController();
-	final _busquedaFocus = FocusNode();
+	late final FocusNode _busquedaFocus;
 	String? _ultimoCodigoProcesado;
 	DateTime? _ultimoCodigoProcesadoEn;
 
 	@override
 	void initState() {
 		super.initState();
+		_busquedaFocus = FocusNode(onKeyEvent: _manejarTeclaEnBusqueda);
+		HardwareKeyboard.instance.addHandler(_manejarTeclaHardwareCaja);
 		WidgetsBinding.instance.addPostFrameCallback((_) {
 			_iniciarEscaner();
 			_enfocarBusqueda();
@@ -54,6 +52,7 @@ class _PantallaCajaState extends ConsumerState<PantallaCaja> {
 
 	@override
 	void dispose() {
+		HardwareKeyboard.instance.removeHandler(_manejarTeclaHardwareCaja);
 		_suscripcionEscaner?.cancel();
 		_scanner?.detener();
 		_busquedaController.dispose();
@@ -146,6 +145,49 @@ class _PantallaCajaState extends ConsumerState<PantallaCaja> {
 		return false;
 	}
 
+	bool _hayDialogoModalAbierto() {
+		final foco = FocusManager.instance.primaryFocus;
+		if (foco == null || !foco.hasFocus) {
+			return false;
+		}
+		return foco.context?.findAncestorWidgetOfExactType<Dialog>() != null;
+	}
+
+	bool _manejarTeclaHardwareCaja(KeyEvent event) {
+		if (!mounted || event is! KeyDownEvent || _hayDialogoModalAbierto()) {
+			return false;
+		}
+		final teclaCobrar = parsearTeclaConfigurada(
+			ref.read(teclaCobrarConfigProvider).value ?? teclaCobrarPredeterminada,
+		);
+		if (event.logicalKey != teclaCobrar) {
+			return false;
+		}
+		final estado = ref.read(carritoNotifierProvider).value;
+		if (estado == null || estado.total <= 0.0) {
+			return false;
+		}
+		ejecutarCobroCaja(context, ref);
+		return true;
+	}
+
+	KeyEventResult _manejarTeclaEnBusqueda(FocusNode node, KeyEvent event) {
+		if (event is! KeyDownEvent) {
+			return KeyEventResult.ignored;
+		}
+		final teclaCobrar = parsearTeclaConfigurada(
+			ref.read(teclaCobrarConfigProvider).value ?? teclaCobrarPredeterminada,
+		);
+		if (event.logicalKey == teclaCobrar) {
+			final estado = ref.read(carritoNotifierProvider).value;
+			if (estado != null && estado.total > 0.0) {
+				ejecutarCobroCaja(context, ref);
+			}
+			return KeyEventResult.handled;
+		}
+		return KeyEventResult.ignored;
+	}
+
 	@override
 	Widget build(BuildContext context) {
 		final estadoCarrito = ref.watch(carritoNotifierProvider);
@@ -202,24 +244,7 @@ class _ConstruirLayoutCaja extends ConsumerWidget {
 	@override
 	Widget build(BuildContext context, WidgetRef ref) {
 		final teclaConfig = ref.watch(teclaCobrarConfigProvider).value ?? teclaCobrarPredeterminada;
-		return Shortcuts(
-			shortcuts: {
-				SingleActivator(parsearTeclaConfigurada(teclaConfig)): const CobrarIntent(),
-			},
-			child: Actions(
-				actions: {
-					CobrarIntent: CallbackAction<CobrarIntent>(
-						onInvoke: (_) {
-							if (estado.total > 0.0) {
-								ejecutarCobroCaja(context, ref);
-							}
-							return null;
-						},
-					),
-				},
-				child: Focus(
-					autofocus: true,
-					child: Scaffold(
+		return Scaffold(
 			backgroundColor: PosiaColors.fondo,
 			body: Column(
 				children: [
@@ -353,9 +378,6 @@ class _ConstruirLayoutCaja extends ConsumerWidget {
 						etiquetaTeclaCobrar: etiquetaTeclaConfigurada(teclaConfig),
 					),
 				],
-			),
-					),
-				),
 			),
 		);
 	}
@@ -521,6 +543,212 @@ class _ConstruirLayoutCaja extends ConsumerWidget {
 	}
 }
 
+/// Aparta el carrito actual para atender otro cliente.
+Future<void> ejecutarPonerEnEspera(BuildContext context, WidgetRef ref) async {
+	final servicio = await ref.read(servicioCajaProvider.future);
+	if (!servicio.carritoTieneLineas()) {
+		if (context.mounted) {
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(content: Text('El carrito esta vacio')),
+			);
+		}
+		return;
+	}
+	final notasController = TextEditingController();
+	final cliente = servicio.obtenerClienteActivo();
+	if (cliente != null) {
+		notasController.text = cliente.nombre;
+	}
+	final confirmar = await showDialog<bool>(
+		context: context,
+		builder: (ctx) => AlertDialog(
+			title: const Text('Poner ticket en espera'),
+			content: SizedBox(
+				width: 360.0,
+				child: Column(
+					mainAxisSize: MainAxisSize.min,
+					crossAxisAlignment: CrossAxisAlignment.stretch,
+					children: [
+						Text(
+							'Total: ${formatearMoneda(servicio.calcularTotalCarrito())}',
+							style: const TextStyle(fontWeight: FontWeight.bold),
+						),
+						const SizedBox(height: 12.0),
+						TextField(
+							controller: notasController,
+							decoration: const InputDecoration(
+								labelText: 'Referencia (opcional)',
+								hintText: 'Ej. Mesa 3, Juan, pedido telefono',
+								border: OutlineInputBorder(),
+							),
+						),
+					],
+				),
+			),
+			actions: [
+				TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+				FilledButton(
+					onPressed: () => Navigator.pop(ctx, true),
+					child: const Text('Guardar en espera'),
+				),
+			],
+		),
+	);
+	if (confirmar != true || !context.mounted) {
+		notasController.dispose();
+		return;
+	}
+	final notas = notasController.text;
+	notasController.dispose();
+	try {
+		await ref.read(carritoNotifierProvider.notifier).ponerCarritoEnEspera(
+			notas: notas,
+		);
+		if (!context.mounted) {
+			return;
+		}
+		ScaffoldMessenger.of(context).showSnackBar(
+			const SnackBar(content: Text('Ticket guardado en espera')),
+		);
+	} on StateError catch (e) {
+		if (!context.mounted) {
+			return;
+		}
+		ScaffoldMessenger.of(context).showSnackBar(
+			SnackBar(content: Text(e.message), backgroundColor: PosiaColors.cancelar),
+		);
+	}
+}
+
+/// Muestra tickets apartados para recuperar o eliminar.
+Future<void> mostrarTicketsEnEspera(BuildContext context, WidgetRef ref) async {
+	final servicio = await ref.read(servicioCajaProvider.future);
+	final tickets = await servicio.listarTicketsEnEspera();
+	if (!context.mounted) {
+		return;
+	}
+	if (tickets.isEmpty) {
+		ScaffoldMessenger.of(context).showSnackBar(
+			const SnackBar(content: Text('No hay tickets en espera')),
+		);
+		await ref.read(carritoNotifierProvider.notifier).recargar();
+		return;
+	}
+	await showDialog<void>(
+		context: context,
+		builder: (ctx) => AlertDialog(
+			title: const Text('Tickets en espera'),
+			content: SizedBox(
+				width: 420.0,
+				height: 360.0,
+				child: ListView.separated(
+					itemCount: tickets.length,
+					separatorBuilder: (_, __) => const Divider(height: 1.0),
+					itemBuilder: (context, indice) {
+						final ticket = tickets[indice];
+						final hora = ticket.creadoEn.toLocal();
+						final horaTexto =
+							'${hora.hour.toString().padLeft(2, '0')}:'
+							'${hora.minute.toString().padLeft(2, '0')}';
+						return ListTile(
+							title: Text(ticket.etiquetaLista),
+							subtitle: Text(
+								'${ticket.cantidadLineas} productos · $horaTexto',
+							),
+							trailing: Text(
+								formatearMoneda(ticket.total),
+								style: const TextStyle(fontWeight: FontWeight.w600),
+							),
+							onTap: () async {
+								final carritoConLineas = servicio.carritoTieneLineas();
+								if (carritoConLineas) {
+									final reemplazar = await showDialog<bool>(
+										context: ctx,
+										builder: (d) => AlertDialog(
+											title: const Text('Reemplazar carrito actual'),
+											content: const Text(
+												'El carrito actual tiene productos. '
+												'¿Descartarlos y recuperar este ticket?',
+											),
+											actions: [
+												TextButton(
+													onPressed: () => Navigator.pop(d, false),
+													child: const Text('Cancelar'),
+												),
+												FilledButton(
+													onPressed: () => Navigator.pop(d, true),
+													child: const Text('Recuperar'),
+												),
+											],
+										),
+									);
+									if (reemplazar != true) {
+										return;
+									}
+									await ref.read(carritoNotifierProvider.notifier).vaciarCarrito();
+								}
+								await ref
+									.read(carritoNotifierProvider.notifier)
+									.recuperarTicketEnEspera(ticket.id);
+								if (ctx.mounted) {
+									Navigator.pop(ctx);
+								}
+								if (context.mounted) {
+									ScaffoldMessenger.of(context).showSnackBar(
+										SnackBar(
+											content: Text('Ticket recuperado: ${ticket.etiquetaLista}'),
+										),
+									);
+								}
+							},
+							onLongPress: () async {
+								final eliminar = await showDialog<bool>(
+									context: ctx,
+									builder: (d) => AlertDialog(
+										title: const Text('Eliminar ticket en espera'),
+										content: Text(
+											'¿Eliminar "${ticket.etiquetaLista}" '
+											'(${formatearMoneda(ticket.total)})?',
+										),
+										actions: [
+											TextButton(
+												onPressed: () => Navigator.pop(d, false),
+												child: const Text('Cancelar'),
+											),
+											FilledButton(
+												style: FilledButton.styleFrom(
+													backgroundColor: PosiaColors.cancelar,
+												),
+												onPressed: () => Navigator.pop(d, true),
+												child: const Text('Eliminar'),
+											),
+										],
+									),
+								);
+								if (eliminar != true) {
+									return;
+								}
+								await ref
+									.read(carritoNotifierProvider.notifier)
+									.eliminarTicketEnEspera(ticket.id);
+								if (ctx.mounted) {
+									Navigator.pop(ctx);
+								}
+								if (context.mounted) {
+									await mostrarTicketsEnEspera(context, ref);
+								}
+							},
+						);
+					},
+				),
+			),
+			actions: [
+				TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
+			],
+		),
+	);
+}
+
 /// Ejecuta cobro con dialogo multipago e impresion.
 Future<void> ejecutarCobroCaja(BuildContext context, WidgetRef ref) async {
 	final servicio = await ref.read(servicioCajaProvider.future);
@@ -676,7 +904,9 @@ class _BarraAccionesCaja extends ConsumerWidget {
 		return Container(
 			padding: const EdgeInsets.all(8.0),
 			color: PosiaColors.tarjeta,
-			child: Row(
+			child: SingleChildScrollView(
+				scrollDirection: Axis.horizontal,
+				child: Row(
 				children: [
 					BotonAccionCaja(
 						icono: Icons.person,
@@ -684,6 +914,20 @@ class _BarraAccionesCaja extends ConsumerWidget {
 						colorFondo: PosiaColors.neutro,
 						alPresionar: () => _mostrarSelectorCliente(context, ref),
 					),
+					BotonAccionCaja(
+						icono: Icons.pause_circle_outline,
+						etiqueta: 'En espera',
+						colorFondo: PosiaColors.neutro,
+						habilitado: puedeCobrar,
+						alPresionar: () => ejecutarPonerEnEspera(context, ref),
+					),
+					if (estado.ticketsEnEspera > 0)
+						BotonAccionCaja(
+							icono: Icons.playlist_play,
+							etiqueta: 'Recuperar (${estado.ticketsEnEspera})',
+							colorFondo: Colors.orange.shade800,
+							alPresionar: () => mostrarTicketsEnEspera(context, ref),
+						),
 					BotonAccionCaja(
 						icono: Icons.clear,
 						etiqueta: 'Cancelar',
@@ -705,6 +949,7 @@ class _BarraAccionesCaja extends ConsumerWidget {
 						alPresionar: () => ejecutarCobroCaja(context, ref),
 					),
 				],
+				),
 			),
 		);
 	}

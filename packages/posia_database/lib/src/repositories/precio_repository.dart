@@ -147,6 +147,14 @@ class PrecioRepository implements RepositorioPrecio {
 			.toList();
 	}
 
+	Future<void> eliminarPreciosPorCliente(String clienteId) async {
+		await _baseDatos.delete(
+			'customer_product_prices',
+			where: 'cliente_id = ?',
+			whereArgs: [clienteId],
+		);
+	}
+
 	Future<void> eliminarPrecioClienteProducto(String clienteId, String productoId) async {
 		await _baseDatos.delete(
 			'customer_product_prices',
@@ -173,6 +181,15 @@ class PrecioRepository implements RepositorioPrecio {
 				'precio_unitario': precioUnitario,
 			},
 			conflictAlgorithm: ConflictAlgorithm.replace,
+		);
+	}
+
+	/// Quita un producto de una lista comercial.
+	Future<void> eliminarPrecioDeLista(String listaPreciosId, String productoId) async {
+		await _baseDatos.delete(
+			'price_list_items',
+			where: 'lista_precios_id = ? AND producto_id = ?',
+			whereArgs: [listaPreciosId, productoId],
 		);
 	}
 

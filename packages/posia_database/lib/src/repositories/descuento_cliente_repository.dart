@@ -48,6 +48,14 @@ class DescuentoClienteRepository {
 		);
 	}
 
+	Future<void> eliminarPorCliente(String clienteId) async {
+		await _baseDatos.delete(
+			'customer_discounts',
+			where: 'cliente_id = ?',
+			whereArgs: [clienteId],
+		);
+	}
+
 	Future<void> eliminar(String id) async {
 		await _baseDatos.delete(
 			'customer_discounts',

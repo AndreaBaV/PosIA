@@ -75,7 +75,7 @@ class PermisosUsuario {
 			case RolUsuario.supervisor:
 				return 'Gestiona inventario, ventas y personal de su tienda';
 			case RolUsuario.empleado:
-				return 'Opera la caja; acceso limitado en administración';
+				return 'Vende desde el celular o la caja con su código y PIN';
 		}
 	}
 }

@@ -2,6 +2,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:posia_core/posia_core.dart';
 
 import '../theme/posia_theme.dart';
@@ -42,8 +43,62 @@ class DialogoPesoCarniceria extends StatefulWidget {
 }
 
 class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
+	final _pesoController = TextEditingController();
+	late final FocusNode _pesoFocus;
 	String _valorPeso = '';
 	_UnidadCapturaPeso _unidad = _UnidadCapturaPeso.kilogramos;
+
+	@override
+	void initState() {
+		super.initState();
+		_pesoFocus = FocusNode(onKeyEvent: _manejarTeclaPeso);
+		HardwareKeyboard.instance.addHandler(_manejarTeclaHardwarePeso);
+		WidgetsBinding.instance.addPostFrameCallback((_) {
+			if (mounted && _pesoFocus.canRequestFocus) {
+				_pesoFocus.requestFocus();
+			}
+		});
+	}
+
+	@override
+	void dispose() {
+		HardwareKeyboard.instance.removeHandler(_manejarTeclaHardwarePeso);
+		_pesoController.dispose();
+		_pesoFocus.dispose();
+		super.dispose();
+	}
+
+	bool _manejarTeclaHardwarePeso(KeyEvent event) {
+		if (!mounted || event is! KeyDownEvent) {
+			return false;
+		}
+		if (event.logicalKey == LogicalKeyboardKey.enter ||
+			event.logicalKey == LogicalKeyboardKey.numpadEnter) {
+			_confirmar();
+			return true;
+		}
+		if (event.logicalKey == LogicalKeyboardKey.escape) {
+			_cancelar();
+			return true;
+		}
+		return false;
+	}
+
+	KeyEventResult _manejarTeclaPeso(FocusNode node, KeyEvent event) {
+		if (event is! KeyDownEvent) {
+			return KeyEventResult.ignored;
+		}
+		if (event.logicalKey == LogicalKeyboardKey.enter ||
+			event.logicalKey == LogicalKeyboardKey.numpadEnter) {
+			_confirmar();
+			return KeyEventResult.handled;
+		}
+		if (event.logicalKey == LogicalKeyboardKey.escape) {
+			_cancelar();
+			return KeyEventResult.handled;
+		}
+		return KeyEventResult.ignored;
+	}
 
 	@override
 	Widget build(BuildContext context) {
@@ -56,44 +111,59 @@ class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
 					Expanded(child: Text(widget.producto.nombre)),
 				],
 			),
-			content: Column(
-				mainAxisSize: MainAxisSize.min,
-				children: [
-					SegmentedButton<_UnidadCapturaPeso>(
-						segments: const [
-							ButtonSegment(
-								value: _UnidadCapturaPeso.kilogramos,
-								label: Text('Kilogramos'),
+			content: SizedBox(
+				width: 320.0,
+				child: Column(
+					mainAxisSize: MainAxisSize.min,
+					children: [
+						SegmentedButton<_UnidadCapturaPeso>(
+							segments: const [
+								ButtonSegment(
+									value: _UnidadCapturaPeso.kilogramos,
+									label: Text('Kilogramos'),
+								),
+								ButtonSegment(
+									value: _UnidadCapturaPeso.gramos,
+									label: Text('Gramos'),
+								),
+							],
+							selected: {_unidad},
+							onSelectionChanged: (s) => setState(() {
+								_unidad = s.first;
+								_establecerValor('');
+							}),
+						),
+						const SizedBox(height: 12.0),
+						TextField(
+							controller: _pesoController,
+							focusNode: _pesoFocus,
+							autofocus: true,
+							keyboardType: const TextInputType.numberWithOptions(decimal: true),
+							textInputAction: TextInputAction.done,
+							decoration: InputDecoration(
+								labelText: 'Peso',
+								suffixText: etiquetaUnidad,
+								hintText: _unidad == _UnidadCapturaPeso.gramos ? '250' : '0.250',
+								border: const OutlineInputBorder(),
+								helperText: 'Enter agrega · Esc cancela',
 							),
-							ButtonSegment(
-								value: _UnidadCapturaPeso.gramos,
-								label: Text('Gramos'),
-							),
-						],
-						selected: {_unidad},
-						onSelectionChanged: (s) => setState(() {
-							_unidad = s.first;
-							_valorPeso = '';
-						}),
-					),
-					const SizedBox(height: 8.0),
-					Text(
-						_valorPeso.isEmpty ? '0 $etiquetaUnidad' : '$_valorPeso $etiquetaUnidad',
-						style: Theme.of(context).textTheme.headlineSmall,
-					),
-					const SizedBox(height: 8.0),
-					TecladoNumericoSimple(
-						valorActual: _valorPeso,
-						alPresionarTecla: _agregarTecla,
-						alBorrar: _borrarTecla,
-					),
-				],
+							onSubmitted: (_) => _confirmar(),
+							onChanged: (texto) =>
+								_establecerValor(_normalizarEntradaPeso(texto)),
+						),
+						const SizedBox(height: 8.0),
+						TecladoNumericoSimple(
+							valorActual: _valorPeso,
+							mostrarValor: false,
+							alPresionarTecla: _agregarTecla,
+							alBorrar: _borrarTecla,
+						),
+					],
+				),
 			),
 			actions: [
 				TextButton(
-					onPressed: () => Navigator.of(context).pop(
-						const ResultadoDialogoPeso(confirmado: false, pesoKg: 0.0),
-					),
+					onPressed: _cancelar,
 					child: const Text('Cancelar'),
 				),
 				FilledButton(
@@ -104,27 +174,58 @@ class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
 		);
 	}
 
+	void _establecerValor(String valor) {
+		setState(() => _valorPeso = valor);
+		if (_pesoController.text == valor) {
+			return;
+		}
+		_pesoController.value = TextEditingValue(
+			text: valor,
+			selection: TextSelection.collapsed(offset: valor.length),
+		);
+	}
+
+	String _normalizarEntradaPeso(String raw) {
+		final texto = raw.replaceAll(',', '.');
+		final buffer = StringBuffer();
+		var puntoVisto = false;
+		for (final caracter in texto.split('')) {
+			if (caracter == '.' && !puntoVisto) {
+				puntoVisto = true;
+				buffer.write(caracter);
+			} else if (RegExp(r'\d').hasMatch(caracter)) {
+				buffer.write(caracter);
+			}
+		}
+		return buffer.toString();
+	}
+
 	void _agregarTecla(String tecla) {
 		if (tecla == '.' && _valorPeso.contains('.')) {
 			return;
 		}
-		setState(() {
-			_valorPeso = _valorPeso + tecla;
-		});
+		_establecerValor(_valorPeso + tecla);
 	}
 
 	void _borrarTecla() {
 		if (_valorPeso.isEmpty) {
 			return;
 		}
-		setState(() {
-			_valorPeso = _valorPeso.substring(0, _valorPeso.length - 1);
-		});
+		_establecerValor(_valorPeso.substring(0, _valorPeso.length - 1));
+	}
+
+	void _cancelar() {
+		Navigator.of(context).pop(
+			const ResultadoDialogoPeso(confirmado: false, pesoKg: 0.0),
+		);
 	}
 
 	void _confirmar() {
 		final cantidad = double.tryParse(_valorPeso.isEmpty ? '0' : _valorPeso) ?? 0.0;
 		if (cantidad <= 0.0) {
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(content: Text('Indique un peso mayor a cero')),
+			);
 			return;
 		}
 		final pesoKg = _unidad == _UnidadCapturaPeso.gramos

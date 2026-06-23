@@ -28,6 +28,7 @@ import '../repositories/pedido_repository.dart';
 import '../repositories/producto_repository.dart';
 import '../repositories/sync_event_repository.dart';
 import '../repositories/sync_state_repository.dart';
+import '../repositories/ticket_espera_repository.dart';
 import '../repositories/tienda_repository.dart';
 import '../repositories/traspaso_repository.dart';
 import '../repositories/turno_caja_repository.dart';
@@ -123,6 +124,7 @@ class FabricaServicios {
 		final compraRepo = CompraRepository(baseDatos: base);
 		final pedidoRepo = PedidoRepository(baseDatos: base);
 		final cotizacionRepo = CotizacionRepository(baseDatos: base);
+		final ticketEsperaRepo = TicketEsperaRepository(baseDatos: base);
 		final varianteRepo = VarianteRepository(baseDatos: base);
 		final servicioCorteCaja = ServicioCorteCaja(
 			turnoRepository: turnoRepo,
@@ -170,6 +172,7 @@ class FabricaServicios {
 			categoriaRepository: categoriaRepo,
 			vendedorRepository: vendedorRepo,
 			cotizacionRepository: cotizacionRepo,
+			ticketEsperaRepository: ticketEsperaRepo,
 			servicioCorteCaja: servicioCorteCaja,
 			tenantId: tenantId,
 			tiendaId: tiendaId,

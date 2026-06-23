@@ -60,79 +60,42 @@ class _PantallaInventarioAdminState extends ConsumerState<PantallaInventarioAdmi
 
 
 	@override
-
 	Widget build(BuildContext context) {
-
-		final inventarioAsync = ref.watch(_inventarioAgrupadoProvider(_tiendaOperacionId));
-
 		final tiendasAsync = ref.watch(_tiendasInventarioProvider);
-
+		final tiendaGestionId = _tiendaOperacionId ?? tiendasAsync.asData?.value.firstOrNull?.id;
+		final inventarioAsync = ref.watch(_inventarioAgrupadoProvider(tiendaGestionId));
 		return Scaffold(
-
 			appBar: AppBar(title: const Text('Existencias')),
-
 			body: Column(
-
 				children: [
-
 					tiendasAsync.when(
-
 						data: (tiendas) {
-
 							if (tiendas.isEmpty) {
-
 								return const SizedBox.shrink();
-
 							}
-
 							final seleccionada = _tiendaOperacionId ?? tiendas.first.id;
-
-							_tiendaOperacionId ??= seleccionada;
-
 							return Padding(
-
 								padding: const EdgeInsets.fromLTRB(12.0, 12.0, 12.0, 0.0),
-
 								child: DropdownButtonFormField<String>(
-
-									initialValue: seleccionada,
-
+									value: seleccionada,
 									decoration: const InputDecoration(
-
 										labelText: 'Tienda a gestionar',
-
 										border: OutlineInputBorder(),
-
 									),
-
 									items: tiendas
-
 										.map(
-
 											(t) => DropdownMenuItem(
-
 												value: t.id,
-
 												child: Text(t.nombre),
-
 											),
-
 										)
-
 										.toList(),
-
 									onChanged: (v) => setState(() => _tiendaOperacionId = v),
-
 								),
-
 							);
-
 						},
-
 						loading: () => const LinearProgressIndicator(),
-
 						error: (_, __) => const SizedBox.shrink(),
-
 					),
 
 					CampoBusqueda(
@@ -160,8 +123,7 @@ class _PantallaInventarioAdminState extends ConsumerState<PantallaInventarioAdmi
 						child: inventarioAsync.when(
 
 							data: (datos) {
-
-								final tiendaId = _tiendaOperacionId ?? datos.tiendaReferenciaId;
+								final tiendaId = tiendaGestionId ?? datos.tiendaReferenciaId;
 
 								final filtrados = datos.registros.where((r) {
 
@@ -234,27 +196,18 @@ class _PantallaInventarioAdminState extends ConsumerState<PantallaInventarioAdmi
 												title: Text(reg.nombreProducto),
 
 												subtitle: Text(
-
-													'$nombreTienda: ${cantidadTienda.toStringAsFixed(0)} · '
-
-													'Total: ${reg.totalGlobal.toStringAsFixed(0)}',
-
+													'$nombreTienda: ${cantidadTienda.toStringAsFixed(1)} · '
+													'Total: ${reg.totalGlobal.toStringAsFixed(1)}',
 												),
 
 												children: [
 
 													...reg.existenciasPorTienda.entries.map(
-
 														(e) => ListTile(
-
 															dense: true,
-
 															title: Text(e.key),
-
-															trailing: Text(e.value.toStringAsFixed(0)),
-
+															trailing: Text(e.value.toStringAsFixed(1)),
 														),
-
 													),
 
 													OverflowBar(
@@ -353,7 +306,7 @@ class _PantallaInventarioAdminState extends ConsumerState<PantallaInventarioAdmi
 	) async {
 		final controller = TextEditingController(
 			text: tipo == TipoMovimientoInventario.ajuste
-				? cantidadActual.toStringAsFixed(0)
+				? cantidadActual.toStringAsFixed(1)
 				: '1',
 		);
 		var motivoSeleccionado = motivoInventarioPredeterminado(tipo);
@@ -393,23 +346,44 @@ class _PantallaInventarioAdminState extends ConsumerState<PantallaInventarioAdmi
 			controller.dispose();
 			return;
 		}
+		final cantidad = double.tryParse(controller.text.trim().replaceAll(',', '.'));
+		controller.dispose();
+		if (cantidad == null) {
+			if (!mounted) {
+				return;
+			}
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(
+					content: Text('Cantidad invalida'),
+					backgroundColor: PosiaColors.cancelar,
+				),
+			);
+			return;
+		}
 		try {
 			final servicio = await ref.read(servicioAdminProvider.future);
 			final operador = ref.read(sesionUsuarioProvider);
 			await servicio.registrarMovimientoInventario(
 				productoId: reg.productoId,
 				tipo: tipo,
-				cantidad: double.tryParse(controller.text) ?? 0.0,
+				cantidad: cantidad,
 				motivo: motivoSeleccionado,
 				tiendaId: tiendaId,
 				operador: operador,
 			);
-			ref.invalidate(_inventarioAgrupadoProvider(_tiendaOperacionId));
+			ref.invalidate(_inventarioAgrupadoProvider);
+			await ref.read(_inventarioAgrupadoProvider(tiendaId).future);
 			if (!mounted) {
 				return;
 			}
 			ScaffoldMessenger.of(context).showSnackBar(
-				const SnackBar(content: Text('Movimiento registrado')),
+				SnackBar(
+					content: Text(
+						tipo == TipoMovimientoInventario.ajuste
+							? 'Existencia ajustada a ${cantidad.toStringAsFixed(1)}'
+							: 'Movimiento registrado',
+					),
+				),
 			);
 		} on StateError catch (e) {
 			if (!mounted) {
@@ -418,8 +392,6 @@ class _PantallaInventarioAdminState extends ConsumerState<PantallaInventarioAdmi
 			ScaffoldMessenger.of(context).showSnackBar(
 				SnackBar(content: Text(e.message), backgroundColor: PosiaColors.cancelar),
 			);
-		} finally {
-			controller.dispose();
 		}
 	}
 }

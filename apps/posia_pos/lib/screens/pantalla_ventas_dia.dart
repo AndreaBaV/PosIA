@@ -365,7 +365,16 @@ class _PantallaVentasDiaState extends ConsumerState<PantallaVentasDia> {
 			.toList();
 	}
 
-	void _mostrarDetalleVenta(BuildContext context, Venta venta) {
+	Future<void> _mostrarDetalleVenta(BuildContext context, Venta venta) async {
+		String? nombreVendedor;
+		if (venta.vendedorId != null) {
+			final servicio = await ref.read(servicioAdminProvider.future);
+			final vendedor = await servicio.obtenerVendedor(venta.vendedorId!);
+			nombreVendedor = vendedor?.nombre;
+		}
+		if (!context.mounted) {
+			return;
+		}
 		showModalBottomSheet<void>(
 			context: context,
 			isScrollControlled: true,
@@ -409,7 +418,7 @@ class _PantallaVentasDiaState extends ConsumerState<PantallaVentasDia> {
 							_filaInfo('Método de pago', etiquetaMetodoPago(venta.metodoPago)),
 							_filaInfo('Fecha', venta.creadaEn.toLocal().toString().substring(0, 19)),
 							if (venta.vendedorId != null)
-								_filaInfo('Vendedor', venta.vendedorId!),
+								_filaInfo('Vendedor', nombreVendedor ?? 'Sin vendedor'),
 							const Divider(height: 24.0),
 							Text('Productos', style: Theme.of(context).textTheme.titleMedium),
 							const SizedBox(height: 8.0),

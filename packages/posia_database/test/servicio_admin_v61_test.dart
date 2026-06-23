@@ -218,5 +218,169 @@ void main() {
 			expect(ventas.first.total, 100.0);
 			await fixture.cerrar();
 		});
+
+		test('eliminarCliente borra cliente sin historial', () async {
+			final fixture = await FixtureAdmin.abrir();
+			final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
+			final cliente = await servicio.registrarCliente(nombre: 'Temporal');
+			await servicio.eliminarCliente(cliente.id);
+			expect(await servicio.obtenerCliente(cliente.id), isNull);
+			await fixture.cerrar();
+		});
+
+		test('eliminarCliente rechaza si tiene ventas', () async {
+			final fixture = await FixtureAdmin.abrir();
+			final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
+			final cliente = await servicio.registrarCliente(nombre: 'Con ventas');
+			await fixture.ventaRepository.guardar(
+				Venta(
+					id: uuid.v4(),
+					tiendaId: fixture.tiendaOrigenId,
+					cajaId: cajaPruebaId,
+					clienteId: cliente.id,
+					lineas: const [],
+					metodoPago: MetodoPago.efectivo,
+					total: 10.0,
+					creadaEn: DateTime.now().toUtc(),
+				),
+			);
+			expect(
+				() => servicio.eliminarCliente(cliente.id),
+				throwsA(isA<StateError>()),
+			);
+			await fixture.cerrar();
+		});
+
+		test('eliminarProveedor borra proveedor sin compras', () async {
+			final fixture = await FixtureAdmin.abrir();
+			final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
+			final proveedor = await servicio.registrarProveedor(nombre: 'Temporal');
+			await servicio.eliminarProveedor(proveedor.id);
+			expect(await servicio.obtenerProveedor(proveedor.id), isNull);
+			await fixture.cerrar();
+		});
+
+		test('eliminarProveedor rechaza si tiene compras', () async {
+			final fixture = await FixtureAdmin.abrir();
+			final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
+			final proveedor = await servicio.registrarProveedor(nombre: 'Con compras');
+			final producto = await servicio.registrarProductoCompleto(
+				AltaProductoRequest(
+					nombre: 'Item compra',
+					codigoBarras: '777',
+					precioBase: 10.0,
+					categoriaId: fixture.categoriaId,
+					stockInicial: 0.0,
+				),
+			);
+			await servicio.registrarCompra(
+				proveedorId: proveedor.id,
+				fechaCompra: DateTime.utc(2026, 6, 22),
+				lineas: [
+					LineaCompraSolicitud(
+						productoId: producto.id,
+						cantidad: 1.0,
+						costoUnitario: 5.0,
+					),
+				],
+			);
+			expect(
+				() => servicio.eliminarProveedor(proveedor.id),
+				throwsA(isA<StateError>()),
+			);
+			await fixture.cerrar();
+		});
+
+		test('resumenPorProducto fusiona mismo nombre con distinto productoId', () async {
+			final fixture = await FixtureAdmin.abrir();
+			final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
+			final ahora = DateTime.now().toUtc();
+			final filtro = servicio.filtroVentasReporte(dias: 7);
+			await fixture.ventaRepository.guardar(
+				Venta(
+					id: uuid.v4(),
+					tiendaId: fixture.tiendaOrigenId,
+					cajaId: cajaPruebaId,
+					clienteId: null,
+					lineas: [
+						LineaVenta(
+							productoId: uuid.v4(),
+							nombreProducto: 'Refresco Cola',
+							cantidad: 2.0,
+							precioUnitario: 15.0,
+							reglaPrecio: ReglaPrecio.precioBase,
+						),
+					],
+					metodoPago: MetodoPago.efectivo,
+					total: 30.0,
+					creadaEn: ahora,
+				),
+			);
+			await fixture.ventaRepository.guardar(
+				Venta(
+					id: uuid.v4(),
+					tiendaId: fixture.tiendaOrigenId,
+					cajaId: cajaPruebaId,
+					clienteId: null,
+					lineas: [
+						LineaVenta(
+							productoId: uuid.v4(),
+							nombreProducto: 'Refresco Cola',
+							cantidad: 3.0,
+							precioUnitario: 15.0,
+							reglaPrecio: ReglaPrecio.precioBase,
+						),
+					],
+					metodoPago: MetodoPago.efectivo,
+					total: 45.0,
+					creadaEn: ahora,
+				),
+			);
+			final resumen = await servicio.obtenerResumenPorProducto(filtro);
+			expect(resumen, hasLength(1));
+			expect(resumen.first.nombreProducto, 'Refresco Cola');
+			expect(resumen.first.cantidadVendida, 5.0);
+			expect(resumen.first.totalVendido, 75.0);
+			await fixture.cerrar();
+		});
+
+		test('registrarVentaCredito crea venta pendiente de liquidar', () async {
+			final fixture = await FixtureAdmin.abrir();
+			final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
+			final cliente = await servicio.registrarCliente(nombre: 'Fiado');
+			await servicio.actualizarCliente(
+				cliente.copiarCon(
+					creditoHabilitado: true,
+					telefono: '5551234567',
+					direccion: 'Calle 1',
+					diasCredito: 15,
+				),
+			);
+			final producto = await servicio.registrarProductoCompleto(
+				AltaProductoRequest(
+					nombre: 'Fiado item',
+					codigoBarras: '888',
+					precioBase: 50.0,
+					categoriaId: fixture.categoriaId,
+					stockInicial: 10.0,
+				),
+			);
+			final venta = await servicio.registrarVentaCredito(
+				clienteId: cliente.id,
+				lineas: [
+					LineaPedidoSolicitud(
+						productoId: producto.id,
+						cantidad: 2.0,
+						precioUnitario: 50.0,
+					),
+				],
+			);
+			expect(venta.metodoPago, MetodoPago.credito);
+			expect(venta.total, 100.0);
+			expect(venta.creditoLiquidado, isFalse);
+			final pendientes = await servicio.listarCreditosPendientes();
+			expect(pendientes.any((v) => v.id == venta.id), isTrue);
+			await fixture.cerrar();
+		});
 	});
 }

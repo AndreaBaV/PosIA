@@ -9,7 +9,6 @@ import 'package:posia_pricing/posia_pricing.dart';
 import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
-import '../providers/app_providers.dart';
 
 class PantallaFormularioProducto extends ConsumerStatefulWidget {
 	const PantallaFormularioProducto({this.productoExistente, super.key});
@@ -510,7 +509,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 					),
 				);
 			}
-			ref.invalidate(contenedorServiciosProvider);
+			await refrescarDatosMaestros(ref);
 			if (!mounted) {
 				return;
 			}

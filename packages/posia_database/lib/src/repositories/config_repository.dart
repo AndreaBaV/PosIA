@@ -54,6 +54,9 @@ const String CLAVE_CONFIG_ETIQUETA_ANCHO_MM = 'etiqueta_ancho_mm';
 /// Alto etiqueta producto en mm.
 const String CLAVE_CONFIG_ETIQUETA_ALTO_MM = 'etiqueta_alto_mm';
 
+/// Carpeta donde se guardan los PDF de etiquetas de producto.
+const String CLAVE_CONFIG_ETIQUETAS_CARPETA = 'etiquetas_carpeta';
+
 /// Tecla de cobro por defecto si no hay configuracion.
 const String teclaCobrarConfigPredeterminada = 'F12';
 

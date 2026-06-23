@@ -58,13 +58,11 @@ class _PantallaProveedoresAdminState extends ConsumerState<PantallaProveedoresAd
 							(p) => ListTile(
 								title: Text(p.nombre),
 								subtitle: Text('${p.contacto} · ${p.telefono}'),
-								trailing: Switch(
-									value: p.activo,
-									onChanged: (activo) async {
-										final servicio = await ref.read(servicioAdminProvider.future);
-										await servicio.actualizarProveedor(p.copiarCon(activo: activo));
-										ref.invalidate(_proveedoresProvider);
-									},
+								trailing: IconButton(
+									icon: const Icon(Icons.delete_outline),
+									color: PosiaColors.cancelar,
+									tooltip: 'Eliminar proveedor',
+									onPressed: () => _confirmarEliminar(p),
 								),
 								onTap: () => _abrirFicha(p),
 							),
@@ -98,6 +96,55 @@ class _PantallaProveedoresAdminState extends ConsumerState<PantallaProveedoresAd
 		await servicio.registrarProveedor(nombre: _nombreController.text.trim());
 		_nombreController.clear();
 		ref.invalidate(_proveedoresProvider);
+	}
+
+	Future<void> _confirmarEliminar(Proveedor proveedor) async {
+		final confirmar = await showDialog<bool>(
+			context: context,
+			builder: (ctx) => AlertDialog(
+				title: const Text('Eliminar proveedor'),
+				content: Text(
+					'¿Eliminar permanentemente a "${proveedor.nombre}"?\n\n'
+					'Los productos vinculados quedarán sin proveedor. '
+					'No es posible si tiene compras registradas.',
+				),
+				actions: [
+					TextButton(
+						onPressed: () => Navigator.pop(ctx, false),
+						child: const Text('Cancelar'),
+					),
+					FilledButton(
+						style: FilledButton.styleFrom(backgroundColor: PosiaColors.cancelar),
+						onPressed: () => Navigator.pop(ctx, true),
+						child: const Text('Eliminar'),
+					),
+				],
+			),
+		);
+		if (confirmar != true || !mounted) {
+			return;
+		}
+		try {
+			final servicio = await ref.read(servicioAdminProvider.future);
+			await servicio.eliminarProveedor(proveedor.id);
+			ref.invalidate(_proveedoresProvider);
+			if (!mounted) {
+				return;
+			}
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(content: Text('Proveedor eliminado')),
+			);
+		} on StateError catch (e) {
+			if (!mounted) {
+				return;
+			}
+			ScaffoldMessenger.of(context).showSnackBar(
+				SnackBar(
+					content: Text(e.message),
+					backgroundColor: PosiaColors.cancelar,
+				),
+			);
+		}
 	}
 }
 

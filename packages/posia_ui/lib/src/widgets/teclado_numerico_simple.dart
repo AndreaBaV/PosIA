@@ -21,6 +21,7 @@ class TecladoNumericoSimple extends StatelessWidget {
 		required this.valorActual,
 		required this.alPresionarTecla,
 		required this.alBorrar,
+		this.mostrarValor = true,
 		super.key,
 	});
 
@@ -33,16 +34,21 @@ class TecladoNumericoSimple extends StatelessWidget {
 	/// Accion al borrar caracter.
 	final VoidCallback alBorrar;
 
+	/// Si false, oculta el display grande (cuando hay TextField externo).
+	final bool mostrarValor;
+
 	@override
 	Widget build(BuildContext context) {
 		return Column(
 			mainAxisSize: MainAxisSize.min,
 			children: [
-				Text(
-					valorActual.isEmpty ? '0.0' : valorActual,
-					style: Theme.of(context).textTheme.headlineLarge,
-				),
-				const SizedBox(height: 16.0),
+				if (mostrarValor) ...[
+					Text(
+						valorActual.isEmpty ? '0.0' : valorActual,
+						style: Theme.of(context).textTheme.headlineLarge,
+					),
+					const SizedBox(height: 16.0),
+				],
 				..._construirFilas(),
 			],
 		);

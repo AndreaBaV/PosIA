@@ -82,21 +82,19 @@ class _PantallaMiCuentaState extends ConsumerState<PantallaMiCuenta> {
 						style: TextStyle(fontWeight: FontWeight.bold),
 					),
 					const SizedBox(height: 12.0),
-					TextField(
+					CampoSecreto(
 						controller: _pinActualController,
 						keyboardType: TextInputType.number,
 						maxLength: LONGITUD_PIN_ADMIN,
-						obscureText: true,
 						decoration: const InputDecoration(
 							labelText: 'PIN actual',
 							border: OutlineInputBorder(),
 						),
 					),
-					TextField(
+					CampoSecreto(
 						controller: _pinNuevoController,
 						keyboardType: TextInputType.number,
 						maxLength: LONGITUD_PIN_ADMIN,
-						obscureText: true,
 						decoration: const InputDecoration(
 							labelText: 'PIN nuevo',
 							border: OutlineInputBorder(),

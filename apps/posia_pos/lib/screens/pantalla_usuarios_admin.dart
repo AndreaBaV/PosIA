@@ -34,12 +34,12 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 		final usuariosAsync = ref.watch(_usuariosAdminProvider);
 		final operador = ref.watch(sesionUsuarioProvider);
 		return Scaffold(
-			appBar: AppBar(title: const Text('Usuarios')),
+			appBar: AppBar(title: const Text('Equipo')),
 			floatingActionButton: operador != null && PermisosUsuario.puedeGestionarUsuarios(operador)
 				? FloatingActionButton.extended(
 					onPressed: () => _abrirFormulario(operador: operador),
 					icon: const Icon(Icons.person_add),
-					label: const Text('Nuevo'),
+					label: const Text('Nueva cuenta'),
 				)
 				: null,
 			body: usuariosAsync.when(
@@ -56,6 +56,32 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 					return ListView(
 						padding: const EdgeInsets.only(bottom: 88.0),
 						children: [
+							Padding(
+								padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 0.0),
+								child: Card(
+									child: Padding(
+										padding: const EdgeInsets.all(12.0),
+										child: Row(
+											crossAxisAlignment: CrossAxisAlignment.start,
+											children: [
+												Icon(
+													Icons.phone_android,
+													color: Theme.of(context).colorScheme.primary,
+												),
+												const SizedBox(width: 12.0),
+												Expanded(
+													child: Text(
+														'Cada persona entra con su codigo y PIN desde el celular o la caja. '
+														'Sus ventas y tickets quedan a su nombre. '
+														'Usted puede crear cuentas y restablecer el PIN.',
+														style: Theme.of(context).textTheme.bodySmall,
+													),
+												),
+											],
+										),
+									),
+								),
+							),
 							Padding(
 								padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 0.0),
 								child: Text(
@@ -113,7 +139,19 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 				),
 				subtitle: Padding(
 					padding: const EdgeInsets.only(top: 6.0),
-					child: Text('Código ${u.codigo} · $tiendaNombre'),
+					child: Column(
+						crossAxisAlignment: CrossAxisAlignment.start,
+						children: [
+							Text('Codigo ${u.codigo} · $tiendaNombre'),
+							if (u.rol != RolUsuario.administrador)
+								Text(
+									'Vende con codigo ${u.codigo} y PIN',
+									style: Theme.of(context).textTheme.bodySmall?.copyWith(
+										color: Colors.grey.shade700,
+									),
+								),
+						],
+					),
 				),
 				trailing: puedeEditar
 					? Row(
@@ -181,7 +219,7 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 				builder: (ctx, setLocal) {
 					final puedeEditarRol = _puedeEditarRol(operador, editando);
 					return AlertDialog(
-						title: Text(esEdicion ? 'Editar usuario' : 'Nuevo usuario'),
+						title: Text(esEdicion ? 'Editar cuenta' : 'Nueva cuenta'),
 						content: SingleChildScrollView(
 							child: SizedBox(
 								width: 380.0,
@@ -262,19 +300,25 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 											),
 										],
 										const SizedBox(height: 12.0),
-										TextField(
+										CampoSecreto(
 											controller: _pinController,
 											keyboardType: TextInputType.number,
 											maxLength: LONGITUD_PIN_ADMIN,
-											obscureText: true,
 											decoration: InputDecoration(
 												labelText: esEdicion ? 'Nuevo PIN (opcional)' : 'PIN inicial',
 												border: const OutlineInputBorder(),
 												helperText: esEdicion
-													? 'Deje vacío para mantener el PIN actual'
-													: '4 dígitos para iniciar sesión',
+													? 'Deje vacio para mantener el PIN actual'
+													: '4 digitos para entrar desde el celular o la caja',
 											),
 										),
+										if (!esEdicion) ...[
+											const SizedBox(height: 4.0),
+											Text(
+												PermisosUsuario.descripcionRol(rolSeleccionado),
+												style: Theme.of(context).textTheme.bodySmall,
+											),
+										],
 										if (esEdicion) ...[
 											const SizedBox(height: 8.0),
 											SwitchListTile(
@@ -348,13 +392,15 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 				}
 			}
 			ref.invalidate(_usuariosAdminProvider);
+			ref.invalidate(empleadosAsignacionProvider);
+			await refrescarDatosMaestros(ref);
 			if (ctx.mounted) {
 				Navigator.pop(ctx);
 			}
 			if (mounted) {
 				ScaffoldMessenger.of(context).showSnackBar(
 					SnackBar(
-						content: Text(editando == null ? 'Usuario creado' : 'Usuario actualizado'),
+						content: Text(editando == null ? 'Cuenta creada' : 'Cuenta actualizada'),
 					),
 				);
 			}
@@ -384,6 +430,8 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 				operador: operador,
 			);
 			ref.invalidate(_usuariosAdminProvider);
+			ref.invalidate(empleadosAsignacionProvider);
+			await refrescarDatosMaestros(ref);
 		} on StateError catch (e) {
 			if (!mounted) {
 				return;

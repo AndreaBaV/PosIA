@@ -371,7 +371,7 @@ class _PantallaPedidosAdminState extends ConsumerState<PantallaPedidosAdmin>
 	}
 
 	Future<void> _asignarPedido(Pedido pedido, Usuario? operador) async {
-		final empleados = await ref.read(_empleadosAsignacionProvider.future);
+		final empleados = await ref.refresh(empleadosAsignacionProvider.future);
 		if (!mounted) {
 			return;
 		}
@@ -704,10 +704,4 @@ final _pedidosTodosProvider = FutureProvider<List<Pedido>>((ref) async {
 	final servicio = await ref.watch(servicioAdminProvider.future);
 	final operador = ref.watch(sesionUsuarioProvider);
 	return servicio.listarPedidosTienda(operador: operador);
-});
-
-final _empleadosAsignacionProvider = FutureProvider<List<Usuario>>((ref) async {
-	final servicio = await ref.watch(servicioAdminProvider.future);
-	final operador = ref.watch(sesionUsuarioProvider);
-	return servicio.listarEmpleadosParaAsignacion(operador: operador);
 });

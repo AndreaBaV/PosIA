@@ -24,6 +24,16 @@ class ClienteRepository {
 		return filas.map(_mapearCliente).toList();
 	}
 
+	Future<List<Cliente>> listarActivosPorLista(String listaPreciosId) async {
+		final filas = await _baseDatos.query(
+			'customers',
+			where: 'activo = 1 AND lista_precios_id = ?',
+			whereArgs: [listaPreciosId],
+			orderBy: 'nombre ASC',
+		);
+		return filas.map(_mapearCliente).toList();
+	}
+
 	Future<Cliente?> obtenerPorId(String clienteId) async {
 		final filas = await _baseDatos.query(
 			'customers',
@@ -43,6 +53,27 @@ class ClienteRepository {
 			_mapearMapa(cliente),
 			conflictAlgorithm: ConflictAlgorithm.replace,
 		);
+	}
+
+	/// Elimina cliente y datos comerciales vinculados (descuentos, precios especiales).
+	Future<void> eliminar(String clienteId) async {
+		await _baseDatos.transaction((tx) async {
+			await tx.delete(
+				'customer_discounts',
+				where: 'cliente_id = ?',
+				whereArgs: [clienteId],
+			);
+			await tx.delete(
+				'customer_product_prices',
+				where: 'cliente_id = ?',
+				whereArgs: [clienteId],
+			);
+			await tx.delete(
+				'customers',
+				where: 'id = ?',
+				whereArgs: [clienteId],
+			);
+		});
 	}
 
 	Map<String, Object?> _mapearMapa(Cliente cliente) {

@@ -10,6 +10,15 @@ class CompraRepository {
 
 	final Database _baseDatos;
 
+	/// Cuenta compras asociadas a un proveedor.
+	Future<int> contarPorProveedor(String proveedorId) async {
+		final filas = await _baseDatos.rawQuery(
+			'SELECT COUNT(*) AS total FROM purchases WHERE proveedor_id = ?',
+			[proveedorId],
+		);
+		return (filas.first['total'] as int?) ?? 0;
+	}
+
 	Future<void> guardar(Compra compra) async {
 		await _baseDatos.transaction((tx) async {
 			await tx.insert(

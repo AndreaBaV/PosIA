@@ -311,6 +311,7 @@ class MigracionesEsquema {
 		await _crearTablasCompras(base);
 		await _crearTablasPedidos(base);
 		await _crearTablasCotizaciones(base);
+		await _crearTablasTicketsEspera(base);
 		await base.execute('''
 			CREATE TABLE cash_shifts (
 				id TEXT PRIMARY KEY,
@@ -675,6 +676,50 @@ class MigracionesEsquema {
 	/// Cotizaciones persistidas (v15 → v16).
 	static Future<void> migrarVersion15A16(Database base) async {
 		await _crearTablasCotizaciones(base);
+	}
+
+	/// Tickets en espera en caja (v16 → v17).
+	static Future<void> migrarVersion16A17(Database base) async {
+		await _crearTablasTicketsEspera(base);
+	}
+
+	static Future<void> _crearTablasTicketsEspera(Database base) async {
+		await base.execute('''
+			CREATE TABLE IF NOT EXISTS held_tickets (
+				id TEXT PRIMARY KEY,
+				tienda_id TEXT NOT NULL,
+				caja_id TEXT NOT NULL,
+				cliente_id TEXT,
+				nombre_cliente TEXT,
+				vendedor_id TEXT,
+				notas TEXT NOT NULL DEFAULT '',
+				descuento_ticket REAL NOT NULL DEFAULT 0,
+				total REAL NOT NULL,
+				creado_en TEXT NOT NULL
+			)
+		''');
+		await base.execute('''
+			CREATE TABLE IF NOT EXISTS held_ticket_lines (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				ticket_id TEXT NOT NULL,
+				producto_id TEXT NOT NULL,
+				nombre_producto TEXT NOT NULL,
+				cantidad REAL NOT NULL,
+				precio_unitario REAL NOT NULL,
+				regla_precio TEXT NOT NULL,
+				lote_id TEXT,
+				etiqueta_lote TEXT,
+				descuento_linea REAL NOT NULL DEFAULT 0,
+				codigo_barras TEXT NOT NULL DEFAULT '',
+				unidad_medida TEXT NOT NULL DEFAULT 'pieza',
+				modulo_vertical TEXT NOT NULL DEFAULT 'general',
+				categoria_id TEXT
+			)
+		''');
+		await base.execute(
+			'CREATE INDEX IF NOT EXISTS idx_held_tickets_tienda_caja '
+			'ON held_tickets(tienda_id, caja_id, creado_en DESC)',
+		);
 	}
 
 	static Future<void> _crearTablasCotizaciones(Database base) async {

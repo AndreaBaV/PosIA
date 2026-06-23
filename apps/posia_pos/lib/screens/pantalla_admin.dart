@@ -27,7 +27,6 @@ import 'pantalla_sync_admin.dart';
 import 'pantalla_tiendas_admin.dart';
 import 'pantalla_traspasos_admin.dart';
 import 'pantalla_usuarios_admin.dart';
-import 'pantalla_vendedores_admin.dart';
 import 'pantalla_ventas_dia.dart';
 
 /// Panel admin organizado por secciones operativas.
@@ -132,8 +131,8 @@ class PantallaAdmin extends StatelessWidget {
 		final cuenta = [
 			tile('mi_cuenta', Icons.account_circle, 'Mi cuenta', 'Perfil y PIN',
 				Colors.blueGrey, const PantallaMiCuenta()),
-			tile('usuarios', Icons.manage_accounts, 'Usuarios', 'Cuentas y roles',
-				Colors.blue, const PantallaUsuariosAdmin()),
+			tile('usuarios', Icons.groups, 'Equipo', 'Cuentas, PIN y ventas',
+				Colors.deepPurple, const PantallaUsuariosAdmin()),
 		].whereType<Widget>().toList();
 
 		final ventas = [
@@ -143,14 +142,12 @@ class PantallaAdmin extends StatelessWidget {
 				Colors.deepOrange, const PantallaPedidosAdmin()),
 			tile('historial', Icons.history, 'Historial', 'Ventas y cancelaciones',
 				Colors.green, const PantallaHistorialVentas()),
-			tile('creditos', Icons.account_balance_wallet, 'Creditos', 'Pendientes de liquidar',
+			tile('creditos', Icons.account_balance_wallet, 'Creditos', 'Fiar, pendientes y liquidar',
 				Colors.amber.shade800, const PantallaCreditosPendientes()),
 			tile('cotizaciones', Icons.request_quote, 'Cotizaciones', 'Historial guardado',
 				Colors.blueGrey, const PantallaCotizacionesAdmin()),
 			tile('corte', Icons.point_of_sale, 'Corte de caja', 'Abrir / cerrar turno',
 				Colors.teal, const PantallaCorteCaja()),
-			tile('vendedores', Icons.badge, 'Vendedores', 'Personal de venta',
-				Colors.deepPurple, const PantallaVendedoresAdmin()),
 		].whereType<Widget>().toList();
 
 		final catalogo = [
@@ -160,7 +157,7 @@ class PantallaAdmin extends StatelessWidget {
 				PosiaColors.neutro, const PantallaProductosAdmin()),
 			tile('etiquetas', Icons.label, 'Etiquetas', 'PDF con codigo de barras',
 				Colors.blueGrey, const PantallaEtiquetasAdmin()),
-			tile('precios', Icons.sell, 'Precios por producto', 'Generico, listas y clientes',
+			tile('precios', Icons.sell, 'Listas de precios', 'Precios por lista y clientes',
 				Colors.green, const PantallaListasPreciosAdmin()),
 		].whereType<Widget>().toList();
 

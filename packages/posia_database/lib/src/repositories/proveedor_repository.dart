@@ -45,6 +45,23 @@ class ProveedorRepository {
 		);
 	}
 
+	/// Elimina proveedor y desvincula productos asociados.
+	Future<void> eliminar(String proveedorId) async {
+		await _baseDatos.transaction((tx) async {
+			await tx.update(
+				'products',
+				{'proveedor_id': null},
+				where: 'proveedor_id = ?',
+				whereArgs: [proveedorId],
+			);
+			await tx.delete(
+				'proveedores',
+				where: 'id = ?',
+				whereArgs: [proveedorId],
+			);
+		});
+	}
+
 	Map<String, Object?> _mapearMapa(Proveedor proveedor) {
 		return {
 			'id': proveedor.id,

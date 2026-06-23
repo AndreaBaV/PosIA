@@ -7,7 +7,6 @@ import 'package:posia_core/posia_core.dart';
 import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
-import '../providers/app_providers.dart';
 
 class PantallaCategoriasAdmin extends ConsumerStatefulWidget {
 	const PantallaCategoriasAdmin({super.key});
@@ -179,7 +178,7 @@ class _PantallaCategoriasAdminState extends ConsumerState<PantallaCategoriasAdmi
 		final servicio = await ref.read(servicioAdminProvider.future);
 		await servicio.reordenarCategorias(ids);
 		ref.invalidate(_categoriasProvider);
-		ref.invalidate(contenedorServiciosProvider);
+		await refrescarDatosMaestros(ref);
 	}
 
 	Future<void> _editar(Categoria categoria) async {
@@ -245,7 +244,7 @@ class _PantallaCategoriasAdminState extends ConsumerState<PantallaCategoriasAdmi
 		);
 		nombreController.dispose();
 		ref.invalidate(_categoriasProvider);
-		ref.invalidate(contenedorServiciosProvider);
+		await refrescarDatosMaestros(ref);
 	}
 
 	Future<void> _agregarCategoria() async {
@@ -261,7 +260,7 @@ class _PantallaCategoriasAdminState extends ConsumerState<PantallaCategoriasAdmi
 		);
 		_nombreController.clear();
 		ref.invalidate(_categoriasProvider);
-		ref.invalidate(contenedorServiciosProvider);
+		await refrescarDatosMaestros(ref);
 	}
 }
 

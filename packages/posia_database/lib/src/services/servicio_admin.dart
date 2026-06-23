@@ -19,6 +19,7 @@ import '../models/estado_sync_admin.dart';
 import '../models/linea_compra_solicitud.dart';
 import '../models/linea_pedido_solicitud.dart';
 import '../models/linea_traspaso_solicitud.dart';
+import '../models/item_lista_precios.dart';
 import '../models/resumen_precios_producto.dart';
 import '../models/resumen_vendedor.dart';
 import '../models/resumen_ventas_dia.dart';
@@ -43,6 +44,7 @@ import '../repositories/usuario_repository.dart';
 import '../repositories/variante_repository.dart';
 import '../repositories/vendedor_repository.dart';
 import '../repositories/venta_repository.dart';
+import '../utils/sincronizador_vendedor_usuario.dart';
 import 'servicio_corte_caja.dart';
 
 /// Coordina operaciones del panel de administracion minimalista.
@@ -726,6 +728,32 @@ class ServicioAdmin {
     await _registrarEventoCliente(cliente);
   }
 
+  /// Elimina un cliente sin historial de ventas, pedidos ni cotizaciones.
+  ///
+  /// Lanza [StateError] si el cliente tiene movimientos registrados.
+  Future<void> eliminarCliente(String clienteId) async {
+    final repo = _clienteRepository;
+    if (repo == null) {
+      throw StateError('Repositorio de clientes no configurado');
+    }
+    if (await _ventaRepository.contarPorCliente(clienteId) > 0) {
+      throw StateError(
+        'No se puede eliminar: el cliente tiene ventas registradas',
+      );
+    }
+    if (await (_pedidoRepository?.contarPorCliente(clienteId) ?? Future.value(0)) > 0) {
+      throw StateError(
+        'No se puede eliminar: el cliente tiene pedidos registrados',
+      );
+    }
+    if (await (_cotizacionRepository?.contarPorCliente(clienteId) ?? Future.value(0)) > 0) {
+      throw StateError(
+        'No se puede eliminar: el cliente tiene cotizaciones registradas',
+      );
+    }
+    await repo.eliminar(clienteId);
+  }
+
   Future<Cliente?> obtenerCliente(String clienteId) async {
     return _clienteRepository?.obtenerPorId(clienteId);
   }
@@ -927,28 +955,10 @@ class ServicioAdmin {
     String? tiendaId,
     Usuario? operador,
   }) async {
-    final repo = _vendedorRepository;
-    if (repo == null) {
-      throw StateError('Repositorio de vendedores no configurado');
-    }
-    final tiendaDestino = _resolverTiendaOperacion(
-      operador,
-      tiendaId ?? operador?.tiendaId,
+    throw StateError(
+      'Use registrarUsuario para dar de alta personal. '
+      'Cada cuenta crea automaticamente su vendedor al iniciar sesion.',
     );
-    final nombreLimpio = nombre.trim();
-    if (nombreLimpio.isEmpty) {
-      throw StateError('El nombre del vendedor es obligatorio');
-    }
-    final codigo = await repo.generarSiguienteCodigo();
-    final vendedor = Vendedor(
-      id: _generadorId.v4(),
-      nombre: nombreLimpio,
-      codigo: codigo,
-      activo: true,
-      tiendaId: tiendaDestino,
-    );
-    await repo.guardar(vendedor);
-    return vendedor;
   }
 
   Future<void> actualizarVendedor(
@@ -1126,6 +1136,7 @@ class ServicioAdmin {
     }
     await repo.guardar(usuario);
     await _registrarEventoUsuario(usuario);
+    await _sincronizarVendedorVinculado(usuario);
     return usuario;
   }
 
@@ -1205,7 +1216,16 @@ class ServicioAdmin {
     );
     await repo.guardar(actualizado);
     await _registrarEventoUsuario(actualizado);
+    await _sincronizarVendedorVinculado(actualizado);
     return actualizado;
+  }
+
+  Future<void> _sincronizarVendedorVinculado(Usuario usuario) async {
+    final repo = _vendedorRepository;
+    if (repo == null) {
+      return;
+    }
+    await SincronizadorVendedorUsuario.sincronizar(repo: repo, usuario: usuario);
   }
 
   void _validarAsignacionRol({
@@ -1325,6 +1345,23 @@ class ServicioAdmin {
 
   Future<void> actualizarProveedor(Proveedor proveedor) async {
     await _proveedorRepository?.guardar(proveedor);
+  }
+
+  /// Elimina un proveedor sin compras registradas.
+  ///
+  /// Los productos vinculados quedan sin proveedor asignado.
+  /// Lanza [StateError] si el proveedor tiene compras en el historial.
+  Future<void> eliminarProveedor(String proveedorId) async {
+    final repo = _proveedorRepository;
+    if (repo == null) {
+      throw StateError('Repositorio de proveedores no configurado');
+    }
+    if (await (_compraRepository?.contarPorProveedor(proveedorId) ?? Future.value(0)) > 0) {
+      throw StateError(
+        'No se puede eliminar: el proveedor tiene compras registradas',
+      );
+    }
+    await repo.eliminar(proveedorId);
   }
 
   Future<Proveedor?> obtenerProveedor(String proveedorId) async {
@@ -1775,8 +1812,134 @@ class ServicioAdmin {
     );
   }
 
+  Future<String?> obtenerCarpetaEtiquetas() async {
+    final raw = await _configRepository.obtenerValor(CLAVE_CONFIG_ETIQUETAS_CARPETA);
+    if (raw == null || raw.trim().isEmpty) {
+      return null;
+    }
+    return raw.trim();
+  }
+
+  Future<void> guardarCarpetaEtiquetas(String ruta) async {
+    await _configRepository.guardarValor(CLAVE_CONFIG_ETIQUETAS_CARPETA, ruta.trim());
+  }
+
   Future<List<Venta>> listarCreditosPendientes() async {
     return _ventaRepository.listarCreditosPendientes(_tiendaActivaId);
+  }
+
+  /// Registra una venta a credito desde administracion (fiado al cliente).
+  ///
+  /// Valida datos del cliente, descuenta inventario y encola sincronizacion.
+  Future<Venta> registrarVentaCredito({
+    required String clienteId,
+    required List<LineaPedidoSolicitud> lineas,
+    int? diasCredito,
+    Usuario? operador,
+  }) async {
+    final repoCliente = _clienteRepository;
+    if (repoCliente == null) {
+      throw StateError('Repositorio de clientes no configurado');
+    }
+    final cliente = await repoCliente.obtenerPorId(clienteId);
+    if (cliente == null) {
+      throw StateError('Cliente no encontrado');
+    }
+    final dias = diasCredito ?? cliente.diasCredito;
+    final errorCliente = validarClienteParaCredito(cliente, diasCredito: dias);
+    if (errorCliente != null) {
+      throw StateError(errorCliente);
+    }
+    if (lineas.isEmpty) {
+      throw StateError('Agregue al menos un producto');
+    }
+
+    final lineasVenta = <LineaVenta>[];
+    for (final solicitud in lineas) {
+      if (solicitud.cantidad <= 0) {
+        throw StateError('Cantidad invalida en linea de credito');
+      }
+      if (solicitud.precioUnitario <= 0) {
+        throw StateError('Precio invalido en linea de credito');
+      }
+      final producto = await _productoRepository.obtenerPorId(solicitud.productoId);
+      if (producto == null) {
+        throw StateError('Producto no encontrado');
+      }
+      final stock = await _inventarioRepository.obtenerStock(
+        producto.id,
+        _tiendaActivaId,
+      );
+      final disponible = stock?.cantidad ?? 0.0;
+      if (disponible < solicitud.cantidad) {
+        throw StateError(
+          'Stock insuficiente para ${producto.nombre} '
+          '(disponible ${disponible.toStringAsFixed(1)})',
+        );
+      }
+      lineasVenta.add(
+        LineaVenta(
+          productoId: producto.id,
+          nombreProducto: producto.nombre,
+          cantidad: solicitud.cantidad,
+          precioUnitario: redondearMonto(solicitud.precioUnitario),
+          reglaPrecio: ReglaPrecio.precioBase,
+        ),
+      );
+    }
+
+    final creditoVenceEn = calcularFechaVencimientoCredito(
+      DateTime.now().toUtc(),
+      dias,
+    );
+    final total = Venta.calcularTotalDesdeLineas(lineasVenta);
+    final turno = await _servicioCorteCaja?.obtenerTurnoAbierto();
+    String? vendedorId;
+    if (operador != null && _vendedorRepository != null) {
+      await SincronizadorVendedorUsuario.sincronizar(
+        repo: _vendedorRepository!,
+        usuario: operador,
+      );
+      vendedorId = 'vend-${operador.id}';
+    }
+
+    final venta = Venta(
+      id: _generadorId.v4(),
+      tiendaId: _tiendaActivaId,
+      cajaId: _cajaId,
+      clienteId: clienteId,
+      lineas: lineasVenta,
+      metodoPago: MetodoPago.credito,
+      total: total,
+      creadaEn: DateTime.now().toUtc(),
+      vendedorId: vendedorId,
+      turnoCajaId: turno?.id,
+      creditoDias: dias,
+      creditoVenceEn: creditoVenceEn,
+    );
+
+    await _ventaRepository.guardar(venta);
+    final ahora = DateTime.now().toUtc();
+    for (final linea in lineasVenta) {
+      final stock = await _inventarioRepository.obtenerStock(
+        linea.productoId,
+        _tiendaActivaId,
+      );
+      await _inventarioRepository.guardarStock(
+        StockNivel(
+          productoId: linea.productoId,
+          tiendaId: _tiendaActivaId,
+          cantidad: (stock?.cantidad ?? 0.0) - linea.cantidad,
+          actualizadoEn: ahora,
+          stockMinimo: stock?.stockMinimo ?? 0.0,
+        ),
+      );
+    }
+    if (turno != null && _servicioCorteCaja != null) {
+      await _servicioCorteCaja.registrarVenta(turno, venta);
+    }
+    await _registrarEventoVentaCompletada(venta);
+    return venta;
   }
 
   Future<Venta> liquidarCreditoVenta(String ventaId) async {
@@ -2434,7 +2597,12 @@ class ServicioAdmin {
         stockMinimo: stockActual?.stockMinimo ?? 0.0,
       ),
     );
-    await _registrarEventoAjusteStock(productoId, delta, motivoLimpio);
+    await _registrarEventoAjusteStock(
+      productoId,
+      delta,
+      motivoLimpio,
+      tiendaId: tiendaDestino,
+    );
     await repo.guardar(
       MovimientoInventario(
         id: _generadorId.v4(),
@@ -2678,6 +2846,34 @@ class ServicioAdmin {
     await _precioRepository?.eliminarLista(listaId);
   }
 
+  Future<List<Cliente>> listarClientesPorLista(String listaId) async {
+    return _clienteRepository?.listarActivosPorLista(listaId) ?? [];
+  }
+
+  Future<List<ItemListaPrecios>> listarItemsListaPrecios(String listaId) async {
+    final repo = _precioRepository;
+    if (repo == null) {
+      return [];
+    }
+    final precios = await repo.listarPreciosDeLista(listaId);
+    final items = <ItemListaPrecios>[];
+    for (final entry in precios.entries) {
+      final producto = await _productoRepository.obtenerPorId(entry.key);
+      if (producto == null || !producto.activo) {
+        continue;
+      }
+      items.add(
+        ItemListaPrecios(producto: producto, precioLista: entry.value),
+      );
+    }
+    items.sort((a, b) => a.producto.nombre.compareTo(b.producto.nombre));
+    return items;
+  }
+
+  Future<void> eliminarProductoDeLista(String listaId, String productoId) async {
+    await _precioRepository?.eliminarPrecioDeLista(listaId, productoId);
+  }
+
   Future<void> establecerFavoritoProducto(
     String productoId,
     bool favorito,
@@ -2727,6 +2923,40 @@ class ServicioAdmin {
         'diasCredito': cliente.diasCredito,
       },
       creadoEn: DateTime.now().toUtc(),
+      estado: EstadoSyncEvento.pendiente,
+    );
+    await _syncOrchestrator.registrarEvento(evento);
+  }
+
+  Future<void> _registrarEventoVentaCompletada(Venta venta) async {
+    final evento = SyncEvent(
+      id: _generadorId.v4(),
+      tenantId: _tenantId,
+      tiendaId: _tiendaActivaId,
+      dispositivoId: _cajaId,
+      tipo: TipoSyncEvento.saleCompleted,
+      payload: {
+        'ventaId': venta.id,
+        'total': venta.total,
+        'metodoPago': venta.metodoPago.name,
+        'clienteId': venta.clienteId,
+        'creditoDias': venta.creditoDias,
+        'creditoVenceEn': venta.creditoVenceEn?.toIso8601String(),
+        'lineas': venta.lineas
+            .map(
+              (linea) => {
+                'productoId': linea.productoId,
+                'nombreProducto': linea.nombreProducto,
+                'cantidad': linea.cantidad,
+                'precioUnitario': linea.precioUnitario,
+                'reglaPrecio': linea.reglaPrecio.name,
+                'loteId': linea.loteId,
+                'etiquetaLote': linea.etiquetaLote,
+              },
+            )
+            .toList(),
+      },
+      creadoEn: venta.creadaEn,
       estado: EstadoSyncEvento.pendiente,
     );
     await _syncOrchestrator.registrarEvento(evento);
@@ -2806,12 +3036,13 @@ class ServicioAdmin {
   Future<void> _registrarEventoAjusteStock(
     String productoId,
     double delta,
-    String motivo,
-  ) async {
+    String motivo, {
+    required String tiendaId,
+  }) async {
     final evento = SyncEvent(
       id: _generadorId.v4(),
       tenantId: _tenantId,
-      tiendaId: _tiendaActivaId,
+      tiendaId: tiendaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.stockAdjusted,
       payload: {'productoId': productoId, 'delta': delta, 'motivo': motivo},

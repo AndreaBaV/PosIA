@@ -4,6 +4,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:posia_core/posia_core.dart';
+import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
 
@@ -27,7 +28,6 @@ class _PantallaFichaProveedorState extends ConsumerState<PantallaFichaProveedor>
 	late final TextEditingController _direccionController;
 	late final TextEditingController _notasController;
 	late final TextEditingController _diasCreditoController;
-	late bool _activo;
 
 	@override
 	void initState() {
@@ -42,7 +42,6 @@ class _PantallaFichaProveedorState extends ConsumerState<PantallaFichaProveedor>
 		_direccionController = TextEditingController(text: p.direccion);
 		_notasController = TextEditingController(text: p.notas);
 		_diasCreditoController = TextEditingController(text: '${p.diasCredito}');
-		_activo = p.activo;
 	}
 
 	@override
@@ -74,6 +73,12 @@ class _PantallaFichaProveedorState extends ConsumerState<PantallaFichaProveedor>
 					],
 				),
 				actions: [
+					IconButton(
+						icon: const Icon(Icons.delete_outline),
+						color: PosiaColors.cancelar,
+						tooltip: 'Eliminar proveedor',
+						onPressed: _confirmarEliminar,
+					),
 					IconButton(icon: const Icon(Icons.save), onPressed: _guardar),
 				],
 			),
@@ -149,11 +154,6 @@ class _PantallaFichaProveedorState extends ConsumerState<PantallaFichaProveedor>
 									border: OutlineInputBorder(),
 								),
 							),
-							SwitchListTile(
-								title: const Text('Activo'),
-								value: _activo,
-								onChanged: (v) => setState(() => _activo = v),
-							),
 						],
 					),
 					Column(
@@ -216,7 +216,7 @@ class _PantallaFichaProveedorState extends ConsumerState<PantallaFichaProveedor>
 				direccion: _direccionController.text.trim(),
 				notas: _notasController.text.trim(),
 				diasCredito: int.tryParse(_diasCreditoController.text) ?? 0,
-				activo: _activo,
+				activo: true,
 			),
 		);
 		if (!mounted) {
@@ -225,6 +225,52 @@ class _PantallaFichaProveedorState extends ConsumerState<PantallaFichaProveedor>
 		ScaffoldMessenger.of(context).showSnackBar(
 			const SnackBar(content: Text('Proveedor actualizado')),
 		);
+	}
+
+	Future<void> _confirmarEliminar() async {
+		final confirmar = await showDialog<bool>(
+			context: context,
+			builder: (ctx) => AlertDialog(
+				title: const Text('Eliminar proveedor'),
+				content: Text(
+					'¿Eliminar permanentemente a "${widget.proveedor.nombre}"?\n\n'
+					'Los productos vinculados quedarán sin proveedor. '
+					'No es posible si tiene compras registradas.',
+				),
+				actions: [
+					TextButton(
+						onPressed: () => Navigator.pop(ctx, false),
+						child: const Text('Cancelar'),
+					),
+					FilledButton(
+						style: FilledButton.styleFrom(backgroundColor: PosiaColors.cancelar),
+						onPressed: () => Navigator.pop(ctx, true),
+						child: const Text('Eliminar'),
+					),
+				],
+			),
+		);
+		if (confirmar != true || !mounted) {
+			return;
+		}
+		try {
+			final servicio = await ref.read(servicioAdminProvider.future);
+			await servicio.eliminarProveedor(widget.proveedor.id);
+			if (!mounted) {
+				return;
+			}
+			Navigator.of(context).pop();
+		} on StateError catch (e) {
+			if (!mounted) {
+				return;
+			}
+			ScaffoldMessenger.of(context).showSnackBar(
+				SnackBar(
+					content: Text(e.message),
+					backgroundColor: PosiaColors.cancelar,
+				),
+			);
+		}
 	}
 
 	Future<void> _vincularProducto(List<Producto> productos) async {

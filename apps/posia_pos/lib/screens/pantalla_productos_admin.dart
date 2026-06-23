@@ -260,66 +260,15 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 			);
 			return;
 		}
-		if (accion == 'desactivar') {
-			final confirmar = await showDialog<bool>(
-				context: context,
-				builder: (ctx) => AlertDialog(
-					title: const Text('Desactivar producto'),
-					content: Text(
-						'Desactivar "${producto.nombre}"?\n\n'
-						'Dejará de aparecer en caja, pero se conserva en el historial.',
-					),
-					actions: [
-						TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-						FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Desactivar')),
-					],
-				),
-			);
-			if (confirmar != true) {
-				return;
-			}
-			final servicio = await ref.read(servicioAdminProvider.future);
-			final ok = await servicio.eliminarProducto(producto.id);
-			if (!context.mounted) {
-				return;
-			}
-			ScaffoldMessenger.of(context).showSnackBar(
-				SnackBar(
-					content: Text(
-						ok
-							? 'Producto desactivado'
-							: 'No se puede desactivar: hay existencias en alguna tienda',
-					),
-					backgroundColor: ok ? PosiaColors.cobrar : PosiaColors.cancelar,
-				),
-			);
-			ref.invalidate(_productosCatalogoProvider);
-			return;
-		}
-		if (accion == 'reactivar') {
-			final servicio = await ref.read(servicioAdminProvider.future);
-			final ok = await servicio.reactivarProducto(producto.id);
-			if (!context.mounted) {
-				return;
-			}
-			ScaffoldMessenger.of(context).showSnackBar(
-				SnackBar(
-					content: Text(ok ? 'Producto reactivado' : 'No se pudo reactivar'),
-					backgroundColor: ok ? PosiaColors.cobrar : PosiaColors.cancelar,
-				),
-			);
-			ref.invalidate(_productosCatalogoProvider);
-			return;
-		}
-		if (accion == 'eliminar_permanente') {
+		if (accion == 'eliminar') {
 			final confirmar = await showDialog<bool>(
 				context: context,
 				builder: (ctx) => AlertDialog(
 					title: const Text('Eliminar producto'),
 					content: Text(
-						'Eliminar permanentemente "${producto.nombre}"?\n\n'
+						'¿Eliminar permanentemente "${producto.nombre}"?\n\n'
 						'Se borrará del catálogo junto con variantes y precios. '
-						'Esta acción no se puede deshacer.',
+						'No es posible si hay existencias en alguna tienda.',
 					),
 					actions: [
 						TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
@@ -343,13 +292,14 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 				SnackBar(
 					content: Text(
 						ok
-							? 'Producto eliminado del catálogo'
+							? 'Producto eliminado'
 							: 'No se puede eliminar: hay existencias en alguna tienda',
 					),
 					backgroundColor: ok ? PosiaColors.cobrar : PosiaColors.cancelar,
 				),
 			);
 			ref.invalidate(_productosCatalogoProvider);
+			await refrescarDatosMaestros(ref);
 		}
 	}
 
@@ -361,14 +311,10 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 				child: Text('Actualizar precio'),
 			),
 			const PopupMenuItem(value: 'variantes', child: Text('Variantes')),
-			if (producto.activo)
-				const PopupMenuItem(value: 'desactivar', child: Text('Desactivar'))
-			else
-				const PopupMenuItem(value: 'reactivar', child: Text('Reactivar')),
 			PopupMenuItem(
-				value: 'eliminar_permanente',
+				value: 'eliminar',
 				child: Text(
-					'Eliminar del catálogo',
+					'Eliminar',
 					style: TextStyle(color: PosiaColors.cancelar),
 				),
 			),

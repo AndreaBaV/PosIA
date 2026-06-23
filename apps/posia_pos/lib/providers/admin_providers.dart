@@ -94,6 +94,26 @@ final teclaCobrarConfigProvider = FutureProvider<String>((ref) async {
 	return servicio.obtenerTeclaCobrar();
 });
 
+/// Empleados activos que pueden recibir pedidos asignados.
+final empleadosAsignacionProvider = FutureProvider<List<Usuario>>((ref) async {
+	final servicio = await ref.watch(servicioAdminProvider.future);
+	final operador = ref.watch(sesionUsuarioProvider);
+	return servicio.listarEmpleadosParaAsignacion(operador: operador);
+});
+
+/// Recarga servicios y catalogo de caja tras cambios en productos, categorias o usuarios.
+Future<void> refrescarDatosMaestros(WidgetRef ref) async {
+	ref.invalidate(contenedorServiciosProvider);
+	ref.invalidate(empleadosAsignacionProvider);
+	await ref.read(contenedorServiciosProvider.future);
+	final carrito = ref.read(carritoNotifierProvider.notifier);
+	if (ref.read(carritoNotifierProvider).hasValue) {
+		await carrito.recargar(invalidarCatalogo: true);
+	} else {
+		ref.invalidate(carritoNotifierProvider);
+	}
+}
+
 /// Indica si el tecnico completo la instalacion inicial (hub + caja).
 final instalacionCompletaProvider = FutureProvider<bool>((ref) async {
 	await ref.watch(estadoInicializacionProvider.future);

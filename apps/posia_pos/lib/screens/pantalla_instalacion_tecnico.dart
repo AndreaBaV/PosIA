@@ -120,9 +120,8 @@ class _PantallaInstalacionTecnicoState extends ConsumerState<PantallaInstalacion
 						),
 					),
 					const SizedBox(height: 12.0),
-					TextField(
+					CampoSecreto(
 						controller: _hubApiKeyController,
-						obscureText: true,
 						decoration: const InputDecoration(
 							labelText: 'API Key del hub',
 							border: OutlineInputBorder(),

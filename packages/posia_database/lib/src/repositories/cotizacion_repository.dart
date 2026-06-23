@@ -10,6 +10,15 @@ class CotizacionRepository {
 
 	final Database _baseDatos;
 
+	/// Cuenta cotizaciones asociadas a un cliente.
+	Future<int> contarPorCliente(String clienteId) async {
+		final filas = await _baseDatos.rawQuery(
+			'SELECT COUNT(*) AS total FROM quotes WHERE cliente_id = ?',
+			[clienteId],
+		);
+		return (filas.first['total'] as int?) ?? 0;
+	}
+
 	Future<void> guardar(Cotizacion cotizacion) async {
 		await _baseDatos.transaction((transaccion) async {
 			await transaccion.insert(
