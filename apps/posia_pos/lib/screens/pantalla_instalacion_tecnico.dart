@@ -426,6 +426,7 @@ class _DialogoPinTecnicoState extends State<_DialogoPinTecnico> {
 					const SizedBox(height: 12.0),
 					TecladoPinAdmin(
 						pinActual: _pin,
+						autofocusTeclado: true,
 						alPresionarDigito: (d) {
 							if (_pin.length >= LONGITUD_PIN_ADMIN) {
 								return;

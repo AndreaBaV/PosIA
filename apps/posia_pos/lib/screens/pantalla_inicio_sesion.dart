@@ -220,6 +220,7 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 										else
 											TecladoPinAdmin(
 												pinActual: _pinIngresado,
+												autofocusTeclado: true,
 												alPresionarDigito: _agregarDigito,
 												alBorrar: _borrarDigito,
 											),
