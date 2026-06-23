@@ -62,3 +62,17 @@ String etiquetaTipoMovimiento(TipoMovimientoInventario tipo) {
 			return 'Reversión de venta';
 	}
 }
+
+/// Texto legible del estado de un pedido.
+String etiquetaEstadoPedido(EstadoPedido estado) {
+	switch (estado) {
+		case EstadoPedido.recibido:
+			return 'Recibido';
+		case EstadoPedido.asignado:
+			return 'Asignado';
+		case EstadoPedido.entregado:
+			return 'Entregado';
+		case EstadoPedido.cancelado:
+			return 'Cancelado';
+	}
+}

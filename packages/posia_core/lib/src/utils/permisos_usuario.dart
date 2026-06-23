@@ -17,7 +17,10 @@ class PermisosUsuario {
 	static bool esEmpleado(Usuario usuario) =>
 		usuario.rol == RolUsuario.empleado;
 
-	static bool puedeAccederPanelAdmin(Usuario usuario) => true;
+	static bool puedeGestionarPedidos(Usuario usuario) =>
+		usuario.rol != RolUsuario.empleado;
+
+	static bool puedeVerMisPedidos(Usuario usuario) => true;
 
 	static bool puedeGestionarTodasLasTiendas(Usuario usuario) =>
 		usuario.rol == RolUsuario.administrador;

@@ -18,14 +18,14 @@ class PantallaMovimientosInventario extends ConsumerStatefulWidget {
 
 class _PantallaMovimientosInventarioState
 	extends ConsumerState<PantallaMovimientosInventario> {
-	TipoMovimientoInventario _tipo = TipoMovimientoInventario.entrada;
+	TipoMovimientoInventario _tipo = TipoMovimientoInventario.salida;
 	String? _productoId;
 	final _cantidadController = TextEditingController(text: '10');
 	final _busquedaController = TextEditingController();
 	String _filtro = '';
 	bool _formularioExpandido = false;
 	String? _tiendaOperacionId;
-	String _motivoSeleccionado = motivoInventarioPredeterminado(TipoMovimientoInventario.entrada);
+	String _motivoSeleccionado = motivoInventarioPredeterminado(TipoMovimientoInventario.salida);
 
 	@override
 	void dispose() {
@@ -38,7 +38,7 @@ class _PantallaMovimientosInventarioState
 	Widget build(BuildContext context) {
 		final datosAsync = ref.watch(_movimientosDatosProvider(_tiendaOperacionId));
 		return Scaffold(
-			appBar: AppBar(title: const Text('Movimientos de inventario')),
+			appBar: AppBar(title: const Text('Salidas y ajustes')),
 			body: datosAsync.when(
 				data: (datos) {
 					final filtrados = datos.movimientos.where((m) {
@@ -111,7 +111,6 @@ class _PantallaMovimientosInventarioState
 												DropdownButtonFormField<TipoMovimientoInventario>(
 													initialValue: _tipo,
 													items: const [
-														TipoMovimientoInventario.entrada,
 														TipoMovimientoInventario.salida,
 														TipoMovimientoInventario.ajuste,
 													]

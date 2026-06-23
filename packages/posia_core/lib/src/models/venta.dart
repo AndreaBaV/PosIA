@@ -42,6 +42,10 @@ class Venta {
 		this.montoEfectivo,
 		this.montoTarjeta,
 		this.montoTransferencia,
+		this.creditoDias,
+		this.creditoVenceEn,
+		this.creditoLiquidado = false,
+		this.creditoLiquidadoEn,
 	});
 
 	/// Identificador unico de venta.
@@ -89,6 +93,18 @@ class Venta {
 	/// Monto cobrado por transferencia.
 	final double? montoTransferencia;
 
+	/// Plazo acordado en dias (solo ventas a credito).
+	final int? creditoDias;
+
+	/// Fecha limite de pago acordada (solo ventas a credito).
+	final DateTime? creditoVenceEn;
+
+	/// Indica si el credito ya fue liquidado en una sola exhibicion.
+	final bool creditoLiquidado;
+
+	/// Fecha en que se liquido el credito.
+	final DateTime? creditoLiquidadoEn;
+
 	/// Indica si la venta puede anularse.
 	bool puedeAnularse() {
 		return estado == EstadoVenta.completada;
@@ -116,6 +132,10 @@ class Venta {
 		double? montoEfectivo,
 		double? montoTarjeta,
 		double? montoTransferencia,
+		int? creditoDias,
+		DateTime? creditoVenceEn,
+		bool? creditoLiquidado,
+		DateTime? creditoLiquidadoEn,
 	}) {
 		return Venta(
 			id: id ?? this.id,
@@ -133,6 +153,10 @@ class Venta {
 			montoEfectivo: montoEfectivo ?? this.montoEfectivo,
 			montoTarjeta: montoTarjeta ?? this.montoTarjeta,
 			montoTransferencia: montoTransferencia ?? this.montoTransferencia,
+			creditoDias: creditoDias ?? this.creditoDias,
+			creditoVenceEn: creditoVenceEn ?? this.creditoVenceEn,
+			creditoLiquidado: creditoLiquidado ?? this.creditoLiquidado,
+			creditoLiquidadoEn: creditoLiquidadoEn ?? this.creditoLiquidadoEn,
 		);
 	}
 

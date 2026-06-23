@@ -3,6 +3,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:posia_core/posia_core.dart';
 import 'package:posia_database/posia_database.dart';
 import 'package:posia_ui/posia_ui.dart';
 
@@ -13,6 +14,7 @@ import 'pantalla_admin.dart';
 import 'pantalla_caja.dart';
 import 'pantalla_caja_movil.dart';
 import 'pantalla_mi_cuenta.dart';
+import 'pantalla_mis_pedidos.dart';
 
 /// Contenedor raiz post-inicializacion con pestañas Caja y Admin.
 class PantallaInicio extends ConsumerStatefulWidget {
@@ -56,6 +58,7 @@ class _PantallaInicioState extends ConsumerState<PantallaInicio> {
 			);
 		}
 		final muestraAdmin = puedeAccederPanelAdmin(usuario);
+		final esEmpleado = usuario.rol == RolUsuario.empleado;
 		final caja = esPlataformaMovilNativa()
 			? const PantallaCajaMovil()
 			: const PantallaCaja();
@@ -83,7 +86,15 @@ class _PantallaInicioState extends ConsumerState<PantallaInicio> {
 									PantallaAdmin(usuario: usuario),
 								],
 							)
-							: caja,
+							: esEmpleado
+								? IndexedStack(
+									index: _indicePestana,
+									children: [
+										caja,
+										const PantallaMisPedidos(),
+									],
+								)
+								: caja,
 					),
 				],
 			),
@@ -106,7 +117,26 @@ class _PantallaInicioState extends ConsumerState<PantallaInicio> {
 						),
 					],
 				)
-				: null,
+				: esEmpleado
+					? NavigationBar(
+						height: 68.0,
+						labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+						selectedIndex: _indicePestana,
+						onDestinationSelected: (indice) => setState(() => _indicePestana = indice),
+						destinations: const [
+							NavigationDestination(
+								icon: Icon(Icons.point_of_sale_outlined),
+								selectedIcon: Icon(Icons.point_of_sale),
+								label: 'Caja',
+							),
+							NavigationDestination(
+								icon: Icon(Icons.assignment_outlined),
+								selectedIcon: Icon(Icons.assignment),
+								label: 'Pedidos',
+							),
+						],
+					)
+					: null,
 		);
 	}
 

@@ -12,6 +12,7 @@ class CobroRequest {
 		this.montoTarjeta,
 		this.montoTransferencia,
 		this.montoRecibido,
+		this.diasCredito,
 	});
 
 	final MetodoPago metodoPago;
@@ -22,4 +23,7 @@ class CobroRequest {
 
 	/// Efectivo entregado por cliente (solo informativo para cambio).
 	final double? montoRecibido;
+
+	/// Plazo acordado en dias (venta a credito).
+	final int? diasCredito;
 }

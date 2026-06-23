@@ -7,7 +7,7 @@
 library;
 
 /// Version actual del esquema local SQLite.
-const int SCHEMA_VERSION = 11;
+const int SCHEMA_VERSION = 16;
 
 /// Identificador de categoria virtual "Todos" en caja.
 const String CATEGORIA_TODOS_ID = '__todos__';
@@ -23,6 +23,15 @@ const double PESO_MINIMO_GRAMOS_CARNICERIA = 100.0;
 
 /// Decimales permitidos para montos en MXN.
 const int DECIMALES_MONEDA = 2;
+
+/// Utilidad minima sobre costo de compra para cualquier precio de venta.
+const double MARGEN_UTILIDAD_MINIMA_PORCENTAJE = 1.0;
+
+/// Utilidad sugerida por defecto al calcular precio de venta.
+const double UTILIDAD_SUGERIDA_PORCENTAJE = 25.0;
+
+/// Plazo de credito predeterminado para clientes (dias).
+const int DIAS_CREDITO_PREDETERMINADO = 15;
 
 /// Umbral en minutos para marcar inventario remoto como desactualizado.
 const int UMBRAL_STOCK_DESACTUALIZADO_MINUTOS = 15;
@@ -60,3 +69,6 @@ const int LIMITE_MAX_USUARIOS = 15;
 /// Identificadores de categorias para derivar modulo vertical (carniceria / farmacia).
 const String ID_CAT_CARNICERIA = 'cat-carniceria';
 const String ID_CAT_FARMACIA = 'cat-farmacia';
+
+/// Dias de vigencia por defecto en cotizaciones impresas.
+const int VIGENCIA_COTIZACION_DIAS = 7;

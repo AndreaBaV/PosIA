@@ -1,6 +1,8 @@
 /// Modelo inmutable de cliente comercial.
 library;
 
+import '../constants/posia_constants.dart';
+
 /// Representa un cliente con posible lista de precios preferencial.
 class Cliente {
 	const Cliente({
@@ -14,6 +16,7 @@ class Cliente {
 		this.rfc = '',
 		this.direccion = '',
 		this.notas = '',
+		this.diasCredito = DIAS_CREDITO_PREDETERMINADO,
 	});
 
 	final String id;
@@ -26,6 +29,7 @@ class Cliente {
 	final String rfc;
 	final String direccion;
 	final String notas;
+	final int diasCredito;
 
 	Cliente copiarCon({
 		String? id,
@@ -38,6 +42,7 @@ class Cliente {
 		String? rfc,
 		String? direccion,
 		String? notas,
+		int? diasCredito,
 	}) {
 		return Cliente(
 			id: id ?? this.id,
@@ -50,6 +55,7 @@ class Cliente {
 			rfc: rfc ?? this.rfc,
 			direccion: direccion ?? this.direccion,
 			notas: notas ?? this.notas,
+			diasCredito: diasCredito ?? this.diasCredito,
 		);
 	}
 }

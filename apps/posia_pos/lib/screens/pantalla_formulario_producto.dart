@@ -27,6 +27,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 	final _nombreController = TextEditingController();
 	final _codigoController = TextEditingController();
 	final _precioController = TextEditingController();
+	final _costoController = TextEditingController(text: '0');
 	final _notasController = TextEditingController();
 	final _piezasCajaController = TextEditingController();
 	final _bultoController = TextEditingController();
@@ -50,6 +51,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 			_nombreController.text = p.nombre;
 			_codigoController.text = p.codigoBarras;
 			_precioController.text = p.precioBase.toStringAsFixed(2);
+			_costoController.text = p.costoUnitario.toStringAsFixed(2);
 			_notasController.text = p.notas;
 			_categoriaId = p.categoriaId;
 			_unidad = p.unidadMedida;
@@ -114,6 +116,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 		_nombreController.dispose();
 		_codigoController.dispose();
 		_precioController.dispose();
+		_costoController.dispose();
 		_notasController.dispose();
 		_piezasCajaController.dispose();
 		_bultoController.dispose();
@@ -259,17 +262,41 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 	}
 
 	Widget _pestanaPrecios() {
+		final costo = double.tryParse(_costoController.text.replaceAll(',', '.')) ?? 0.0;
+		final minimo = calcularPrecioMinimoVenta(costo);
 		return ListView(
 			padding: const EdgeInsets.all(16.0),
 			children: [
 				TextField(
-					controller: _precioController,
-					keyboardType: TextInputType.number,
+					controller: _costoController,
+					keyboardType: const TextInputType.numberWithOptions(decimal: true),
 					decoration: const InputDecoration(
-						labelText: 'Precio menudeo (MXN) *',
+						labelText: 'Costo de compra (MXN)',
 						border: OutlineInputBorder(),
 						prefixText: '\$ ',
+						helperText: 'Precio al que compra el producto al proveedor',
 					),
+					onChanged: (_) => setState(() {}),
+				),
+				const SizedBox(height: 12.0),
+				TextField(
+					controller: _precioController,
+					keyboardType: const TextInputType.numberWithOptions(decimal: true),
+					decoration: InputDecoration(
+						labelText: 'Precio menudeo (MXN) *',
+						border: const OutlineInputBorder(),
+						prefixText: '\$ ',
+						helperText: costo > 0
+							? 'Minimo permitido: ${formatearMoneda(minimo)}'
+							: null,
+					),
+					onChanged: (_) => setState(() {}),
+				),
+				const SizedBox(height: 12.0),
+				PanelCalculoUtilidad(
+					costoUnitario: costo,
+					precioController: _precioController,
+					alCambiarPrecio: () => setState(() {}),
 				),
 				const SizedBox(height: 16.0),
 				Row(
@@ -428,13 +455,15 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 		setState(() => _guardando = true);
 		try {
 			final servicio = await ref.read(servicioAdminProvider.future);
-			final precio = double.tryParse(_precioController.text) ?? 0.0;
+			final precio = double.tryParse(_precioController.text.replaceAll(',', '.')) ?? 0.0;
+			final costo = double.tryParse(_costoController.text.replaceAll(',', '.')) ?? 0.0;
 			if (_esEdicion) {
 				final base = widget.productoExistente!;
 				final actualizado = base.copiarCon(
 					nombre: nombre,
 					codigoBarras: _codigoController.text.trim(),
 					precioBase: precio,
+					costoUnitario: costo,
 					categoriaId: _categoriaId,
 					unidadMedida: _unidad,
 					piezasPorCaja: _parseInt(_piezasCajaController.text),
@@ -467,6 +496,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 						nombre: nombre,
 						codigoBarras: _codigoController.text.trim(),
 						precioBase: precio,
+						costoUnitario: costo,
 						categoriaId: _categoriaId!,
 						unidadMedida: _unidad,
 						piezasPorCaja: _parseInt(_piezasCajaController.text),

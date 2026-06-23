@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:posia_core/posia_core.dart';
 import 'package:posia_database/posia_database.dart';
+import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
@@ -24,6 +25,7 @@ class PantallaConfiguracionAdmin extends ConsumerStatefulWidget {
 	final _puertoImpresoraController = TextEditingController(text: '9100');
 	String? _tiendaSeleccionadaId;
 	String _modoImpresora = 'ambos';
+	String _teclaCobrar = teclaCobrarPredeterminada;
 
 	@override
 	void dispose() {
@@ -39,6 +41,7 @@ class PantallaConfiguracionAdmin extends ConsumerStatefulWidget {
 		final pinAsync = ref.watch(pinAdminProvider);
 		final configAsync = ref.watch(configDispositivoProvider);
 		final impresoraAsync = ref.watch(configImpresoraProvider);
+		final teclaAsync = ref.watch(teclaCobrarConfigProvider);
 		final tiendasAsync = ref.watch(_tiendasConfigProvider);
 		return Scaffold(
 			appBar: AppBar(title: const Text('Configuración')),
@@ -202,6 +205,42 @@ class PantallaConfiguracionAdmin extends ConsumerStatefulWidget {
 							),
 							const Divider(height: 40.0),
 							const Text(
+								'Atajos de caja',
+								style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
+							),
+							const SizedBox(height: 8.0),
+							const Text('Tecla para cobrar e imprimir ticket desde la pantalla de venta.'),
+							const SizedBox(height: 16.0),
+							teclaAsync.when(
+								data: (tecla) {
+									_teclaCobrar = tecla;
+									return DropdownButtonFormField<String>(
+										key: ValueKey(_teclaCobrar),
+										initialValue: _teclaCobrar,
+										items: List.generate(
+											12,
+											(i) => DropdownMenuItem(
+												value: 'F${i + 1}',
+												child: Text('F${i + 1}'),
+											),
+										),
+										onChanged: (v) => setState(() => _teclaCobrar = v ?? teclaCobrarPredeterminada),
+										decoration: const InputDecoration(
+											labelText: 'Tecla cobrar',
+											border: OutlineInputBorder(),
+										),
+									);
+								},
+								loading: () => const LinearProgressIndicator(),
+								error: (e, _) => Text('$e'),
+							),
+							const SizedBox(height: 12.0),
+							FilledButton(
+								onPressed: _guardarTeclaCobrar,
+								child: const Text('Guardar tecla cobrar'),
+							),
+							const Divider(height: 40.0),
+							const Text(
 								'PIN de administrador',
 								style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
 							),
@@ -273,6 +312,18 @@ class PantallaConfiguracionAdmin extends ConsumerStatefulWidget {
 		}
 		ScaffoldMessenger.of(context).showSnackBar(
 			const SnackBar(content: Text('Impresora configurada')),
+		);
+	}
+
+	Future<void> _guardarTeclaCobrar() async {
+		final servicio = await ref.read(servicioAdminProvider.future);
+		await servicio.guardarTeclaCobrar(_teclaCobrar);
+		ref.invalidate(teclaCobrarConfigProvider);
+		if (!mounted) {
+			return;
+		}
+		ScaffoldMessenger.of(context).showSnackBar(
+			SnackBar(content: Text('Tecla cobrar: $_teclaCobrar')),
 		);
 	}
 

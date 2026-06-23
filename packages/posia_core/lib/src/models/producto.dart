@@ -43,8 +43,7 @@ class Producto {
 	final bool favoritoCaja;
 
 	bool requierePeso() {
-		return moduloVertical == ModuloVertical.carniceria &&
-			unidadMedida == UnidadMedida.kilogramo;
+		return unidadMedida == UnidadMedida.kilogramo;
 	}
 
 	bool requiereLote() {

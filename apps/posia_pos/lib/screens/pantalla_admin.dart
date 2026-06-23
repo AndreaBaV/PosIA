@@ -8,12 +8,17 @@ import 'package:posia_ui/posia_ui.dart';
 import '../providers/admin_providers.dart';
 import 'pantalla_categorias_admin.dart';
 import 'pantalla_clientes_admin.dart';
+import 'pantalla_compras_admin.dart';
 import 'pantalla_corte_caja.dart';
+import 'pantalla_cotizaciones_admin.dart';
+import 'pantalla_creditos_pendientes.dart';
+import 'pantalla_etiquetas_admin.dart';
 import 'pantalla_historial_ventas.dart';
 import 'pantalla_inventario_admin.dart';
 import 'pantalla_listas_precios_admin.dart';
 import 'pantalla_mi_cuenta.dart';
 import 'pantalla_movimientos_inventario.dart';
+import 'pantalla_pedidos_admin.dart';
 import 'pantalla_productos_admin.dart';
 import 'pantalla_proveedores_admin.dart';
 import 'pantalla_reportes_admin.dart';
@@ -134,8 +139,14 @@ class PantallaAdmin extends StatelessWidget {
 		final ventas = [
 			tile('ventas', Icons.attach_money, 'Ventas por tienda', 'Detalle multi-sucursal',
 				PosiaColors.cobrar, const PantallaVentasDia()),
+			tile('pedidos', Icons.local_shipping, 'Pedidos', 'Recibir y asignar a empleados',
+				Colors.deepOrange, const PantallaPedidosAdmin()),
 			tile('historial', Icons.history, 'Historial', 'Ventas y cancelaciones',
 				Colors.green, const PantallaHistorialVentas()),
+			tile('creditos', Icons.account_balance_wallet, 'Creditos', 'Pendientes de liquidar',
+				Colors.amber.shade800, const PantallaCreditosPendientes()),
+			tile('cotizaciones', Icons.request_quote, 'Cotizaciones', 'Historial guardado',
+				Colors.blueGrey, const PantallaCotizacionesAdmin()),
 			tile('corte', Icons.point_of_sale, 'Corte de caja', 'Abrir / cerrar turno',
 				Colors.teal, const PantallaCorteCaja()),
 			tile('vendedores', Icons.badge, 'Vendedores', 'Personal de venta',
@@ -147,14 +158,18 @@ class PantallaAdmin extends StatelessWidget {
 				Colors.orange, const PantallaCategoriasAdmin()),
 			tile('productos', Icons.inventory_2, 'Productos', 'Catálogo unificado',
 				PosiaColors.neutro, const PantallaProductosAdmin()),
-			tile('precios', Icons.sell, 'Listas precios', 'Mayoreo y distribuidor',
+			tile('etiquetas', Icons.label, 'Etiquetas', 'PDF con codigo de barras',
+				Colors.blueGrey, const PantallaEtiquetasAdmin()),
+			tile('precios', Icons.sell, 'Precios por producto', 'Generico, listas y clientes',
 				Colors.green, const PantallaListasPreciosAdmin()),
 		].whereType<Widget>().toList();
 
 		final inventario = [
 			tile('existencias', Icons.warehouse, 'Existencias', 'Multi-tienda',
 				Colors.blueGrey, const PantallaInventarioAdmin()),
-			tile('movimientos', Icons.swap_vert, 'Movimientos', 'Entradas y salidas',
+			tile('compras', Icons.shopping_cart, 'Compras', 'Proveedor, productos y costo',
+				Colors.brown, const PantallaComprasAdmin()),
+			tile('movimientos', Icons.swap_vert, 'Movimientos', 'Salidas y ajustes',
 				Colors.indigo, const PantallaMovimientosInventario()),
 			tile('traspasos', Icons.swap_horiz, 'Traspasos', 'Entre sucursales',
 				Colors.cyan, const PantallaTraspasosAdmin()),

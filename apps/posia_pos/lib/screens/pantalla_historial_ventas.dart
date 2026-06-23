@@ -8,6 +8,8 @@ import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
+import '../utils/ticket_credito_util.dart';
+import '../utils/ticket_venta_util.dart';
 
 class PantallaHistorialVentas extends ConsumerStatefulWidget {
 	const PantallaHistorialVentas({super.key});
@@ -93,8 +95,9 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 												),
 												subtitle: Text(
 													'${venta.lineas.length} productos · '
-													'${etiquetaMetodoPago(venta.metodoPago)} · '
-													'${venta.creadaEn.toLocal().toString().substring(0, 16)}',
+													'${etiquetaMetodoPago(venta.metodoPago)}'
+													'${venta.metodoPago == MetodoPago.credito && !venta.creditoLiquidado ? ' · Pendiente' : ''}'
+													' · ${venta.creadaEn.toLocal().toString().substring(0, 16)}',
 												),
 												trailing: venta.puedeAnularse()
 													? IconButton(
@@ -229,6 +232,21 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 							const SizedBox(height: 16.0),
 							_wrapInfo('Estado', etiquetaEstadoVenta(venta.estado)),
 							_wrapInfo('Método de pago', etiquetaMetodoPago(venta.metodoPago)),
+							if (venta.metodoPago == MetodoPago.credito &&
+								venta.creditoDias != null)
+								_wrapInfo('Plazo de crédito', '${venta.creditoDias} días'),
+							if (venta.creditoVenceEn != null)
+								_wrapInfo(
+									'Pagar a más tardar',
+									formatearFechaCredito(venta.creditoVenceEn!.toLocal()),
+								),
+							if (venta.metodoPago == MetodoPago.credito)
+								_wrapInfo(
+									'Estado crédito',
+									venta.creditoLiquidado
+										? 'Liquidado${venta.creditoLiquidadoEn != null ? ' · ${formatearFechaCredito(venta.creditoLiquidadoEn!.toLocal())}' : ''}'
+										: 'Pendiente de pago',
+								),
 							_wrapInfo('Fecha', venta.creadaEn.toLocal().toString().substring(0, 19)),
 							if (venta.vendedorId != null)
 								_wrapInfo('Vendedor', venta.vendedorId!),
@@ -263,7 +281,22 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 												_reimprimirTicket(venta);
 											},
 											icon: const Icon(Icons.print),
-											label: const Text('Reimprimir'),
+											label: Text(
+												venta.metodoPago == MetodoPago.credito && !venta.creditoLiquidado
+													? 'Reimprimir pagarés'
+													: 'Reimprimir',
+											),
+										),
+									if (venta.metodoPago == MetodoPago.credito &&
+										!venta.creditoLiquidado &&
+										venta.estado == EstadoVenta.completada)
+										TextButton.icon(
+											onPressed: () {
+												Navigator.pop(ctx);
+												_liquidarCredito(venta);
+											},
+											icon: const Icon(Icons.paid),
+											label: const Text('Liquidar'),
 										),
 									if (venta.puedeDevolverseParcial())
 										TextButton(
@@ -312,14 +345,32 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 
 	Future<void> _reimprimirTicket(Venta venta) async {
 		final servicio = await ref.read(servicioAdminProvider.future);
-		final tienda = await servicio.obtenerTiendaActiva();
-		final texto = generarTextoTicket(
-			venta: venta,
-			nombreTienda: tienda?.nombre ?? 'Tienda',
-		);
+		final config = await ref.read(configDispositivoProvider.future);
 		try {
 			final hardware = await ref.read(hardwareRegistryProvider.future);
-			await hardware.obtenerImpresora().imprimirTicket(texto);
+			final impresora = hardware.obtenerImpresora();
+			if (venta.metodoPago == MetodoPago.credito && !venta.creditoLiquidado) {
+				final pagares = await construirTextosPagareCredito(
+					venta: venta,
+					servicioAdmin: servicio,
+				);
+				for (final pagare in pagares) {
+					await impresora.imprimirTicket(pagare);
+				}
+			} else if (venta.metodoPago == MetodoPago.credito && venta.creditoLiquidado) {
+				final texto = await construirTextoLiquidacionCredito(
+					venta: venta,
+					servicioAdmin: servicio,
+				);
+				await impresora.imprimirTicket(texto);
+			} else {
+				final texto = await construirTextoTicketVenta(
+					venta: venta,
+					servicioAdmin: servicio,
+					config: config,
+				);
+				await impresora.imprimirTicket(texto);
+			}
 			if (!mounted) {
 				return;
 			}
@@ -332,6 +383,52 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 			}
 			ScaffoldMessenger.of(context).showSnackBar(
 				const SnackBar(content: Text('No se pudo imprimir el ticket')),
+			);
+		}
+	}
+
+	Future<void> _liquidarCredito(Venta venta) async {
+		final confirmar = await showDialog<bool>(
+			context: context,
+			builder: (ctx) => AlertDialog(
+				title: const Text('Liquidar crédito'),
+				content: Text(
+					'Confirmar pago de ${formatearMoneda(venta.total)} en una sola exhibición.',
+				),
+				actions: [
+					TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+					FilledButton(
+						onPressed: () => Navigator.pop(ctx, true),
+						child: const Text('Liquidar'),
+					),
+				],
+			),
+		);
+		if (confirmar != true || !mounted) {
+			return;
+		}
+		try {
+			final servicio = await ref.read(servicioAdminProvider.future);
+			final actualizada = await servicio.liquidarCreditoVenta(venta.id);
+			final texto = await construirTextoLiquidacionCredito(
+				venta: actualizada,
+				servicioAdmin: servicio,
+			);
+			final hardware = await ref.read(hardwareRegistryProvider.future);
+			await hardware.obtenerImpresora().imprimirTicket(texto);
+			ref.invalidate(_historialProvider(_diasAtras));
+			if (!mounted) {
+				return;
+			}
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(content: Text('Crédito liquidado')),
+			);
+		} catch (error) {
+			if (!mounted) {
+				return;
+			}
+			ScaffoldMessenger.of(context).showSnackBar(
+				SnackBar(content: Text('$error'), backgroundColor: PosiaColors.cancelar),
 			);
 		}
 	}

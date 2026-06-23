@@ -374,11 +374,7 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 			lista = lista.where((producto) => producto.categoriaId == categoriaId);
 		}
 		if (textoBusqueda.isNotEmpty) {
-			lista = lista.where(
-				(producto) =>
-					producto.nombre.toLowerCase().contains(textoBusqueda) ||
-					producto.codigoBarras.contains(textoBusqueda),
-			);
+			return filtrarProductosPorBusqueda(lista.toList(), textoBusqueda);
 		}
 		return lista.toList();
 	}

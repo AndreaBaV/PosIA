@@ -38,6 +38,10 @@ class VentaRepository {
 				'monto_efectivo': venta.montoEfectivo,
 				'monto_tarjeta': venta.montoTarjeta,
 				'monto_transferencia': venta.montoTransferencia,
+				'credito_dias': venta.creditoDias,
+				'credito_vence_en': venta.creditoVenceEn?.toIso8601String(),
+				'credito_liquidado': venta.creditoLiquidado ? 1 : 0,
+				'credito_liquidado_en': venta.creditoLiquidadoEn?.toIso8601String(),
 			});
 			for (final linea in venta.lineas) {
 				await transaccion.insert('sale_lines', {
@@ -232,6 +236,36 @@ class VentaRepository {
 		);
 	}
 
+	/// Lista ventas a credito pendientes de liquidar.
+	Future<List<Venta>> listarCreditosPendientes(String tiendaId) async {
+		final filas = await _baseDatos.query(
+			'sales',
+			where:
+				"tienda_id = ? AND metodo_pago = 'credito' "
+				'AND credito_liquidado = 0 AND estado = ?',
+			whereArgs: [tiendaId, EstadoVenta.completada.name],
+			orderBy: 'creada_en DESC',
+		);
+		final ventas = <Venta>[];
+		for (final fila in filas) {
+			ventas.add(await _mapearVenta(fila));
+		}
+		return ventas;
+	}
+
+	/// Marca credito como liquidado.
+	Future<void> actualizarCreditoLiquidado(Venta venta) async {
+		await _baseDatos.update(
+			'sales',
+			{
+				'credito_liquidado': venta.creditoLiquidado ? 1 : 0,
+				'credito_liquidado_en': venta.creditoLiquidadoEn?.toIso8601String(),
+			},
+			where: 'id = ?',
+			whereArgs: [venta.id],
+		);
+	}
+
 	/// Calcula total vendido en el dia para tienda.
 	///
 	/// [tiendaId] Tienda consultada.
@@ -271,6 +305,7 @@ class VentaRepository {
 			)
 			.toList();
 		final estadoNombre = filaVenta['estado'] as String? ?? EstadoVenta.completada.name;
+		final venceRaw = filaVenta['credito_vence_en'] as String?;
 		return Venta(
 			id: ventaId,
 			tiendaId: filaVenta['tienda_id'] as String,
@@ -287,6 +322,12 @@ class VentaRepository {
 			montoEfectivo: (filaVenta['monto_efectivo'] as num?)?.toDouble(),
 			montoTarjeta: (filaVenta['monto_tarjeta'] as num?)?.toDouble(),
 			montoTransferencia: (filaVenta['monto_transferencia'] as num?)?.toDouble(),
+			creditoDias: filaVenta['credito_dias'] as int?,
+			creditoVenceEn: venceRaw == null ? null : DateTime.parse(venceRaw),
+			creditoLiquidado: (filaVenta['credito_liquidado'] as int? ?? 0) == 1,
+			creditoLiquidadoEn: filaVenta['credito_liquidado_en'] == null
+				? null
+				: DateTime.parse(filaVenta['credito_liquidado_en'] as String),
 		);
 	}
 

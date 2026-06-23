@@ -17,6 +17,7 @@ import 'package:posia_ui/posia_ui.dart';
 
 
 import '../providers/admin_providers.dart';
+import 'pantalla_compras_admin.dart';
 
 
 
@@ -261,23 +262,13 @@ class _PantallaInventarioAdminState extends ConsumerState<PantallaInventarioAdmi
 														children: [
 
 															TextButton.icon(
-
-																onPressed: () => _ajustar(
-
-																	reg,
-
-																	tiendaId,
-
-																	TipoMovimientoInventario.entrada,
-
-																	cantidadTienda,
-
+																onPressed: () => Navigator.of(context).push(
+																	MaterialPageRoute<void>(
+																		builder: (_) => const PantallaComprasAdmin(),
+																	),
 																),
-
-																icon: const Icon(Icons.add),
-
-																label: const Text('Entrada'),
-
+																icon: const Icon(Icons.shopping_cart),
+																label: const Text('Comprar'),
 															),
 
 															TextButton.icon(

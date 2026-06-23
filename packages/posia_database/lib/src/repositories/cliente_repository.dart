@@ -57,6 +57,7 @@ class ClienteRepository {
 			'rfc': cliente.rfc,
 			'direccion': cliente.direccion,
 			'notas': cliente.notas,
+			'dias_credito': cliente.diasCredito,
 		};
 	}
 
@@ -72,6 +73,7 @@ class ClienteRepository {
 			rfc: fila['rfc'] as String? ?? '',
 			direccion: fila['direccion'] as String? ?? '',
 			notas: fila['notas'] as String? ?? '',
+			diasCredito: (fila['dias_credito'] as int?) ?? DIAS_CREDITO_PREDETERMINADO,
 		);
 	}
 }

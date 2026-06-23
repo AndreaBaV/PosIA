@@ -45,6 +45,24 @@ const String CLAVE_CONFIG_IMPRESORA_HOST = 'printer_host';
 /// Clave de puerto de impresora termica.
 const String CLAVE_CONFIG_IMPRESORA_PUERTO = 'printer_port';
 
+/// Tecla de acceso rapido para cobrar (ej. F12, Enter con modificador).
+const String CLAVE_CONFIG_TECLA_COBRAR = 'tecla_cobrar';
+
+/// Ancho etiqueta producto en mm.
+const String CLAVE_CONFIG_ETIQUETA_ANCHO_MM = 'etiqueta_ancho_mm';
+
+/// Alto etiqueta producto en mm.
+const String CLAVE_CONFIG_ETIQUETA_ALTO_MM = 'etiqueta_alto_mm';
+
+/// Tecla de cobro por defecto si no hay configuracion.
+const String teclaCobrarConfigPredeterminada = 'F12';
+
+/// Ancho de etiqueta por defecto (mm).
+const double etiquetaAnchoMmPredeterminado = 50.0;
+
+/// Alto de etiqueta por defecto (mm).
+const double etiquetaAltoMmPredeterminado = 30.0;
+
 /// Lee y escribe pares clave-valor en tabla app_config.
 class ConfigRepository {
 	/// Crea repositorio con conexion SQLite activa.

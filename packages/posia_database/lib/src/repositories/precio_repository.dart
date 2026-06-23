@@ -251,6 +251,39 @@ class PrecioRepository implements RepositorioPrecio {
 		};
 	}
 
+	/// Precios del producto en cada lista comercial.
+	Future<Map<String, double>> listarPreciosProductoEnListas(String productoId) async {
+		final filas = await _baseDatos.query(
+			'price_list_items',
+			where: 'producto_id = ?',
+			whereArgs: [productoId],
+		);
+		return {
+			for (final f in filas)
+				f['lista_precios_id'] as String: (f['precio_unitario'] as num).toDouble(),
+		};
+	}
+
+	/// Precios especiales del producto por cliente.
+	Future<List<PrecioClienteProducto>> listarPreciosProductoPorCliente(
+		String productoId,
+	) async {
+		final filas = await _baseDatos.query(
+			'customer_product_prices',
+			where: 'producto_id = ?',
+			whereArgs: [productoId],
+		);
+		return filas
+			.map(
+				(fila) => PrecioClienteProducto(
+					clienteId: fila['cliente_id'] as String,
+					productoId: productoId,
+					precioUnitario: (fila['precio_unitario'] as num).toDouble(),
+				),
+			)
+			.toList();
+	}
+
 	/// Elimina lista y sus precios asociados.
 	Future<void> eliminarLista(String listaId) async {
 		await _baseDatos.transaction((tx) async {

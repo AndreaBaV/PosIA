@@ -88,6 +88,12 @@ final configImpresoraProvider = FutureProvider<ConfigImpresora>((ref) async {
 	return servicio.obtenerConfigImpresora();
 });
 
+/// Tecla configurada para cobrar en caja (ej. F12).
+final teclaCobrarConfigProvider = FutureProvider<String>((ref) async {
+	final servicio = await ref.watch(servicioAdminProvider.future);
+	return servicio.obtenerTeclaCobrar();
+});
+
 /// Indica si el tecnico completo la instalacion inicial (hub + caja).
 final instalacionCompletaProvider = FutureProvider<bool>((ref) async {
 	await ref.watch(estadoInicializacionProvider.future);

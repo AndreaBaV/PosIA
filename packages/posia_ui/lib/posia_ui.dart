@@ -7,6 +7,7 @@
 library;
 
 export 'src/utils/etiquetas_ui.dart';
+export 'src/utils/teclas_caja_util.dart';
 export 'src/utils/iconos_categoria.dart';
 export 'src/utils/layout_responsivo.dart';
 export 'src/utils/presentacion_rol.dart';
@@ -21,6 +22,7 @@ export 'src/widgets/dialogo_peso_carniceria.dart';
 export 'src/widgets/grilla_productos.dart';
 export 'src/widgets/insignia_rol.dart';
 export 'src/widgets/panel_carrito.dart';
+export 'src/widgets/panel_calculo_utilidad.dart';
 export 'src/widgets/panel_total.dart';
 export 'src/widgets/selector_motivo_inventario.dart';
 export 'src/widgets/tarjeta_menu_admin.dart';

@@ -143,6 +143,45 @@ void main() {
 			await fixture.cerrar();
 		});
 
+		test('registrarCompra aumenta stock y actualiza costo', () async {
+			final fixture = await FixtureAdmin.abrir();
+			final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
+			final proveedor = await servicio.registrarProveedor(nombre: 'Distribuidora');
+			final producto = await servicio.registrarProductoCompleto(
+				AltaProductoRequest(
+					nombre: 'Comprado',
+					codigoBarras: '555',
+					precioBase: 20.0,
+					categoriaId: fixture.categoriaId,
+					stockInicial: 5.0,
+					costoUnitario: 8.0,
+				),
+			);
+			final compra = await servicio.registrarCompra(
+				proveedorId: proveedor.id,
+				fechaCompra: DateTime.utc(2026, 6, 22),
+				lineas: [
+					LineaCompraSolicitud(
+						productoId: producto.id,
+						cantidad: 10.0,
+						costoUnitario: 9.5,
+					),
+				],
+			);
+			expect(compra.lineas.length, 1);
+			expect(compra.total, 95.0);
+			final stock = await fixture.inventarioRepository.obtenerStock(
+				producto.id,
+				fixture.tiendaOrigenId,
+			);
+			expect(stock?.cantidad, 15.0);
+			final actualizado = await servicio.obtenerProducto(producto.id);
+			expect(actualizado?.costoUnitario, 9.5);
+			final historial = await servicio.listarCompras();
+			expect(historial.any((c) => c.id == compra.id), isTrue);
+			await fixture.cerrar();
+		});
+
 		test('listarVentasCliente retorna ventas filtradas', () async {
 			final fixture = await FixtureAdmin.abrir();
 			final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);

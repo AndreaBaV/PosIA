@@ -16,12 +16,15 @@ import '../database/posia_local_database.dart';
 import '../repositories/categoria_repository.dart';
 import '../repositories/cliente_repository.dart';
 import '../repositories/descuento_cliente_repository.dart';
+import '../repositories/compra_repository.dart';
+import '../repositories/cotizacion_repository.dart';
 import '../repositories/config_repository.dart';
 import '../repositories/movimiento_inventario_repository.dart';
 import '../repositories/proveedor_repository.dart';
 import '../repositories/inventario_repository.dart';
 import '../repositories/lote_farmacia_repository.dart';
 import '../repositories/precio_repository.dart';
+import '../repositories/pedido_repository.dart';
 import '../repositories/producto_repository.dart';
 import '../repositories/sync_event_repository.dart';
 import '../repositories/sync_state_repository.dart';
@@ -117,6 +120,9 @@ class FabricaServicios {
 		final movimientoRepo = MovimientoInventarioRepository(baseDatos: base);
 		final turnoRepo = TurnoCajaRepository(baseDatos: base);
 		final traspasoRepo = TraspasoRepository(baseDatos: base);
+		final compraRepo = CompraRepository(baseDatos: base);
+		final pedidoRepo = PedidoRepository(baseDatos: base);
+		final cotizacionRepo = CotizacionRepository(baseDatos: base);
 		final varianteRepo = VarianteRepository(baseDatos: base);
 		final servicioCorteCaja = ServicioCorteCaja(
 			turnoRepository: turnoRepo,
@@ -163,6 +169,7 @@ class FabricaServicios {
 			servicioFarmacia: servicioFarmacia,
 			categoriaRepository: categoriaRepo,
 			vendedorRepository: vendedorRepo,
+			cotizacionRepository: cotizacionRepo,
 			servicioCorteCaja: servicioCorteCaja,
 			tenantId: tenantId,
 			tiendaId: tiendaId,
@@ -182,6 +189,9 @@ class FabricaServicios {
 			vendedorRepository: vendedorRepo,
 			usuarioRepository: usuarioRepo,
 			proveedorRepository: proveedorRepo,
+			compraRepository: compraRepo,
+			pedidoRepository: pedidoRepo,
+			cotizacionRepository: cotizacionRepo,
 			precioRepository: precioRepo,
 			movimientoRepository: movimientoRepo,
 			traspasoRepository: traspasoRepo,

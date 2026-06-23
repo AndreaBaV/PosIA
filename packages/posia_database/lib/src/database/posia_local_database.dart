@@ -153,5 +153,20 @@ class PosiaLocalDatabase {
 		if (versionAnterior < 11 && versionNueva >= 11) {
 			await MigracionesEsquema.migrarVersion10A11(base);
 		}
+		if (versionAnterior < 12 && versionNueva >= 12) {
+			await MigracionesEsquema.migrarVersion11A12(base);
+		}
+		if (versionAnterior < 13 && versionNueva >= 13) {
+			await MigracionesEsquema.migrarVersion12A13(base);
+		}
+		if (versionAnterior < 14 && versionNueva >= 14) {
+			await MigracionesEsquema.migrarVersion13A14(base);
+		}
+		if (versionAnterior < 15 && versionNueva >= 15) {
+			await MigracionesEsquema.migrarVersion14A15(base);
+		}
+		if (versionAnterior < 16 && versionNueva >= 16) {
+			await MigracionesEsquema.migrarVersion15A16(base);
+		}
 	}
 }

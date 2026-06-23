@@ -308,6 +308,9 @@ class MigracionesEsquema {
 				dias_credito INTEGER NOT NULL DEFAULT 0
 			)
 		''');
+		await _crearTablasCompras(base);
+		await _crearTablasPedidos(base);
+		await _crearTablasCotizaciones(base);
 		await base.execute('''
 			CREATE TABLE cash_shifts (
 				id TEXT PRIMARY KEY,
@@ -458,7 +461,8 @@ class MigracionesEsquema {
 				email TEXT NOT NULL DEFAULT '',
 				rfc TEXT NOT NULL DEFAULT '',
 				direccion TEXT NOT NULL DEFAULT '',
-				notas TEXT NOT NULL DEFAULT ''
+				notas TEXT NOT NULL DEFAULT '',
+				dias_credito INTEGER NOT NULL DEFAULT $DIAS_CREDITO_PREDETERMINADO
 			)
 		''');
 		await base.execute('''
@@ -523,7 +527,11 @@ class MigracionesEsquema {
 				descuento_ticket REAL NOT NULL DEFAULT 0,
 				monto_efectivo REAL,
 				monto_tarjeta REAL,
-				monto_transferencia REAL
+				monto_transferencia REAL,
+				credito_dias INTEGER,
+				credito_vence_en TEXT,
+				credito_liquidado INTEGER NOT NULL DEFAULT 0,
+				credito_liquidado_en TEXT
 			)
 		''');
 		await base.execute('''
@@ -584,6 +592,152 @@ class MigracionesEsquema {
 	/// Tabla guia `ejemplo` en bases ya existentes (v10 → v11).
 	static Future<void> migrarVersion10A11(Database base) async {
 		await PlaceholdersEjemplo.insertarGuiaTenant(base);
+	}
+
+	/// Compras a proveedor con historial (v11 → v12).
+	static Future<void> migrarVersion11A12(Database base) async {
+		await _crearTablasCompras(base);
+	}
+
+	/// Credito de clientes: plazo y datos en ventas (v12 → v13).
+	static Future<void> migrarVersion12A13(Database base) async {
+		await _agregarColumnaSiNoExiste(
+			base,
+			'customers',
+			'dias_credito',
+			'INTEGER NOT NULL DEFAULT $DIAS_CREDITO_PREDETERMINADO',
+		);
+		await _agregarColumnaSiNoExiste(base, 'sales', 'credito_dias', 'INTEGER');
+		await _agregarColumnaSiNoExiste(base, 'sales', 'credito_vence_en', 'TEXT');
+	}
+
+	/// Pedidos con asignacion a empleados (v13 → v14).
+	static Future<void> migrarVersion13A14(Database base) async {
+		await _crearTablasPedidos(base);
+	}
+
+	static Future<void> _crearTablasPedidos(Database base) async {
+		await base.execute('''
+			CREATE TABLE IF NOT EXISTS orders (
+				id TEXT PRIMARY KEY,
+				tienda_id TEXT NOT NULL,
+				cliente_id TEXT,
+				nombre_entrega TEXT NOT NULL,
+				telefono_entrega TEXT NOT NULL,
+				direccion_entrega TEXT NOT NULL,
+				es_credito INTEGER NOT NULL DEFAULT 0,
+				credito_dias INTEGER,
+				credito_vence_en TEXT,
+				metodo_pago TEXT NOT NULL,
+				total REAL NOT NULL,
+				notas TEXT NOT NULL DEFAULT '',
+				estado TEXT NOT NULL DEFAULT 'recibido',
+				asignado_a_usuario_id TEXT,
+				asignado_a_usuario_nombre TEXT,
+				asignado_en TEXT,
+				creado_en TEXT NOT NULL,
+				creado_por_usuario_id TEXT,
+				venta_id TEXT
+			)
+		''');
+		await base.execute('''
+			CREATE TABLE IF NOT EXISTS order_lines (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				pedido_id TEXT NOT NULL,
+				producto_id TEXT NOT NULL,
+				nombre_producto TEXT NOT NULL,
+				cantidad REAL NOT NULL,
+				precio_unitario REAL NOT NULL,
+				subtotal REAL NOT NULL
+			)
+		''');
+		await base.execute(
+			'CREATE INDEX IF NOT EXISTS idx_orders_tienda_estado '
+			'ON orders(tienda_id, estado, creado_en DESC)',
+		);
+		await base.execute(
+			'CREATE INDEX IF NOT EXISTS idx_orders_empleado '
+			'ON orders(asignado_a_usuario_id, estado)',
+		);
+	}
+
+	/// Credito liquidado y cotizaciones (v14 → v15).
+	static Future<void> migrarVersion14A15(Database base) async {
+		await _agregarColumnaSiNoExiste(
+			base,
+			'sales',
+			'credito_liquidado',
+			'INTEGER NOT NULL DEFAULT 0',
+		);
+		await _agregarColumnaSiNoExiste(base, 'sales', 'credito_liquidado_en', 'TEXT');
+	}
+
+	/// Cotizaciones persistidas (v15 → v16).
+	static Future<void> migrarVersion15A16(Database base) async {
+		await _crearTablasCotizaciones(base);
+	}
+
+	static Future<void> _crearTablasCotizaciones(Database base) async {
+		await base.execute('''
+			CREATE TABLE IF NOT EXISTS quotes (
+				id TEXT PRIMARY KEY,
+				tienda_id TEXT NOT NULL,
+				cliente_id TEXT,
+				nombre_cliente TEXT,
+				total REAL NOT NULL,
+				notas TEXT NOT NULL DEFAULT '',
+				vigencia_dias INTEGER NOT NULL DEFAULT $VIGENCIA_COTIZACION_DIAS,
+				creada_en TEXT NOT NULL,
+				caja_id TEXT,
+				vendedor_id TEXT
+			)
+		''');
+		await base.execute('''
+			CREATE TABLE IF NOT EXISTS quote_lines (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				cotizacion_id TEXT NOT NULL,
+				producto_id TEXT NOT NULL,
+				nombre_producto TEXT NOT NULL,
+				cantidad REAL NOT NULL,
+				precio_unitario REAL NOT NULL,
+				regla_precio TEXT NOT NULL DEFAULT 'precioBase',
+				subtotal REAL NOT NULL
+			)
+		''');
+		await base.execute(
+			'CREATE INDEX IF NOT EXISTS idx_quotes_tienda_fecha '
+			'ON quotes(tienda_id, creada_en DESC)',
+		);
+	}
+
+	static Future<void> _crearTablasCompras(Database base) async {
+		await base.execute('''
+			CREATE TABLE IF NOT EXISTS purchases (
+				id TEXT PRIMARY KEY,
+				tienda_id TEXT NOT NULL,
+				proveedor_id TEXT NOT NULL,
+				fecha_compra TEXT NOT NULL,
+				notas TEXT NOT NULL DEFAULT '',
+				total REAL NOT NULL,
+				creada_en TEXT NOT NULL,
+				creado_por TEXT
+			)
+		''');
+		await base.execute('''
+			CREATE TABLE IF NOT EXISTS purchase_lines (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				compra_id TEXT NOT NULL,
+				producto_id TEXT NOT NULL,
+				nombre_producto TEXT NOT NULL,
+				cantidad REAL NOT NULL,
+				costo_unitario REAL NOT NULL,
+				subtotal REAL NOT NULL
+			)
+		''');
+		await base.execute(
+			'CREATE INDEX IF NOT EXISTS idx_purchases_tienda_fecha '
+			'ON purchases(tienda_id, fecha_compra DESC)',
+		);
 	}
 
 	/// Crea tablas verticales en instalacion nueva version 2.

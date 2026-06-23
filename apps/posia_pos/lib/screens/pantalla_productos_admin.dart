@@ -7,6 +7,7 @@ import 'package:posia_core/posia_core.dart';
 import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
+import '../widgets/dialogo_actualizar_precio_venta.dart';
 import 'pantalla_formulario_producto.dart';
 import 'pantalla_variantes_admin.dart';
 
@@ -239,6 +240,17 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 			await _abrirFormulario(context, producto);
 			return;
 		}
+		if (accion == 'precio') {
+			final ok = await mostrarDialogoActualizarPrecioVenta(
+				context: context,
+				producto: producto,
+				obtenerServicio: () => ref.read(servicioAdminProvider.future),
+			);
+			if (ok) {
+				ref.invalidate(_productosCatalogoProvider);
+			}
+			return;
+		}
 		if (accion == 'variantes') {
 			await Navigator.push(
 				context,
@@ -344,6 +356,10 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 	List<PopupMenuEntry<String>> _menuProducto(Producto producto) {
 		return [
 			const PopupMenuItem(value: 'editar', child: Text('Editar')),
+			const PopupMenuItem(
+				value: 'precio',
+				child: Text('Actualizar precio'),
+			),
 			const PopupMenuItem(value: 'variantes', child: Text('Variantes')),
 			if (producto.activo)
 				const PopupMenuItem(value: 'desactivar', child: Text('Desactivar'))

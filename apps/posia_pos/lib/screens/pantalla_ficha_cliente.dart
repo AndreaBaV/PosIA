@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:posia_core/posia_core.dart';
 
 import '../providers/admin_providers.dart';
-import 'seccion_descuentos_cliente.dart';
 
 class PantallaFichaCliente extends ConsumerStatefulWidget {
 	const PantallaFichaCliente({required this.cliente, super.key});
@@ -26,6 +25,7 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 	late final TextEditingController _rfcController;
 	late final TextEditingController _direccionController;
 	late final TextEditingController _notasController;
+	late final TextEditingController _diasCreditoController;
 	late bool _credito;
 	late bool _activo;
 	String? _listaPreciosId;
@@ -33,7 +33,7 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 	@override
 	void initState() {
 		super.initState();
-		_tabs = TabController(length: 3, vsync: this);
+		_tabs = TabController(length: 2, vsync: this);
 		final c = widget.cliente;
 		_nombreController = TextEditingController(text: c.nombre);
 		_telefonoController = TextEditingController(text: c.telefono);
@@ -41,6 +41,7 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 		_rfcController = TextEditingController(text: c.rfc);
 		_direccionController = TextEditingController(text: c.direccion);
 		_notasController = TextEditingController(text: c.notas);
+		_diasCreditoController = TextEditingController(text: c.diasCredito.toString());
 		_credito = c.creditoHabilitado;
 		_activo = c.activo;
 		_listaPreciosId = c.listaPreciosId;
@@ -55,6 +56,7 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 		_rfcController.dispose();
 		_direccionController.dispose();
 		_notasController.dispose();
+		_diasCreditoController.dispose();
 		super.dispose();
 	}
 
@@ -69,7 +71,6 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 					controller: _tabs,
 					tabs: const [
 						Tab(text: 'Datos'),
-						Tab(text: 'Descuentos'),
 						Tab(text: 'Ventas'),
 					],
 				),
@@ -93,8 +94,9 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 							const SizedBox(height: 8.0),
 							TextField(
 								controller: _telefonoController,
+								keyboardType: TextInputType.phone,
 								decoration: const InputDecoration(
-									labelText: 'Teléfono',
+									labelText: 'Teléfono * (requerido para crédito)',
 									border: OutlineInputBorder(),
 								),
 							),
@@ -119,8 +121,19 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 								controller: _direccionController,
 								maxLines: 2,
 								decoration: const InputDecoration(
-									labelText: 'Dirección',
+									labelText: 'Dirección * (requerida para crédito)',
 									border: OutlineInputBorder(),
+								),
+							),
+							const SizedBox(height: 8.0),
+							TextField(
+								controller: _diasCreditoController,
+								keyboardType: TextInputType.number,
+								decoration: const InputDecoration(
+									labelText: 'Días de crédito predeterminados',
+									border: OutlineInputBorder(),
+									suffixText: 'días',
+									helperText: 'Plazo al fiar en caja',
 								),
 							),
 							const SizedBox(height: 8.0),
@@ -137,7 +150,7 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 											items: [
 												const DropdownMenuItem<String?>(
 													value: null,
-													child: Text('Precio normal'),
+													child: Text('Precio generico (publico)'),
 												),
 												...listas.map(
 													(l) => DropdownMenuItem<String?>(
@@ -164,6 +177,9 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 							),
 							SwitchListTile(
 								title: const Text('Crédito habilitado'),
+								subtitle: const Text(
+									'Requiere teléfono y dirección completos',
+								),
 								value: _credito,
 								onChanged: (v) => setState(() => _credito = v),
 							),
@@ -174,7 +190,6 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 							),
 						],
 					),
-					SeccionDescuentosCliente(clienteId: widget.cliente.id),
 					Column(
 						children: [
 							resumenAsync.when(
@@ -233,20 +248,31 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 	}
 
 	Future<void> _guardar() async {
-		final servicio = await ref.read(servicioAdminProvider.future);
-		await servicio.actualizarCliente(
-			widget.cliente.copiarCon(
-				nombre: _nombreController.text.trim(),
-				telefono: _telefonoController.text.trim(),
-				email: _emailController.text.trim(),
-				rfc: _rfcController.text.trim(),
-				direccion: _direccionController.text.trim(),
-				notas: _notasController.text.trim(),
-				creditoHabilitado: _credito,
-				activo: _activo,
-				listaPreciosId: _listaPreciosId,
-			),
+		final diasCredito = int.tryParse(_diasCreditoController.text.trim()) ??
+			DIAS_CREDITO_PREDETERMINADO;
+		final actualizado = widget.cliente.copiarCon(
+			nombre: _nombreController.text.trim(),
+			telefono: _telefonoController.text.trim(),
+			email: _emailController.text.trim(),
+			rfc: _rfcController.text.trim(),
+			direccion: _direccionController.text.trim(),
+			notas: _notasController.text.trim(),
+			creditoHabilitado: _credito,
+			activo: _activo,
+			listaPreciosId: _listaPreciosId,
+			diasCredito: diasCredito,
 		);
+		if (_credito) {
+			final error = validarClienteParaCredito(actualizado, diasCredito: diasCredito);
+			if (error != null) {
+				ScaffoldMessenger.of(context).showSnackBar(
+					SnackBar(content: Text(error)),
+				);
+				return;
+			}
+		}
+		final servicio = await ref.read(servicioAdminProvider.future);
+		await servicio.actualizarCliente(actualizado);
 		if (!mounted) {
 			return;
 		}

@@ -14,6 +14,8 @@ dependencies:
   flutter_riverpod: ^3.0.3
   path_provider: ^2.1.5
   permission_handler: ^12.0.1
+  pdf: ^3.11.3
+  barcode: ^2.2.9
   speech_to_text: ^7.0.0
   posia_core:
     path: ../../packages/posia_core

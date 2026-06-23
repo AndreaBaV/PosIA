@@ -9,7 +9,9 @@ import 'package:posia_database/posia_database.dart';
 import 'package:posia_ui/posia_ui.dart';
 import 'package:posia_voice/posia_voice.dart';
 
+import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
+import '../utils/ticket_venta_util.dart';
 import '../voz/servicio_voz_dispositivo.dart';
 
 class PantallaCajaMovil extends ConsumerStatefulWidget {
@@ -413,10 +415,11 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 			return;
 		}
 		final contenedor = await ref.read(contenedorServiciosProvider.future);
-		final tienda = await contenedor.servicioAdmin.obtenerTiendaActiva();
-		final textoTicket = generarTextoTicket(
+		final config = await ref.read(configDispositivoProvider.future);
+		final textoTicket = await construirTextoTicketVenta(
 			venta: venta,
-			nombreTienda: tienda?.nombre ?? 'Tienda',
+			servicioAdmin: contenedor.servicioAdmin,
+			config: config,
 		);
 		var ticketGuardado = false;
 		try {

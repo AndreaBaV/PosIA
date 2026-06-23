@@ -52,6 +52,7 @@ class FixtureAdmin {
 			clienteRepository: ClienteRepository(baseDatos: base),
 			vendedorRepository: VendedorRepository(baseDatos: base),
 			proveedorRepository: ProveedorRepository(baseDatos: base),
+			compraRepository: CompraRepository(baseDatos: base),
 			precioRepository: PrecioRepository(baseDatos: base),
 			movimientoRepository: MovimientoInventarioRepository(baseDatos: base),
 			traspasoRepository: TraspasoRepository(baseDatos: base),

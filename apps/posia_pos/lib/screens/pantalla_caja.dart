@@ -14,8 +14,17 @@ import 'package:posia_core/posia_core.dart';
 import 'package:posia_hardware/posia_hardware.dart';
 import 'package:posia_ui/posia_ui.dart';
 
+import '../providers/admin_providers.dart';
+import '../widgets/dialogo_completar_datos_credito.dart';
 import '../providers/app_providers.dart';
+import '../utils/ticket_credito_util.dart';
+import '../utils/ticket_venta_util.dart';
 import '../widgets/dialogo_cobro.dart';
+
+/// Atajo de teclado para cobrar venta.
+class CobrarIntent extends Intent {
+	const CobrarIntent();
+}
 
 /// Interfaz de venta con grilla de productos, carrito y barra de acciones.
 class PantallaCaja extends ConsumerStatefulWidget {
@@ -192,7 +201,25 @@ class _ConstruirLayoutCaja extends ConsumerWidget {
 
 	@override
 	Widget build(BuildContext context, WidgetRef ref) {
-		return Scaffold(
+		final teclaConfig = ref.watch(teclaCobrarConfigProvider).value ?? teclaCobrarPredeterminada;
+		return Shortcuts(
+			shortcuts: {
+				SingleActivator(parsearTeclaConfigurada(teclaConfig)): const CobrarIntent(),
+			},
+			child: Actions(
+				actions: {
+					CobrarIntent: CallbackAction<CobrarIntent>(
+						onInvoke: (_) {
+							if (estado.total > 0.0) {
+								ejecutarCobroCaja(context, ref);
+							}
+							return null;
+						},
+					),
+				},
+				child: Focus(
+					autofocus: true,
+					child: Scaffold(
 			backgroundColor: PosiaColors.fondo,
 			body: Column(
 				children: [
@@ -313,9 +340,6 @@ class _ConstruirLayoutCaja extends ConsumerWidget {
 												alEliminarLinea: (indice) {
 													ref.read(carritoNotifierProvider.notifier).eliminarLinea(indice);
 												},
-												alTocarLinea: (indice) {
-													_mostrarDescuentoLinea(context, ref, indice, estado.lineas[indice]);
-												},
 											),
 										),
 									),
@@ -326,8 +350,12 @@ class _ConstruirLayoutCaja extends ConsumerWidget {
 					_BarraAccionesCaja(
 						total: estado.total,
 						estado: estado,
+						etiquetaTeclaCobrar: etiquetaTeclaConfigurada(teclaConfig),
 					),
 				],
+			),
+					),
+				),
 			),
 		);
 	}
@@ -342,12 +370,12 @@ class _ConstruirLayoutCaja extends ConsumerWidget {
 		WidgetRef ref,
 		Producto producto,
 	) async {
-		if (producto.moduloVertical == ModuloVertical.carniceria) {
-			await _agregarProductoCarniceria(context, ref, producto);
-			return;
-		}
 		if (producto.moduloVertical == ModuloVertical.farmacia) {
 			await _agregarProductoFarmacia(context, ref, producto);
+			return;
+		}
+		if (producto.moduloVertical == ModuloVertical.carniceria || producto.requierePeso()) {
+			await _agregarProductoCarniceria(context, ref, producto);
 			return;
 		}
 		final servicio = await ref.read(servicioCajaProvider.future);
@@ -491,44 +519,142 @@ class _ConstruirLayoutCaja extends ConsumerWidget {
 			},
 		);
 	}
+}
 
-	Future<void> _mostrarDescuentoLinea(
-		BuildContext context,
-		WidgetRef ref,
-		int indice,
-		LineaCarrito linea,
-	) async {
-		final ctrl = TextEditingController(
-			text: linea.descuentoLinea > 0 ? '${linea.descuentoLinea}' : '',
-		);
-		final descuento = await showDialog<double>(
+/// Ejecuta cobro con dialogo multipago e impresion.
+Future<void> ejecutarCobroCaja(BuildContext context, WidgetRef ref) async {
+	final servicio = await ref.read(servicioCajaProvider.future);
+	final error = await servicio.validarCobro();
+	if (error != null && context.mounted) {
+		await showDialog<void>(
 			context: context,
 			builder: (ctx) => AlertDialog(
-				title: Text('Descuento: ${linea.producto.nombre}'),
-				content: TextField(
-					controller: ctrl,
-					keyboardType: const TextInputType.numberWithOptions(decimal: true),
-					decoration: const InputDecoration(
-						labelText: 'Descuento (\$)',
-						border: OutlineInputBorder(),
-					),
+				icon: const Icon(Icons.warning_amber, color: Colors.orange),
+				content: Text(error, textAlign: TextAlign.center),
+				actions: [
+					TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
+				],
+			),
+		);
+		return;
+	}
+	final cliente = servicio.obtenerClienteActivo();
+	final request = await mostrarDialogoCobro(
+		context: context,
+		subtotal: servicio.calcularTotalCarrito(),
+		cliente: cliente,
+	);
+	if (request == null || !context.mounted) {
+		return;
+	}
+	final errorCobro = await servicio.validarCobroRequest(request);
+	if (errorCobro != null && context.mounted) {
+		ScaffoldMessenger.of(context).showSnackBar(
+			SnackBar(content: Text(errorCobro), backgroundColor: PosiaColors.cancelar),
+		);
+		return;
+	}
+	final venta = await servicio.cobrar(request);
+	await ref.read(carritoNotifierProvider.notifier).recargar();
+	if (!context.mounted || venta == null) {
+		return;
+	}
+	final contenedor = await ref.read(contenedorServiciosProvider.future);
+	final config = await ref.read(configDispositivoProvider.future);
+	final hardware = await ref.read(hardwareRegistryProvider.future);
+	final impresora = hardware.obtenerImpresora();
+	if (venta.metodoPago == MetodoPago.credito) {
+		final pagares = await construirTextosPagareCredito(
+			venta: venta,
+			servicioAdmin: contenedor.servicioAdmin,
+		);
+		for (final pagare in pagares) {
+			await impresora.imprimirTicket(pagare);
+		}
+	} else {
+		final textoTicket = await construirTextoTicketVenta(
+			venta: venta,
+			servicioAdmin: contenedor.servicioAdmin,
+			config: config,
+			montoRecibido: request.montoRecibido,
+		);
+		await impresora.imprimirTicket(textoTicket);
+	}
+	if (!context.mounted) {
+		return;
+	}
+	final esCredito = venta.metodoPago == MetodoPago.credito;
+	await showDialog<void>(
+		context: context,
+		builder: (dialogContext) {
+			return AlertDialog(
+				icon: const Icon(Icons.check_circle, color: PosiaColors.cobrar, size: 64.0),
+				title: Text(esCredito ? 'Credito registrado' : 'Venta completada'),
+				content: Text(
+					esCredito
+						? 'Se imprimieron 2 pagares.\n${formatearMoneda(venta.total)}'
+						: formatearMoneda(venta.total),
+					style: Theme.of(context).textTheme.headlineSmall,
+					textAlign: TextAlign.center,
 				),
 				actions: [
-					TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
-					FilledButton(
-						onPressed: () => Navigator.pop(ctx, double.tryParse(ctrl.text) ?? 0.0),
-						child: const Text('Aplicar'),
+					TextButton(
+						onPressed: () => Navigator.of(dialogContext).pop(),
+						child: const Text('OK'),
+					),
+				],
+			);
+		},
+	);
+}
+
+/// Genera e imprime cotizacion desde el carrito actual.
+Future<void> ejecutarCotizacionCaja(BuildContext context, WidgetRef ref) async {
+	final servicio = await ref.read(servicioCajaProvider.future);
+	if (servicio.obtenerCarrito().isEmpty) {
+		if (context.mounted) {
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(content: Text('Agregue productos al carrito')),
+			);
+		}
+		return;
+	}
+	try {
+		final contenedor = await ref.read(contenedorServiciosProvider.future);
+		final resultado = await registrarCotizacionDesdeCarrito(
+			servicioCaja: servicio,
+			servicioAdmin: contenedor.servicioAdmin,
+		);
+		final hardware = await ref.read(hardwareRegistryProvider.future);
+		await hardware.obtenerImpresora().imprimirTicket(resultado.texto);
+		if (!context.mounted) {
+			return;
+		}
+		await showDialog<void>(
+			context: context,
+			builder: (dialogContext) => AlertDialog(
+				icon: const Icon(Icons.request_quote, color: PosiaColors.neutro, size: 56.0),
+				title: const Text('Cotizacion guardada'),
+				content: Text(
+					'Folio ${resultado.cotizacion.id.substring(0, 8).toUpperCase()}\n'
+					'${formatearMoneda(resultado.cotizacion.total)}',
+					style: Theme.of(context).textTheme.headlineSmall,
+					textAlign: TextAlign.center,
+				),
+				actions: [
+					TextButton(
+						onPressed: () => Navigator.of(dialogContext).pop(),
+						child: const Text('OK'),
 					),
 				],
 			),
 		);
-		ctrl.dispose();
-		if (descuento == null) {
-			return;
+	} catch (error) {
+		if (context.mounted) {
+			ScaffoldMessenger.of(context).showSnackBar(
+				SnackBar(content: Text('$error'), backgroundColor: PosiaColors.cancelar),
+			);
 		}
-		final servicio = await ref.read(servicioCajaProvider.future);
-		servicio.aplicarDescuentoLinea(indice, descuento);
-		await ref.read(carritoNotifierProvider.notifier).recargar();
 	}
 }
 
@@ -537,10 +663,12 @@ class _BarraAccionesCaja extends ConsumerWidget {
 	const _BarraAccionesCaja({
 		required this.total,
 		required this.estado,
+		required this.etiquetaTeclaCobrar,
 	});
 
 	final double total;
 	final EstadoCarrito estado;
+	final String etiquetaTeclaCobrar;
 
 	@override
 	Widget build(BuildContext context, WidgetRef ref) {
@@ -563,11 +691,18 @@ class _BarraAccionesCaja extends ConsumerWidget {
 						alPresionar: () => _confirmarVaciarCarrito(context, ref),
 					),
 					BotonAccionCaja(
+						icono: Icons.request_quote,
+						etiqueta: 'Cotizar',
+						colorFondo: PosiaColors.neutro,
+						habilitado: puedeCobrar,
+						alPresionar: () => ejecutarCotizacionCaja(context, ref),
+					),
+					BotonAccionCaja(
 						icono: Icons.payments,
-						etiqueta: 'COBRAR',
+						etiqueta: 'COBRAR ($etiquetaTeclaCobrar)',
 						colorFondo: PosiaColors.cobrar,
 						habilitado: puedeCobrar,
-						alPresionar: () => _ejecutarCobro(context, ref),
+						alPresionar: () => ejecutarCobroCaja(context, ref),
 					),
 				],
 			),
@@ -630,94 +765,60 @@ class _BarraAccionesCaja extends ConsumerWidget {
 								),
 								...clientes.map(
 									(cliente) => ListTile(
-										leading: const Icon(Icons.person),
+										leading: Icon(
+											Icons.person,
+											color: clientePuedeRecibirCredito(cliente)
+												? PosiaColors.cobrar
+												: null,
+										),
 										title: Text(cliente.nombre),
+										subtitle: cliente.creditoHabilitado
+											? Text(
+												clientePuedeRecibirCredito(cliente)
+													? 'Credito · ${cliente.diasCredito} dias'
+													: 'Credito: faltan datos',
+												style: TextStyle(
+													fontSize: 12.0,
+													color: clientePuedeRecibirCredito(cliente)
+														? Colors.grey
+														: PosiaColors.cancelar,
+												),
+											)
+											: null,
 										onTap: () async {
-											await servicio.seleccionarCliente(cliente);
+											var seleccion = cliente;
+											if (cliente.creditoHabilitado &&
+												!clienteTieneDatosCredito(cliente)) {
+												if (!dialogContext.mounted) {
+													return;
+												}
+												final actualizado = await mostrarDialogoCompletarDatosCredito(
+													context: dialogContext,
+													cliente: cliente,
+												);
+												if (actualizado == null) {
+													return;
+												}
+												final contenedor =
+													await ref.read(contenedorServiciosProvider.future);
+												await contenedor.servicioAdmin.actualizarCliente(
+													actualizado,
+												);
+												seleccion = actualizado;
+											}
+											await servicio.seleccionarCliente(seleccion);
 											if (dialogContext.mounted) {
 												Navigator.of(dialogContext).pop();
 											}
 											await ref.read(carritoNotifierProvider.notifier).recargar(
-											invalidarCatalogo: true,
-										);
+												invalidarCatalogo: true,
+											);
 										},
 									),
 								),
 							],
 						),
 					),
-				);
-			},
-		);
-	}
-
-	/// Ejecuta cobro con dialogo multipago y muestra confirmacion visual.
-	Future<void> _ejecutarCobro(BuildContext context, WidgetRef ref) async {
-		final servicio = await ref.read(servicioCajaProvider.future);
-		final error = await servicio.validarCobro();
-		if (error != null && context.mounted) {
-			await showDialog<void>(
-				context: context,
-				builder: (ctx) => AlertDialog(
-					icon: const Icon(Icons.warning_amber, color: Colors.orange),
-					content: Text(error, textAlign: TextAlign.center),
-					actions: [
-						TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
-					],
-				),
-			);
-			return;
-		}
-		final cliente = servicio.obtenerClienteActivo();
-		final request = await mostrarDialogoCobro(
-			context: context,
-			subtotal: servicio.calcularTotalCarrito(),
-			creditoDisponible: cliente?.creditoHabilitado ?? false,
-		);
-		if (request == null || !context.mounted) {
-			return;
-		}
-		final errorCobro = await servicio.validarCobroRequest(request);
-		if (errorCobro != null && context.mounted) {
-			ScaffoldMessenger.of(context).showSnackBar(
-				SnackBar(content: Text(errorCobro), backgroundColor: PosiaColors.cancelar),
-			);
-			return;
-		}
-		final venta = await servicio.cobrar(request);
-		await ref.read(carritoNotifierProvider.notifier).recargar();
-		if (!context.mounted || venta == null) {
-			return;
-		}
-		final contenedor = await ref.read(contenedorServiciosProvider.future);
-		final tienda = await contenedor.servicioAdmin.obtenerTiendaActiva();
-		final textoTicket = generarTextoTicket(
-			venta: venta,
-			nombreTienda: tienda?.nombre ?? 'Tienda',
-			montoRecibido: request.montoRecibido,
-		);
-		final hardware = await ref.read(hardwareRegistryProvider.future);
-		await hardware.obtenerImpresora().imprimirTicket(textoTicket);
-		if (!context.mounted) {
-			return;
-		}
-		await showDialog<void>(
-			context: context,
-			builder: (dialogContext) {
-				return AlertDialog(
-					icon: const Icon(Icons.check_circle, color: PosiaColors.cobrar, size: 64.0),
-					title: const Text('Venta completada'),
-					content: Text(
-						formatearMoneda(venta.total),
-						style: Theme.of(context).textTheme.headlineLarge,
-						textAlign: TextAlign.center,
-					),
-					actions: [
-						TextButton(
-							onPressed: () => Navigator.of(dialogContext).pop(),
-							child: const Text('OK'),
-						),
-					],
 				);
 			},
 		);

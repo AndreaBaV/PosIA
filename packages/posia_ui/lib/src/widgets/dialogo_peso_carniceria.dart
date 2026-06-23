@@ -1,9 +1,4 @@
-/// Dialogo de captura de peso para venta en carniceria.
-///
-/// Autor: Equipo POSIA
-/// Matricula: POSIA-2026-001
-/// Fecha creacion: 2026-06-07 20:15:00 (UTC-6)
-/// Ultima modificacion: 2026-06-07 20:15:00 (UTC-6)
+/// Dialogo de captura de peso para venta por kilogramo o gramos.
 library;
 
 import 'package:flutter/material.dart';
@@ -12,39 +7,25 @@ import 'package:posia_core/posia_core.dart';
 import '../theme/posia_theme.dart';
 import 'teclado_numerico_simple.dart';
 
-/// Resultado del dialogo de peso carniceria.
+/// Resultado del dialogo de peso.
 class ResultadoDialogoPeso {
-	/// Crea resultado del dialogo.
-	///
-	/// [confirmado] Indica si usuario confirmo venta.
-	/// [pesoKg] Peso capturado en kilogramos.
 	const ResultadoDialogoPeso({
 		required this.confirmado,
 		required this.pesoKg,
 	});
 
-	/// Usuario confirmo accion.
 	final bool confirmado;
-
-	/// Peso en kilogramos.
 	final double pesoKg;
 }
 
-/// Muestra dialogo iconografico para capturar peso en kg.
+enum _UnidadCapturaPeso { kilogramos, gramos }
+
+/// Muestra dialogo para capturar peso en kg o gramos.
 class DialogoPesoCarniceria extends StatefulWidget {
-	/// Crea dialogo de peso para producto carniceria.
-	///
-	/// [producto] Producto vendido por kilogramo.
 	const DialogoPesoCarniceria({required this.producto, super.key});
 
-	/// Producto seleccionado.
 	final Producto producto;
 
-	/// Presenta dialogo modal y retorna peso confirmado.
-	///
-	/// [context] Contexto de navegacion.
-	/// [producto] Producto de carniceria.
-	/// Retorna [ResultadoDialogoPeso] con decision del cajero.
 	static Future<ResultadoDialogoPeso> mostrar(
 		BuildContext context,
 		Producto producto,
@@ -60,12 +41,13 @@ class DialogoPesoCarniceria extends StatefulWidget {
 	State<DialogoPesoCarniceria> createState() => _DialogoPesoCarniceriaState();
 }
 
-/// Estado del dialogo de peso carniceria.
 class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
 	String _valorPeso = '';
+	_UnidadCapturaPeso _unidad = _UnidadCapturaPeso.kilogramos;
 
 	@override
 	Widget build(BuildContext context) {
+		final etiquetaUnidad = _unidad == _UnidadCapturaPeso.kilogramos ? 'kg' : 'g';
 		return AlertDialog(
 			title: Row(
 				children: [
@@ -74,10 +56,38 @@ class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
 					Expanded(child: Text(widget.producto.nombre)),
 				],
 			),
-			content: TecladoNumericoSimple(
-				valorActual: _valorPeso,
-				alPresionarTecla: _agregarTecla,
-				alBorrar: _borrarTecla,
+			content: Column(
+				mainAxisSize: MainAxisSize.min,
+				children: [
+					SegmentedButton<_UnidadCapturaPeso>(
+						segments: const [
+							ButtonSegment(
+								value: _UnidadCapturaPeso.kilogramos,
+								label: Text('Kilogramos'),
+							),
+							ButtonSegment(
+								value: _UnidadCapturaPeso.gramos,
+								label: Text('Gramos'),
+							),
+						],
+						selected: {_unidad},
+						onSelectionChanged: (s) => setState(() {
+							_unidad = s.first;
+							_valorPeso = '';
+						}),
+					),
+					const SizedBox(height: 8.0),
+					Text(
+						_valorPeso.isEmpty ? '0 $etiquetaUnidad' : '$_valorPeso $etiquetaUnidad',
+						style: Theme.of(context).textTheme.headlineSmall,
+					),
+					const SizedBox(height: 8.0),
+					TecladoNumericoSimple(
+						valorActual: _valorPeso,
+						alPresionarTecla: _agregarTecla,
+						alBorrar: _borrarTecla,
+					),
+				],
 			),
 			actions: [
 				TextButton(
@@ -94,9 +104,6 @@ class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
 		);
 	}
 
-	/// Agrega caracter al valor de peso respetando formato decimal.
-	///
-	/// [tecla] Caracter pulsado.
 	void _agregarTecla(String tecla) {
 		if (tecla == '.' && _valorPeso.contains('.')) {
 			return;
@@ -106,7 +113,6 @@ class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
 		});
 	}
 
-	/// Elimina ultimo caracter del valor parcial.
 	void _borrarTecla() {
 		if (_valorPeso.isEmpty) {
 			return;
@@ -116,11 +122,16 @@ class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
 		});
 	}
 
-	/// Confirma peso ingresado y cierra dialogo.
 	void _confirmar() {
-		final peso = double.tryParse(_valorPeso.isEmpty ? '0' : _valorPeso) ?? 0.0;
+		final cantidad = double.tryParse(_valorPeso.isEmpty ? '0' : _valorPeso) ?? 0.0;
+		if (cantidad <= 0.0) {
+			return;
+		}
+		final pesoKg = _unidad == _UnidadCapturaPeso.gramos
+			? cantidad / 1000.0
+			: cantidad;
 		Navigator.of(context).pop(
-			ResultadoDialogoPeso(confirmado: true, pesoKg: peso),
+			ResultadoDialogoPeso(confirmado: true, pesoKg: pesoKg),
 		);
 	}
 }
