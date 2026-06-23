@@ -14,6 +14,8 @@ Future<CobroRequest?> mostrarDialogoCobro({
 }) async {
 	return showDialog<CobroRequest>(
 		context: context,
+		barrierDismissible: false,
+		useRootNavigator: true,
 		builder: (ctx) => _DialogoCobro(
 			subtotal: subtotal,
 			cliente: cliente,
@@ -242,10 +244,12 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 			)
 			: null;
 
-		return Focus(
-			focusNode: _capturaFocus,
-			autofocus: true,
-			child: AlertDialog(
+		return PopScope(
+			canPop: !_cerrado,
+			child: Focus(
+				focusNode: _capturaFocus,
+				autofocus: true,
+				child: AlertDialog(
 				title: const Text('Cobrar venta'),
 				content: SizedBox(
 					width: 420.0,
@@ -378,13 +382,6 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 												),
 											),
 										),
-									const SizedBox(height: 8.0),
-									TecladoNumericoSimple(
-										valorActual: _recibidoCtrl.text,
-										mostrarValor: false,
-										alPresionarTecla: _agregarTeclaMonto,
-										alBorrar: _borrarTeclaMonto,
-									),
 								],
 								if (_metodo == MetodoPago.mixto) ...[
 									const SizedBox(height: 12.0),
@@ -408,13 +405,6 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 										'Tab alterna entre efectivo y tarjeta',
 										style: TextStyle(color: Colors.grey, fontSize: 11.0),
 									),
-									const SizedBox(height: 8.0),
-									TecladoNumericoSimple(
-										valorActual: _controladorCampoActivo.text,
-										mostrarValor: false,
-										alPresionarTecla: _agregarTeclaMonto,
-										alBorrar: _borrarTeclaMonto,
-									),
 								],
 							],
 						),
@@ -432,6 +422,7 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 					),
 				],
 			),
+		),
 		);
 	}
 
@@ -484,7 +475,13 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 			return;
 		}
 		_cerrado = true;
-		Navigator.pop(context);
+		_capturaFocus.unfocus();
+		WidgetsBinding.instance.addPostFrameCallback((_) {
+			if (!mounted) {
+				return;
+			}
+			Navigator.of(context, rootNavigator: true).pop();
+		});
 	}
 
 	void _confirmar() {
@@ -492,6 +489,9 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 			return;
 		}
 		if (_total <= 0.0) {
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(content: Text('No hay monto por cobrar')),
+			);
 			return;
 		}
 		if (_metodo == MetodoPago.efectivo) {
@@ -532,21 +532,25 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 				return;
 			}
 		}
-		_cerrado = true;
-		Navigator.pop(
-			context,
-			CobroRequest(
-				metodoPago: _metodo,
-				descuentoTicket: 0.0,
-				montoEfectivo: _metodo == MetodoPago.mixto
-					? double.tryParse(_efectivoCtrl.text)
-					: null,
-				montoTarjeta: _metodo == MetodoPago.mixto
-					? double.tryParse(_tarjetaCtrl.text)
-					: null,
-				montoRecibido: double.tryParse(_recibidoCtrl.text),
-				diasCredito: _metodo == MetodoPago.credito ? _diasCredito : null,
-			),
+		final request = CobroRequest(
+			metodoPago: _metodo,
+			descuentoTicket: 0.0,
+			montoEfectivo: _metodo == MetodoPago.mixto
+				? double.tryParse(_efectivoCtrl.text)
+				: null,
+			montoTarjeta: _metodo == MetodoPago.mixto
+				? double.tryParse(_tarjetaCtrl.text)
+				: null,
+			montoRecibido: double.tryParse(_recibidoCtrl.text),
+			diasCredito: _metodo == MetodoPago.credito ? _diasCredito : null,
 		);
+		_cerrado = true;
+		_capturaFocus.unfocus();
+		WidgetsBinding.instance.addPostFrameCallback((_) {
+			if (!mounted) {
+				return;
+			}
+			Navigator.of(context, rootNavigator: true).pop(request);
+		});
 	}
 }

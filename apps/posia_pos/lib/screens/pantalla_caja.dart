@@ -22,6 +22,9 @@ import '../utils/ticket_credito_util.dart';
 import '../utils/ticket_venta_util.dart';
 import '../widgets/dialogo_cobro.dart';
 
+/// Evita abrir varios dialogos de cobro apilados (doble clic / F2 repetido).
+bool _cobroCajaEnEjecucion = false;
+
 /// Interfaz de venta con grilla de productos, carrito y barra de acciones.
 class PantallaCaja extends ConsumerStatefulWidget {
 	/// Crea pantalla de caja POSIA.
@@ -852,89 +855,94 @@ bool procesarAtajoTecladoEnCaja({
 
 /// Ejecuta cobro con dialogo multipago e impresion.
 Future<void> ejecutarCobroCaja(BuildContext context, WidgetRef ref) async {
-	final servicio = await ref.read(servicioCajaProvider.future);
-	final error = await servicio.validarCobro();
-	if (error != null && context.mounted) {
-		await showDialog<void>(
-			context: context,
-			builder: (ctx) => AlertDialog(
-				icon: const Icon(Icons.warning_amber, color: Colors.orange),
-				content: Text(error, textAlign: TextAlign.center),
-				actions: [
-					TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
-				],
-			),
-		);
+	if (_cobroCajaEnEjecucion) {
 		return;
 	}
-	final cliente = servicio.obtenerClienteActivo();
-	final request = await mostrarDialogoCobro(
-		context: context,
-		subtotal: servicio.calcularTotalCarrito(),
-		cliente: cliente,
-	);
-	if (request == null || !context.mounted) {
-		return;
-	}
-	final errorCobro = await servicio.validarCobroRequest(request);
-	if (errorCobro != null && context.mounted) {
-		ScaffoldMessenger.of(context).showSnackBar(
-			SnackBar(content: Text(errorCobro), backgroundColor: PosiaColors.cancelar),
-		);
-		return;
-	}
-	final venta = await servicio.cobrar(request);
-	await ref.read(carritoNotifierProvider.notifier).recargar();
-	if (!context.mounted || venta == null) {
-		return;
-	}
-	final contenedor = await ref.read(contenedorServiciosProvider.future);
-	final config = await ref.read(configDispositivoProvider.future);
-	final hardware = await ref.read(hardwareRegistryProvider.future);
-	final impresora = hardware.obtenerImpresora();
-	if (venta.metodoPago == MetodoPago.credito) {
-		final pagares = await construirTextosPagareCredito(
-			venta: venta,
-			servicioAdmin: contenedor.servicioAdmin,
-		);
-		for (final pagare in pagares) {
-			await impresora.imprimirTicket(pagare);
+	_cobroCajaEnEjecucion = true;
+	try {
+		final servicio = await ref.read(servicioCajaProvider.future);
+		final error = await servicio.validarCobro();
+		if (error != null && context.mounted) {
+			await showDialog<void>(
+				context: context,
+				builder: (ctx) => AlertDialog(
+					icon: const Icon(Icons.warning_amber, color: Colors.orange),
+					content: Text(error, textAlign: TextAlign.center),
+					actions: [
+						TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
+					],
+				),
+			);
+			return;
 		}
-	} else {
-		final textoTicket = await construirTextoTicketVenta(
-			venta: venta,
-			servicioAdmin: contenedor.servicioAdmin,
-			config: config,
-			montoRecibido: request.montoRecibido,
-		);
-		await impresora.imprimirTicket(textoTicket);
-	}
-	if (!context.mounted) {
-		return;
-	}
-	final esCredito = venta.metodoPago == MetodoPago.credito;
-	await showDialog<void>(
-		context: context,
-		builder: (dialogContext) {
-			return AlertDialog(
-				icon: const Icon(Icons.check_circle, color: PosiaColors.cobrar, size: 64.0),
-				title: Text(esCredito ? 'Credito registrado' : 'Venta completada'),
+		CobroRequest? request;
+		while (context.mounted) {
+			final cliente = servicio.obtenerClienteActivo();
+			request = await mostrarDialogoCobro(
+				context: context,
+				subtotal: servicio.calcularTotalCarrito(),
+				cliente: cliente,
+			);
+			if (request == null) {
+				return;
+			}
+			final errorCobro = await servicio.validarCobroRequest(request);
+			if (errorCobro == null) {
+				break;
+			}
+			if (context.mounted) {
+				ScaffoldMessenger.of(context).showSnackBar(
+					SnackBar(content: Text(errorCobro), backgroundColor: PosiaColors.cancelar),
+				);
+			}
+		}
+		if (!context.mounted || request == null) {
+			return;
+		}
+		final venta = await servicio.cobrar(request);
+		await ref.read(carritoNotifierProvider.notifier).recargar();
+		if (!context.mounted || venta == null) {
+			return;
+		}
+		final contenedor = await ref.read(contenedorServiciosProvider.future);
+		final config = await ref.read(configDispositivoProvider.future);
+		final hardware = await ref.read(hardwareRegistryProvider.future);
+		final impresora = hardware.obtenerImpresora();
+		if (venta.metodoPago == MetodoPago.credito) {
+			final pagares = await construirTextosPagareCredito(
+				venta: venta,
+				servicioAdmin: contenedor.servicioAdmin,
+			);
+			for (final pagare in pagares) {
+				await impresora.imprimirTicket(pagare);
+			}
+		} else {
+			final textoTicket = await construirTextoTicketVenta(
+				venta: venta,
+				servicioAdmin: contenedor.servicioAdmin,
+				config: config,
+				montoRecibido: request.montoRecibido,
+			);
+			await impresora.imprimirTicket(textoTicket);
+		}
+		if (!context.mounted) {
+			return;
+		}
+		final esCredito = venta.metodoPago == MetodoPago.credito;
+		ScaffoldMessenger.of(context).showSnackBar(
+			SnackBar(
 				content: Text(
 					esCredito
-						? 'Se imprimieron 2 pagares.\n${formatearMoneda(venta.total)}'
-						: formatearMoneda(venta.total),
-					style: Theme.of(context).textTheme.headlineSmall,
-					textAlign: TextAlign.center,
+						? 'Credito registrado · ${formatearMoneda(venta.total)}'
+						: 'Venta completada · ${formatearMoneda(venta.total)}',
 				),
-				actions: [
-					TextButton(
-						onPressed: () => Navigator.of(dialogContext).pop(),
-						child: const Text('OK'),
-					),
-				],
-			);
-		},
-	);
+				backgroundColor: PosiaColors.cobrar,
+				duration: const Duration(seconds: 2),
+			),
+		);
+	} finally {
+		_cobroCajaEnEjecucion = false;
+	}
 }
 
 /// Genera e imprime cotizacion desde el carrito actual.
