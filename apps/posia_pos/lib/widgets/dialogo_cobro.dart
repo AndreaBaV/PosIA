@@ -495,8 +495,14 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 			return;
 		}
 		if (_metodo == MetodoPago.efectivo) {
-			final recibido = double.tryParse(_recibidoCtrl.text);
-			if (recibido != null && recibido < _total) {
+			final recibido = double.tryParse(_recibidoCtrl.text.trim());
+			if (recibido == null || recibido <= 0.0) {
+				ScaffoldMessenger.of(context).showSnackBar(
+					const SnackBar(content: Text('Indique el monto recibido en efectivo')),
+				);
+				return;
+			}
+			if (recibido < _total) {
 				ScaffoldMessenger.of(context).showSnackBar(
 					const SnackBar(content: Text('Monto recibido insuficiente')),
 				);
