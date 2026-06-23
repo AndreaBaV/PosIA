@@ -409,6 +409,7 @@ Future<bool> seleccionarProductoEnCaja(
 	WidgetRef ref,
 	Producto producto,
 ) async {
+	FocusManager.instance.primaryFocus?.unfocus();
 	if (producto.moduloVertical == ModuloVertical.farmacia) {
 		return _agregarProductoFarmacia(context, ref, producto);
 	}

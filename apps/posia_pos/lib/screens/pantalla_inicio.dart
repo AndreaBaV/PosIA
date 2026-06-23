@@ -50,6 +50,13 @@ class _PantallaInicioState extends ConsumerState<PantallaInicio> {
 		if (!mounted || _indicePestana != 0 || esPlataformaMovilNativa()) {
 			return false;
 		}
+		if (hayDialogoModalConFoco()) {
+			return false;
+		}
+		if (event.logicalKey == LogicalKeyboardKey.enter ||
+			event.logicalKey == LogicalKeyboardKey.numpadEnter) {
+			return false;
+		}
 		final usuario = ref.read(sesionUsuarioProvider);
 		if (usuario == null) {
 			return false;
