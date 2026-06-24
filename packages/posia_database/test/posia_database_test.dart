@@ -45,8 +45,8 @@ void main() {
 	test('ConfigRepository guarda PIN administrativo', () async {
 		final base = await abrirBasePrueba();
 		final repositorio = ConfigRepository(baseDatos: base);
-		await repositorio.guardarValor(CLAVE_CONFIG_PIN_ADMIN, '5678');
-		final pin = await repositorio.obtenerValor(CLAVE_CONFIG_PIN_ADMIN);
+		await repositorio.guardarValor(claveConfigPinAdmin, '5678');
+		final pin = await repositorio.obtenerValor(claveConfigPinAdmin);
 		expect(pin, '5678');
 		await base.close();
 	});

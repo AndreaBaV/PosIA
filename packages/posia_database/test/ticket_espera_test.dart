@@ -2,7 +2,6 @@
 library;
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:posia_core/posia_core.dart';
 import 'package:posia_database/posia_database.dart';
 import 'package:posia_inventory/posia_inventory.dart';
 import 'package:posia_pricing/posia_pricing.dart';

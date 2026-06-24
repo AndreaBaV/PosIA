@@ -136,12 +136,18 @@ class UsuarioRepository {
 		return _verificarFila(filas.first, pin);
 	}
 
-	Future<String> generarSiguienteCodigo(RolUsuario rol) async {
+	Future<String> generarSiguienteCodigo(
+		RolUsuario rol, {
+		Iterable<String> codigosReservados = const [],
+	}) async {
 		final prefijo = switch (rol) {
 			RolUsuario.administrador => 'ADM',
 			RolUsuario.supervisor => 'SUP',
 			RolUsuario.empleado => 'EMP',
 		};
+		final reservados = codigosReservados
+			.map(ValidadorCodigoUsuario.normalizar)
+			.toSet();
 		final todos = await listarTodos();
 		var maximo = 0;
 		for (final usuario in todos) {
@@ -154,8 +160,21 @@ class UsuarioRepository {
 				maximo = numerico;
 			}
 		}
-		final siguiente = (maximo + 1).toString().padLeft(3, '0');
-		return '$prefijo$siguiente';
+		for (final codigo in reservados) {
+			if (!codigo.startsWith(prefijo) || codigo.length <= prefijo.length) {
+				continue;
+			}
+			final numerico = int.tryParse(codigo.substring(prefijo.length));
+			if (numerico != null && numerico > maximo) {
+				maximo = numerico;
+			}
+		}
+		var candidato = '';
+		do {
+			maximo++;
+			candidato = '$prefijo${maximo.toString().padLeft(3, '0')}';
+		} while (reservados.contains(candidato));
+		return candidato;
 	}
 
 	Future<void> guardar(Usuario usuario) async {
@@ -244,7 +263,18 @@ class UsuarioRepository {
 		final codigoLimpio = ValidadorCodigoUsuario.normalizar(codigo);
 		final duplicado = await obtenerPorCodigo(codigoLimpio, excluirId: id);
 		if (duplicado != null) {
-			return false;
+			final filaDuplicado = await _baseDatos.query(
+				'usuarios',
+				where: 'id = ?',
+				whereArgs: [duplicado.id],
+				limit: 1,
+			);
+			final actualizadoDuplicado =
+				filaDuplicado.first['actualizado_en'] as String? ?? '';
+			if (actualizadoEn.compareTo(actualizadoDuplicado) < 0) {
+				return false;
+			}
+			await _reasignarCodigoPorConflicto(duplicado.id, codigoLimpio);
 		}
 		await _baseDatos.insert(
 			'usuarios',
@@ -263,6 +293,32 @@ class UsuarioRepository {
 			conflictAlgorithm: ConflictAlgorithm.replace,
 		);
 		return true;
+	}
+
+	/// Libera un codigo ocupado por otra cuenta cuando llega un evento mas reciente.
+	Future<void> _reasignarCodigoPorConflicto(
+		String usuarioId,
+		String codigoOcupado,
+	) async {
+		final usuario = await obtenerPorId(usuarioId);
+		if (usuario == null) {
+			return;
+		}
+		final reservados = {codigoOcupado};
+		final nuevoCodigo = await generarSiguienteCodigo(
+			usuario.rol,
+			codigosReservados: reservados,
+		);
+		final ahora = DateTime.now().toUtc().toIso8601String();
+		await _baseDatos.update(
+			'usuarios',
+			{
+				'codigo': nuevoCodigo,
+				'actualizado_en': ahora,
+			},
+			where: 'id = ?',
+			whereArgs: [usuarioId],
+		);
 	}
 
 	/// Lee credenciales y marcas de tiempo para replicar por sync.

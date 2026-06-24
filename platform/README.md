@@ -169,4 +169,4 @@ Desde la raíz del repo:
 | `server/sync_api` | Hub sync + auth (`/v1/auth/login`) |
 | `apps/posia_pos` | App única; tenant al login |
 
-Ver también: [docs/DEPLOYMENT.md](../docs/DEPLOYMENT.md)
+Ver también: [docs/MANUAL_TECNICO.md](../docs/MANUAL_TECNICO.md)

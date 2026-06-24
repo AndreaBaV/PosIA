@@ -67,7 +67,11 @@ class EnrutadorApi {
 		if (codigo.trim().isEmpty) {
 			return _respuestaJson({'error': 'codigo es obligatorio'}, codigo: 400);
 		}
-		final perfil = await almacen.obtenerPerfilPorCodigo(codigo);
+		final tenantId = solicitud.url.queryParameters['tenantId'];
+		final perfil = await almacen.obtenerPerfilPorCodigo(
+			codigo,
+			tenantId: tenantId,
+		);
 		if (perfil == null) {
 			return _respuestaJson({'error': 'Usuario no encontrado'}, codigo: 404);
 		}
@@ -87,10 +91,15 @@ class EnrutadorApi {
 		}
 		final codigo = cuerpo['codigo'] as String? ?? '';
 		final pin = cuerpo['pin'] as String? ?? '';
+		final tenantSolicitado = cuerpo['tenantId'] as String?;
 		if (codigo.trim().isEmpty || pin.isEmpty) {
 			return _respuestaJson({'error': 'codigo y pin son obligatorios'}, codigo: 400);
 		}
-		final resultado = await almacen.autenticar(codigo: codigo, pin: pin);
+		final resultado = await almacen.autenticar(
+			codigo: codigo,
+			pin: pin,
+			tenantId: tenantSolicitado,
+		);
 		if (resultado == null) {
 			return _respuestaJson({'error': 'Credenciales invalidas'}, codigo: 401);
 		}

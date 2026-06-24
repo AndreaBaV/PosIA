@@ -148,7 +148,7 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 									final listasAsync = ref.watch(_listasClienteProvider);
 									return listasAsync.when(
 										data: (listas) => DropdownButtonFormField<String?>(
-											value: _listaPreciosId,
+											initialValue: _listaPreciosId,
 											decoration: const InputDecoration(
 												labelText: 'Lista de precios',
 												border: OutlineInputBorder(),

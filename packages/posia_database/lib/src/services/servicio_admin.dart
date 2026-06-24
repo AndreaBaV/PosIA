@@ -537,6 +537,18 @@ class ServicioAdmin {
     return _syncOrchestrator.sincronizarCompleto();
   }
 
+  /// Empuja cambios locales y descarga usuarios del hub (reparacion).
+  Future<ResultadoSync> repararSincronizacionUsuarios() async {
+    final repo = _usuarioRepository;
+    if (repo != null) {
+      final activos = await repo.listarTodos();
+      for (final usuario in activos) {
+        await _registrarEventoUsuario(usuario);
+      }
+    }
+    return sincronizarManual();
+  }
+
   /// Obtiene URL del hub configurada en el dispositivo.
   ///
   /// Retorna URL activa o cadena vacia si no hay hub.
@@ -553,12 +565,12 @@ class ServicioAdmin {
   }
 
   Future<String> obtenerHubApiKey() async {
-    return await _configRepository.obtenerValor(CLAVE_CONFIG_HUB_API_KEY) ?? '';
+    return await _configRepository.obtenerValor(claveConfigHubApiKey) ?? '';
   }
 
   Future<void> guardarHubApiKey(String clave) async {
     await _configRepository.guardarValor(
-      CLAVE_CONFIG_HUB_API_KEY,
+      claveConfigHubApiKey,
       clave.trim(),
     );
   }
@@ -1039,7 +1051,7 @@ class ServicioAdmin {
         throw StateError('Usuario sin tienda asignada');
       }
       await cambiarTiendaActiva(tiendaId);
-    } else if (tiendasDesdeHub.isNotEmpty) {
+		} else if (tiendasDesdeHub.isNotEmpty) {
       await importarTiendasDesdeHub(tiendasDesdeHub);
     }
     final hub = await _configRepository.obtenerHubUrl();
@@ -1132,7 +1144,7 @@ class ServicioAdmin {
         'Limite de $LIMITE_MAX_USUARIOS cuentas activas alcanzado',
       );
     }
-    final codigo = await repo.generarSiguienteCodigo(rol);
+    final codigo = await _resolverCodigoUsuarioDisponible(repo, rol);
     final usuario = Usuario(
       id: _generadorId.v4(),
       nombre: nombreLimpio,
@@ -1149,6 +1161,7 @@ class ServicioAdmin {
     await repo.guardar(usuario);
     await _registrarEventoUsuario(usuario);
     await _sincronizarVendedorVinculado(usuario);
+    await _sincronizarInmediatoConHub();
     return usuario;
   }
 
@@ -1198,7 +1211,7 @@ class ServicioAdmin {
         );
       }
       if (rolFinal != existente.rol) {
-        codigoFinal = await repo.generarSiguienteCodigo(rolFinal);
+        codigoFinal = await _resolverCodigoUsuarioDisponible(repo, rolFinal);
       }
       if (rolFinal == RolUsuario.administrador) {
         tiendaFinal = null;
@@ -1229,6 +1242,7 @@ class ServicioAdmin {
     await repo.guardar(actualizado);
     await _registrarEventoUsuario(actualizado);
     await _sincronizarVendedorVinculado(actualizado);
+    await _sincronizarInmediatoConHub();
     return actualizado;
   }
 
@@ -1302,7 +1316,12 @@ class ServicioAdmin {
       throw StateError('El PIN debe tener $LONGITUD_PIN_ADMIN digitos');
     }
     await repo.guardar(existente.copiarCon(pin: pinNuevo.trim()));
-    await _registrarEventoUsuario(existente);
+    final actualizado = await repo.obtenerPorId(usuarioId);
+    if (actualizado == null) {
+      throw StateError('Usuario no encontrado');
+    }
+    await _registrarEventoUsuario(actualizado);
+    await _sincronizarInmediatoConHub();
   }
 
   String? _resolverTiendaOperacion(Usuario? operador, String? tiendaId) {
@@ -1784,25 +1803,25 @@ class ServicioAdmin {
   // --- Configuracion ---
 
   Future<String> obtenerPinAdmin() async {
-    return await _configRepository.obtenerValor(CLAVE_CONFIG_PIN_ADMIN) ?? '';
+    return await _configRepository.obtenerValor(claveConfigPinAdmin) ?? '';
   }
 
   Future<void> guardarPinAdmin(String pin) async {
-    await _configRepository.guardarValor(CLAVE_CONFIG_PIN_ADMIN, pin);
+    await _configRepository.guardarValor(claveConfigPinAdmin, pin);
   }
 
   Future<String> obtenerTeclaCobrar() async {
-    return await _configRepository.obtenerValor(CLAVE_CONFIG_TECLA_COBRAR) ??
+    return await _configRepository.obtenerValor(claveConfigTeclaCobrar) ??
         teclaCobrarConfigPredeterminada;
   }
 
   Future<void> guardarTeclaCobrar(String tecla) async {
-    await _configRepository.guardarValor(CLAVE_CONFIG_TECLA_COBRAR, tecla.trim().toUpperCase());
+    await _configRepository.guardarValor(claveConfigTeclaCobrar, tecla.trim().toUpperCase());
   }
 
   /// Lee JSON de atajos de caja; si no existe, usa tecla cobrar legacy.
   Future<String> obtenerAtajosCajaJson() async {
-    final raw = await _configRepository.obtenerValor(CLAVE_CONFIG_ATAJOS_CAJA);
+    final raw = await _configRepository.obtenerValor(claveConfigAtajosCaja);
     if (raw != null && raw.trim().isNotEmpty) {
       return raw;
     }
@@ -1812,7 +1831,7 @@ class ServicioAdmin {
 
   /// Persiste mapa JSON de atajos y sincroniza tecla cobrar legacy.
   Future<void> guardarAtajosCajaJson(String json) async {
-    await _configRepository.guardarValor(CLAVE_CONFIG_ATAJOS_CAJA, json);
+    await _configRepository.guardarValor(claveConfigAtajosCaja, json);
     try {
       final decodificado = jsonDecode(json);
       if (decodificado is Map && decodificado['cobrar'] != null) {
@@ -1824,12 +1843,12 @@ class ServicioAdmin {
   }
 
   Future<double> obtenerEtiquetaAnchoMm() async {
-    final raw = await _configRepository.obtenerValor(CLAVE_CONFIG_ETIQUETA_ANCHO_MM);
+    final raw = await _configRepository.obtenerValor(claveConfigEtiquetaAnchoMm);
     return double.tryParse(raw ?? '') ?? etiquetaAnchoMmPredeterminado;
   }
 
   Future<double> obtenerEtiquetaAltoMm() async {
-    final raw = await _configRepository.obtenerValor(CLAVE_CONFIG_ETIQUETA_ALTO_MM);
+    final raw = await _configRepository.obtenerValor(claveConfigEtiquetaAltoMm);
     return double.tryParse(raw ?? '') ?? etiquetaAltoMmPredeterminado;
   }
 
@@ -1838,17 +1857,17 @@ class ServicioAdmin {
     required double altoMm,
   }) async {
     await _configRepository.guardarValor(
-      CLAVE_CONFIG_ETIQUETA_ANCHO_MM,
+      claveConfigEtiquetaAnchoMm,
       anchoMm.toStringAsFixed(1),
     );
     await _configRepository.guardarValor(
-      CLAVE_CONFIG_ETIQUETA_ALTO_MM,
+      claveConfigEtiquetaAltoMm,
       altoMm.toStringAsFixed(1),
     );
   }
 
   Future<String?> obtenerCarpetaEtiquetas() async {
-    final raw = await _configRepository.obtenerValor(CLAVE_CONFIG_ETIQUETAS_CARPETA);
+    final raw = await _configRepository.obtenerValor(claveConfigEtiquetasCarpeta);
     if (raw == null || raw.trim().isEmpty) {
       return null;
     }
@@ -1856,7 +1875,7 @@ class ServicioAdmin {
   }
 
   Future<void> guardarCarpetaEtiquetas(String ruta) async {
-    await _configRepository.guardarValor(CLAVE_CONFIG_ETIQUETAS_CARPETA, ruta.trim());
+    await _configRepository.guardarValor(claveConfigEtiquetasCarpeta, ruta.trim());
   }
 
   Future<List<Venta>> listarCreditosPendientes() async {
@@ -1932,7 +1951,7 @@ class ServicioAdmin {
     String? vendedorId;
     if (operador != null && _vendedorRepository != null) {
       await SincronizadorVendedorUsuario.sincronizar(
-        repo: _vendedorRepository!,
+        repo: _vendedorRepository,
         usuario: operador,
       );
       vendedorId = 'vend-${operador.id}';
@@ -3126,6 +3145,50 @@ class ServicioAdmin {
       estado: EstadoSyncEvento.pendiente,
     );
     await _syncOrchestrator.registrarEvento(evento);
+  }
+
+  Future<HubSyncClient?> _clienteHubOpcional() async {
+    final hubUrl = await _configRepository.obtenerHubUrl();
+    if (hubUrl == null || hubUrl.trim().isEmpty) {
+      return null;
+    }
+    final claveApi =
+        await _configRepository.obtenerValor(claveConfigHubApiKey) ?? '';
+    return HubSyncClient(urlBase: hubUrl.trim(), claveApi: claveApi);
+  }
+
+  /// Tras mutar usuarios, empuja a la nube y descarga cambios remotos.
+  Future<void> _sincronizarInmediatoConHub() async {
+    final hubUrl = await _configRepository.obtenerHubUrl();
+    if (hubUrl == null || hubUrl.trim().isEmpty) {
+      return;
+    }
+    await sincronizarManual();
+  }
+
+  /// Evita colisionar con cuentas ya provisionadas en el hub (p. ej. bootstrap).
+  Future<String> _resolverCodigoUsuarioDisponible(
+    UsuarioRepository repo,
+    RolUsuario rol,
+  ) async {
+    final reservados = <String>{};
+    var codigo = await repo.generarSiguienteCodigo(rol);
+    final hub = await _clienteHubOpcional();
+    if (hub == null || !await hub.verificarSalud()) {
+      return codigo;
+    }
+    for (var intento = 0; intento < 99; intento++) {
+      final ocupado = await hub.obtenerPerfilUsuario(codigo);
+      if (ocupado == null) {
+        return codigo;
+      }
+      reservados.add(ValidadorCodigoUsuario.normalizar(codigo));
+      codigo = await repo.generarSiguienteCodigo(
+        rol,
+        codigosReservados: reservados,
+      );
+    }
+    throw StateError('No hay codigos de usuario disponibles');
   }
 
   Future<void> _registrarEventoUsuario(Usuario usuario) async {

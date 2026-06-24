@@ -76,7 +76,7 @@ class _PantallaListasPreciosAdminState extends ConsumerState<PantallaListasPreci
 								child: listas.isEmpty
 									? const Text('Sin listas. Cree una para comenzar.')
 									: DropdownButtonFormField<String>(
-										value: listaId,
+										initialValue: listaId,
 										isExpanded: true,
 										decoration: const InputDecoration(
 											labelText: 'Lista de precios',
@@ -218,7 +218,7 @@ class _PantallaListasPreciosAdminState extends ConsumerState<PantallaListasPreci
 						: ListView.separated(
 							padding: const EdgeInsets.fromLTRB(8.0, 0.0, 8.0, 88.0),
 							itemCount: filtrados.length,
-							separatorBuilder: (_, __) => const Divider(height: 1.0),
+							separatorBuilder: (_, _) => const Divider(height: 1.0),
 							itemBuilder: (context, i) {
 								final item = filtrados[i];
 								return _FilaProductoLista(
@@ -605,7 +605,7 @@ class _DialogoAgregarProductoListaState extends State<_DialogoAgregarProductoLis
 							),
 							const SizedBox(height: 8.0),
 							DropdownButtonFormField<String>(
-								value: filtrados.any((p) => p.id == _productoId) ? _productoId : null,
+								initialValue: filtrados.any((p) => p.id == _productoId) ? _productoId : null,
 								isExpanded: true,
 								decoration: const InputDecoration(
 									labelText: 'Producto',

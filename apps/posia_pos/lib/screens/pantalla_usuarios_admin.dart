@@ -272,8 +272,8 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 													rolSeleccionado = v!;
 													if (rolSeleccionado == RolUsuario.administrador) {
 														tiendaSeleccionada = null;
-													} else if (tiendaSeleccionada == null) {
-														tiendaSeleccionada =
+													} else {
+														tiendaSeleccionada ??=
 															operador.tiendaId ?? datos.tiendas.firstOrNull?.id;
 													}
 												})
@@ -390,7 +390,7 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 	}) async {
 		try {
 			final servicio = await ref.read(servicioAdminProvider.future);
-			String? usuarioId;
+			late final String usuarioId;
 			if (editando == null) {
 				final creado = await servicio.registrarUsuario(
 					nombre: _nombreController.text,
@@ -417,7 +417,7 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 					ref.read(sesionUsuarioProvider.notifier).iniciar(actualizado);
 				}
 			}
-			if (usuarioId != null && rolSeleccionado != RolUsuario.administrador) {
+			if (rolSeleccionado != RolUsuario.administrador) {
 				final tarifa = double.tryParse(
 					_tarifaController.text.replaceAll(',', '.'),
 				);
@@ -492,6 +492,10 @@ class _DatosUsuarios {
 
 final _usuariosAdminProvider = FutureProvider<_DatosUsuarios>((ref) async {
 	final servicio = await ref.watch(servicioAdminProvider.future);
+	final hubUrl = await servicio.obtenerHubUrl();
+	if (hubUrl.isNotEmpty) {
+		await servicio.repararSincronizacionUsuarios();
+	}
 	final operador = ref.watch(sesionUsuarioProvider);
 	final usuarios = await servicio.listarUsuarios(operador: operador);
 	final tiendas = await servicio.obtenerTiendasPermitidas(operador: operador);

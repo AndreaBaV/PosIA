@@ -10,18 +10,24 @@ import '../models/resultado_autenticacion.dart';
 import '../repositories/config_repository.dart';
 import '../repositories/usuario_repository.dart';
 
-/// Valida credenciales contra el hub o la copia local del tenant.
+/// Valida credenciales contra el hub (fuente de verdad) con respaldo local offline.
 class ServicioAutenticacion {
 	ServicioAutenticacion({
 		required ConfigRepository configDispositivo,
 		HubSyncClient? clienteHub,
+		SyncOrchestrator? orquestadorSync,
 	}) : _configDispositivo = configDispositivo,
-	     _clienteHub = clienteHub;
+	     _clienteHub = clienteHub,
+	     _orquestadorSync = orquestadorSync;
 
 	final ConfigRepository _configDispositivo;
 	final HubSyncClient? _clienteHub;
+	final SyncOrchestrator? _orquestadorSync;
 
 	/// Busca perfil publico por codigo (sin validar PIN).
+	///
+	/// Sincroniza con el hub antes de consultar para que cuentas creadas en
+	/// este u otro dispositivo esten actualizadas.
 	Future<BusquedaPerfilAuth> buscarPerfilPorCodigo(String codigo) async {
 		final limpio = ValidadorCodigoUsuario.normalizar(codigo);
 		final errorFormato = ValidadorCodigoUsuario.validar(limpio);
@@ -31,34 +37,37 @@ class ServicioAutenticacion {
 		if (limpio.isEmpty) {
 			return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.usuarioNoEncontrado);
 		}
+		await _sincronizarConHubSiPosible();
+		final tenantId = await _tenantIdConfigurado();
 		final hub = _clienteHub;
 		if (hub != null) {
 			final salud = await hub.verificarSalud();
-			if (!salud) {
-				final offline = await _buscarPerfilLocal(limpio);
-				if (offline != null) {
-					return BusquedaPerfilAuth.usuario(offline);
+			if (salud) {
+				final perfil = await hub.obtenerPerfilUsuario(
+					limpio,
+					tenantId: tenantId,
+				);
+				if (perfil != null) {
+					if (!perfil.activo) {
+						return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.usuarioInactivo);
+					}
+					return BusquedaPerfilAuth.usuario(_mapearPerfilHub(perfil));
 				}
-				return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.hubNoDisponible);
+				return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.usuarioNoEncontrado);
 			}
-			final perfil = await hub.obtenerPerfilUsuario(limpio);
-			if (perfil != null) {
-				if (!perfil.activo) {
-					return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.usuarioInactivo);
-				}
-				return BusquedaPerfilAuth.usuario(_mapearPerfilHub(perfil));
-			}
-			return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.usuarioNoEncontrado);
 		}
 		final local = await _buscarPerfilLocal(limpio);
 		if (local != null) {
 			return BusquedaPerfilAuth.usuario(local);
 		}
-		final tenantId = await _configDispositivo.obtenerValor(CLAVE_CONFIG_TENANT_ID);
-		if (tenantId == null || tenantId.isEmpty) {
-			return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.hubNoConfigurado);
+		if (hub == null) {
+			final tenant = await _tenantIdConfigurado();
+			if (tenant == null || tenant.isEmpty) {
+				return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.hubNoConfigurado);
+			}
+			return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.usuarioNoEncontrado);
 		}
-		return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.usuarioNoEncontrado);
+		return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.hubNoDisponible);
 	}
 
 	/// Autentica y devuelve el tenant al que pertenece la cuenta.
@@ -67,11 +76,17 @@ class ServicioAutenticacion {
 		if (limpio.isEmpty || pin.isEmpty) {
 			return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.credencialesInvalidas);
 		}
+		await _sincronizarConHubSiPosible();
+		final tenantId = await _tenantIdConfigurado();
 		final hub = _clienteHub;
 		if (hub != null) {
 			final salud = await hub.verificarSalud();
 			if (salud) {
-				final remoto = await hub.iniciarSesion(codigo: limpio, pin: pin);
+				final remoto = await hub.iniciarSesion(
+					codigo: limpio,
+					pin: pin,
+					tenantId: tenantId,
+				);
 				if (remoto != null) {
 					if (!remoto.perfil.activo) {
 						return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.usuarioInactivo);
@@ -81,32 +96,54 @@ class ServicioAutenticacion {
 				return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.credencialesInvalidas);
 			}
 		}
-		final tenantId = await _configDispositivo.obtenerValor(CLAVE_CONFIG_TENANT_ID);
+		final local = await _autenticarLocal(limpio, pin);
+		if (local != null) {
+			return IntentoAutenticacionAuth.exito(local);
+		}
+		if (hub == null) {
+			return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.hubNoConfigurado);
+		}
+		if (tenantId != null && tenantId.isNotEmpty) {
+			return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.credencialesInvalidas);
+		}
+		return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.hubNoDisponible);
+	}
+
+	Future<void> _sincronizarConHubSiPosible() async {
+		final orquestador = _orquestadorSync;
+		if (orquestador == null || !orquestador.tieneHubConfigurado()) {
+			return;
+		}
+		try {
+			await orquestador.sincronizarCompleto();
+		} on Object {
+			// El login puede continuar con copia local si el hub falla.
+		}
+	}
+
+	Future<String?> _tenantIdConfigurado() async {
+		return _configDispositivo.obtenerValor(claveConfigTenantId);
+	}
+
+	Future<ResultadoAutenticacion?> _autenticarLocal(String codigo, String pin) async {
+		final tenantId = await _tenantIdConfigurado();
 		if (tenantId == null || tenantId.isEmpty) {
-			if (hub == null) {
-				return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.hubNoConfigurado);
-			}
-			return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.hubNoDisponible);
+			return null;
 		}
 		await PosiaLocalDatabase.obtenerInstancia().establecerTenant(tenantId);
 		final base = await PosiaLocalDatabase.obtenerInstancia().obtenerBaseDatos();
-		final usuario = await UsuarioRepository(baseDatos: base).autenticar(limpio, pin);
+		final usuario = await UsuarioRepository(baseDatos: base).autenticar(codigo, pin);
 		if (usuario == null) {
-			if (hub != null) {
-				return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.hubNoDisponible);
-			}
-			return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.credencialesInvalidas);
+			return null;
 		}
-		return IntentoAutenticacionAuth.exito(
-			ResultadoAutenticacion(
-				usuario: usuario.copiarCon(tenantId: tenantId),
-				tenantId: tenantId,
-			),
+		return ResultadoAutenticacion(
+			usuario: usuario.copiarCon(tenantId: tenantId),
+			tenantId: tenantId,
 		);
 	}
 
 	Future<Usuario?> _buscarPerfilLocal(String codigo) async {
-		final tenantId = await _configDispositivo.obtenerValor(CLAVE_CONFIG_TENANT_ID);
+		final tenantId = await _tenantIdConfigurado();
 		if (tenantId == null || tenantId.isEmpty) {
 			return null;
 		}

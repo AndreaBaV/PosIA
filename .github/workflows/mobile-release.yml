@@ -229,7 +229,7 @@ jobs:
         if: steps.signing.outputs.configured != 'true'
         run: |
           echo "iOS no compilado: faltan secrets de firma Apple."
-          echo "Ver docs/PUBLICACION_MOVIL.md seccion GitHub Actions."
+          echo "Ver docs/MANUAL_TECNICO.md seccion 11 (Publicacion movil)."
 
   github-release:
     name: GitHub Release

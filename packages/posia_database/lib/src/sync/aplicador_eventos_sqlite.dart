@@ -237,7 +237,6 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		if (venta == null || !venta.puedeAnularse()) {
 			return;
 		}
-		final ahora = DateTime.now().toUtc();
 		for (final linea in venta.lineas) {
 			await _ajustarStock(linea.productoId, venta.tiendaId, linea.cantidad);
 		}

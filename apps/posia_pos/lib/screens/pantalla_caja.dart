@@ -317,7 +317,7 @@ class _ConstruirLayoutCaja extends ConsumerWidget {
 								scrollDirection: Axis.horizontal,
 								padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
 								itemCount: estado.favoritos.length,
-								separatorBuilder: (_, __) => const SizedBox(width: 8.0),
+								separatorBuilder: (_, _) => const SizedBox(width: 8.0),
 								itemBuilder: (context, indice) {
 									final producto = estado.favoritos[indice];
 									return ActionChip(
@@ -667,6 +667,10 @@ Future<void> ejecutarPonerEnEspera(BuildContext context, WidgetRef ref) async {
 	if (cliente != null) {
 		notasController.text = cliente.nombre;
 	}
+	if (!context.mounted) {
+		notasController.dispose();
+		return;
+	}
 	final confirmar = await showDialog<bool>(
 		context: context,
 		builder: (ctx) => AlertDialog(
@@ -751,7 +755,7 @@ Future<void> mostrarTicketsEnEspera(BuildContext context, WidgetRef ref) async {
 				height: 360.0,
 				child: ListView.separated(
 					itemCount: tickets.length,
-					separatorBuilder: (_, __) => const Divider(height: 1.0),
+					separatorBuilder: (_, _) => const Divider(height: 1.0),
 					itemBuilder: (context, indice) {
 						final ticket = tickets[indice];
 						final hora = ticket.creadoEn.toLocal();
@@ -1012,6 +1016,9 @@ Future<void> ejecutarCobroCaja(BuildContext context, WidgetRef ref) async {
 		CobroRequest? request;
 		while (context.mounted) {
 			final cliente = servicio.obtenerClienteActivo();
+			if (!context.mounted) {
+				return;
+			}
 			request = await mostrarDialogoCobro(
 				context: context,
 				subtotal: servicio.calcularTotalCarrito(),
@@ -1069,6 +1076,9 @@ Future<void> ejecutarCobroCaja(BuildContext context, WidgetRef ref) async {
 			final cliente = venta.clienteId != null
 				? await contenedor.servicioAdmin.obtenerCliente(venta.clienteId!)
 				: null;
+			if (!context.mounted) {
+				return;
+			}
 			await _mostrarOpcionesPostVenta(
 				context,
 				textoTicket: textoTicket,

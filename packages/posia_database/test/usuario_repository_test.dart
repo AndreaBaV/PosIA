@@ -48,6 +48,25 @@ void main() {
 			);
 		});
 
+		test('generarSiguienteCodigo evita codigos reservados', () async {
+			await repo.guardar(
+				const Usuario(
+					id: 'u-emp1',
+					nombre: 'Ana',
+					codigo: 'EMP001',
+					pin: '1234',
+					rol: RolUsuario.empleado,
+					activo: true,
+					tiendaId: 't-1',
+				),
+			);
+			final codigo = await repo.generarSiguienteCodigo(
+				RolUsuario.empleado,
+				codigosReservados: {'EMP002'},
+			);
+			expect(codigo, 'EMP003');
+		});
+
 		test('autentica con pin hasheado y rechaza pin incorrecto', () async {
 			await repo.guardar(
 				const Usuario(

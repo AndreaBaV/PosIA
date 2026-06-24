@@ -183,7 +183,6 @@ class FabricaServicios {
 			varianteRepository: varianteRepo,
 			presentacionRepository: presentacionRepo,
 			clienteRepository: clienteRepo,
-			descuentoClienteRepository: descuentoClienteRepo,
 			ventaRepository: ventaRepo,
 			motorPrecio: motorPrecio,
 			gestorInventario: gestorInventario,
@@ -257,6 +256,59 @@ class FabricaServicios {
 		);
 	}
 
+	/// Orquestador de sync para login (antes de sesion de tenant en UI).
+	///
+	/// Retorna null si no hay tenant ni hub configurados.
+	static Future<SyncOrchestrator?> crearOrquestadorPreLogin() async {
+		final gestor = PosiaLocalDatabase.obtenerInstancia();
+		final baseDispositivo = await gestor.obtenerBaseDatosDispositivo();
+		final configRepo = ConfigRepository(baseDatos: baseDispositivo);
+		final config = await configRepo.obtenerConfigDispositivo();
+		final tenantId = config.tenantId;
+		if (tenantId.isEmpty) {
+			return null;
+		}
+		final clienteHub = await _crearClienteHub(configRepo);
+		if (clienteHub == null) {
+			return null;
+		}
+		await gestor.establecerTenant(tenantId);
+		final base = await gestor.obtenerBaseDatos();
+		final productoRepo = ProductoRepository(baseDatos: base);
+		final clienteRepo = ClienteRepository(baseDatos: base);
+		final ventaRepo = VentaRepository(baseDatos: base);
+		final inventarioRepo = InventarioRepository(baseDatos: base);
+		final categoriaRepo = CategoriaRepository(baseDatos: base);
+		final traspasoRepo = TraspasoRepository(baseDatos: base);
+		final varianteRepo = VarianteRepository(baseDatos: base);
+		final tiendaRepo = TiendaRepository(baseDatos: base);
+		final usuarioRepo = UsuarioRepository(baseDatos: base);
+		final colaSync = SyncEventRepository(baseDatos: base);
+		final estadoSyncRepo = SyncStateRepository(baseDatos: base);
+		final aplicadorRemoto = AplicadorEventosSqlite(
+			baseDatos: base,
+			productoRepository: productoRepo,
+			clienteRepository: clienteRepo,
+			ventaRepository: ventaRepo,
+			inventarioRepository: inventarioRepo,
+			categoriaRepository: categoriaRepo,
+			traspasoRepository: traspasoRepo,
+			varianteRepository: varianteRepo,
+			tiendaRepository: tiendaRepo,
+			usuarioRepository: usuarioRepo,
+		);
+		return SyncOrchestrator(
+			colaLocal: colaSync,
+			clienteHub: clienteHub,
+			clienteLan: null,
+			aplicadorRemoto: aplicadorRemoto,
+			almacenCursor: estadoSyncRepo,
+			tenantId: tenantId,
+			tiendaId: config.tiendaId,
+			dispositivoId: config.cajaId,
+		);
+	}
+
 	/// Crea cliente hub desde configuracion local.
 	///
 	/// [configRepo] Acceso a app_config.
@@ -266,7 +318,7 @@ class FabricaServicios {
 		if (hubUrl == null) {
 			return null;
 		}
-		final claveApi = await configRepo.obtenerValor(CLAVE_CONFIG_HUB_API_KEY);
+		final claveApi = await configRepo.obtenerValor(claveConfigHubApiKey);
 		return HubSyncClient(urlBase: hubUrl, claveApi: claveApi);
 	}
 }

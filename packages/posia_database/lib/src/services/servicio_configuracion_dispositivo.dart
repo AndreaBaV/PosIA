@@ -16,7 +16,7 @@ class ServicioConfiguracionDispositivo {
 	Future<String?> obtenerHubUrl() => _config.obtenerHubUrl();
 
 	Future<String> obtenerHubApiKey() async {
-		return (await _config.obtenerValor(CLAVE_CONFIG_HUB_API_KEY)) ?? '';
+		return (await _config.obtenerValor(claveConfigHubApiKey)) ?? '';
 	}
 
 	/// Guarda URL y clave del hub; no modifica el tenant (se resuelve al login).
@@ -55,7 +55,7 @@ class ServicioConfiguracionDispositivo {
 			if (pin.length != LONGITUD_PIN_ADMIN) {
 				throw StateError('El PIN técnico debe tener $LONGITUD_PIN_ADMIN dígitos');
 			}
-			await _config.guardarValor(CLAVE_CONFIG_PIN_ADMIN, pin);
+			await _config.guardarValor(claveConfigPinAdmin, pin);
 		}
 		await _config.marcarInstalacionCompleta();
 		return usarHub;

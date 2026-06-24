@@ -159,7 +159,7 @@ class _PantallaCreditosPendientesState extends ConsumerState<PantallaCreditosPen
           : ListView.separated(
               padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 88.0),
               itemCount: _ventas!.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8.0),
+              separatorBuilder: (_, _) => const SizedBox(height: 8.0),
               itemBuilder: (context, indice) {
                 final venta = _ventas![indice];
                 final nombreCliente = venta.clienteId == null

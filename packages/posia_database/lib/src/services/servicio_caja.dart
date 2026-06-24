@@ -19,7 +19,6 @@ import 'package:uuid/uuid.dart';
 import '../repositories/categoria_repository.dart';
 import '../repositories/cliente_repository.dart';
 import '../repositories/cotizacion_repository.dart';
-import '../repositories/descuento_cliente_repository.dart';
 import '../repositories/producto_repository.dart';
 import '../repositories/ticket_espera_repository.dart';
 import '../repositories/presentacion_repository.dart';
@@ -49,7 +48,6 @@ class ServicioCaja {
     VarianteRepository? varianteRepository,
     PresentacionRepository? presentacionRepository,
     required ClienteRepository clienteRepository,
-    DescuentoClienteRepository? descuentoClienteRepository,
     required VentaRepository ventaRepository,
     required MotorPrecio motorPrecio,
     required GestorInventario gestorInventario,
@@ -68,7 +66,6 @@ class ServicioCaja {
        _varianteRepository = varianteRepository,
        _presentacionRepository = presentacionRepository,
        _clienteRepository = clienteRepository,
-       _descuentoClienteRepository = descuentoClienteRepository,
        _ventaRepository = ventaRepository,
        _motorPrecio = motorPrecio,
        _gestorInventario = gestorInventario,
@@ -88,7 +85,6 @@ class ServicioCaja {
   final VarianteRepository? _varianteRepository;
   final PresentacionRepository? _presentacionRepository;
   final ClienteRepository _clienteRepository;
-  final DescuentoClienteRepository? _descuentoClienteRepository;
   final VentaRepository _ventaRepository;
   final MotorPrecio _motorPrecio;
   final GestorInventario _gestorInventario;
@@ -103,15 +99,11 @@ class ServicioCaja {
   final String _tenantId;
   final String _tiendaId;
   final String _cajaId;
-  final Uuid _generadorId = const Uuid();
 
   final List<LineaCarrito> _lineasCarrito = [];
   Cliente? _clienteActivo;
   Vendedor? _vendedorActivo;
-  double _descuentoTicketCliente = 0.0;
-
-  /// Descuento automatico del cliente activo sobre el ticket.
-  double obtenerDescuentoTicketCliente() => _descuentoTicketCliente;
+  final Uuid _generadorId = const Uuid();
 
   /// Expone servicio de carniceria para UI especializada.
   ///
@@ -458,14 +450,12 @@ class ServicioCaja {
       return;
     }
     _lineasCarrito.removeAt(indice);
-    await _aplicarDescuentosCliente();
   }
 
   /// Vacia el carrito activo sin persistir venta.
   void vaciarCarrito() {
     _lineasCarrito.clear();
     _clienteActivo = null;
-    _descuentoTicketCliente = 0.0;
   }
 
   /// Lista tickets apartados en esta tienda y caja.
@@ -503,7 +493,7 @@ class ServicioCaja {
       nombreCliente: _clienteActivo?.nombre,
       vendedorId: _vendedorActivo?.id,
       notas: notas.trim(),
-      descuentoTicket: _descuentoTicketCliente,
+      descuentoTicket: 0.0,
       total: calcularTotalCarrito(),
       creadoEn: DateTime.now().toUtc(),
       lineas: _lineasCarrito
@@ -534,7 +524,6 @@ class ServicioCaja {
     if (ticket.vendedorId != null) {
       _vendedorActivo = await _vendedorRepository?.obtenerPorId(ticket.vendedorId!);
     }
-    _descuentoTicketCliente = ticket.descuentoTicket;
     for (final linea in ticket.lineas) {
       final producto = await _productoRepository.obtenerPorId(linea.productoId);
       _lineasCarrito.add(
@@ -564,8 +553,7 @@ class ServicioCaja {
     for (final linea in _lineasCarrito) {
       acumulado = acumulado + linea.calcularSubtotal();
     }
-    final neto = acumulado - _descuentoTicketCliente;
-    return redondearMonto(neto < 0.0 ? 0.0 : neto);
+    return redondearMonto(acumulado < 0.0 ? 0.0 : acumulado);
   }
 
   /// Cierra venta, persiste, ajusta inventario y encola sync.
@@ -595,10 +583,7 @@ class ServicioCaja {
         )
         .toList();
     final turno = await _servicioCorteCaja?.obtenerTurnoAbierto();
-    final total = Venta.calcularTotalDesdeLineas(
-      lineasVenta,
-      descuentoTicket: request.descuentoTicket + _descuentoTicketCliente,
-    );
+    final total = Venta.calcularTotalDesdeLineas(lineasVenta);
     double? montoEfectivo;
     double? montoTarjeta;
     double? montoTransferencia;
@@ -636,7 +621,7 @@ class ServicioCaja {
       creadaEn: DateTime.now().toUtc(),
       vendedorId: _vendedorActivo?.id,
       turnoCajaId: turno?.id,
-      descuentoTicket: request.descuentoTicket + _descuentoTicketCliente,
+      descuentoTicket: 0.0,
       montoEfectivo: montoEfectivo,
       montoTarjeta: montoTarjeta,
       montoTransferencia: montoTransferencia,
@@ -660,7 +645,7 @@ class ServicioCaja {
     if (errorBase != null) {
       return errorBase;
     }
-    final total = calcularTotalCarrito() - request.descuentoTicket;
+    final total = calcularTotalCarrito();
     if (total <= 0.0) {
       return 'Total invalido';
     }
@@ -750,17 +735,6 @@ class ServicioCaja {
     return cotizacion;
   }
 
-  /// Aplica descuento absoluto a una linea del carrito.
-  void aplicarDescuentoLinea(int indice, double descuento) {
-    if (indice < 0 || indice >= _lineasCarrito.length) {
-      return;
-    }
-    final linea = _lineasCarrito[indice];
-    _lineasCarrito[indice] = linea.copiarCon(
-      descuentoLinea: descuento < 0.0 ? 0.0 : descuento,
-    );
-  }
-
   /// Lista productos favoritos configurados para caja rapida.
   Future<List<Producto>> listarFavoritosCaja() async {
     return _productoRepository.listarFavoritosCaja(_tiendaId);
@@ -821,7 +795,6 @@ class ServicioCaja {
             etiquetaLote: _etiquetaLoteFusionada(producto, cantidadNueva) ??
                 lineaActual.etiquetaLote,
           );
-          await _aplicarDescuentosCliente();
           return;
         }
       }
@@ -838,19 +811,10 @@ class ServicioCaja {
         productoStockId: productoStockId,
       ),
     );
-    await _aplicarDescuentosCliente();
   }
 
   Future<void> _sincronizarClienteEnCarrito() async {
     await _recalcularPreciosCarrito();
-    await _aplicarDescuentosCliente();
-  }
-
-  Future<void> _aplicarDescuentosCliente() async {
-    _descuentoTicketCliente = 0.0;
-    for (var i = 0; i < _lineasCarrito.length; i++) {
-      _lineasCarrito[i] = _lineasCarrito[i].copiarCon(descuentoLinea: 0.0);
-    }
   }
 
   /// Recalcula precio unitario de cada linea segun cliente activo.

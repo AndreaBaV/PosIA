@@ -104,7 +104,7 @@ class _PantallaRegistrarCreditoState extends ConsumerState<PantallaRegistrarCred
 					const SizedBox(height: 12.0),
 					clientesAsync.when(
 						data: (clientes) => DropdownButtonFormField<String?>(
-							value: _clienteId,
+							initialValue: _clienteId,
 							decoration: const InputDecoration(
 								labelText: 'Cliente *',
 								border: OutlineInputBorder(),
@@ -350,6 +350,9 @@ class _PantallaRegistrarCreditoState extends ConsumerState<PantallaRegistrarCred
 			}
 			final cantidad = double.tryParse(_controllerCantidad(producto.id).text) ?? 0.0;
 			if (cantidad <= 0) {
+				if (!mounted) {
+					return;
+				}
 				ScaffoldMessenger.of(context).showSnackBar(
 					SnackBar(
 						content: Text('Cantidad invalida para ${producto.nombre}'),

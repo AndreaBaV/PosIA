@@ -91,9 +91,15 @@ class ServicioProvisionHub {
 				parameters: {'id': usuario.id},
 			);
 			final ahora = DateTime.now().toUtc().toIso8601String();
+			late final String pinHash;
+			late final String pinSalt;
+			late final String creadoEn;
 			if (existente.isEmpty) {
 				final sal = HasherPin.generarSal();
 				final hash = HasherPin.hashPin(usuario.pinPlano, sal);
+				pinHash = hash;
+				pinSalt = sal;
+				creadoEn = ahora;
 				await conexion.execute(
 					Sql.named('''
 						INSERT INTO users (
@@ -112,9 +118,9 @@ class ServicioProvisionHub {
 						'rol': usuario.rol,
 						'tienda': usuario.tiendaId,
 						'activo': usuario.activo ? 1 : 0,
-						'hash': hash,
-						'salt': sal,
-						'creado': ahora,
+						'hash': pinHash,
+						'salt': pinSalt,
+						'creado': creadoEn,
 						'actualizado': ahora,
 					},
 				);
@@ -142,7 +148,27 @@ class ServicioProvisionHub {
 						'actualizado': ahora,
 					},
 				);
+				final credenciales = await conexion.execute(
+					Sql.named('''
+						SELECT pin_hash, pin_salt, creado_en
+						FROM users WHERE id = @id
+					'''),
+					parameters: {'id': usuario.id},
+				);
+				final cols = credenciales.first.toColumnMap();
+				pinHash = cols['pin_hash'] as String? ?? '';
+				pinSalt = cols['pin_salt'] as String? ?? '';
+				creadoEn = cols['creado_en'] as String? ?? ahora;
 			}
+			await _publicarEventoUsuario(
+				conexion,
+				tenantId: tenantId,
+				usuario: usuario,
+				pinHash: pinHash,
+				pinSalt: pinSalt,
+				creadoEn: creadoEn,
+				actualizadoEn: ahora,
+			);
 			usuariosOk++;
 		}
 
@@ -215,6 +241,50 @@ class ServicioProvisionHub {
 					'nombre': tienda.nombre,
 					'direccion': tienda.direccion,
 					'activa': tienda.activa,
+				}),
+				'created': ahora,
+			},
+		);
+	}
+
+	Future<void> _publicarEventoUsuario(
+		Connection conexion, {
+		required String tenantId,
+		required UsuarioBootstrap usuario,
+		required String pinHash,
+		required String pinSalt,
+		required String creadoEn,
+		required String actualizadoEn,
+	}) async {
+		if (pinHash.isEmpty || pinSalt.isEmpty) {
+			return;
+		}
+		final ahora = DateTime.now().toUtc();
+		await conexion.execute(
+			Sql.named('''
+				INSERT INTO sync_events
+					(id, tenant_id, store_id, device_id, type, payload, created_at)
+				VALUES
+					(@id, @tenant, @store, @device, @type, @payload, @created)
+				ON CONFLICT (id) DO NOTHING
+			'''),
+			parameters: {
+				'id': _uuid.v4(),
+				'tenant': tenantId,
+				'store': usuario.tiendaId ?? '',
+				'device': 'provision-bootstrap',
+				'type': 'userUpserted',
+				'payload': jsonEncode({
+					'id': usuario.id,
+					'nombre': usuario.nombre,
+					'codigo': usuario.codigo,
+					'rol': usuario.rol,
+					'tiendaId': usuario.tiendaId,
+					'activo': usuario.activo,
+					'pinHash': pinHash,
+					'pinSalt': pinSalt,
+					'creadoEn': creadoEn,
+					'actualizadoEn': actualizadoEn,
 				}),
 				'created': ahora,
 			},

@@ -37,15 +37,11 @@ POSIA/
 
 ## Documentación
 
-Índice completo: **[docs/README.md](docs/README.md)**
-
 | Documento | Descripción |
 |-----------|-------------|
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Arquitectura del sistema |
-| [docs/MANUAL_USUARIO.md](docs/MANUAL_USUARIO.md) | Manual de operación (caja y admin) |
-| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Despliegue, licencia y sync |
-| [docs/PUBLICACION_MOVIL.md](docs/PUBLICACION_MOVIL.md) | Google Play y App Store |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md) | Historial de versiones |
+| [docs/MANUAL_TECNICO.md](docs/MANUAL_TECNICO.md) | Arquitectura, despliegue, builds, sync, publicación móvil |
+| [docs/MANUAL_USUARIO.md](docs/MANUAL_USUARIO.md) | Operación de caja y admin; inventario de funciones |
+| [docs/CONTROL_CAMBIOS.md](docs/CONTROL_CAMBIOS.md) | Historial de versiones |
 
 ## Requisitos
 
@@ -70,7 +66,7 @@ flutter run -d windows
 
 ## Licencia
 
-Software comercial con licencia perpetua. Ver [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+Software comercial con licencia perpetua. Ver [docs/MANUAL_TECNICO.md](docs/MANUAL_TECNICO.md).
 
 ## Autor
 

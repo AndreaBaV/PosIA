@@ -1,7 +1,6 @@
 /// Validacion y calculo de ventas a credito para clientes.
 library;
 
-import '../constants/posia_constants.dart';
 import '../models/cliente.dart';
 import 'moneda_util.dart';
 

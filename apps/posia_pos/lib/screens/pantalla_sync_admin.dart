@@ -34,6 +34,7 @@ class _PantallaSyncAdminState extends ConsumerState<PantallaSyncAdmin> {
 					sincronizando: _sincronizando,
 					mensajeResultado: _mensajeResultado,
 					alSincronizar: _ejecutarSyncManual,
+					alRepararEquipo: _ejecutarReparacionEquipo,
 					alReconfigurar: () => abrirInstalacionTecnica(context, ref),
 				),
 				loading: () => const Center(child: CircularProgressIndicator()),
@@ -55,6 +56,24 @@ class _PantallaSyncAdminState extends ConsumerState<PantallaSyncAdmin> {
 			_mensajeResultado = resultado.hubDisponible
 				? 'Enviados: ${resultado.eventosEnviados} · Recibidos: ${resultado.eventosRecibidos}'
 				: 'Sin conexión al hub o dispositivo en modo offline';
+		});
+	}
+
+	Future<void> _ejecutarReparacionEquipo() async {
+		setState(() {
+			_sincronizando = true;
+			_mensajeResultado = null;
+		});
+		final servicio = await ref.read(servicioAdminProvider.future);
+		final resultado = await servicio.repararSincronizacionUsuarios();
+		ref.invalidate(_estadoSyncProvider);
+		setState(() {
+			_sincronizando = false;
+			_mensajeResultado = resultado.hubDisponible
+				? 'Reparación: enviados ${resultado.eventosEnviados} · '
+					'recibidos ${resultado.eventosRecibidos}. '
+					'Revise Admin → Equipo en todos los dispositivos.'
+				: 'Sin conexión al hub';
 		});
 	}
 }
@@ -85,6 +104,7 @@ class _ConstruirContenidoSync extends StatelessWidget {
 		required this.sincronizando,
 		required this.mensajeResultado,
 		required this.alSincronizar,
+		required this.alRepararEquipo,
 		required this.alReconfigurar,
 	});
 
@@ -92,6 +112,7 @@ class _ConstruirContenidoSync extends StatelessWidget {
 	final bool sincronizando;
 	final String? mensajeResultado;
 	final VoidCallback alSincronizar;
+	final VoidCallback alRepararEquipo;
 	final VoidCallback alReconfigurar;
 
 	@override
@@ -163,6 +184,17 @@ class _ConstruirContenidoSync extends StatelessWidget {
 								label: Text(sincronizando ? 'Sincronizando...' : 'Sincronizar ahora'),
 							),
 						),
+					if (hubActivo) ...[
+						const SizedBox(height: 8.0),
+						SizedBox(
+							height: 48.0,
+							child: OutlinedButton.icon(
+								onPressed: sincronizando ? null : alRepararEquipo,
+								icon: const Icon(Icons.people_outline),
+								label: const Text('Reparar equipo (usuarios)'),
+							),
+						),
+					],
 					const SizedBox(height: 8.0),
 					TextButton.icon(
 						onPressed: alReconfigurar,

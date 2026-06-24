@@ -29,10 +29,15 @@ final servicioAutenticacionProvider = FutureProvider<ServicioAutenticacion>((ref
 	final hubUrl = await configRepo.obtenerHubUrl();
 	HubSyncClient? cliente;
 	if (hubUrl != null) {
-		final clave = await configRepo.obtenerValor(CLAVE_CONFIG_HUB_API_KEY);
+		final clave = await configRepo.obtenerValor(claveConfigHubApiKey);
 		cliente = HubSyncClient(urlBase: hubUrl, claveApi: clave);
 	}
-	return ServicioAutenticacion(configDispositivo: configRepo, clienteHub: cliente);
+	final orquestador = await FabricaServicios.crearOrquestadorPreLogin();
+	return ServicioAutenticacion(
+		configDispositivo: configRepo,
+		clienteHub: cliente,
+		orquestadorSync: orquestador,
+	);
 });
 
 /// Configuracion de hub/caja sin requerir sesion de tenant.
@@ -68,7 +73,7 @@ bool puedeAccederPanelAdmin(Usuario usuario) => usuario.rol != RolUsuario.emplea
 /// PIN administrativo configurado en el dispositivo.
 final pinAdminProvider = FutureProvider<String>((ref) async {
 	final configRepo = await ref.watch(configDispositivoRepoProvider.future);
-	return (await configRepo.obtenerValor(CLAVE_CONFIG_PIN_ADMIN)) ?? '';
+	return (await configRepo.obtenerValor(claveConfigPinAdmin)) ?? '';
 });
 
 /// ID de tienda activa del dispositivo.

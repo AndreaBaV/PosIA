@@ -15,7 +15,7 @@ API REST minimalista para hub de sincronizacion multi-tenant (event log append-o
 | GET | `/v1/events?tenantId=&since=&excludeDevice=` | Pull incremental por cursor seq |
 | GET | `/v1/health` | Health check |
 
-Ver [docs/SYNC.md](../../docs/SYNC.md) para contrato completo.
+Ver [docs/MANUAL_TECNICO.md](../../docs/MANUAL_TECNICO.md) sección 6 para contrato completo de sync.
 
 ## Variables de entorno
 

@@ -60,7 +60,7 @@ function Build-AndroidApk {
 
 function Build-Ios {
     if ($env:OS -notmatch "Darwin") {
-        Write-Error "iOS requiere macOS con Xcode. Ver docs/PUBLICACION_MOVIL.md seccion 4."
+        Write-Error "iOS requiere macOS con Xcode. Ver docs/MANUAL_TECNICO.md seccion 11."
     }
     Write-Host "==> flutter build ipa --release $DefineArgs" -ForegroundColor Cyan
     if ($DefineArgs) {
@@ -81,4 +81,4 @@ switch ($Plataforma) {
     }
 }
 
-Write-Host "`nVer docs/PUBLICACION_MOVIL.md para subir a Play Store y App Store." -ForegroundColor Cyan
+Write-Host "`nVer docs/MANUAL_TECNICO.md seccion 11 para subir a Play Store y App Store." -ForegroundColor Cyan

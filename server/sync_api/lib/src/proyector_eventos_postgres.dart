@@ -1,6 +1,7 @@
 /// Proyecta eventos del hub a tablas espejo del POS en PostgreSQL.
 library;
 
+import 'package:posia_core/posia_core.dart';
 import 'package:postgres/postgres.dart';
 
 import 'evento_hub.dart';
@@ -535,6 +536,10 @@ class ProyectorEventosPostgres {
 			return;
 		}
 		final actualizadoEn = p['actualizadoEn'] as String? ?? evento.creadoEn.toUtc().toIso8601String();
+		final codigo = ValidadorCodigoUsuario.normalizar(p['codigo'] as String? ?? '');
+		if (codigo.isEmpty) {
+			return;
+		}
 		final existente = await _conexion.execute(
 			Sql.named('SELECT actualizado_en FROM users WHERE id = @id'),
 			parameters: {'id': id},
@@ -545,6 +550,12 @@ class ProyectorEventosPostgres {
 				return;
 			}
 		}
+		await _liberarCodigoEnConflicto(
+			tenantId: evento.tenantId,
+			codigo: codigo,
+			usuarioId: id,
+			actualizadoEn: actualizadoEn,
+		);
 		await _conexion.execute(
 			Sql.named('''
 				INSERT INTO users (
@@ -570,13 +581,57 @@ class ProyectorEventosPostgres {
 				'id': id,
 				'tenant': evento.tenantId,
 				'nombre': p['nombre'] ?? '',
-				'codigo': p['codigo'] ?? '',
+				'codigo': codigo,
 				'rol': p['rol'] ?? 'empleado',
 				'tienda': p['tiendaId'],
 				'activo': (p['activo'] as bool? ?? true) ? 1 : 0,
 				'hash': pinHash,
 				'salt': pinSalt,
 				'creado': p['creadoEn'] as String? ?? evento.creadoEn.toUtc().toIso8601String(),
+				'actualizado': actualizadoEn,
+			},
+		);
+	}
+
+	/// Reasigna el codigo de cuentas mas antiguas que chocan en el mismo tenant.
+	Future<void> _liberarCodigoEnConflicto({
+		required String tenantId,
+		required String codigo,
+		required String usuarioId,
+		required String actualizadoEn,
+	}) async {
+		final conflicto = await _conexion.execute(
+			Sql.named('''
+				SELECT id, actualizado_en
+				FROM users
+				WHERE tenant_id = @tenant AND codigo = @codigo AND id <> @id
+				LIMIT 1
+			'''),
+			parameters: {
+				'tenant': tenantId,
+				'codigo': codigo,
+				'id': usuarioId,
+			},
+		);
+		if (conflicto.isEmpty) {
+			return;
+		}
+		final cols = conflicto.first.toColumnMap();
+		final otroId = cols['id'] as String? ?? '';
+		final otroActualizado = cols['actualizado_en'] as String? ?? '';
+		if (otroId.isEmpty || otroActualizado.compareTo(actualizadoEn) >= 0) {
+			return;
+		}
+		final sufijo = otroId.length > 8 ? otroId.substring(0, 8) : otroId;
+		await _conexion.execute(
+			Sql.named('''
+				UPDATE users
+				SET codigo = @nuevo, actualizado_en = @actualizado
+				WHERE id = @id
+			'''),
+			parameters: {
+				'id': otroId,
+				'nuevo': '${codigo}_LEGACY_$sufijo',
 				'actualizado': actualizadoEn,
 			},
 		);

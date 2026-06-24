@@ -1,32 +1,33 @@
 # Manual de usuario — POSIA
 
 **Autor:** Equipo POSIA  
-**Matricula:** POSIA-2026-001  
-**Version de la app:** 0.1.0  
-**Ultima actualizacion:** 2026-06-11  
+**Matrícula:** POSIA-2026-001  
+**Versión de la app:** 1.0.0  
+**Última actualización:** 2026-06-24  
 **Plataformas:** Windows (escritorio), iPhone, Android
 
 ---
 
 ## Tabla de contenido
 
-1. [Introduccion](#1-introduccion)
-2. [Requisitos e instalacion](#2-requisitos-e-instalacion)
+1. [Introducción](#1-introducción)
+2. [Requisitos e instalación](#2-requisitos-e-instalación)
 3. [Pantalla principal](#3-pantalla-principal)
-4. [Acceso al panel de administracion](#4-acceso-al-panel-de-administracion)
-5. [Flujo diario de caja](#5-flujo-diario-de-caja)
-6. [Caja en escritorio (Windows)](#6-caja-en-escritorio-windows)
-7. [Caja movil por voz (iPhone / Android)](#7-caja-movil-por-voz-iphone--android)
-8. [Impresion de tickets](#8-impresion-de-tickets)
-9. [Panel de administracion](#9-panel-de-administracion)
-10. [Sincronizacion con la nube](#10-sincronizacion-con-la-nube)
-11. [Limitaciones](#11-limitaciones)
-12. [Solucion de problemas](#12-solucion-de-problemas)
-13. [Registro de cambios](#13-registro-de-cambios)
+4. [Inicio de sesión y PINs](#4-inicio-de-sesión-y-pins)
+5. [Panel de administración](#5-panel-de-administración)
+6. [Flujo diario de caja](#6-flujo-diario-de-caja)
+7. [Caja en escritorio (Windows)](#7-caja-en-escritorio-windows)
+8. [Caja móvil por voz (iPhone / Android)](#8-caja-móvil-por-voz-iphone--android)
+9. [Inventario de funciones](#9-inventario-de-funciones)
+10. [Impresión de tickets](#10-impresión-de-tickets)
+11. [Sincronización con la nube](#11-sincronización-con-la-nube)
+12. [Asistencia y nómina](#12-asistencia-y-nómina)
+13. [Limitaciones](#13-limitaciones)
+14. [Solución de problemas](#14-solución-de-problemas)
 
 ---
 
-## 1. Introduccion
+## 1. Introducción
 
 POSIA es un punto de venta **offline-first**: la caja funciona sin internet. Los datos se guardan en el dispositivo y, si configuras un servidor de sincronizacion, se replican automaticamente cuando hay conexion.
 
@@ -45,7 +46,7 @@ POSIA soporta **efectivo, tarjeta, transferencia, mixto y crédito/fiado** en el
 
 ---
 
-## 2. Requisitos e instalacion
+## 2. Requisitos e instalación
 
 ### Windows (escritorio)
 
@@ -101,7 +102,7 @@ Los **empleados** solo ven **Caja**; **Mi cuenta** esta en el icono de perfil de
 
 ---
 
-## 4. Inicio de sesion y PINs
+## 4. Inicio de sesión y PINs
 
 ### Flujo
 
@@ -117,15 +118,64 @@ Los **empleados** solo ven **Caja**; **Mi cuenta** esta en el icono de perfil de
 
 ---
 
-## 5. Panel de administracion
+## 5. Panel de administración
 
-El acceso a Admin depende del rol con el que iniciaste sesion:
+El acceso a Admin depende del rol con el que iniciaste sesión:
 
 - **Administrador:** todas las secciones.
-- **Supervisor:** usuarios de su tienda, inventario y operacion limitada.
-- **Empleado:** sin panel Admin (solo caja).
+- **Supervisor:** usuarios de su tienda, inventario y operación limitada.
+- **Empleado:** sin panel Admin (solo caja, asistencia y pedidos en móvil).
 
-Para volver a caja, toca la pestaña **Caja**. Para cerrar sesion, usa **Cerrar sesion** en la barra superior.
+Para volver a caja, toca la pestaña **Caja**. Para cerrar sesión, usa **Cerrar sesión** en la barra superior.
+
+### Ventas
+
+| Opción | Qué hace |
+|--------|----------|
+| **Ventas hoy** | Resumen del día y lista de tickets |
+| **Historial** | Ventas de 1, 7 o 30 días; detalle; anular; devolución parcial; reimprimir |
+| **Pedidos** | Recibir pedidos y asignar empleado |
+| **Créditos** | Fiados pendientes; liquidar |
+| **Cotizaciones** | Historial guardado; reimprimir; WhatsApp |
+| **Corte de caja** | Abrir y cerrar turno |
+
+### Catálogo
+
+| Opción | Qué hace |
+|--------|----------|
+| **Categorías** | Crear y activar categorías para la grilla de caja |
+| **Productos** | Catálogo completo; variantes (icono capas); etiquetas PDF |
+| **Listas de precios** | Precios por lista y por cliente |
+
+Carnicería y farmacia se configuran como categorías de producto (peso y lotes).
+
+### Inventario
+
+| Opción | Qué hace |
+|--------|----------|
+| **Existencias** | Stock por tienda; tocar fila para stock mínimo |
+| **Compras** | Entradas de proveedor |
+| **Movimientos** | Entrada, salida o ajuste con motivo |
+| **Traspasos** | Enviar o recibir entre sucursales |
+| **Almacenes** | Centros de distribución |
+| **Presentaciones** | Tipos caja, bulto, etc. |
+
+### Personas
+
+| Opción | Qué hace |
+|--------|----------|
+| **Clientes** | Alta, editar, ficha con historial de ventas |
+| **Equipo** | Usuarios, roles, PIN, tarifa nómina |
+| **Proveedores** | Alta, editar, productos vinculados |
+
+### Reportes y sistema
+
+| Opción | Qué hace |
+|--------|----------|
+| **Tiendas** | Alta, baja (máx. 5 activas), geocerca asistencia |
+| **Reportes** | KPIs, alertas de faltantes; exportar CSV |
+| **Estado de la nube** | Cola sync, sync manual |
+| **Configuración** | Tienda, caja, impresora, PIN admin |
 
 ---
 
@@ -154,9 +204,9 @@ Opcional en escritorio: seleccionar **Vendedor** y **Cliente** antes de cobrar.
 
 1. Verifica el total del carrito.
 2. Toca **COBRAR**.
-3. Confirma el monto.
-4. Se genera el ticket (archivo o impresora segun configuracion).
-5. Opcional: toque **WhatsApp** para enviar el ticket al cliente.
+3. Elige forma de pago: efectivo, tarjeta, transferencia, mixto o crédito.
+4. Se genera el ticket (archivo o impresora según configuración).
+5. Opcional: enviar ticket por WhatsApp.
 
 ### Compartir por WhatsApp
 
@@ -175,24 +225,7 @@ En Admin → **Configuracion** active **Abrir cajon al cobrar** y configure la i
 
 ---
 
-## 5b. Asistencia y nomina
-
-### Asistencia (sin sensor de huella)
-
-1. Configure **latitud, longitud y radio** en Admin → **Tiendas**.
-2. Admin → **Asistencia** → **Generar PIN** (valido 5 minutos).
-3. El empleado abre **Asistencia** en el celular e ingresa el PIN dentro del radio de la tienda.
-4. Alternativa: **Entrada con biometria** (Face ID / huella del telefono) cuando esta en la geocerca.
-
-### Nomina
-
-1. Asigne **tarifa por hora** en Admin → **Equipo** (al editar usuario).
-2. Admin → **Nomina** → calcule el periodo semanal.
-3. Exporte CSV al portapapeles para contabilidad.
-
----
-
-## 6. Caja en escritorio (Windows)
+## 7. Caja en escritorio (Windows)
 
 ### Vista general
 
@@ -237,7 +270,10 @@ En Admin → **Configuracion** active **Abrir cajon al cobrar** y configure la i
 | **Vendedor** | Asigna vendedor activo para reportes |
 | **Cliente** | Asigna cliente; aplica precios preferenciales o mayoreo |
 | **Cancelar** | Vacia el carrito (con confirmacion) |
-| **COBRAR** | Cierra la venta en efectivo |
+| **COBRAR** | Abre diálogo de cobro (multipago) |
+| **En espera** | Guarda carrito para atender otro cliente |
+| **Recuperar** | Restaura ticket en espera |
+| **Cotizar** | Guarda cotización sin cobrar |
 
 ### Aviso sin turno
 
@@ -245,7 +281,7 @@ Si no hay turno abierto, aparece un aviso naranja y el cobro queda bloqueado.
 
 ---
 
-## 7. Caja movil por voz (iPhone / Android)
+## 8. Caja móvil por voz (iPhone / Android)
 
 La caja movil esta pensada para vender **hablando**. Es la funcion principal en telefono.
 
@@ -258,7 +294,11 @@ La caja movil esta pensada para vender **hablando**. Es la funcion principal en 
 | Campo de texto | Mismo comando por escrito si prefieres no hablar |
 | **Procesar texto** | Ejecuta el comando escrito |
 | Carrito | Productos agregados con cantidad resuelta |
-| **COBRAR** | Cierra venta en efectivo |
+| **COBRAR** | Diálogo de cobro (efectivo, tarjeta, transferencia, mixto, crédito) |
+| **Pausa** | Poner ticket en espera |
+| **Lista** | Recuperar tickets en espera (badge con cantidad) |
+| **Cotizar** | Guardar cotización desde el carrito |
+| **Vaciar** | Borrar carrito con confirmación |
 
 ### Comandos de voz — agregar productos
 
@@ -322,7 +362,60 @@ Cuando dices *"1 caja de leche"*, POSIA consulta el catalogo para saber si la ca
 
 ---
 
-## 8. Impresion de tickets
+---
+
+## 9. Inventario de funciones
+
+Resumen de capacidades por plataforma (v1.0).
+
+### Por plataforma
+
+| Área | Windows | iPhone / Android |
+|------|---------|------------------|
+| Caja | Grilla + escáner USB | Voz + texto manual |
+| Admin completo | Sí | Sí |
+| Asistencia empleados | Limitado | Sí (GPS + biometría) |
+| Impresora térmica red | Sí | Archivo de respaldo |
+| Sync hub | Sí | Sí |
+
+### Caja — venta y cobro
+
+| Función | Windows | Móvil |
+|---------|---------|-------|
+| Grilla por categoría | Sí | No |
+| Escáner USB | Sí | No |
+| Comandos de voz | No | Sí |
+| Variantes y mayoreo | Sí | Sí |
+| Productos por peso (carnicería) | Sí | Sí |
+| Lotes farmacia (FEFO) | Sí | Sí (voz: primer lote) |
+| Multipago y crédito | Sí | Sí |
+| Ticket en espera / recuperar | Sí | Sí |
+| Cotización desde carrito | Sí | Sí |
+| Atajos de teclado | Sí | No |
+| WhatsApp ticket/cotización | Sí | Sí |
+
+### Admin — módulos disponibles
+
+| Sección | Funciones |
+|---------|-----------|
+| Cuenta | Mi cuenta, equipo, asistencia, nómina |
+| Ventas | Ventas hoy, pedidos, historial, créditos, cotizaciones, corte |
+| Catálogo | Categorías, productos, variantes, etiquetas PDF, listas de precios |
+| Inventario | Existencias, compras, movimientos, traspasos, almacenes, presentaciones |
+| Personas | Clientes, proveedores |
+| Sistema | Tiendas, reportes, sync, configuración |
+
+### Empleados (móvil)
+
+Pestañas **Caja**, **Asistencia** (PIN + geocerca + Face ID) y **Mis pedidos**.
+
+### Fuera de alcance v1.0
+
+CFDI / timbrado, escáner por cámara en móvil, web como producción.
+
+---
+
+## 10. Impresión de tickets
 
 Configura la impresora en Admin → **Configuracion**.
 
@@ -349,61 +442,7 @@ Configura la impresora en Admin → **Configuracion**.
 
 ---
 
-## 9. Panel de administracion
-
-### Ventas
-
-| Opcion | Que hace |
-|--------|----------|
-| **Ventas hoy** | Resumen del dia y lista de tickets |
-| **Historial** | Ventas de 1, 7 o 30 dias; detalle; anular; reimprimir |
-| **Corte de caja** | Abrir y cerrar turno |
-| **Vendedores** | Registrar y editar vendedores |
-
-**Anular venta:** Historial → icono deshacer. Revierte stock y sincroniza con otras cajas.
-
-**Devolucion parcial:** Historial → tocar venta → **Devolver** → cantidad por linea.
-
-**Reimprimir:** Historial → tocar venta → **Reimprimir**.
-
-### Catalogo
-
-| Opcion | Que hace |
-|--------|----------|
-| **Categorias** | Crear y activar categorias para la grilla de caja |
-| **Productos** | Ver catalogo; alta rapida; variantes (icono capas) |
-| **Carniceria** | Productos por peso |
-| **Farmacia** | Lotes y alertas de caducidad |
-
-### Inventario
-
-| Opcion | Que hace |
-|--------|----------|
-| **Existencias** | Stock por tienda; tocar fila para stock minimo |
-| **Movimientos** | Entrada, salida o ajuste con motivo |
-| **Traspasos** | Enviar o recibir entre sucursales |
-
-### Personas
-
-| Opcion | Que hace |
-|--------|----------|
-| **Clientes** | Alta, editar, activar/desactivar |
-| **Vendedores** | Alta, editar codigo y nombre |
-| **Proveedores** | Alta, editar datos |
-
-### Reportes y sistema
-
-| Opcion | Que hace |
-|--------|----------|
-| **Reportes** | Ventas por vendedor; alertas de faltantes; exportar CSV |
-| **Sincronizar** | URL del hub, API Key, cola, sync manual |
-| **Configuracion** | Tenant ID, tienda, caja, impresora, PIN |
-
-**Alertas de faltantes:** Configura stock minimo en Inventario → Existencias (tocar fila de tu tienda).
-
----
-
-## 10. Sincronizacion con la nube
+## 11. Sincronización con la nube
 
 La conexion al hub va **incluida en la app** al publicarla (Play Store / App Store). El usuario **no** configura Tenant ID ni URL.
 
@@ -414,7 +453,7 @@ Al abrir la app por primera vez:
 
 ### Para quien publica la app (una sola vez)
 
-Al compilar el release, embeber hub y tenant con variables de entorno o `--dart-define` (ver [DEPLOYMENT.md](DEPLOYMENT.md)). Cada dispositivo recibe un identificador de caja unico automaticamente.
+Al compilar el release se embeben hub y API key (ver manual técnico §11). Cada dispositivo recibe un identificador de caja único automáticamente.
 
 ### Para soporte tecnico (casos excepcionales)
 
@@ -424,22 +463,37 @@ Al compilar el release, embeber hub y tenant con variables de entorno o `--dart-
 
 - Admin → **Estado de la nube**: ver pendientes y forzar sync manual si hace falta.
 
-Guia de despliegue del hub: [DEPLOYMENT.md](DEPLOYMENT.md).
+---
+
+## 12. Asistencia y nómina
+
+### Asistencia
+
+1. Configure **latitud, longitud y radio** en Admin → **Tiendas**.
+2. Admin → **Asistencia** → **Generar PIN** (válido 5 minutos).
+3. El empleado abre **Asistencia** en el celular e ingresa el PIN dentro del radio de la tienda.
+4. Alternativa: **Entrada con biometría** (Face ID / huella) en la geocerca.
+
+### Nómina
+
+1. Asigne **tarifa por hora** en Admin → **Equipo**.
+2. Admin → **Nómina** → calcule el periodo semanal.
+3. Exporte CSV al portapapeles.
 
 ---
 
-## 11. Limitaciones
+## 13. Limitaciones
 
-| Funcion | Estado |
+| Función | Estado |
 |---------|--------|
-| Pago con tarjeta / mixto / crédito | Disponible en diálogo de cobro |
-| Escaneo por camara en movil | No disponible (usa voz o texto) |
-| Lector USB en movil | No aplica |
-| Admin completo en telefono | Disponible pero pensado para tablet o tareas puntuales |
+| Escaneo por cámara en móvil | No disponible (usa voz o texto) |
+| Lector USB en móvil | No aplica |
+| Admin completo en teléfono | Disponible; pensado para tablet o tareas puntuales |
+| CFDI / timbrado | Fuera de alcance v1.0 |
 
 ---
 
-## 12. Solucion de problemas
+## 14. Solución de problemas
 
 | Problema | Solucion |
 |----------|----------|
@@ -455,18 +509,5 @@ Guia de despliegue del hub: [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ---
 
-## 13. Registro de cambios
-
-| Fecha | Cambio |
-|-------|--------|
-| 2026-06-11 23:00 | Manual inicial — escritorio piloto |
-| 2026-06-11 26:00 | Impresion, sync nube, devoluciones |
-| 2026-06-11 28:00 | Manual completo: escritorio + movil por voz, iPhone |
-
----
-
-## Documentación relacionada
-
-- [ADMIN.md](ADMIN.md) — panel de administración
-- [DEPLOYMENT.md](DEPLOYMENT.md) — despliegue y sync en nube
-- [PUBLICACION_MOVIL.md](PUBLICACION_MOVIL.md) — tiendas móviles
+Historial de versiones: ver [CONTROL_CAMBIOS.md](CONTROL_CAMBIOS.md).  
+Despliegue, builds e iOS: ver [MANUAL_TECNICO.md](MANUAL_TECNICO.md).

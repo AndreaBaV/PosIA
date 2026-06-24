@@ -10,21 +10,35 @@ class AlmacenUsuariosPostgres {
 
 	final Connection _conexion;
 
-	/// Perfil publico por codigo global (sin PIN).
-	Future<Map<String, Object?>?> obtenerPerfilPorCodigo(String codigo) async {
+	/// Perfil publico por codigo (sin PIN), opcionalmente acotado al tenant.
+	Future<Map<String, Object?>?> obtenerPerfilPorCodigo(
+		String codigo, {
+		String? tenantId,
+	}) async {
 		final limpio = ValidadorCodigoUsuario.normalizar(codigo);
 		if (limpio.isEmpty) {
 			return null;
 		}
-		final filas = await _conexion.execute(
-			Sql.named('''
-				SELECT id, tenant_id, nombre, codigo, rol, tienda_id, activo
-				FROM users
-				WHERE codigo = @codigo AND activo = 1
-				LIMIT 1
-			'''),
-			parameters: {'codigo': limpio},
-		);
+		final tenantLimpio = tenantId?.trim() ?? '';
+		final filas = tenantLimpio.isNotEmpty
+			? await _conexion.execute(
+				Sql.named('''
+					SELECT id, tenant_id, nombre, codigo, rol, tienda_id, activo
+					FROM users
+					WHERE codigo = @codigo AND tenant_id = @tenant AND activo = 1
+					LIMIT 1
+				'''),
+				parameters: {'codigo': limpio, 'tenant': tenantLimpio},
+			)
+			: await _conexion.execute(
+				Sql.named('''
+					SELECT id, tenant_id, nombre, codigo, rol, tienda_id, activo
+					FROM users
+					WHERE codigo = @codigo AND activo = 1
+					LIMIT 1
+				'''),
+				parameters: {'codigo': limpio},
+			);
 		if (filas.isEmpty) {
 			return null;
 		}
@@ -35,21 +49,34 @@ class AlmacenUsuariosPostgres {
 	Future<Map<String, Object?>?> autenticar({
 		required String codigo,
 		required String pin,
+		String? tenantId,
 	}) async {
 		final limpio = ValidadorCodigoUsuario.normalizar(codigo);
 		if (limpio.isEmpty || pin.isEmpty) {
 			return null;
 		}
-		final filas = await _conexion.execute(
-			Sql.named('''
-				SELECT id, tenant_id, nombre, codigo, rol, tienda_id, activo,
-					pin_hash, pin_salt, creado_en, actualizado_en
-				FROM users
-				WHERE codigo = @codigo AND activo = 1
-				LIMIT 1
-			'''),
-			parameters: {'codigo': limpio},
-		);
+		final tenantLimpio = tenantId?.trim() ?? '';
+		final filas = tenantLimpio.isNotEmpty
+			? await _conexion.execute(
+				Sql.named('''
+					SELECT id, tenant_id, nombre, codigo, rol, tienda_id, activo,
+						pin_hash, pin_salt, creado_en, actualizado_en
+					FROM users
+					WHERE codigo = @codigo AND tenant_id = @tenant AND activo = 1
+					LIMIT 1
+				'''),
+				parameters: {'codigo': limpio, 'tenant': tenantLimpio},
+			)
+			: await _conexion.execute(
+				Sql.named('''
+					SELECT id, tenant_id, nombre, codigo, rol, tienda_id, activo,
+						pin_hash, pin_salt, creado_en, actualizado_en
+					FROM users
+					WHERE codigo = @codigo AND activo = 1
+					LIMIT 1
+				'''),
+				parameters: {'codigo': limpio},
+			);
 		if (filas.isEmpty) {
 			return null;
 		}

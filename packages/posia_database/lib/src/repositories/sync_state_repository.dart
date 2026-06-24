@@ -16,7 +16,7 @@ class SyncStateRepository implements AlmacenCursorSync {
 	/// [baseDatos] Conexion local abierta.
 	SyncStateRepository({required Database baseDatos}) : _baseDatos = baseDatos;
 
-	static const String _CLAVE_CURSOR_HUB = 'last_synced_event_seq';
+	static const String _claveCursorHub = 'last_synced_event_seq';
 
 	final Database _baseDatos;
 
@@ -25,7 +25,7 @@ class SyncStateRepository implements AlmacenCursorSync {
 		final filas = await _baseDatos.query(
 			'sync_state',
 			where: 'clave = ?',
-			whereArgs: [_CLAVE_CURSOR_HUB],
+			whereArgs: [_claveCursorHub],
 			limit: 1,
 		);
 		if (filas.isEmpty) {
@@ -38,7 +38,7 @@ class SyncStateRepository implements AlmacenCursorSync {
 	Future<void> guardarCursorHub(int seq) async {
 		await _baseDatos.insert(
 			'sync_state',
-			{'clave': _CLAVE_CURSOR_HUB, 'valor': seq.toString()},
+			{'clave': _claveCursorHub, 'valor': seq.toString()},
 			conflictAlgorithm: ConflictAlgorithm.replace,
 		);
 	}

@@ -35,8 +35,8 @@ La base local arranca **vacía**. Usuarios, tiendas y catálogo llegan por **sin
 ## Documentación adicional
 
 - [Manual de usuario](../../docs/MANUAL_USUARIO.md)
-- [Panel de administración](../../docs/ADMIN.md)
-- [Publicación móvil (Play Store / App Store)](../../docs/PUBLICACION_MOVIL.md)
+- [Manual técnico](../../docs/MANUAL_TECNICO.md) — despliegue, sync, publicación móvil
+- [Control de cambios](../../docs/CONTROL_CAMBIOS.md)
 
 ## Publicación en tiendas (v1.0.0)
 
@@ -47,7 +47,7 @@ La base local arranca **vacía**. Usuarios, tiendas y catálogo llegan por **sin
 ```
 
 **Android (AAB):** `build/app/outputs/bundle/release/app-release.aab`  
-**iOS:** requiere Mac — ver `docs/PUBLICACION_MOVIL.md`
+**iOS:** GitHub Actions o Mac — ver `docs/MANUAL_TECNICO.md` §11
 
 Identificadores:
 

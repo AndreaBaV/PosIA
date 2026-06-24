@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:posia_core/posia_core.dart';
-import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
@@ -85,6 +84,9 @@ class PantallaNominaAdmin extends ConsumerWidget {
 			return;
 		}
 		await Clipboard.setData(ClipboardData(text: csv));
+		if (!context.mounted) {
+			return;
+		}
 		ScaffoldMessenger.of(context).showSnackBar(
 			const SnackBar(content: Text('CSV copiado al portapapeles')),
 		);

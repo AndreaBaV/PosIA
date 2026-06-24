@@ -245,26 +245,30 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 			_validando = true;
 			_mensajeError = null;
 		});
-		final auth = await ref.read(servicioAutenticacionProvider.future);
-		final busqueda = await auth.buscarPerfilPorCodigo(codigo);
-		if (!mounted) {
-			return;
-		}
-		if (!busqueda.exitoso) {
+		try {
+			final auth = await ref.read(servicioAutenticacionProvider.future);
+			final busqueda = await auth.buscarPerfilPorCodigo(codigo);
+			if (!mounted) {
+				return;
+			}
+			if (!busqueda.exitoso) {
+				setState(() {
+					_mensajeError = busqueda.motivoFallo?.mensajeUsuario ?? 'Usuario no encontrado';
+				});
+				return;
+			}
+			final usuario = busqueda.usuario!;
 			setState(() {
-				_validando = false;
-				_mensajeError = busqueda.motivoFallo?.mensajeUsuario ?? 'Usuario no encontrado';
+				_usuarioIdentificado = usuario;
+				_paso = _PasoInicioSesion.contrasena;
+				_pinIngresado = '';
+				_mensajeError = null;
 			});
-			return;
+		} finally {
+			if (mounted) {
+				setState(() => _validando = false);
+			}
 		}
-		final usuario = busqueda.usuario!;
-		setState(() {
-			_validando = false;
-			_usuarioIdentificado = usuario;
-			_paso = _PasoInicioSesion.contrasena;
-			_pinIngresado = '';
-			_mensajeError = null;
-		});
 	}
 
 	void _volverIdentificacion() {
@@ -305,26 +309,25 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 		final pin = _pinIngresado;
 		setState(() => _validando = true);
 
-		final auth = await ref.read(servicioAutenticacionProvider.future);
-		final intento = await auth.autenticar(codigo, pin);
+		try {
+			final auth = await ref.read(servicioAutenticacionProvider.future);
+			final intento = await auth.autenticar(codigo, pin);
 
-		if (!intento.exitoso) {
-			if (!mounted) {
+			if (!intento.exitoso) {
+				if (!mounted) {
+					return;
+				}
+				setState(() {
+					_pinIngresado = '';
+					_mensajeError = intento.motivoFallo?.mensajeUsuario ?? 'Contraseña incorrecta';
+				});
 				return;
 			}
-			setState(() {
-				_validando = false;
-				_pinIngresado = '';
-				_mensajeError = intento.motivoFallo?.mensajeUsuario ?? 'Contraseña incorrecta';
-			});
-			return;
-		}
 
-		final resultado = intento.resultado!;
-		final usuario = resultado.usuario;
-		final tenantId = resultado.tenantId;
+			final resultado = intento.resultado!;
+			final usuario = resultado.usuario;
+			final tenantId = resultado.tenantId;
 
-		try {
 			await PosiaLocalDatabase.obtenerInstancia().establecerTenant(tenantId);
 			final configRepo = await ref.read(configDispositivoRepoProvider.future);
 			final config = await configRepo.obtenerConfigDispositivo();
@@ -344,7 +347,7 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 
 			final servicio = await ref.read(servicioAdminProvider.future);
 			final hubUrl = await configRepo.obtenerHubUrl();
-			final hubApiKey = await configRepo.obtenerValor(CLAVE_CONFIG_HUB_API_KEY);
+			final hubApiKey = await configRepo.obtenerValor(claveConfigHubApiKey);
 			HubSyncClient? clienteHub;
 			if (hubUrl != null && hubUrl.isNotEmpty) {
 				clienteHub = HubSyncClient(urlBase: hubUrl, claveApi: hubApiKey);
@@ -400,10 +403,13 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 				return;
 			}
 			setState(() {
-				_validando = false;
 				_pinIngresado = '';
 				_mensajeError = '$error';
 			});
+		} finally {
+			if (mounted) {
+				setState(() => _validando = false);
+			}
 		}
 	}
 }

@@ -77,7 +77,7 @@ class _PantallaInventarioAdminState extends ConsumerState<PantallaInventarioAdmi
 							return Padding(
 								padding: const EdgeInsets.fromLTRB(12.0, 12.0, 12.0, 0.0),
 								child: DropdownButtonFormField<String>(
-									value: seleccionada,
+									initialValue: seleccionada,
 									decoration: const InputDecoration(
 										labelText: 'Tienda a gestionar',
 										border: OutlineInputBorder(),
@@ -95,7 +95,7 @@ class _PantallaInventarioAdminState extends ConsumerState<PantallaInventarioAdmi
 							);
 						},
 						loading: () => const LinearProgressIndicator(),
-						error: (_, __) => const SizedBox.shrink(),
+						error: (_, _) => const SizedBox.shrink(),
 					),
 
 					CampoBusqueda(

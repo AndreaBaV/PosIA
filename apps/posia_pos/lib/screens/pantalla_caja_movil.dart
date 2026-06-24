@@ -9,10 +9,15 @@ import 'package:posia_database/posia_database.dart';
 import 'package:posia_ui/posia_ui.dart';
 import 'package:posia_voice/posia_voice.dart';
 
-import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
-import '../utils/ticket_venta_util.dart';
 import '../voz/servicio_voz_dispositivo.dart';
+import 'pantalla_caja.dart'
+	show
+		confirmarVaciarCarritoCaja,
+		ejecutarCobroCaja,
+		ejecutarCotizacionCaja,
+		ejecutarPonerEnEspera,
+		mostrarTicketsEnEspera;
 
 class PantallaCajaMovil extends ConsumerStatefulWidget {
 	const PantallaCajaMovil({super.key});
@@ -211,7 +216,44 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 								formatearMoneda(estado.total),
 								style: Theme.of(context).textTheme.headlineMedium,
 							),
-							const SizedBox(height: 12.0),
+							Row(
+								mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+								children: [
+									IconButton.filledTonal(
+										tooltip: 'Poner en espera',
+										onPressed: estado.lineas.isNotEmpty
+											? () => ejecutarPonerEnEspera(context, ref)
+											: null,
+										icon: const Icon(Icons.pause_circle_outline),
+									),
+									Badge(
+										isLabelVisible: estado.ticketsEnEspera > 0,
+										label: Text('${estado.ticketsEnEspera}'),
+										child: IconButton.filledTonal(
+											tooltip: 'Recuperar ticket',
+											onPressed: estado.ticketsEnEspera > 0
+												? () => mostrarTicketsEnEspera(context, ref)
+												: null,
+											icon: const Icon(Icons.playlist_play),
+										),
+									),
+									IconButton.filledTonal(
+										tooltip: 'Cotización',
+										onPressed: estado.lineas.isNotEmpty
+											? () => ejecutarCotizacionCaja(context, ref)
+											: null,
+										icon: const Icon(Icons.request_quote),
+									),
+									IconButton.filledTonal(
+										tooltip: 'Vaciar carrito',
+										onPressed: estado.lineas.isNotEmpty
+											? () => confirmarVaciarCarritoCaja(context, ref)
+											: null,
+										icon: const Icon(Icons.delete_sweep),
+									),
+								],
+							),
+							const SizedBox(height: 8.0),
 							Row(
 								children: [
 									Expanded(
@@ -230,7 +272,7 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 									Expanded(
 										child: FilledButton(
 											onPressed: estado.turnoAbierto && estado.lineas.isNotEmpty
-												? _cobrar
+												? () => ejecutarCobroCaja(context, ref)
 												: null,
 											style: FilledButton.styleFrom(minimumSize: const Size(0, 56.0)),
 											child: const Text('COBRAR'),
@@ -335,7 +377,10 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 		final mensajes = <String>[];
 
 		if (resultado.intencion == IntencionComandoVoz.cobrar) {
-			await _cobrar();
+			if (!mounted) {
+				return;
+			}
+			await ejecutarCobroCaja(context, ref);
 			return;
 		}
 		if (resultado.intencion == IntencionComandoVoz.vaciarCarrito) {
@@ -376,83 +421,4 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 		});
 	}
 
-	Future<void> _cobrar() async {
-		final messenger = ScaffoldMessenger.of(context);
-		final servicio = await ref.read(servicioCajaProvider.future);
-		final error = await servicio.validarCobro();
-		if (error != null && mounted) {
-			messenger.showSnackBar(SnackBar(content: Text(error)));
-			return;
-		}
-		final total = servicio.calcularTotalCarrito();
-		if (!mounted) {
-			return;
-		}
-		final confirmar = await showDialog<bool>(
-			context: context,
-			builder: (ctx) => AlertDialog(
-				icon: const Icon(Icons.payments, color: PosiaColors.cobrar, size: 48.0),
-				title: const Text('Confirmar cobro'),
-				content: Text(
-					formatearMoneda(total),
-					style: Theme.of(context).textTheme.headlineMedium,
-					textAlign: TextAlign.center,
-				),
-				actions: [
-					TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-					FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Cobrar')),
-				],
-			),
-		);
-		if (confirmar != true) {
-			return;
-		}
-		final venta = await servicio.cobrar(
-			CobroRequest(metodoPago: MetodoPago.efectivo),
-		);
-		await ref.read(carritoNotifierProvider.notifier).recargar();
-		if (!mounted || venta == null) {
-			return;
-		}
-		final contenedor = await ref.read(contenedorServiciosProvider.future);
-		final config = await ref.read(configDispositivoProvider.future);
-		final textoTicket = await construirTextoTicketVenta(
-			venta: venta,
-			servicioAdmin: contenedor.servicioAdmin,
-			config: config,
-		);
-		var ticketGuardado = false;
-		try {
-			final hardware = await ref.read(hardwareRegistryProvider.future);
-			await hardware.obtenerImpresora().imprimirTicket(textoTicket);
-			try {
-				await hardware.obtenerCajon()?.abrir();
-			} catch (_) {}
-			ticketGuardado = true;
-		} catch (_) {}
-		if (!mounted) {
-			return;
-		}
-		await showDialog<void>(
-			context: context,
-			builder: (ctx) => AlertDialog(
-				icon: const Icon(Icons.check_circle, color: PosiaColors.cobrar, size: 64.0),
-				title: const Text('Venta completada'),
-				content: Text(
-					'${formatearMoneda(venta.total)}\n'
-					'${ticketGuardado ? "Ticket guardado" : "Ticket no generado"}',
-					textAlign: TextAlign.center,
-				),
-				actions: [
-					FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
-				],
-			),
-		);
-		setState(() {
-			_mensajes
-				..clear()
-				..add('Venta cobrada');
-			_transcripcion = '';
-		});
-	}
 }

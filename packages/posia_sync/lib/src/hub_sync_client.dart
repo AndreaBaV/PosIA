@@ -79,7 +79,13 @@ class HubSyncClient {
 			final respuesta = await _clienteHttp
 				.post(uri, headers: _construirCabeceras(), body: cuerpo)
 				.timeout(const Duration(seconds: TIMEOUT_HUB_SYNC_SEGUNDOS));
-			return respuesta.statusCode >= 200 && respuesta.statusCode < 300;
+			if (respuesta.statusCode < 200 || respuesta.statusCode >= 300) {
+				return false;
+			}
+			final json = jsonDecode(respuesta.body) as Map<String, Object?>;
+			final aceptados = json['accepted'] as int? ?? 0;
+			final recibidos = json['received'] as int? ?? eventos.length;
+			return aceptados > 0 || recibidos > 0;
 		} on Object {
 			return false;
 		}
@@ -129,24 +135,31 @@ class HubSyncClient {
 	}
 
 	/// Busca perfil por codigo sin validar PIN (paso previo al login).
-	Future<PerfilUsuarioHub?> obtenerPerfilUsuario(String codigo) async {
+	Future<PerfilUsuarioHub?> obtenerPerfilUsuario(
+		String codigo, {
+		String? tenantId,
+	}) async {
 		final limpio = codigo.trim();
 		if (limpio.isEmpty) {
 			return null;
 		}
 		final uri = Uri.parse('$_urlBase/v1/auth/preview').replace(
-			queryParameters: {'codigo': limpio},
+			queryParameters: {
+				'codigo': limpio,
+				if (tenantId != null && tenantId.trim().isNotEmpty)
+					'tenantId': tenantId.trim(),
+			},
 		);
 		try {
-			final respuesta = await _clienteHttp.get(uri, headers: _construirCabeceras());
+			final respuesta = await _clienteHttp
+				.get(uri, headers: _construirCabeceras())
+				.timeout(const Duration(seconds: TIMEOUT_HUB_SYNC_SEGUNDOS));
 			if (respuesta.statusCode != 200) {
 				return null;
 			}
 			final json = jsonDecode(respuesta.body) as Map<String, Object?>;
 			return _mapearPerfil(json);
-		} on http.ClientException {
-			return null;
-		} on FormatException {
+		} on Object {
 			return null;
 		}
 	}
@@ -155,6 +168,7 @@ class HubSyncClient {
 	Future<RespuestaLoginHub?> iniciarSesion({
 		required String codigo,
 		required String pin,
+		String? tenantId,
 	}) async {
 		final limpio = codigo.trim();
 		if (limpio.isEmpty || pin.isEmpty) {
@@ -162,11 +176,18 @@ class HubSyncClient {
 		}
 		final uri = Uri.parse('$_urlBase/v1/auth/login');
 		try {
-			final respuesta = await _clienteHttp.post(
-				uri,
-				headers: _construirCabeceras(),
-				body: jsonEncode({'codigo': limpio, 'pin': pin}),
-			);
+			final respuesta = await _clienteHttp
+				.post(
+					uri,
+					headers: _construirCabeceras(),
+					body: jsonEncode({
+						'codigo': limpio,
+						'pin': pin,
+						if (tenantId != null && tenantId.trim().isNotEmpty)
+							'tenantId': tenantId.trim(),
+					}),
+				)
+				.timeout(const Duration(seconds: TIMEOUT_HUB_SYNC_SEGUNDOS));
 			if (respuesta.statusCode != 200) {
 				return null;
 			}
@@ -188,9 +209,7 @@ class HubSyncClient {
 				actualizadoEn: json['actualizadoEn'] as String? ?? '',
 				tiendas: _mapearTiendas(json['tiendas']),
 			);
-		} on http.ClientException {
-			return null;
-		} on FormatException {
+		} on Object {
 			return null;
 		}
 	}

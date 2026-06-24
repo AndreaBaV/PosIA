@@ -209,6 +209,13 @@ class EsquemaPosPostgres {
 			CREATE INDEX IF NOT EXISTS idx_users_codigo ON users(codigo)
 		''');
 		await conexion.execute('''
+			ALTER TABLE users DROP CONSTRAINT IF EXISTS users_codigo_key
+		''');
+		await conexion.execute('''
+			CREATE UNIQUE INDEX IF NOT EXISTS idx_users_tenant_codigo
+			ON users (tenant_id, codigo)
+		''');
+		await conexion.execute('''
 			ALTER TABLE products ADD COLUMN IF NOT EXISTS permite_stock_negativo INTEGER NOT NULL DEFAULT 0
 		''');
 		await conexion.execute('''
