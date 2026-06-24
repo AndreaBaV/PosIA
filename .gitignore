@@ -12,11 +12,30 @@ build/
 # Secretos locales
 .env
 **/.env
+.env.*
 !.env.example
+!**/.env.example
 **/android/key.properties
 **/*.keystore
 **/*.jks
 **/KEYSTORE_BASE64.txt
+
+# Certificados y firmado iOS / Android (nunca en Git)
+**/*.cer
+**/*.csr
+**/*.certSigningRequest
+**/*.p12
+**/*.pem
+**/*.p8
+**/*.mobileprovision
+**/*distribution*.key
+**/*.key
+
+# Licencias comerciales por cliente
+**/*.lic
+
+# Logs locales de Flutter
+flutter_*.log
 
 # Flutter
 **/flutter/ephemeral/

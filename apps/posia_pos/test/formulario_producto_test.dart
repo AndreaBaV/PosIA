@@ -10,6 +10,13 @@ void main() {
 	testWidgets('formulario producto valida categoria requerida', (tester) async {
 		final fixture = await FixtureAdmin.abrir();
 		final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
+		// Sin categorías activas el formulario no preselecciona ninguna.
+		await fixture.base.update(
+			'categories',
+			{'activa': 0},
+			where: 'id = ?',
+			whereArgs: [categoriaPruebaId],
+		);
 		addTearDown(fixture.cerrar);
 
 		await tester.pumpWidget(
@@ -30,7 +37,8 @@ void main() {
 		);
 		await tester.tap(find.byIcon(Icons.save));
 		await tester.pump();
+		await tester.pump(const Duration(milliseconds: 400));
 
-		expect(find.text('Nombre y categoria son obligatorios'), findsOneWidget);
+		expect(find.text('Nombre y categoría son obligatorios'), findsOneWidget);
 	});
 }
