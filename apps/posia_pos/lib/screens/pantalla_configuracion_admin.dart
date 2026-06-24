@@ -25,6 +25,7 @@ class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguraci
 	final _puertoImpresoraController = TextEditingController(text: '9100');
 	String? _tiendaSeleccionadaId;
 	String _modoImpresora = 'ambos';
+	bool _abrirCajonAlCobrar = false;
 	AtajosCajaConfig _atajosCaja = AtajosCajaConfig.predeterminados();
 	var _atajosInicializados = false;
 
@@ -160,6 +161,7 @@ class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguraci
 										_puertoImpresoraController.text = config.puertoRed.toString();
 									}
 									_modoImpresora = config.modo;
+									_abrirCajonAlCobrar = config.abrirCajonAlCobrar;
 									return Column(
 										children: [
 											DropdownButtonFormField<String>(
@@ -191,6 +193,17 @@ class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguraci
 												decoration: const InputDecoration(
 													labelText: 'Puerto TCP',
 													border: OutlineInputBorder(),
+												),
+											),
+											const SizedBox(height: 12.0),
+											SwitchListTile(
+												title: const Text('Abrir cajón al cobrar'),
+												subtitle: const Text(
+													'Requiere impresora térmica con cajón conectado (modo red)',
+												),
+												value: _abrirCajonAlCobrar,
+												onChanged: (v) => setState(
+													() => _abrirCajonAlCobrar = v,
 												),
 											),
 										],
@@ -334,6 +347,7 @@ class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguraci
 				modo: _modoImpresora,
 				hostRed: _hostImpresoraController.text.trim(),
 				puertoRed: int.tryParse(_puertoImpresoraController.text.trim()) ?? 9100,
+				abrirCajonAlCobrar: _abrirCajonAlCobrar,
 			),
 		);
 		ref.invalidate(configImpresoraProvider);

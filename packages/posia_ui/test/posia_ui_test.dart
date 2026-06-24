@@ -18,4 +18,18 @@ void main() {
 		);
 		expect(find.text('Todos'), findsOneWidget);
 	});
+
+	test('AtajosCajaConfig fusiona JSON parcial con predeterminados', () {
+		final config = AtajosCajaConfig.desdeJson(
+			'{"cobrar":"F10","creditos":"CTRL+T"}',
+		);
+		expect(config.atajo(atajoAccionCobrar), 'F10');
+		expect(config.atajo(atajoAccionCreditos), 'CTRL+T');
+		expect(config.atajo(atajoAccionAdmin), 'CTRL+SHIFT+A');
+	});
+
+	test('etiquetaAtajoConfigurado normaliza vacio', () {
+		expect(etiquetaAtajoConfigurado(''), teclaCobrarPredeterminada);
+		expect(etiquetaAtajoConfigurado('ctrl+t'), 'CTRL+T');
+	});
 }

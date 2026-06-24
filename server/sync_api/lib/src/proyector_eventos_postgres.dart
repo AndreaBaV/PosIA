@@ -36,6 +36,8 @@ class ProyectorEventosPostgres {
 				await _devolucionParcial(evento);
 			case 'storeUpserted':
 				await _tienda(evento);
+			case 'warehouseUpserted':
+				await _almacen(evento);
 			case 'userUpserted':
 				await _usuario(evento);
 			default:
@@ -496,6 +498,30 @@ class ProyectorEventosPostgres {
 				'nombre': p['nombre'] ?? '',
 				'direccion': p['direccion'] ?? '',
 				'activa': (p['activa'] as bool? ?? true) ? 1 : 0,
+			},
+		);
+	}
+
+	Future<void> _almacen(EventoHub evento) async {
+		final p = evento.payload;
+		final id = p['id'] as String? ?? '';
+		if (id.isEmpty) {
+			return;
+		}
+		await _conexion.execute(
+			Sql.named('''
+				INSERT INTO almacenes (id, nombre, tienda_id, activo)
+				VALUES (@id, @nombre, @tienda, @activo)
+				ON CONFLICT (id) DO UPDATE SET
+					nombre = EXCLUDED.nombre,
+					tienda_id = EXCLUDED.tienda_id,
+					activo = EXCLUDED.activo
+			'''),
+			parameters: {
+				'id': id,
+				'nombre': p['nombre'] ?? '',
+				'tienda': p['tiendaId'],
+				'activo': _boolInt(p['activo'], defaultValue: true),
 			},
 		);
 	}

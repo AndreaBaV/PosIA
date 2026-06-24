@@ -183,22 +183,54 @@ class _PantallaTiendasAdminState extends ConsumerState<PantallaTiendasAdmin> {
 	Future<void> _editar(Tienda tienda) async {
 		final nombreController = TextEditingController(text: tienda.nombre);
 		final direccionController = TextEditingController(text: tienda.direccion);
+		final latController = TextEditingController(
+			text: tienda.latitud?.toString() ?? '',
+		);
+		final lngController = TextEditingController(
+			text: tienda.longitud?.toString() ?? '',
+		);
+		final radioController = TextEditingController(
+			text: tienda.radioMetrosAsistencia.toStringAsFixed(0),
+		);
 		final guardar = await showDialog<bool>(
 			context: context,
 			builder: (ctx) => AlertDialog(
 				title: const Text('Editar tienda'),
-				content: Column(
-					mainAxisSize: MainAxisSize.min,
-					children: [
-						TextField(
-							controller: nombreController,
-							decoration: const InputDecoration(labelText: 'Nombre'),
-						),
-						TextField(
-							controller: direccionController,
-							decoration: const InputDecoration(labelText: 'Dirección'),
-						),
-					],
+				content: SingleChildScrollView(
+					child: Column(
+						mainAxisSize: MainAxisSize.min,
+						children: [
+							TextField(
+								controller: nombreController,
+								decoration: const InputDecoration(labelText: 'Nombre'),
+							),
+							TextField(
+								controller: direccionController,
+								decoration: const InputDecoration(labelText: 'Dirección'),
+							),
+							TextField(
+								controller: latController,
+								keyboardType: const TextInputType.numberWithOptions(decimal: true),
+								decoration: const InputDecoration(
+									labelText: 'Latitud (asistencia)',
+								),
+							),
+							TextField(
+								controller: lngController,
+								keyboardType: const TextInputType.numberWithOptions(decimal: true),
+								decoration: const InputDecoration(
+									labelText: 'Longitud (asistencia)',
+								),
+							),
+							TextField(
+								controller: radioController,
+								keyboardType: TextInputType.number,
+								decoration: const InputDecoration(
+									labelText: 'Radio geocerca (metros)',
+								),
+							),
+						],
+					),
 				),
 				actions: [
 					TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
@@ -209,6 +241,9 @@ class _PantallaTiendasAdminState extends ConsumerState<PantallaTiendasAdmin> {
 		if (guardar != true) {
 			nombreController.dispose();
 			direccionController.dispose();
+			latController.dispose();
+			lngController.dispose();
+			radioController.dispose();
 			return;
 		}
 		final servicio = await ref.read(servicioAdminProvider.future);
@@ -218,10 +253,17 @@ class _PantallaTiendasAdminState extends ConsumerState<PantallaTiendasAdmin> {
 				nombre: nombreController.text.trim(),
 				direccion: direccionController.text.trim(),
 				activa: tienda.activa,
+				latitud: double.tryParse(latController.text.trim()),
+				longitud: double.tryParse(lngController.text.trim()),
+				radioMetrosAsistencia:
+					double.tryParse(radioController.text.trim()) ?? 150,
 			),
 		);
 		nombreController.dispose();
 		direccionController.dispose();
+		latController.dispose();
+		lngController.dispose();
+		radioController.dispose();
 		ref.invalidate(_tiendasAdminProvider);
 	}
 

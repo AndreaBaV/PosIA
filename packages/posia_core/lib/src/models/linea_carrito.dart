@@ -27,6 +27,8 @@ class LineaCarrito {
 		this.loteId,
 		this.etiquetaLote,
 		this.descuentoLinea = 0.0,
+		this.factorABase = 1.0,
+		this.productoStockId,
 	});
 
 	/// Producto en carrito.
@@ -50,6 +52,12 @@ class LineaCarrito {
 	/// Descuento absoluto aplicado a la linea (MXN).
 	final double descuentoLinea;
 
+	/// Factor de conversion a unidad base de inventario (presentaciones).
+	final double factorABase;
+
+	/// Producto padre cuyo stock se descuenta; null usa resolucion automatica.
+	final String? productoStockId;
+
 	/// Calcula subtotal de la linea.
 	///
 	/// Retorna cantidad multiplicada por precio unitario menos descuento.
@@ -70,6 +78,8 @@ class LineaCarrito {
 		String? loteId,
 		String? etiquetaLote,
 		double? descuentoLinea,
+		double? factorABase,
+		String? productoStockId,
 	}) {
 		return LineaCarrito(
 			producto: producto ?? this.producto,
@@ -79,6 +89,8 @@ class LineaCarrito {
 			loteId: loteId ?? this.loteId,
 			etiquetaLote: etiquetaLote ?? this.etiquetaLote,
 			descuentoLinea: descuentoLinea ?? this.descuentoLinea,
+			factorABase: factorABase ?? this.factorABase,
+			productoStockId: productoStockId ?? this.productoStockId,
 		);
 	}
 }

@@ -45,8 +45,14 @@ const String CLAVE_CONFIG_IMPRESORA_HOST = 'printer_host';
 /// Clave de puerto de impresora termica.
 const String CLAVE_CONFIG_IMPRESORA_PUERTO = 'printer_port';
 
+/// Abrir cajon al cobrar en efectivo.
+const String CLAVE_CONFIG_CAJON_ABRIR = 'cash_drawer_open';
+
 /// Tecla de acceso rapido para cobrar (ej. F12, Enter con modificador).
 const String CLAVE_CONFIG_TECLA_COBRAR = 'tecla_cobrar';
+
+/// Mapa JSON de atajos de caja (cobrar, creditos, admin, etc.).
+const String CLAVE_CONFIG_ATAJOS_CAJA = 'atajos_caja';
 
 /// Ancho etiqueta producto en mm.
 const String CLAVE_CONFIG_ETIQUETA_ANCHO_MM = 'etiqueta_ancho_mm';
@@ -58,7 +64,7 @@ const String CLAVE_CONFIG_ETIQUETA_ALTO_MM = 'etiqueta_alto_mm';
 const String CLAVE_CONFIG_ETIQUETAS_CARPETA = 'etiquetas_carpeta';
 
 /// Tecla de cobro por defecto si no hay configuracion.
-const String teclaCobrarConfigPredeterminada = 'F12';
+const String teclaCobrarConfigPredeterminada = 'F2';
 
 /// Ancho de etiqueta por defecto (mm).
 const double etiquetaAnchoMmPredeterminado = 50.0;
@@ -158,10 +164,12 @@ class ConfigRepository {
 		final modo = await obtenerValor(CLAVE_CONFIG_IMPRESORA_MODO);
 		final host = await obtenerValor(CLAVE_CONFIG_IMPRESORA_HOST);
 		final puerto = await obtenerValor(CLAVE_CONFIG_IMPRESORA_PUERTO);
+		final abrirCajon = await obtenerValor(CLAVE_CONFIG_CAJON_ABRIR);
 		return ConfigImpresora(
 			modo: modo ?? 'ambos',
 			hostRed: host ?? '',
 			puertoRed: int.tryParse(puerto ?? '') ?? 9100,
+			abrirCajonAlCobrar: abrirCajon == '1',
 		);
 	}
 
@@ -169,6 +177,10 @@ class ConfigRepository {
 		await guardarValor(CLAVE_CONFIG_IMPRESORA_MODO, config.modo);
 		await guardarValor(CLAVE_CONFIG_IMPRESORA_HOST, config.hostRed);
 		await guardarValor(CLAVE_CONFIG_IMPRESORA_PUERTO, config.puertoRed.toString());
+		await guardarValor(
+			CLAVE_CONFIG_CAJON_ABRIR,
+			config.abrirCajonAlCobrar ? '1' : '0',
+		);
 	}
 
 	/// Indica si el tecnico ya configuro tenant y conexion al hub.

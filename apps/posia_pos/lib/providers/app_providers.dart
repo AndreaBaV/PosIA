@@ -109,6 +109,14 @@ final hardwareRegistryProvider = FutureProvider<HardwareRegistry>((ref) async {
 	final contenedor = await ref.watch(contenedorServiciosProvider.future);
 	final configImpresora = await contenedor.servicioAdmin.obtenerConfigImpresora();
 	final directorioTickets = await _resolverDirectorioTickets();
+	CashDrawer? cajon;
+	if (configImpresora.abrirCajonAlCobrar &&
+		configImpresora.hostRed.trim().isNotEmpty) {
+		cajon = EscPosCashDrawer(
+			host: configImpresora.hostRed,
+			port: configImpresora.puertoRed,
+		);
+	}
 	return HardwareRegistry(
 		scanner: TecladoBarcodeScanner(),
 		impresora: ImpresoraConfigurable(
@@ -117,6 +125,7 @@ final hardwareRegistryProvider = FutureProvider<HardwareRegistry>((ref) async {
 			puertoRed: configImpresora.puertoRed,
 			directorioArchivo: directorioTickets,
 		),
+		cajon: cajon,
 	);
 });
 

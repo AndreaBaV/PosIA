@@ -8,6 +8,7 @@ library;
 
 export 'src/utils/etiquetas_ui.dart';
 export 'src/utils/teclas_caja_util.dart';
+export 'src/widgets/campo_atajo_teclado.dart';
 export 'src/utils/iconos_categoria.dart';
 export 'src/utils/layout_responsivo.dart';
 export 'src/utils/presentacion_rol.dart';
@@ -19,6 +20,7 @@ export 'src/widgets/campo_busqueda.dart';
 export 'src/widgets/campo_busqueda_caja.dart';
 export 'src/widgets/campo_secreto.dart';
 export 'src/widgets/dialogo_lote_farmacia.dart';
+export 'src/widgets/dialogo_cantidad_producto.dart';
 export 'src/widgets/dialogo_peso_carniceria.dart';
 export 'src/widgets/grilla_productos.dart';
 export 'src/widgets/insignia_rol.dart';

@@ -36,7 +36,15 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 	UnidadMedida _unidad = UnidadMedida.pieza;
 	String? _proveedorId;
 	bool _activo = true;
+	bool _permiteStockNegativo = false;
 	final _escalas = <_EscalaEditable>[];
+	final _nombrePresentacionController = TextEditingController();
+	final _factorPresentacionController = TextEditingController(text: '1');
+	final _codigoPresentacionController = TextEditingController();
+	final _precioPresentacionController = TextEditingController();
+	String? _tipoPresentacionId;
+	List<PresentacionProducto> _presentaciones = [];
+	List<TipoPresentacion> _tiposPresentacion = [];
 	bool _guardando = false;
 
 	bool get _esEdicion => widget.productoExistente != null;
@@ -44,7 +52,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 	@override
 	void initState() {
 		super.initState();
-		_tabs = TabController(length: 4, vsync: this);
+		_tabs = TabController(length: _esEdicion ? 5 : 4, vsync: this);
 		final p = widget.productoExistente;
 		if (p != null) {
 			_nombreController.text = p.nombre;
@@ -56,6 +64,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 			_unidad = p.unidadMedida;
 			_proveedorId = p.proveedorId;
 			_activo = p.activo;
+			_permiteStockNegativo = p.permiteStockNegativo;
 			if (p.piezasPorCaja != null) {
 				_piezasCajaController.text = '${p.piezasPorCaja}';
 			}
@@ -65,6 +74,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 			WidgetsBinding.instance.addPostFrameCallback((_) {
 				_cargarEscalas(p.id);
 				_cargarStock(p.id);
+				_cargarPresentaciones(p.id);
 			});
 		}
 	}
@@ -109,6 +119,20 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 		});
 	}
 
+	Future<void> _cargarPresentaciones(String productoId) async {
+		final servicio = await ref.read(servicioAdminProvider.future);
+		final presentaciones = await servicio.listarPresentacionesProducto(productoId);
+		final tipos = await servicio.listarTiposPresentacion();
+		if (!mounted) {
+			return;
+		}
+		setState(() {
+			_presentaciones = presentaciones;
+			_tiposPresentacion = tipos.where((t) => t.activo).toList();
+			_tipoPresentacionId ??= _tiposPresentacion.firstOrNull?.id;
+		});
+	}
+
 	@override
 	void dispose() {
 		_tabs.dispose();
@@ -121,6 +145,10 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 		_bultoController.dispose();
 		_stockController.dispose();
 		_minimoController.dispose();
+		_nombrePresentacionController.dispose();
+		_factorPresentacionController.dispose();
+		_codigoPresentacionController.dispose();
+		_precioPresentacionController.dispose();
 		for (final e in _escalas) {
 			e.dispose();
 		}
@@ -136,11 +164,13 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 				title: Text(_esEdicion ? 'Editar producto' : 'Nuevo producto'),
 				bottom: TabBar(
 					controller: _tabs,
-					tabs: const [
-						Tab(text: 'General'),
-						Tab(text: 'Precios'),
-						Tab(text: 'Empaque'),
-						Tab(text: 'Inventario'),
+					isScrollable: true,
+					tabs: [
+						const Tab(text: 'General'),
+						const Tab(text: 'Precios'),
+						const Tab(text: 'Empaque'),
+						if (_esEdicion) const Tab(text: 'Presentaciones'),
+						const Tab(text: 'Inventario'),
 					],
 				),
 			),
@@ -153,6 +183,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 							_pestanaGeneral(categorias, proveedoresAsync),
 							_pestanaPrecios(),
 							_pestanaEmpaque(),
+							if (_esEdicion) _pestanaPresentaciones(),
 							_pestanaInventario(),
 						],
 					);
@@ -388,6 +419,157 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 		);
 	}
 
+	Widget _pestanaPresentaciones() {
+		return ListView(
+			padding: const EdgeInsets.all(16.0),
+			children: [
+				const Text(
+					'Presentaciones comerciales',
+					style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16.0),
+				),
+				const SizedBox(height: 8.0),
+				if (_presentaciones.isEmpty)
+					const Text('Sin presentaciones adicionales')
+				else
+					..._presentaciones.map(
+						(p) => ListTile(
+							title: Text(p.nombre),
+							subtitle: Text(
+								p.esPresentacionBase
+									? 'Unidad base'
+									: 'Factor ${p.factorABase.toStringAsFixed(0)} · '
+										'${p.codigoBarras.isNotEmpty ? p.codigoBarras : 'Sin código'}',
+							),
+							trailing: p.precio != null
+								? Text(formatearMoneda(p.precio!))
+								: null,
+						),
+					),
+				const Divider(height: 32.0),
+				const Text(
+					'Agregar presentación',
+					style: TextStyle(fontWeight: FontWeight.w600),
+				),
+				const SizedBox(height: 12.0),
+				TextField(
+					controller: _nombrePresentacionController,
+					decoration: const InputDecoration(
+						labelText: 'Nombre (ej. Caja 12)',
+						border: OutlineInputBorder(),
+					),
+				),
+				const SizedBox(height: 12.0),
+				TextField(
+					controller: _factorPresentacionController,
+					keyboardType: TextInputType.number,
+					decoration: const InputDecoration(
+						labelText: 'Factor a unidad base',
+						border: OutlineInputBorder(),
+					),
+				),
+				const SizedBox(height: 12.0),
+				DropdownButtonFormField<String>(
+					initialValue: _tipoPresentacionId,
+					items: _tiposPresentacion
+						.map(
+							(t) => DropdownMenuItem(value: t.id, child: Text(t.nombre)),
+						)
+						.toList(),
+					onChanged: (v) => setState(() => _tipoPresentacionId = v),
+					decoration: const InputDecoration(
+						labelText: 'Tipo',
+						border: OutlineInputBorder(),
+					),
+				),
+				const SizedBox(height: 12.0),
+				TextField(
+					controller: _codigoPresentacionController,
+					decoration: const InputDecoration(
+						labelText: 'Código de barras',
+						border: OutlineInputBorder(),
+					),
+				),
+				const SizedBox(height: 12.0),
+				TextField(
+					controller: _precioPresentacionController,
+					keyboardType: TextInputType.number,
+					decoration: const InputDecoration(
+						labelText: 'Precio (opcional)',
+						border: OutlineInputBorder(),
+					),
+				),
+				const SizedBox(height: 16.0),
+				OutlinedButton.icon(
+					onPressed: _guardandoPresentacion ? null : _agregarPresentacion,
+					icon: const Icon(Icons.add),
+					label: const Text('Guardar presentación'),
+				),
+			],
+		);
+	}
+
+	var _guardandoPresentacion = false;
+
+	Future<void> _agregarPresentacion() async {
+		final productoId = widget.productoExistente?.id;
+		if (productoId == null) {
+			return;
+		}
+		final nombre = _nombrePresentacionController.text.trim();
+		final factor =
+			double.tryParse(_factorPresentacionController.text.replaceAll(',', '.')) ??
+			0.0;
+		if (nombre.isEmpty || factor <= 0) {
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(
+					content: Text('Nombre y factor válido son obligatorios'),
+					backgroundColor: PosiaColors.cancelar,
+				),
+			);
+			return;
+		}
+		setState(() => _guardandoPresentacion = true);
+		try {
+			final servicio = await ref.read(servicioAdminProvider.future);
+			final precio = double.tryParse(
+				_precioPresentacionController.text.replaceAll(',', '.'),
+			);
+			await servicio.guardarPresentacionProducto(
+				productoId: productoId,
+				nombre: nombre,
+				factorABase: factor,
+				tipoPresentacionId: _tipoPresentacionId,
+				codigoBarras: _codigoPresentacionController.text.trim(),
+				precio: precio,
+			);
+			_nombrePresentacionController.clear();
+			_factorPresentacionController.text = '1';
+			_codigoPresentacionController.clear();
+			_precioPresentacionController.clear();
+			await _cargarPresentaciones(productoId);
+			if (!mounted) {
+				return;
+			}
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(content: Text('Presentación guardada')),
+			);
+		} catch (error) {
+			if (!mounted) {
+				return;
+			}
+			ScaffoldMessenger.of(context).showSnackBar(
+				SnackBar(
+					content: Text('$error'),
+					backgroundColor: PosiaColors.cancelar,
+				),
+			);
+		} finally {
+			if (mounted) {
+				setState(() => _guardandoPresentacion = false);
+			}
+		}
+	}
+
 	Widget _pestanaInventario() {
 		return ListView(
 			padding: const EdgeInsets.all(16.0),
@@ -415,6 +597,13 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 						labelText: 'Stock mínimo (alerta)',
 						border: OutlineInputBorder(),
 					),
+				),
+				const SizedBox(height: 12.0),
+				SwitchListTile(
+					title: const Text('Permitir stock negativo'),
+					subtitle: const Text('Vender aunque no haya existencia'),
+					value: _permiteStockNegativo,
+					onChanged: (v) => setState(() => _permiteStockNegativo = v),
 				),
 			],
 		);
@@ -470,6 +659,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 					proveedorId: _proveedorId,
 					notas: _notasController.text.trim(),
 					activo: _activo,
+					permiteStockNegativo: _permiteStockNegativo,
 				);
 				await servicio.actualizarProducto(
 					actualizado,
@@ -506,6 +696,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 						stockInicial: double.tryParse(_stockController.text) ?? 0.0,
 						stockMinimo: double.tryParse(_minimoController.text) ?? 0.0,
 						escalasMayoreo: escalasNuevas,
+						permiteStockNegativo: _permiteStockNegativo,
 					),
 				);
 			}

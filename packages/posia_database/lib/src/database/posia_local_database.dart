@@ -171,5 +171,14 @@ class PosiaLocalDatabase {
 		if (versionAnterior < 17 && versionNueva >= 17) {
 			await MigracionesEsquema.migrarVersion16A17(base);
 		}
+		if (versionAnterior < 18 && versionNueva >= 18) {
+			await MigracionesEsquema.migrarVersion17A18(base);
+		}
+		if (versionAnterior < 19 && versionNueva >= 19) {
+			await MigracionesEsquema.migrarVersion18A19(base);
+		}
+		if (versionAnterior < 20 && versionNueva >= 20) {
+			await MigracionesEsquema.migrarVersion19A20(base);
+		}
 	}
 }

@@ -89,6 +89,15 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 				await _aplicarTiendaRemota(evento);
 			case TipoSyncEvento.userUpserted:
 				await _aplicarUsuarioRemoto(evento);
+			case TipoSyncEvento.warehouseUpserted:
+			case TipoSyncEvento.presentationTypeUpserted:
+			case TipoSyncEvento.productPresentationUpserted:
+			case TipoSyncEvento.attendanceChallengeCreated:
+			case TipoSyncEvento.attendanceCheckedIn:
+			case TipoSyncEvento.attendanceCheckedOut:
+			case TipoSyncEvento.employeeProfileUpserted:
+			case TipoSyncEvento.payrollPeriodClosed:
+				break;
 		}
 	}
 
@@ -108,6 +117,10 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 				nombre: payload['nombre'] as String? ?? '',
 				direccion: payload['direccion'] as String? ?? '',
 				activa: payload['activa'] as bool? ?? true,
+				latitud: (payload['latitud'] as num?)?.toDouble(),
+				longitud: (payload['longitud'] as num?)?.toDouble(),
+				radioMetrosAsistencia:
+					(payload['radioMetrosAsistencia'] as num?)?.toDouble() ?? 150,
 			),
 		);
 	}
@@ -376,6 +389,7 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			unidadesPorBulto: (payload['unidadesPorBulto'] as num?)?.toInt(),
 			proveedorId: payload['proveedorId'] as String?,
 			notas: payload['notas'] as String? ?? '',
+			permiteStockNegativo: payload['permiteStockNegativo'] as bool? ?? false,
 		);
 		await _productoRepository.guardar(producto);
 	}

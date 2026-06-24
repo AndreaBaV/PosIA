@@ -51,7 +51,7 @@ class _CampoBusquedaCajaState extends State<CampoBusquedaCaja> {
 				autofocus: true,
 				textInputAction: TextInputAction.search,
 				decoration: InputDecoration(
-					hintText: 'Buscar por nombre o escanear código…',
+					hintText: 'Buscar… flechas para elegir · Enter para cantidad',
 					prefixIcon: const Icon(Icons.search),
 					suffixIcon: Row(
 						mainAxisSize: MainAxisSize.min,

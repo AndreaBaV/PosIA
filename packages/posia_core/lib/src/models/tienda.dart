@@ -19,6 +19,9 @@ class Tienda {
 		required this.nombre,
 		required this.direccion,
 		required this.activa,
+		this.latitud,
+		this.longitud,
+		this.radioMetrosAsistencia = 150,
 	});
 
 	/// Identificador unico de la tienda.
@@ -32,4 +35,13 @@ class Tienda {
 
 	/// Estado operativo de la sucursal.
 	final bool activa;
+
+	/// Latitud para geocerca de asistencia.
+	final double? latitud;
+
+	/// Longitud para geocerca de asistencia.
+	final double? longitud;
+
+	/// Radio en metros para validar entrada de empleados.
+	final double radioMetrosAsistencia;
 }

@@ -23,6 +23,7 @@ class Producto {
 		this.notas = '',
 		this.costoUnitario = 0.0,
 		this.favoritoCaja = false,
+		this.permiteStockNegativo = false,
 	});
 
 	final String id;
@@ -41,6 +42,7 @@ class Producto {
 	final String notas;
 	final double costoUnitario;
 	final bool favoritoCaja;
+	final bool permiteStockNegativo;
 
 	bool requierePeso() {
 		return unidadMedida == UnidadMedida.kilogramo;
@@ -67,6 +69,7 @@ class Producto {
 		String? notas,
 		double? costoUnitario,
 		bool? favoritoCaja,
+		bool? permiteStockNegativo,
 	}) {
 		return Producto(
 			id: id ?? this.id,
@@ -85,6 +88,7 @@ class Producto {
 			notas: notas ?? this.notas,
 			costoUnitario: costoUnitario ?? this.costoUnitario,
 			favoritoCaja: favoritoCaja ?? this.favoritoCaja,
+			permiteStockNegativo: permiteStockNegativo ?? this.permiteStockNegativo,
 		);
 	}
 }

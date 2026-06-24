@@ -6,6 +6,8 @@
 /// Ultima modificacion: 2026-06-11 15:40:00 (UTC-6)
 library;
 
+import 'dart:convert';
+
 import 'package:posia_core/posia_core.dart';
 import 'package:posia_pricing/posia_pricing.dart';
 import 'package:posia_sync/posia_sync.dart';
@@ -44,6 +46,8 @@ import '../repositories/usuario_repository.dart';
 import '../repositories/variante_repository.dart';
 import '../repositories/vendedor_repository.dart';
 import '../repositories/venta_repository.dart';
+import '../repositories/almacen_repository.dart';
+import '../repositories/presentacion_repository.dart';
 import '../utils/sincronizador_vendedor_usuario.dart';
 import 'servicio_corte_caja.dart';
 
@@ -82,6 +86,8 @@ class ServicioAdmin {
     MovimientoInventarioRepository? movimientoRepository,
     TraspasoRepository? traspasoRepository,
     VarianteRepository? varianteRepository,
+    AlmacenRepository? almacenRepository,
+    PresentacionRepository? presentacionRepository,
     ServicioCorteCaja? servicioCorteCaja,
     required String tenantId,
     required String tiendaActivaId,
@@ -106,6 +112,8 @@ class ServicioAdmin {
        _movimientoRepository = movimientoRepository,
        _traspasoRepository = traspasoRepository,
        _varianteRepository = varianteRepository,
+       _almacenRepository = almacenRepository,
+       _presentacionRepository = presentacionRepository,
        _servicioCorteCaja = servicioCorteCaja,
        _tenantId = tenantId,
        _tiendaActivaId = tiendaActivaId,
@@ -131,6 +139,8 @@ class ServicioAdmin {
   final MovimientoInventarioRepository? _movimientoRepository;
   final TraspasoRepository? _traspasoRepository;
   final VarianteRepository? _varianteRepository;
+  final AlmacenRepository? _almacenRepository;
+  final PresentacionRepository? _presentacionRepository;
   final ServicioCorteCaja? _servicioCorteCaja;
   final String _tenantId;
   final String _tiendaActivaId;
@@ -257,6 +267,7 @@ class ServicioAdmin {
       proveedorId: req.proveedorId,
       notas: req.notas.trim(),
       costoUnitario: redondearMonto(req.costoUnitario),
+      permiteStockNegativo: req.permiteStockNegativo,
     );
     await _productoRepository.guardar(producto);
     final ahora = DateTime.now().toUtc();
@@ -282,6 +293,7 @@ class ServicioAdmin {
       await _precioRepository.reemplazarEscalasMayoreo(producto.id, escalas);
     }
     await _registrarEventoProducto(producto);
+    await asegurarPresentacionBase(producto);
     return producto;
   }
 
@@ -1788,6 +1800,29 @@ class ServicioAdmin {
     await _configRepository.guardarValor(CLAVE_CONFIG_TECLA_COBRAR, tecla.trim().toUpperCase());
   }
 
+  /// Lee JSON de atajos de caja; si no existe, usa tecla cobrar legacy.
+  Future<String> obtenerAtajosCajaJson() async {
+    final raw = await _configRepository.obtenerValor(CLAVE_CONFIG_ATAJOS_CAJA);
+    if (raw != null && raw.trim().isNotEmpty) {
+      return raw;
+    }
+    final cobrar = await obtenerTeclaCobrar();
+    return jsonEncode({'cobrar': cobrar});
+  }
+
+  /// Persiste mapa JSON de atajos y sincroniza tecla cobrar legacy.
+  Future<void> guardarAtajosCajaJson(String json) async {
+    await _configRepository.guardarValor(CLAVE_CONFIG_ATAJOS_CAJA, json);
+    try {
+      final decodificado = jsonDecode(json);
+      if (decodificado is Map && decodificado['cobrar'] != null) {
+        await guardarTeclaCobrar(decodificado['cobrar'].toString());
+      }
+    } catch (_) {
+      // Ignorar parseo; el JSON ya quedo guardado.
+    }
+  }
+
   Future<double> obtenerEtiquetaAnchoMm() async {
     final raw = await _configRepository.obtenerValor(CLAVE_CONFIG_ETIQUETA_ANCHO_MM);
     return double.tryParse(raw ?? '') ?? etiquetaAnchoMmPredeterminado;
@@ -3151,10 +3186,256 @@ class ServicioAdmin {
         'unidadesPorBulto': producto.unidadesPorBulto,
         'proveedorId': producto.proveedorId,
         'notas': producto.notas,
+        'permiteStockNegativo': producto.permiteStockNegativo,
       },
       creadoEn: DateTime.now().toUtc(),
       estado: EstadoSyncEvento.pendiente,
     );
     await _syncOrchestrator.registrarEvento(evento);
+  }
+
+  // --- Almacenes ---
+
+  Future<List<Almacen>> listarAlmacenes() async {
+    final repo = _almacenRepository;
+    if (repo == null) {
+      return [];
+    }
+    final lista = await repo.listarTodos();
+    if (lista.isEmpty) {
+      await _sembrarAlmacenesIniciales();
+      return repo.listarTodos();
+    }
+    return lista;
+  }
+
+  Future<void> _sembrarAlmacenesIniciales() async {
+    final repo = _almacenRepository;
+    if (repo == null) {
+      return;
+    }
+    final nombres = ['Almacén Central', 'Almacén Norte', 'Almacén Sur'];
+    for (var i = 0; i < nombres.length; i++) {
+      await repo.guardar(
+        Almacen(
+          id: 'alm-${i + 1}',
+          nombre: nombres[i],
+          activo: true,
+        ),
+      );
+    }
+  }
+
+  Future<Almacen> registrarAlmacen(String nombre, {String? tiendaId}) async {
+    final repo = _almacenRepository;
+    if (repo == null) {
+      throw StateError('Almacenes no disponibles');
+    }
+    final almacen = Almacen(
+      id: _generadorId.v4(),
+      nombre: nombre.trim(),
+      tiendaId: tiendaId,
+      activo: true,
+    );
+    await repo.guardar(almacen);
+    await _registrarEventoAlmacen(almacen);
+    return almacen;
+  }
+
+  Future<void> traspasarAlmacenATienda({
+    required String almacenId,
+    required String tiendaDestinoId,
+    required String productoId,
+    required double cantidad,
+  }) async {
+    final almacenRepo = _almacenRepository;
+    if (almacenRepo == null) {
+      throw StateError('Almacenes no disponibles');
+    }
+    final stock = await almacenRepo.obtenerStock(productoId, almacenId);
+    final anterior = stock?.cantidad ?? 0.0;
+    if (anterior < cantidad) {
+      throw StateError('Stock insuficiente en almacén');
+    }
+    final ahora = DateTime.now().toUtc();
+    await almacenRepo.guardarStock(
+      StockAlmacen(
+        productoId: productoId,
+        almacenId: almacenId,
+        cantidad: anterior - cantidad,
+        actualizadoEn: ahora,
+        stockMinimo: stock?.stockMinimo ?? 0,
+      ),
+    );
+    final stockTienda = await _inventarioRepository.obtenerStock(
+      productoId,
+      tiendaDestinoId,
+    );
+    await _inventarioRepository.guardarStock(
+      StockNivel(
+        productoId: productoId,
+        tiendaId: tiendaDestinoId,
+        cantidad: (stockTienda?.cantidad ?? 0) + cantidad,
+        actualizadoEn: ahora,
+        stockMinimo: stockTienda?.stockMinimo ?? 0,
+      ),
+    );
+  }
+
+  /// Productos con existencia en un almacen.
+  Future<List<({Producto producto, double cantidad})>> listarProductosConStockAlmacen(
+    String almacenId,
+  ) async {
+    final almacenRepo = _almacenRepository;
+    if (almacenRepo == null) {
+      return [];
+    }
+    final stocks = await almacenRepo.listarStockPorAlmacen(almacenId);
+    final resultado = <({Producto producto, double cantidad})>[];
+    for (final stock in stocks) {
+      if (stock.cantidad <= 0) {
+        continue;
+      }
+      final producto = await _productoRepository.obtenerPorId(stock.productoId);
+      if (producto != null && producto.activo) {
+        resultado.add((producto: producto, cantidad: stock.cantidad));
+      }
+    }
+    resultado.sort(
+      (a, b) => a.producto.nombre.compareTo(b.producto.nombre),
+    );
+    return resultado;
+  }
+
+  Future<void> traspasarAlmacenATiendaMultiple({
+    required String almacenId,
+    required String tiendaDestinoId,
+    required List<LineaTraspasoSolicitud> lineas,
+  }) async {
+    for (final linea in lineas) {
+      if (linea.cantidad <= 0) {
+        continue;
+      }
+      await traspasarAlmacenATienda(
+        almacenId: almacenId,
+        tiendaDestinoId: tiendaDestinoId,
+        productoId: linea.productoId,
+        cantidad: linea.cantidad,
+      );
+    }
+  }
+
+  Future<void> _registrarEventoAlmacen(Almacen almacen) async {
+    await _syncOrchestrator.registrarEvento(
+      SyncEvent(
+        id: _generadorId.v4(),
+        tenantId: _tenantId,
+        tiendaId: _tiendaActivaId,
+        dispositivoId: _cajaId,
+        tipo: TipoSyncEvento.warehouseUpserted,
+        payload: {
+          'id': almacen.id,
+          'nombre': almacen.nombre,
+          'tiendaId': almacen.tiendaId,
+          'activo': almacen.activo,
+        },
+        creadoEn: DateTime.now().toUtc(),
+        estado: EstadoSyncEvento.pendiente,
+      ),
+    );
+  }
+
+  // --- Presentaciones ---
+
+  Future<List<TipoPresentacion>> listarTiposPresentacion() async {
+    return _presentacionRepository?.listarTodosTipos() ?? [];
+  }
+
+  Future<TipoPresentacion> registrarTipoPresentacion({
+    required String nombre,
+    required String unidad,
+  }) async {
+    final repo = _presentacionRepository;
+    if (repo == null) {
+      throw StateError('Presentaciones no disponibles');
+    }
+    final tipo = TipoPresentacion(
+      id: _generadorId.v4(),
+      nombre: nombre.trim(),
+      unidad: unidad,
+      activo: true,
+    );
+    await repo.guardarTipo(tipo);
+    return tipo;
+  }
+
+  Future<List<PresentacionProducto>> listarPresentacionesProducto(
+    String productoId,
+  ) async {
+    return _presentacionRepository?.listarPorProducto(productoId) ?? [];
+  }
+
+  Future<PresentacionProducto> guardarPresentacionProducto({
+    required String productoId,
+    required String nombre,
+    required double factorABase,
+    String? tipoPresentacionId,
+    String? codigoBarras,
+    double? precio,
+    bool esPresentacionBase = false,
+  }) async {
+    final repo = _presentacionRepository;
+    if (repo == null) {
+      throw StateError('Presentaciones no disponibles');
+    }
+    final presentacion = PresentacionProducto(
+      id: _generadorId.v4(),
+      productoId: productoId,
+      tipoPresentacionId: tipoPresentacionId,
+      nombre: nombre.trim(),
+      factorABase: factorABase,
+      esPresentacionBase: esPresentacionBase,
+      codigoBarras: codigoBarras ?? '',
+      precio: precio,
+      activo: true,
+    );
+    await repo.guardarPresentacion(presentacion);
+    return presentacion;
+  }
+
+  Future<void> asegurarPresentacionBase(Producto producto) async {
+    final repo = _presentacionRepository;
+    if (repo == null) {
+      return;
+    }
+    final existentes = await repo.listarPorProducto(producto.id);
+    if (existentes.any((p) => p.esPresentacionBase)) {
+      return;
+    }
+    await repo.guardarPresentacion(
+      PresentacionProducto(
+        id: _generadorId.v4(),
+        productoId: producto.id,
+        nombre: 'Unidad base',
+        factorABase: 1,
+        esPresentacionBase: true,
+        precio: producto.precioBase,
+        activo: true,
+      ),
+    );
+    if (producto.piezasPorCaja != null && producto.piezasPorCaja! > 1) {
+      await repo.guardarPresentacion(
+        PresentacionProducto(
+          id: _generadorId.v4(),
+          productoId: producto.id,
+          tipoPresentacionId: 'tp-caja',
+          nombre: 'Caja x${producto.piezasPorCaja}',
+          factorABase: producto.piezasPorCaja!.toDouble(),
+          esPresentacionBase: false,
+          precio: producto.precioBase * producto.piezasPorCaja!,
+          activo: true,
+        ),
+      );
+    }
   }
 }

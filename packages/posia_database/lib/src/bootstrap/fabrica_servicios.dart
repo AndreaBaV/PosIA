@@ -40,6 +40,13 @@ import '../services/servicio_admin.dart';
 import '../services/servicio_caja.dart';
 import '../services/servicio_corte_caja.dart';
 import '../sync/aplicador_eventos_sqlite.dart';
+import '../repositories/almacen_repository.dart';
+import '../repositories/asistencia_repository.dart';
+import '../repositories/empleado_perfil_repository.dart';
+import '../repositories/nomina_repository.dart';
+import '../repositories/presentacion_repository.dart';
+import '../services/servicio_asistencia.dart';
+import '../services/servicio_nomina.dart';
 
 /// Agrupa servicios construidos sobre SQLite local.
 class ContenedorServicios {
@@ -58,6 +65,8 @@ class ContenedorServicios {
 		required this.servicioFarmacia,
 		required this.syncOrchestrator,
 		required this.hardwareListo,
+		this.servicioAsistencia,
+		this.servicioNomina,
 	});
 
 	/// Servicio de ventas en caja.
@@ -74,6 +83,12 @@ class ContenedorServicios {
 
 	/// Orquestador de eventos sync.
 	final SyncOrchestrator syncOrchestrator;
+
+	/// Servicio de asistencia de empleados.
+	final ServicioAsistencia? servicioAsistencia;
+
+	/// Servicio de nomina.
+	final ServicioNomina? servicioNomina;
 
 	/// Bandera de inicializacion completa.
 	final bool hardwareListo;
@@ -126,6 +141,11 @@ class FabricaServicios {
 		final cotizacionRepo = CotizacionRepository(baseDatos: base);
 		final ticketEsperaRepo = TicketEsperaRepository(baseDatos: base);
 		final varianteRepo = VarianteRepository(baseDatos: base);
+		final almacenRepo = AlmacenRepository(baseDatos: base);
+		final presentacionRepo = PresentacionRepository(baseDatos: base);
+		final asistenciaRepo = AsistenciaRepository(baseDatos: base);
+		final empleadoPerfilRepo = EmpleadoPerfilRepository(baseDatos: base);
+		final nominaRepo = NominaRepository(baseDatos: base);
 		final servicioCorteCaja = ServicioCorteCaja(
 			turnoRepository: turnoRepo,
 			tiendaId: tiendaId,
@@ -161,6 +181,7 @@ class FabricaServicios {
 		final servicioCaja = ServicioCaja(
 			productoRepository: productoRepo,
 			varianteRepository: varianteRepo,
+			presentacionRepository: presentacionRepo,
 			clienteRepository: clienteRepo,
 			descuentoClienteRepository: descuentoClienteRepo,
 			ventaRepository: ventaRepo,
@@ -199,10 +220,30 @@ class FabricaServicios {
 			movimientoRepository: movimientoRepo,
 			traspasoRepository: traspasoRepo,
 			varianteRepository: varianteRepo,
+			almacenRepository: almacenRepo,
+			presentacionRepository: presentacionRepo,
 			servicioCorteCaja: servicioCorteCaja,
 			tenantId: tenantId,
 			tiendaActivaId: tiendaId,
 			cajaId: cajaId,
+		);
+		final servicioAsistencia = ServicioAsistencia(
+			asistenciaRepository: asistenciaRepo,
+			tiendaRepository: tiendaRepo,
+			syncOrchestrator: sync,
+			tenantId: tenantId,
+			tiendaId: tiendaId,
+			dispositivoId: cajaId,
+		);
+		final servicioNomina = ServicioNomina(
+			nominaRepository: nominaRepo,
+			asistenciaRepository: asistenciaRepo,
+			empleadoPerfilRepository: empleadoPerfilRepo,
+			usuarioRepository: usuarioRepo,
+			syncOrchestrator: sync,
+			tenantId: tenantId,
+			tiendaId: tiendaId,
+			dispositivoId: cajaId,
 		);
 		return ContenedorServicios(
 			servicioCaja: servicioCaja,
@@ -210,6 +251,8 @@ class FabricaServicios {
 			servicioCarniceria: servicioCarniceria,
 			servicioFarmacia: servicioFarmacia,
 			syncOrchestrator: sync,
+			servicioAsistencia: servicioAsistencia,
+			servicioNomina: servicioNomina,
 			hardwareListo: true,
 		);
 	}

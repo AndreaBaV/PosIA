@@ -7,6 +7,7 @@ class ConfigImpresora {
 		required this.modo,
 		required this.hostRed,
 		required this.puertoRed,
+		this.abrirCajonAlCobrar = false,
 	});
 
 	/// Modo: archivo, red o ambos.
@@ -17,4 +18,7 @@ class ConfigImpresora {
 
 	/// Puerto TCP (default 9100).
 	final int puertoRed;
+
+	/// Abre cajon de dinero al cobrar en efectivo o mixto.
+	final bool abrirCajonAlCobrar;
 }

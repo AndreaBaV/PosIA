@@ -21,6 +21,7 @@ class AltaProductoRequest {
 		this.stockMinimo = 0.0,
 		this.escalasMayoreo = const [],
 		this.costoUnitario = 0.0,
+		this.permiteStockNegativo = false,
 	});
 
 	final String nombre;
@@ -37,6 +38,7 @@ class AltaProductoRequest {
 	final double stockMinimo;
 	final List<EscalaMayoreo> escalasMayoreo;
 	final double costoUnitario;
+	final bool permiteStockNegativo;
 }
 
 /// Inventario agrupado por producto con existencias por tienda.

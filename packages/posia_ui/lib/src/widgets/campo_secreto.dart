@@ -2,6 +2,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 /// TextField con icono de visibilidad (PIN, contraseña, API key, etc.).
 class CampoSecreto extends StatefulWidget {
@@ -29,12 +30,17 @@ class _CampoSecretoState extends State<CampoSecreto> {
 
 	@override
 	Widget build(BuildContext context) {
+		final soloDigitos = widget.keyboardType == TextInputType.number ||
+			widget.keyboardType == const TextInputType.numberWithOptions();
 		return TextField(
 			controller: widget.controller,
 			autofocus: widget.autofocus,
 			keyboardType: widget.keyboardType,
 			maxLength: widget.maxLength,
 			obscureText: _oculto,
+			inputFormatters: soloDigitos
+				? [FilteringTextInputFormatter.digitsOnly]
+				: null,
 			decoration: (widget.decoration ?? const InputDecoration()).copyWith(
 				suffixIcon: IconButton(
 					tooltip: _oculto ? 'Mostrar' : 'Ocultar',

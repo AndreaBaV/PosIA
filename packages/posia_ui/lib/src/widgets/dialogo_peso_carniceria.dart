@@ -47,12 +47,12 @@ class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
 	late final FocusNode _pesoFocus;
 	String _valorPeso = '';
 	_UnidadCapturaPeso _unidad = _UnidadCapturaPeso.kilogramos;
+	var _cerrado = false;
 
 	@override
 	void initState() {
 		super.initState();
 		_pesoFocus = FocusNode(onKeyEvent: _manejarTeclaPeso);
-		HardwareKeyboard.instance.addHandler(_manejarTeclaHardwarePeso);
 		WidgetsBinding.instance.addPostFrameCallback((_) {
 			if (mounted && _pesoFocus.canRequestFocus) {
 				_pesoFocus.requestFocus();
@@ -62,26 +62,9 @@ class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
 
 	@override
 	void dispose() {
-		HardwareKeyboard.instance.removeHandler(_manejarTeclaHardwarePeso);
 		_pesoController.dispose();
 		_pesoFocus.dispose();
 		super.dispose();
-	}
-
-	bool _manejarTeclaHardwarePeso(KeyEvent event) {
-		if (!mounted || event is! KeyDownEvent) {
-			return false;
-		}
-		if (event.logicalKey == LogicalKeyboardKey.enter ||
-			event.logicalKey == LogicalKeyboardKey.numpadEnter) {
-			_confirmar();
-			return true;
-		}
-		if (event.logicalKey == LogicalKeyboardKey.escape) {
-			_cancelar();
-			return true;
-		}
-		return false;
 	}
 
 	KeyEventResult _manejarTeclaPeso(FocusNode node, KeyEvent event) {
@@ -147,7 +130,6 @@ class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
 								border: const OutlineInputBorder(),
 								helperText: 'Enter agrega · Esc cancela',
 							),
-							onSubmitted: (_) => _confirmar(),
 							onChanged: (texto) =>
 								_establecerValor(_normalizarEntradaPeso(texto)),
 						),
@@ -215,12 +197,19 @@ class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
 	}
 
 	void _cancelar() {
+		if (_cerrado || !mounted) {
+			return;
+		}
+		_cerrado = true;
 		Navigator.of(context).pop(
 			const ResultadoDialogoPeso(confirmado: false, pesoKg: 0.0),
 		);
 	}
 
 	void _confirmar() {
+		if (_cerrado || !mounted) {
+			return;
+		}
 		final cantidad = double.tryParse(_valorPeso.isEmpty ? '0' : _valorPeso) ?? 0.0;
 		if (cantidad <= 0.0) {
 			ScaffoldMessenger.of(context).showSnackBar(
@@ -231,6 +220,7 @@ class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
 		final pesoKg = _unidad == _UnidadCapturaPeso.gramos
 			? cantidad / 1000.0
 			: cantidad;
+		_cerrado = true;
 		Navigator.of(context).pop(
 			ResultadoDialogoPeso(confirmado: true, pesoKg: pesoKg),
 		);

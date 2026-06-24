@@ -22,6 +22,7 @@ import '../repositories/cotizacion_repository.dart';
 import '../repositories/descuento_cliente_repository.dart';
 import '../repositories/producto_repository.dart';
 import '../repositories/ticket_espera_repository.dart';
+import '../repositories/presentacion_repository.dart';
 import '../repositories/variante_repository.dart';
 import '../repositories/vendedor_repository.dart';
 import '../utils/sincronizador_vendedor_usuario.dart';
@@ -46,6 +47,7 @@ class ServicioCaja {
   ServicioCaja({
     required ProductoRepository productoRepository,
     VarianteRepository? varianteRepository,
+    PresentacionRepository? presentacionRepository,
     required ClienteRepository clienteRepository,
     DescuentoClienteRepository? descuentoClienteRepository,
     required VentaRepository ventaRepository,
@@ -64,6 +66,7 @@ class ServicioCaja {
     required String cajaId,
   }) : _productoRepository = productoRepository,
        _varianteRepository = varianteRepository,
+       _presentacionRepository = presentacionRepository,
        _clienteRepository = clienteRepository,
        _descuentoClienteRepository = descuentoClienteRepository,
        _ventaRepository = ventaRepository,
@@ -83,6 +86,7 @@ class ServicioCaja {
 
   final ProductoRepository _productoRepository;
   final VarianteRepository? _varianteRepository;
+  final PresentacionRepository? _presentacionRepository;
   final ClienteRepository _clienteRepository;
   final DescuentoClienteRepository? _descuentoClienteRepository;
   final VentaRepository _ventaRepository;
@@ -213,6 +217,10 @@ class ServicioCaja {
     if (_lineasCarrito.isEmpty) {
       return 'Carrito vacio';
     }
+    final errorStock = await _validarStockCarrito();
+    if (errorStock != null) {
+      return errorStock;
+    }
     final corte = _servicioCorteCaja;
     if (corte != null && !await corte.tieneTurnoAbierto()) {
       await corte.abrirTurno(
@@ -238,12 +246,18 @@ class ServicioCaja {
     Producto producto, {
     double cantidad = 1.0,
   }) async {
+    final errorStock = await _validarStockParaAgregar(producto, cantidad);
+    if (errorStock != null) {
+      throw StateError(errorStock);
+    }
     await _agregarLineaCarrito(
       producto: producto,
       cantidad: cantidad,
       loteId: null,
       etiquetaLote: null,
       permitirFusion: true,
+      factorABase: 1.0,
+      productoStockId: null,
     );
   }
 
@@ -269,7 +283,7 @@ class ServicioCaja {
       cantidad: resultado.pesoKg,
       loteId: null,
       etiquetaLote: formatearPesoKg(resultado.pesoKg),
-      permitirFusion: false,
+      permitirFusion: true,
     );
     return '';
   }
@@ -304,6 +318,67 @@ class ServicioCaja {
       permitirFusion: false,
     );
     return '';
+  }
+
+  /// Indica si el producto tiene presentaciones comerciales activas.
+  Future<bool> productoTienePresentaciones(String productoId) async {
+    final repo = _presentacionRepository;
+    if (repo == null) {
+      return false;
+    }
+    final presentaciones = await repo.listarActivasPorProducto(productoId);
+    return presentaciones.any((p) => !p.esPresentacionBase);
+  }
+
+  /// Lista presentaciones activas (excluye solo la base si es unica).
+  Future<List<PresentacionProducto>> listarPresentacionesActivas(
+    String productoId,
+  ) async {
+    final repo = _presentacionRepository;
+    if (repo == null) {
+      return [];
+    }
+    final presentaciones = await repo.listarActivasPorProducto(productoId);
+    return presentaciones.where((p) => !p.esPresentacionBase).toList();
+  }
+
+  /// Agrega presentacion comercial al carrito con factor de inventario.
+  Future<void> agregarPresentacion(
+    PresentacionProducto presentacion, {
+    double cantidad = 1.0,
+  }) async {
+    final padre = await _productoRepository.obtenerPorId(presentacion.productoId);
+    if (padre == null) {
+      return;
+    }
+    if (presentacion.esPresentacionBase) {
+      await agregarProducto(padre, cantidad: cantidad);
+      return;
+    }
+    final productoVenta = padre.copiarCon(
+      id: presentacion.id,
+      nombre: '${padre.nombre} - ${presentacion.nombre}',
+      codigoBarras: presentacion.codigoBarras,
+      precioBase: presentacion.precio ?? padre.precioBase,
+    );
+    final errorStock = await _validarStockParaAgregar(
+      productoVenta,
+      cantidad,
+      factorABase: presentacion.factorABase,
+      productoStockId: presentacion.productoId,
+    );
+    if (errorStock != null) {
+      throw StateError(errorStock);
+    }
+    await _agregarLineaCarrito(
+      producto: productoVenta,
+      cantidad: cantidad,
+      loteId: null,
+      etiquetaLote: null,
+      permitirFusion: true,
+      factorABase: presentacion.factorABase,
+      productoStockId: presentacion.productoId,
+    );
   }
 
   /// Indica si el producto tiene presentaciones activas.
@@ -345,6 +420,13 @@ class ServicioCaja {
   /// [codigoBarras] Codigo escaneado.
   /// Retorna verdadero si el producto fue encontrado y agregado.
   Future<bool> agregarPorCodigoBarras(String codigoBarras) async {
+    final presentacion = await _presentacionRepository?.buscarPorCodigoBarras(
+      codigoBarras,
+    );
+    if (presentacion != null) {
+      await agregarPresentacion(presentacion);
+      return true;
+    }
     final variante = await _varianteRepository?.buscarPorCodigoBarras(
       codigoBarras,
     );
@@ -356,6 +438,9 @@ class ServicioCaja {
       codigoBarras,
     );
     if (producto == null) {
+      return false;
+    }
+    if (await productoTienePresentaciones(producto.id)) {
       return false;
     }
     if (await productoTieneVariantes(producto.id)) {
@@ -562,7 +647,7 @@ class ServicioCaja {
     if (turno != null && _servicioCorteCaja != null) {
       await _servicioCorteCaja.registrarVenta(turno, venta);
     }
-    await _gestorInventario.aplicarVenta(venta);
+    await _aplicarInventarioVenta();
     await _aplicarDescuentosLote(venta);
     await _registrarEventoVenta(venta);
     vaciarCarrito();
@@ -578,6 +663,15 @@ class ServicioCaja {
     final total = calcularTotalCarrito() - request.descuentoTicket;
     if (total <= 0.0) {
       return 'Total invalido';
+    }
+    if (request.metodoPago == MetodoPago.efectivo) {
+      final recibido = request.montoRecibido;
+      if (recibido == null || recibido <= 0.0) {
+        return 'Indique el monto recibido en efectivo';
+      }
+      if (redondearMonto(recibido) < redondearMonto(total)) {
+        return 'Monto recibido insuficiente';
+      }
     }
     if (request.metodoPago == MetodoPago.credito) {
       final dias = request.diasCredito ?? _clienteActivo?.diasCredito;
@@ -692,39 +786,44 @@ class ServicioCaja {
     required String? loteId,
     required String? etiquetaLote,
     required bool permitirFusion,
+    double factorABase = 1.0,
+    String? productoStockId,
   }) async {
     final contexto = ContextoPrecio(
       producto: producto,
       cantidad: cantidad,
       tiendaId: _tiendaId,
       cliente: _clienteActivo,
-      canal: producto.moduloVertical == ModuloVertical.carniceria
-          ? CanalVenta.mayoreo
-          : CanalVenta.mostrador,
+      canal: _canalVentaProducto(producto),
     );
     final resultado = await _motorPrecio.resolverPrecio(contexto);
     if (permitirFusion) {
-      final indiceExistente = _buscarIndiceLineaGeneral(producto.id);
+      final indiceExistente = _buscarIndiceLineaFusionable(producto.id);
       if (indiceExistente >= 0) {
         final lineaActual = _lineasCarrito[indiceExistente];
-        final cantidadNueva = lineaActual.cantidad + cantidad;
-        final contextoActualizado = ContextoPrecio(
-          producto: producto,
-          cantidad: cantidadNueva,
-          tiendaId: _tiendaId,
-          cliente: _clienteActivo,
-          canal: CanalVenta.mostrador,
-        );
-        final precioActualizado = await _motorPrecio.resolverPrecio(
-          contextoActualizado,
-        );
-        _lineasCarrito[indiceExistente] = lineaActual.copiarCon(
-          cantidad: cantidadNueva,
-          precioUnitario: precioActualizado.precioUnitario,
-          reglaPrecio: precioActualizado.reglaAplicada,
-        );
-        await _aplicarDescuentosCliente();
-        return;
+        if (lineaActual.factorABase == factorABase &&
+            lineaActual.productoStockId == productoStockId) {
+          final cantidadNueva = lineaActual.cantidad + cantidad;
+          final contextoActualizado = ContextoPrecio(
+            producto: producto,
+            cantidad: cantidadNueva,
+            tiendaId: _tiendaId,
+            cliente: _clienteActivo,
+            canal: _canalVentaProducto(producto),
+          );
+          final precioActualizado = await _motorPrecio.resolverPrecio(
+            contextoActualizado,
+          );
+          _lineasCarrito[indiceExistente] = lineaActual.copiarCon(
+            cantidad: cantidadNueva,
+            precioUnitario: precioActualizado.precioUnitario,
+            reglaPrecio: precioActualizado.reglaAplicada,
+            etiquetaLote: _etiquetaLoteFusionada(producto, cantidadNueva) ??
+                lineaActual.etiquetaLote,
+          );
+          await _aplicarDescuentosCliente();
+          return;
+        }
       }
     }
     _lineasCarrito.add(
@@ -735,6 +834,8 @@ class ServicioCaja {
         reglaPrecio: resultado.reglaAplicada,
         loteId: loteId,
         etiquetaLote: etiquetaLote,
+        factorABase: factorABase,
+        productoStockId: productoStockId,
       ),
     );
     await _aplicarDescuentosCliente();
@@ -799,17 +900,29 @@ class ServicioCaja {
   ///
   /// [productoId] Identificador del producto.
   /// Retorna indice o -1 si no existe.
-  int _buscarIndiceLineaGeneral(String productoId) {
+  int _buscarIndiceLineaFusionable(String productoId) {
     var indice = 0;
     for (final linea in _lineasCarrito) {
-      final esGeneral = linea.producto.moduloVertical == ModuloVertical.general;
-      final sinLote = linea.loteId == null;
-      if (linea.producto.id == productoId && esGeneral && sinLote) {
+      if (linea.producto.id == productoId && linea.loteId == null) {
         return indice;
       }
       indice = indice + 1;
     }
     return -1;
+  }
+
+  CanalVenta _canalVentaProducto(Producto producto) {
+    return producto.moduloVertical == ModuloVertical.carniceria
+        ? CanalVenta.mayoreo
+        : CanalVenta.mostrador;
+  }
+
+  String? _etiquetaLoteFusionada(Producto producto, double cantidadTotal) {
+    if (producto.requierePeso() ||
+        producto.moduloVertical == ModuloVertical.carniceria) {
+      return formatearPesoKg(cantidadTotal);
+    }
+    return null;
   }
 
   /// Encola evento SaleCompleted para sincronizacion.
@@ -847,5 +960,101 @@ class ServicioCaja {
       estado: EstadoSyncEvento.pendiente,
     );
     await _syncOrchestrator.registrarEvento(evento);
+  }
+
+  Future<String?> _validarStockCarrito() async {
+    final cantidadesPorProducto = <String, double>{};
+    for (final linea in _lineasCarrito) {
+      final stockId =
+          linea.productoStockId ?? await _resolverIdStock(linea.producto);
+      final cantidadBase = linea.cantidad * linea.factorABase;
+      cantidadesPorProducto[stockId] =
+          (cantidadesPorProducto[stockId] ?? 0) + cantidadBase;
+    }
+    for (final entry in cantidadesPorProducto.entries) {
+      final producto = await _productoRepository.obtenerPorId(entry.key);
+      if (producto == null || producto.permiteStockNegativo) {
+        continue;
+      }
+      final disponible = await _gestorInventario.obtenerCantidadDisponible(
+        entry.key,
+        _tiendaId,
+      );
+      if (disponible < entry.value) {
+        return 'Stock insuficiente: ${producto.nombre} '
+            '(disponible ${disponible.toStringAsFixed(1)}, '
+            'requerido ${entry.value.toStringAsFixed(1)})';
+      }
+    }
+    return null;
+  }
+
+  Future<String?> _validarStockParaAgregar(
+    Producto producto,
+    double cantidadAgregar, {
+    double factorABase = 1.0,
+    String? productoStockId,
+  }) async {
+    final stockId = productoStockId ?? await _resolverIdStock(producto);
+    final productoStock = stockId == producto.id
+        ? producto
+        : await _productoRepository.obtenerPorId(stockId);
+    if (productoStock?.permiteStockNegativo == true) {
+      return null;
+    }
+    if (producto.permiteStockNegativo && productoStockId == null) {
+      return null;
+    }
+    var cantidadEnCarrito = 0.0;
+    for (final linea in _lineasCarrito) {
+      final lineaStockId =
+          linea.productoStockId ?? await _resolverIdStock(linea.producto);
+      if (lineaStockId == stockId) {
+        cantidadEnCarrito += linea.cantidad * linea.factorABase;
+      }
+    }
+    final totalRequerido =
+        cantidadEnCarrito + (cantidadAgregar * factorABase);
+    final disponible = await _gestorInventario.obtenerCantidadDisponible(
+      stockId,
+      _tiendaId,
+    );
+    if (disponible < totalRequerido) {
+      final nombre = productoStock?.nombre ?? producto.nombre;
+      return 'Stock insuficiente: $nombre '
+          '(disponible ${disponible.toStringAsFixed(1)})';
+    }
+    return null;
+  }
+
+  Future<String> _resolverIdStock(Producto producto) async {
+    final padre = await _productoRepository.obtenerPorId(producto.id);
+    if (padre != null) {
+      return producto.id;
+    }
+    final presentacion = await _presentacionRepository?.obtenerPorId(
+      producto.id,
+    );
+    if (presentacion != null) {
+      return presentacion.productoId;
+    }
+    final variante = await _varianteRepository?.obtenerPorId(producto.id);
+    if (variante != null) {
+      return variante.productoPadreId;
+    }
+    return producto.id;
+  }
+
+  Future<void> _aplicarInventarioVenta() async {
+    for (final linea in _lineasCarrito) {
+      final stockId =
+          linea.productoStockId ?? await _resolverIdStock(linea.producto);
+      final cantidadBase = linea.cantidad * linea.factorABase;
+      await _gestorInventario.ajustarStock(
+        stockId,
+        _tiendaId,
+        -cantidadBase,
+      );
+    }
   }
 }

@@ -6,6 +6,10 @@ import 'package:posia_core/posia_core.dart';
 import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
+import 'pantalla_almacenes_admin.dart';
+import 'pantalla_asistencia_admin.dart';
+import 'pantalla_nomina_admin.dart';
+import 'pantalla_tipos_presentacion_admin.dart';
 import 'pantalla_categorias_admin.dart';
 import 'pantalla_clientes_admin.dart';
 import 'pantalla_compras_admin.dart';
@@ -133,6 +137,10 @@ class PantallaAdmin extends StatelessWidget {
 				Colors.blueGrey, const PantallaMiCuenta()),
 			tile('usuarios', Icons.groups, 'Equipo', 'Cuentas, PIN y ventas',
 				Colors.deepPurple, const PantallaUsuariosAdmin()),
+			tile('asistencia', Icons.pin, 'Asistencia', 'PIN entrada empleados',
+				Colors.teal, const PantallaAsistenciaAdmin()),
+			tile('nomina', Icons.payments, 'Nómina', 'Horas y tarifa',
+				Colors.green.shade700, const PantallaNominaAdmin()),
 		].whereType<Widget>().toList();
 
 		final ventas = [
@@ -170,6 +178,10 @@ class PantallaAdmin extends StatelessWidget {
 				Colors.indigo, const PantallaMovimientosInventario()),
 			tile('traspasos', Icons.swap_horiz, 'Traspasos', 'Entre sucursales',
 				Colors.cyan, const PantallaTraspasosAdmin()),
+			tile('almacenes', Icons.inventory, 'Almacenes', 'Centros de distribución',
+				Colors.blue, const PantallaAlmacenesAdmin()),
+			tile('presentaciones', Icons.layers, 'Presentaciones', 'Tipos caja/bulto',
+				Colors.orange.shade800, const PantallaTiposPresentacionAdmin()),
 		].whereType<Widget>().toList();
 
 		final personas = [

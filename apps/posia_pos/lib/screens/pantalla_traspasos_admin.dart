@@ -29,6 +29,8 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 	final _seleccionados = <String>{};
 	String? _tiendaOrigenId;
 	String? _tiendaDestinoId;
+	String? _almacenOrigenId;
+	var _origenEsAlmacen = false;
 	String _filtroHistorial = '';
 	String _filtroProducto = '';
 
@@ -97,10 +99,22 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 	}
 
 	Widget _buildNuevoTraspaso(_DatosTraspasos datos, Usuario? operador) {
-		final origenId = _resolverOrigenId(datos, operador);
+		final origenId = _origenEsAlmacen
+			? _almacenOrigenId ?? datos.almacenes.firstOrNull?.id
+			: _resolverOrigenId(datos, operador);
 		final destinos = datos.tiendas.where((t) => t.id != origenId).toList();
 		final destinoId = _tiendaDestinoId ?? destinos.firstOrNull?.id;
-		final productos = datos.productosPorTienda[origenId] ?? [];
+		final productos = _origenEsAlmacen
+			? (datos.productosPorAlmacen[origenId] ?? [])
+					.map((e) => e.producto)
+					.toList()
+			: datos.productosPorTienda[origenId] ?? [];
+		final stockPorProducto = _origenEsAlmacen
+			? {
+				for (final e in datos.productosPorAlmacen[origenId] ?? [])
+					e.producto.id: e.cantidad,
+			}
+			: <String, double>{};
 		final productosFiltrados = productos.where((p) {
 			if (_filtroProducto.isEmpty) {
 				return true;
@@ -117,28 +131,63 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 					child: Column(
 						crossAxisAlignment: CrossAxisAlignment.stretch,
 						children: [
-							DropdownButtonFormField<String>(
-								initialValue: origenId,
-								items: datos.origenes
-									.map(
-										(t) => DropdownMenuItem(
-											value: t.id,
-											child: Text(t.nombre),
-										),
-									)
-									.toList(),
-								onChanged: operador != null &&
-									!PermisosUsuario.puedeGestionarTodasLasTiendas(operador)
-									? null
-									: (v) => setState(() {
-										_tiendaOrigenId = v;
-										_alCambiarOrigen();
-									}),
-								decoration: const InputDecoration(
-									labelText: 'Tienda origen',
-									border: OutlineInputBorder(),
-								),
+							SegmentedButton<bool>(
+								segments: const [
+									ButtonSegment(value: false, label: Text('Tienda origen')),
+									ButtonSegment(value: true, label: Text('Almacén origen')),
+								],
+								selected: {_origenEsAlmacen},
+								onSelectionChanged: (v) => setState(() {
+									_origenEsAlmacen = v.first;
+									_seleccionados.clear();
+								}),
 							),
+							const SizedBox(height: 8.0),
+							if (_origenEsAlmacen)
+								DropdownButtonFormField<String>(
+									initialValue: origenId,
+									items: datos.almacenes
+										.map(
+											(a) => DropdownMenuItem(
+												value: a.id,
+												child: Text(a.nombre),
+											),
+										)
+										.toList(),
+									onChanged: datos.almacenes.isEmpty
+										? null
+										: (v) => setState(() {
+											_almacenOrigenId = v;
+											_alCambiarOrigen();
+										}),
+									decoration: const InputDecoration(
+										labelText: 'Almacén origen',
+										border: OutlineInputBorder(),
+									),
+								)
+							else
+								DropdownButtonFormField<String>(
+									initialValue: origenId,
+									items: datos.origenes
+										.map(
+											(t) => DropdownMenuItem(
+												value: t.id,
+												child: Text(t.nombre),
+											),
+										)
+										.toList(),
+									onChanged: operador != null &&
+										!PermisosUsuario.puedeGestionarTodasLasTiendas(operador)
+										? null
+										: (v) => setState(() {
+											_tiendaOrigenId = v;
+											_alCambiarOrigen();
+										}),
+									decoration: const InputDecoration(
+										labelText: 'Tienda origen',
+										border: OutlineInputBorder(),
+									),
+								),
 							const SizedBox(height: 8.0),
 							DropdownButtonFormField<String>(
 								initialValue: destinoId,
@@ -153,9 +202,11 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 								onChanged: destinos.isEmpty
 									? null
 									: (v) => setState(() => _tiendaDestinoId = v),
-								decoration: const InputDecoration(
-									labelText: 'Tienda destino',
-									border: OutlineInputBorder(),
+								decoration: InputDecoration(
+									labelText: _origenEsAlmacen
+										? 'Tienda destino (abastecimiento)'
+										: 'Tienda destino',
+									border: const OutlineInputBorder(),
 								),
 							),
 						],
@@ -223,9 +274,11 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 											],
 										)
 										: Text(
-											producto.codigoBarras.isNotEmpty
-												? producto.codigoBarras
-												: 'Sin codigo',
+											_origenEsAlmacen
+												? 'Stock: ${stockPorProducto[producto.id]?.toStringAsFixed(0) ?? '0'}'
+												: producto.codigoBarras.isNotEmpty
+													? producto.codigoBarras
+													: 'Sin codigo',
 											style: const TextStyle(fontSize: 12.0),
 										),
 								);
@@ -255,6 +308,7 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 										origenId: origenId,
 										destinoId: destinoId,
 										operador: operador,
+										desdeAlmacen: _origenEsAlmacen,
 									)
 									: null,
 								icon: const Icon(Icons.swap_horiz),
@@ -370,9 +424,30 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 		required String origenId,
 		required String destinoId,
 		required Usuario? operador,
+		bool desdeAlmacen = false,
 	}) async {
 		try {
 			final servicio = await ref.read(servicioAdminProvider.future);
+			if (desdeAlmacen) {
+				await servicio.traspasarAlmacenATiendaMultiple(
+					almacenId: origenId,
+					tiendaDestinoId: destinoId,
+					lineas: _construirLineas(),
+				);
+				ref.invalidate(_traspasosDatosProvider);
+				_limpiarSeleccion();
+				_notasController.clear();
+				if (!mounted) {
+					return;
+				}
+				ScaffoldMessenger.of(context).showSnackBar(
+					const SnackBar(
+						content: Text('Abastecimiento desde almacén completado'),
+						backgroundColor: PosiaColors.cobrar,
+					),
+				);
+				return;
+			}
 			final traspaso = await servicio.realizarTraspasoMultiple(
 				tiendaOrigenId: origenId,
 				tiendaDestinoId: destinoId,
@@ -650,16 +725,22 @@ class _DatosTraspasos {
 	const _DatosTraspasos({
 		required this.traspasos,
 		required this.tiendas,
+		required this.almacenes,
 		required this.origenes,
 		required this.productosPorTienda,
+		required this.productosPorAlmacen,
 		required this.nombresTienda,
+		required this.nombresAlmacen,
 	});
 
 	final List<Traspaso> traspasos;
 	final List<Tienda> tiendas;
+	final List<Almacen> almacenes;
 	final List<Tienda> origenes;
 	final Map<String, List<Producto>> productosPorTienda;
+	final Map<String, List<({Producto producto, double cantidad})>> productosPorAlmacen;
 	final Map<String, String> nombresTienda;
+	final Map<String, String> nombresAlmacen;
 }
 
 final _traspasosDatosProvider = FutureProvider<_DatosTraspasos>((ref) async {
@@ -667,17 +748,28 @@ final _traspasosDatosProvider = FutureProvider<_DatosTraspasos>((ref) async {
 	final operador = ref.watch(sesionUsuarioProvider);
 	final traspasos = await servicio.listarTraspasos();
 	final tiendas = await servicio.obtenerTiendasPermitidas(operador: operador);
+	final almacenes = await servicio.listarAlmacenes();
 	final nombres = {for (final t in tiendas) t.id: t.nombre};
+	final nombresAlmacen = {for (final a in almacenes) a.id: a.nombre};
 	final productosPorTienda = <String, List<Producto>>{};
 	for (final tienda in tiendas) {
 		productosPorTienda[tienda.id] =
 			await servicio.listarProductosActivosPorTienda(tienda.id);
 	}
+	final productosPorAlmacen =
+		<String, List<({Producto producto, double cantidad})>>{};
+	for (final almacen in almacenes) {
+		productosPorAlmacen[almacen.id] =
+			await servicio.listarProductosConStockAlmacen(almacen.id);
+	}
 	return _DatosTraspasos(
 		traspasos: traspasos,
 		tiendas: tiendas,
+		almacenes: almacenes,
 		origenes: tiendas,
 		productosPorTienda: productosPorTienda,
+		productosPorAlmacen: productosPorAlmacen,
 		nombresTienda: nombres,
+		nombresAlmacen: nombresAlmacen,
 	);
 });

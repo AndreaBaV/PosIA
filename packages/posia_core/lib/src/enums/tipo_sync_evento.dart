@@ -41,6 +41,30 @@ enum TipoSyncEvento {
 	/// Tienda o sucursal creada o actualizada.
 	storeUpserted,
 
+	/// Almacen creado o actualizado.
+	warehouseUpserted,
+
+	/// Tipo de presentacion creado o actualizado.
+	presentationTypeUpserted,
+
+	/// Presentacion de producto creada o actualizada.
+	productPresentationUpserted,
+
+	/// Desafio PIN de asistencia creado.
+	attendanceChallengeCreated,
+
+	/// Entrada de empleado registrada.
+	attendanceCheckedIn,
+
+	/// Salida de empleado registrada.
+	attendanceCheckedOut,
+
+	/// Perfil de empleado (tarifa) actualizado.
+	employeeProfileUpserted,
+
+	/// Periodo de nomina cerrado.
+	payrollPeriodClosed,
+
 	/// Cuenta de usuario creada o actualizada (PIN solo como hash).
 	userUpserted,
 }

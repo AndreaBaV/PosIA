@@ -11,6 +11,7 @@ export 'src/barcode_scanner.dart';
 export 'src/escpos_network_printer.dart';
 export 'src/impresora_configurable.dart';
 export 'src/cash_drawer.dart';
+export 'src/escpos_cash_drawer.dart';
 export 'src/customer_display.dart';
 export 'src/hardware_registry.dart';
 export 'src/mock/mock_barcode_scanner.dart';

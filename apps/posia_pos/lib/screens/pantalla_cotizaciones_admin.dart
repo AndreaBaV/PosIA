@@ -8,6 +8,7 @@ import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
+import '../utils/compartir_whatsapp_util.dart';
 import '../utils/ticket_venta_util.dart';
 
 class PantallaCotizacionesAdmin extends ConsumerStatefulWidget {
@@ -166,6 +167,14 @@ class _PantallaCotizacionesAdminState extends ConsumerState<PantallaCotizaciones
                         icon: const Icon(Icons.print),
                         label: const Text('Reimprimir'),
                       ),
+                      TextButton.icon(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _compartirWhatsApp(cotizacion.id);
+                        },
+                        icon: const Icon(Icons.chat),
+                        label: const Text('WhatsApp'),
+                      ),
                       const Spacer(),
                       FilledButton(
                         onPressed: () => Navigator.pop(ctx),
@@ -180,6 +189,32 @@ class _PantallaCotizacionesAdminState extends ConsumerState<PantallaCotizaciones
         );
       },
     );
+  }
+
+  Future<void> _compartirWhatsApp(String cotizacionId) async {
+    try {
+      final servicio = await ref.read(servicioAdminProvider.future);
+      final texto = await construirTextoCotizacionPorId(
+        cotizacionId: cotizacionId,
+        servicioAdmin: servicio,
+      );
+      final ok = await compartirTextoWhatsApp(texto: texto);
+      if (!mounted) {
+        return;
+      }
+      if (!ok) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo abrir WhatsApp')),
+        );
+      }
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$error'), backgroundColor: PosiaColors.cancelar),
+      );
+    }
   }
 
   Future<void> _reimprimir(String cotizacionId) async {

@@ -52,6 +52,7 @@ hardware:
 | `MockBarcodeScanner` | Scanner | Desarrollo y pruebas |
 | `TecladoBarcodeScanner` | Scanner | **Activo en produccion** — USB wedge |
 | `MockReceiptPrinter` | Printer | Desarrollo; impresion simulada |
+| `EscPosCashDrawer` | CashDrawer | Pulso ESC/POS via impresora de red (pin 2) |
 | `escpos_network` | Printer | Planificado |
 | `pdf_fallback` | Printer | Planificado |
 
@@ -75,10 +76,19 @@ Drivers adicionales en paquetes separados futuros.
 | Impresora | PDF + dialogo compartir |
 | Bascula | Entrada manual peso (iconos) |
 | Scanner | Busqueda visual / voz |
+| Cajon | Configurar impresora red + activar "Abrir cajón al cobrar" en Admin → Configuración |
 
 ---
 
-## 6. Registro de cambios
+## 6. Asistencia (sin hardware extra)
+
+- **PIN + GPS:** la laptop admin genera PIN de 4 dígitos; el empleado lo ingresa en el celular dentro del radio de la tienda.
+- **Biometría del teléfono:** Face ID / huella via `local_auth` cuando está en geocerca.
+- Configure latitud, longitud y radio en Admin → Tiendas.
+
+---
+
+## 7. Registro de cambios
 
 | Fecha | Cambio |
 |-------|--------|

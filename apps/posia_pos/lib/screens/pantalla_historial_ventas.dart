@@ -8,6 +8,7 @@ import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
+import '../utils/compartir_whatsapp_util.dart';
 import '../utils/ticket_credito_util.dart';
 import '../utils/ticket_venta_util.dart';
 
@@ -287,6 +288,14 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 													: 'Reimprimir',
 											),
 										),
+										TextButton.icon(
+											onPressed: () {
+												Navigator.pop(ctx);
+												_compartirWhatsApp(venta);
+											},
+											icon: const Icon(Icons.chat),
+											label: const Text('WhatsApp'),
+										),
 									if (venta.metodoPago == MetodoPago.credito &&
 										!venta.creditoLiquidado &&
 										venta.estado == EstadoVenta.completada)
@@ -341,6 +350,48 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 				],
 			),
 		);
+	}
+
+	Future<void> _compartirWhatsApp(Venta venta) async {
+		final servicio = await ref.read(servicioAdminProvider.future);
+		final config = await ref.read(configDispositivoProvider.future);
+		try {
+			String texto;
+			if (venta.metodoPago == MetodoPago.credito && !venta.creditoLiquidado) {
+				final pagares = await construirTextosPagareCredito(
+					venta: venta,
+					servicioAdmin: servicio,
+				);
+				texto = pagares.join('\n\n');
+			} else {
+				texto = await construirTextoTicketVenta(
+					venta: venta,
+					servicioAdmin: servicio,
+					config: config,
+				);
+			}
+			String? telefono;
+			if (venta.clienteId != null) {
+				final cliente = await servicio.obtenerCliente(venta.clienteId!);
+				telefono = cliente?.telefono;
+			}
+			final ok = await compartirTextoWhatsApp(texto: texto, telefono: telefono);
+			if (!mounted) {
+				return;
+			}
+			if (!ok) {
+				ScaffoldMessenger.of(context).showSnackBar(
+					const SnackBar(content: Text('No se pudo abrir WhatsApp')),
+				);
+			}
+		} catch (_) {
+			if (!mounted) {
+				return;
+			}
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(content: Text('No se pudo compartir el ticket')),
+			);
+		}
 	}
 
 	Future<void> _reimprimirTicket(Venta venta) async {

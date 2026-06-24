@@ -145,6 +145,7 @@ class ProductoRepository {
 			notas: fila['notas'] as String? ?? '',
 			costoUnitario: (fila['costo_unitario'] as num?)?.toDouble() ?? 0.0,
 			favoritoCaja: ((fila['favorito_caja'] as int?) ?? 0) == 1,
+			permiteStockNegativo: ((fila['permite_stock_negativo'] as int?) ?? 0) == 1,
 		);
 	}
 
@@ -170,6 +171,7 @@ class ProductoRepository {
 			'notas': producto.notas,
 			'costo_unitario': producto.costoUnitario,
 			'favorito_caja': producto.favoritoCaja ? 1 : 0,
+			'permite_stock_negativo': producto.permiteStockNegativo ? 1 : 0,
 		};
 	}
 

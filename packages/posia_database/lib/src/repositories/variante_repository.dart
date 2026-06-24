@@ -10,6 +10,19 @@ class VarianteRepository {
 
 	final Database _baseDatos;
 
+	Future<VarianteProducto?> obtenerPorId(String varianteId) async {
+		final filas = await _baseDatos.query(
+			'product_variants',
+			where: 'id = ?',
+			whereArgs: [varianteId],
+			limit: 1,
+		);
+		if (filas.isEmpty) {
+			return null;
+		}
+		return _mapear(filas.first);
+	}
+
 	Future<List<VarianteProducto>> listarPorProductoPadre(String productoPadreId) async {
 		final filas = await _baseDatos.query(
 			'product_variants',

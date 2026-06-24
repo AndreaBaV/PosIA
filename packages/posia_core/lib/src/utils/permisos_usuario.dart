@@ -54,6 +54,11 @@ class PermisosUsuario {
 	static bool puedeVerConfiguracionSistema(Usuario usuario) =>
 		usuario.rol == RolUsuario.administrador;
 
+	static bool puedeGestionarNomina(Usuario usuario) =>
+		usuario.rol != RolUsuario.empleado;
+
+	static bool puedeVerAsistencia(Usuario usuario) => true;
+
 	static bool puedeGestionarTiendas(Usuario usuario) =>
 		usuario.rol == RolUsuario.administrador;
 

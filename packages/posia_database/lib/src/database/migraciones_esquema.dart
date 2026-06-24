@@ -588,6 +588,9 @@ class MigracionesEsquema {
 		await crearTablasVerticales(base);
 		await crearTablasOperaciones(base);
 		await PlaceholdersEjemplo.insertarGuiaTenant(base);
+		await migrarVersion17A18(base);
+		await migrarVersion18A19(base);
+		await migrarVersion19A20(base);
 	}
 
 	/// Tabla guia `ejemplo` en bases ya existentes (v10 → v11).
@@ -802,6 +805,147 @@ class MigracionesEsquema {
 		''');
 		await base.execute('''
 			CREATE INDEX idx_pharmacy_lots_producto ON pharmacy_lots(producto_id, tienda_id)
+		''');
+	}
+
+	/// Inventario extendido: stock negativo, almacenes, presentaciones (v17 → v18).
+	static Future<void> migrarVersion17A18(Database base) async {
+		await _agregarColumnaSiNoExiste(
+			base,
+			'products',
+			'permite_stock_negativo',
+			'INTEGER NOT NULL DEFAULT 0',
+		);
+		await _agregarColumnaSiNoExiste(
+			base,
+			'stores',
+			'latitud',
+			'REAL',
+		);
+		await _agregarColumnaSiNoExiste(
+			base,
+			'stores',
+			'longitud',
+			'REAL',
+		);
+		await _agregarColumnaSiNoExiste(
+			base,
+			'stores',
+			'radio_metros_asistencia',
+			'REAL DEFAULT 150',
+		);
+		await base.execute('''
+			CREATE TABLE IF NOT EXISTS almacenes (
+				id TEXT PRIMARY KEY,
+				nombre TEXT NOT NULL,
+				tienda_id TEXT,
+				activo INTEGER NOT NULL DEFAULT 1,
+				latitud REAL,
+				longitud REAL,
+				radio_metros REAL DEFAULT 150
+			)
+		''');
+		await base.execute('''
+			CREATE TABLE IF NOT EXISTS stock_almacen (
+				producto_id TEXT NOT NULL,
+				almacen_id TEXT NOT NULL,
+				cantidad REAL NOT NULL,
+				actualizado_en TEXT NOT NULL,
+				stock_minimo REAL NOT NULL DEFAULT 0,
+				PRIMARY KEY (producto_id, almacen_id)
+			)
+		''');
+		await base.execute('''
+			CREATE TABLE IF NOT EXISTS tipos_presentacion (
+				id TEXT PRIMARY KEY,
+				nombre TEXT NOT NULL,
+				unidad TEXT NOT NULL,
+				activo INTEGER NOT NULL DEFAULT 1
+			)
+		''');
+		await base.execute('''
+			CREATE TABLE IF NOT EXISTS presentaciones_producto (
+				id TEXT PRIMARY KEY,
+				producto_id TEXT NOT NULL,
+				tipo_presentacion_id TEXT,
+				nombre TEXT NOT NULL,
+				factor_a_base REAL NOT NULL DEFAULT 1,
+				es_presentacion_base INTEGER NOT NULL DEFAULT 0,
+				codigo_barras TEXT NOT NULL DEFAULT '',
+				precio REAL,
+				activo INTEGER NOT NULL DEFAULT 1
+			)
+		''');
+		await base.execute('''
+			INSERT OR IGNORE INTO tipos_presentacion (id, nombre, unidad, activo)
+			VALUES
+				('tp-caja', 'Caja', 'caja', 1),
+				('tp-bulto', 'Bulto', 'pieza', 1),
+				('tp-kg', 'Kilogramo', 'kilogramo', 1)
+		''');
+	}
+
+	/// Asistencia de empleados (v18 → v19).
+	static Future<void> migrarVersion18A19(Database base) async {
+		await base.execute('''
+			CREATE TABLE IF NOT EXISTS desafios_asistencia (
+				id TEXT PRIMARY KEY,
+				tienda_id TEXT NOT NULL,
+				pin_hash TEXT NOT NULL,
+				expira_en TEXT NOT NULL,
+				creado_por TEXT NOT NULL,
+				latitud REAL,
+				longitud REAL,
+				radio_metros REAL DEFAULT 150,
+				activo INTEGER NOT NULL DEFAULT 1
+			)
+		''');
+		await base.execute('''
+			CREATE TABLE IF NOT EXISTS registros_asistencia (
+				id TEXT PRIMARY KEY,
+				usuario_id TEXT NOT NULL,
+				tienda_id TEXT NOT NULL,
+				entrada_en TEXT NOT NULL,
+				salida_en TEXT,
+				metodo TEXT NOT NULL,
+				latitud REAL,
+				longitud REAL,
+				desafio_id TEXT
+			)
+		''');
+		await base.execute('''
+			CREATE TABLE IF NOT EXISTS empleado_perfil (
+				usuario_id TEXT PRIMARY KEY,
+				tarifa_hora REAL NOT NULL DEFAULT 0,
+				tipo_pago TEXT NOT NULL DEFAULT 'por_hora',
+				actualizado_en TEXT NOT NULL
+			)
+		''');
+	}
+
+	/// Periodos de nomina (v19 → v20).
+	static Future<void> migrarVersion19A20(Database base) async {
+		await base.execute('''
+			CREATE TABLE IF NOT EXISTS periodos_nomina (
+				id TEXT PRIMARY KEY,
+				tienda_id TEXT,
+				inicio_en TEXT NOT NULL,
+				fin_en TEXT NOT NULL,
+				estado TEXT NOT NULL,
+				cerrado_en TEXT,
+				cerrado_por TEXT
+			)
+		''');
+		await base.execute('''
+			CREATE TABLE IF NOT EXISTS lineas_nomina (
+				id TEXT PRIMARY KEY,
+				periodo_id TEXT NOT NULL,
+				usuario_id TEXT NOT NULL,
+				horas_trabajadas REAL NOT NULL,
+				tarifa_hora REAL NOT NULL,
+				monto_bruto REAL NOT NULL,
+				monto_neto REAL NOT NULL
+			)
 		''');
 	}
 }

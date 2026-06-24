@@ -92,32 +92,52 @@ class PanelCarrito extends StatelessWidget {
 					const Divider(height: 1.0),
 					Expanded(
 						child: lineas.isEmpty
-							? Center(
-								child: Padding(
-									padding: const EdgeInsets.all(24.0),
-									child: Column(
-										mainAxisAlignment: MainAxisAlignment.center,
-										children: [
-											Icon(
-												Icons.remove_shopping_cart_outlined,
-												size: 56.0,
-												color: Colors.grey.shade400,
-											),
-											const SizedBox(height: 12.0),
-											Text(
-												'Carrito vacío',
-												style: Theme.of(context).textTheme.titleMedium?.copyWith(
-													color: Colors.grey.shade600,
+							? LayoutBuilder(
+								builder: (context, constraints) {
+									final compacto = constraints.maxHeight < 130;
+									return Center(
+										child: FittedBox(
+											fit: BoxFit.scaleDown,
+											child: Padding(
+												padding: EdgeInsets.symmetric(
+													horizontal: 12.0,
+													vertical: compacto ? 4.0 : 8.0,
+												),
+												child: Column(
+													mainAxisSize: MainAxisSize.min,
+													children: [
+														Icon(
+															Icons.remove_shopping_cart_outlined,
+															size: compacto ? 28.0 : 40.0,
+															color: Colors.grey.shade400,
+														),
+														SizedBox(height: compacto ? 4.0 : 8.0),
+														Text(
+															'Carrito vacío',
+															style: (compacto
+																	? Theme.of(context).textTheme.bodyMedium
+																	: Theme.of(context).textTheme.titleSmall)
+																?.copyWith(
+																	color: Colors.grey.shade600,
+																	fontWeight: FontWeight.w600,
+																),
+														),
+														if (!compacto) ...[
+															const SizedBox(height: 2.0),
+															Text(
+																'Toca un producto o escanea',
+																style: TextStyle(
+																	color: Colors.grey.shade500,
+																	fontSize: 12.0,
+																),
+															),
+														],
+													],
 												),
 											),
-											const SizedBox(height: 4.0),
-											Text(
-												'Toca un producto o escanea',
-												style: TextStyle(color: Colors.grey.shade500),
-											),
-										],
-									),
-								),
+										),
+									);
+								},
 							)
 							: ListView.separated(
 								padding: const EdgeInsets.all(8.0),
@@ -130,57 +150,84 @@ class PanelCarrito extends StatelessWidget {
 										color: PosiaColors.tarjeta,
 										borderRadius: BorderRadius.circular(12.0),
 										elevation: 0.5,
-										child: ListTile(
-											contentPadding: const EdgeInsets.symmetric(
-												horizontal: 12.0,
-												vertical: 4.0,
-											),
-											shape: RoundedRectangleBorder(
-												borderRadius: BorderRadius.circular(12.0),
-											),
+										child: InkWell(
+											borderRadius: BorderRadius.circular(12.0),
 											onTap: alTocarLinea != null
 												? () => alTocarLinea!(indice)
 												: null,
-											leading: CircleAvatar(
-												backgroundColor: PosiaColors.cobrar,
-												radius: 18.0,
-												child: Text(
-													linea.cantidad.toStringAsFixed(
-														linea.cantidad == linea.cantidad.roundToDouble() ? 0 : 1,
-													),
-													style: const TextStyle(
-														color: Colors.white,
-														fontSize: 12.0,
-														fontWeight: FontWeight.bold,
-													),
+											child: Padding(
+												padding: const EdgeInsets.symmetric(
+													horizontal: 10.0,
+													vertical: 8.0,
 												),
-											),
-											title: Text(
-												linea.producto.nombre,
-												maxLines: 2,
-												overflow: TextOverflow.ellipsis,
-												style: const TextStyle(fontWeight: FontWeight.w600),
-											),
-											subtitle: Text(_construirSubtituloLinea(linea)),
-											trailing: Column(
-												mainAxisAlignment: MainAxisAlignment.center,
-												crossAxisAlignment: CrossAxisAlignment.end,
-												children: [
-													Text(
-														formatearMoneda(subtotal),
-														style: const TextStyle(
-															fontWeight: FontWeight.bold,
-															color: PosiaColors.cobrar,
+												child: Row(
+													crossAxisAlignment: CrossAxisAlignment.center,
+													children: [
+														CircleAvatar(
+															backgroundColor: PosiaColors.cobrar,
+															radius: 18.0,
+															child: Text(
+																linea.cantidad.toStringAsFixed(
+																	linea.cantidad ==
+																			linea.cantidad.roundToDouble()
+																		? 0
+																		: 1,
+																),
+																style: const TextStyle(
+																	color: Colors.white,
+																	fontSize: 12.0,
+																	fontWeight: FontWeight.bold,
+																),
+															),
 														),
-													),
-													IconButton(
-														icon: const Icon(Icons.close, size: 18.0),
-														color: PosiaColors.cancelar,
-														padding: EdgeInsets.zero,
-														constraints: const BoxConstraints(),
-														onPressed: () => alEliminarLinea(indice),
-													),
-												],
+														const SizedBox(width: 10.0),
+														Expanded(
+															child: Column(
+																crossAxisAlignment: CrossAxisAlignment.start,
+																mainAxisSize: MainAxisSize.min,
+																children: [
+																	Text(
+																		linea.producto.nombre,
+																		maxLines: 2,
+																		overflow: TextOverflow.ellipsis,
+																		style: const TextStyle(
+																			fontWeight: FontWeight.w600,
+																		),
+																	),
+																	const SizedBox(height: 2.0),
+																	Text(
+																		_construirSubtituloLinea(linea),
+																		maxLines: 1,
+																		overflow: TextOverflow.ellipsis,
+																		style: TextStyle(
+																			fontSize: 12.0,
+																			color: Colors.grey.shade600,
+																		),
+																	),
+																],
+															),
+														),
+														const SizedBox(width: 6.0),
+														Text(
+															formatearMoneda(subtotal),
+															style: const TextStyle(
+																fontWeight: FontWeight.bold,
+																color: PosiaColors.cobrar,
+															),
+														),
+														IconButton(
+															icon: const Icon(Icons.close, size: 18.0),
+															color: PosiaColors.cancelar,
+															padding: const EdgeInsets.all(4.0),
+															constraints: const BoxConstraints(
+																minWidth: 32.0,
+																minHeight: 32.0,
+															),
+															tooltip: 'Quitar',
+															onPressed: () => alEliminarLinea(indice),
+														),
+													],
+												),
 											),
 										),
 									);

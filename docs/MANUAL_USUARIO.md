@@ -156,6 +156,15 @@ Opcional en escritorio: seleccionar **Vendedor** y **Cliente** antes de cobrar.
 2. Toca **COBRAR**.
 3. Confirma el monto.
 4. Se genera el ticket (archivo o impresora segun configuracion).
+5. Opcional: toque **WhatsApp** para enviar el ticket al cliente.
+
+### Compartir por WhatsApp
+
+Desde historial de ventas, cotizaciones guardadas o al terminar una venta/cotizacion puede enviar el texto del ticket por WhatsApp.
+
+### Cajon de dinero
+
+En Admin → **Configuracion** active **Abrir cajon al cobrar** y configure la impresora termica por red (puerto 9100). El cajon debe estar conectado a la impresora.
 
 ### Paso 4 — Cerrar turno (fin del dia)
 
@@ -163,6 +172,23 @@ Opcional en escritorio: seleccionar **Vendedor** y **Cliente** antes de cobrar.
 2. Revisa: ventas del turno, efectivo vendido, efectivo esperado en caja.
 3. Toca **Cerrar turno**
 4. Se imprime o guarda el ticket de corte automaticamente.
+
+---
+
+## 5b. Asistencia y nomina
+
+### Asistencia (sin sensor de huella)
+
+1. Configure **latitud, longitud y radio** en Admin → **Tiendas**.
+2. Admin → **Asistencia** → **Generar PIN** (valido 5 minutos).
+3. El empleado abre **Asistencia** en el celular e ingresa el PIN dentro del radio de la tienda.
+4. Alternativa: **Entrada con biometria** (Face ID / huella del telefono) cuando esta en la geocerca.
+
+### Nomina
+
+1. Asigne **tarifa por hora** en Admin → **Equipo** (al editar usuario).
+2. Admin → **Nomina** → calcule el periodo semanal.
+3. Exporte CSV al portapapeles para contabilidad.
 
 ---
 

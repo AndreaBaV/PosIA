@@ -56,6 +56,9 @@ class TiendaRepository {
 				'nombre': tienda.nombre,
 				'direccion': tienda.direccion,
 				'activa': tienda.activa ? 1 : 0,
+				'latitud': tienda.latitud,
+				'longitud': tienda.longitud,
+				'radio_metros_asistencia': tienda.radioMetrosAsistencia,
 			},
 			conflictAlgorithm: ConflictAlgorithm.replace,
 		);
@@ -97,6 +100,10 @@ class TiendaRepository {
 			nombre: fila['nombre'] as String,
 			direccion: fila['direccion'] as String,
 			activa: (fila['activa'] as int) == 1,
+			latitud: (fila['latitud'] as num?)?.toDouble(),
+			longitud: (fila['longitud'] as num?)?.toDouble(),
+			radioMetrosAsistencia:
+				(fila['radio_metros_asistencia'] as num?)?.toDouble() ?? 150,
 		);
 	}
 }

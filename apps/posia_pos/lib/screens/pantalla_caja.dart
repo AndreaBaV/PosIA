@@ -18,6 +18,7 @@ import 'package:posia_ui/posia_ui.dart';
 import '../providers/admin_providers.dart';
 import '../widgets/dialogo_completar_datos_credito.dart';
 import '../providers/app_providers.dart';
+import '../utils/compartir_whatsapp_util.dart';
 import '../utils/ticket_credito_util.dart';
 import '../utils/ticket_venta_util.dart';
 import '../widgets/dialogo_cobro.dart';
@@ -423,6 +424,12 @@ Future<bool> seleccionarProductoEnCaja(
 	if (!context.mounted) {
 		return false;
 	}
+	if (await servicio.productoTienePresentaciones(producto.id)) {
+		if (!context.mounted) {
+			return false;
+		}
+		return _seleccionarPresentacion(context, ref, producto);
+	}
 	if (await servicio.productoTieneVariantes(producto.id)) {
 		if (!context.mounted) {
 			return false;
@@ -436,11 +443,90 @@ Future<bool> seleccionarProductoEnCaja(
 	if (!resultado.confirmado) {
 		return false;
 	}
-	await ref.read(carritoNotifierProvider.notifier).agregarProducto(
-		producto,
-		cantidad: resultado.cantidad,
-	);
+	try {
+		await ref.read(carritoNotifierProvider.notifier).agregarProducto(
+			producto,
+			cantidad: resultado.cantidad,
+		);
+	} catch (error) {
+		if (context.mounted) {
+			await _mostrarErrorCaja(context, '$error');
+		}
+		return false;
+	}
 	return true;
+}
+
+/// Muestra dialogo de presentaciones comerciales del producto.
+Future<bool> _seleccionarPresentacion(
+	BuildContext context,
+	WidgetRef ref,
+	Producto producto,
+) async {
+	final servicio = await ref.read(servicioCajaProvider.future);
+	final presentaciones = await servicio.listarPresentacionesActivas(producto.id);
+	if (!context.mounted || presentaciones.isEmpty) {
+		return false;
+	}
+	var agregado = false;
+	await showDialog<void>(
+		context: context,
+		builder: (dialogContext) => AlertDialog(
+			title: Text('Presentación: ${producto.nombre}'),
+			content: SizedBox(
+				width: 340.0,
+				child: ListView(
+					shrinkWrap: true,
+					children: presentaciones
+						.map(
+							(p) => ListTile(
+								title: Text(p.nombre),
+								subtitle: Text(
+									p.codigoBarras.isNotEmpty
+										? '${p.codigoBarras} · x${p.factorABase.toStringAsFixed(0)} u.'
+										: 'Factor ${p.factorABase.toStringAsFixed(0)} u. base',
+								),
+								trailing: Text(
+									formatearMoneda(p.precio ?? producto.precioBase),
+								),
+								onTap: () async {
+									Navigator.of(dialogContext).pop();
+									if (!context.mounted) {
+										return;
+									}
+									final resultado = await DialogoCantidadProducto.mostrar(
+										context,
+										producto.copiarCon(
+											nombre: '${producto.nombre} - ${p.nombre}',
+											precioBase: p.precio ?? producto.precioBase,
+										),
+									);
+									if (!resultado.confirmado) {
+										return;
+									}
+									try {
+										await servicio.agregarPresentacion(
+											p,
+											cantidad: resultado.cantidad,
+										);
+										agregado = true;
+										await ref
+											.read(carritoNotifierProvider.notifier)
+											.recargar();
+									} catch (error) {
+										if (context.mounted) {
+											await _mostrarErrorCaja(context, '$error');
+										}
+									}
+								},
+							),
+						)
+						.toList(),
+				),
+			),
+		),
+	);
+	return agregado;
 }
 
 /// Muestra dialogo de presentaciones activas del producto.
@@ -853,6 +939,54 @@ bool procesarAtajoTecladoEnCaja({
 	return false;
 }
 
+bool _cobroIncluyeEfectivo(MetodoPago metodo, CobroRequest request) {
+	if (metodo == MetodoPago.efectivo) {
+		return true;
+	}
+	if (metodo == MetodoPago.mixto && (request.montoEfectivo ?? 0) > 0) {
+		return true;
+	}
+	return false;
+}
+
+Future<void> _mostrarOpcionesPostVenta(
+	BuildContext context, {
+	required String textoTicket,
+	String? telefonoCliente,
+}) async {
+	await showDialog<void>(
+		context: context,
+		builder: (dialogContext) => AlertDialog(
+			title: const Text('Venta completada'),
+			content: const Text('¿Desea enviar el ticket por WhatsApp?'),
+			actions: [
+				TextButton(
+					onPressed: () => Navigator.of(dialogContext).pop(),
+					child: const Text('Cerrar'),
+				),
+				FilledButton.icon(
+					onPressed: () async {
+						final ok = await compartirTextoWhatsApp(
+							texto: textoTicket,
+							telefono: telefonoCliente,
+						);
+						if (dialogContext.mounted) {
+							Navigator.of(dialogContext).pop();
+							if (!ok) {
+								ScaffoldMessenger.of(context).showSnackBar(
+									const SnackBar(content: Text('No se pudo abrir WhatsApp')),
+								);
+							}
+						}
+					},
+					icon: const Icon(Icons.chat),
+					label: const Text('WhatsApp'),
+				),
+			],
+		),
+	);
+}
+
 /// Ejecuta cobro con dialogo multipago e impresion.
 Future<void> ejecutarCobroCaja(BuildContext context, WidgetRef ref) async {
 	if (_cobroCajaEnEjecucion) {
@@ -924,6 +1058,22 @@ Future<void> ejecutarCobroCaja(BuildContext context, WidgetRef ref) async {
 				montoRecibido: request.montoRecibido,
 			);
 			await impresora.imprimirTicket(textoTicket);
+			if (_cobroIncluyeEfectivo(venta.metodoPago, request)) {
+				try {
+					await hardware.obtenerCajon()?.abrir();
+				} catch (_) {}
+			}
+			if (!context.mounted) {
+				return;
+			}
+			final cliente = venta.clienteId != null
+				? await contenedor.servicioAdmin.obtenerCliente(venta.clienteId!)
+				: null;
+			await _mostrarOpcionesPostVenta(
+				context,
+				textoTicket: textoTicket,
+				telefonoCliente: cliente?.telefono,
+			);
 		}
 		if (!context.mounted) {
 			return;
@@ -967,6 +1117,7 @@ Future<void> ejecutarCotizacionCaja(BuildContext context, WidgetRef ref) async {
 		if (!context.mounted) {
 			return;
 		}
+		final clienteActivo = servicio.obtenerClienteActivo();
 		await showDialog<void>(
 			context: context,
 			builder: (dialogContext) => AlertDialog(
@@ -979,6 +1130,21 @@ Future<void> ejecutarCotizacionCaja(BuildContext context, WidgetRef ref) async {
 					textAlign: TextAlign.center,
 				),
 				actions: [
+					TextButton.icon(
+						onPressed: () async {
+							final ok = await compartirTextoWhatsApp(
+								texto: resultado.texto,
+								telefono: clienteActivo?.telefono,
+							);
+							if (dialogContext.mounted && !ok) {
+								ScaffoldMessenger.of(dialogContext).showSnackBar(
+									const SnackBar(content: Text('No se pudo abrir WhatsApp')),
+								);
+							}
+						},
+						icon: const Icon(Icons.chat),
+						label: const Text('WhatsApp'),
+					),
 					TextButton(
 						onPressed: () => Navigator.of(dialogContext).pop(),
 						child: const Text('OK'),

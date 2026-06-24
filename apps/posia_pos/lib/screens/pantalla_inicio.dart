@@ -13,6 +13,7 @@ import '../providers/app_providers.dart';
 import '../util/destinos_admin.dart';
 import '../util/plataforma_util.dart';
 import 'pantalla_admin.dart';
+import 'pantalla_asistencia_movil.dart';
 import 'pantalla_caja.dart';
 import 'pantalla_caja_movil.dart';
 import 'pantalla_mi_cuenta.dart';
@@ -170,6 +171,7 @@ class _PantallaInicioState extends ConsumerState<PantallaInicio> {
 									index: _indicePestana,
 									children: [
 										caja,
+										const PantallaAsistenciaMovil(),
 										const PantallaMisPedidos(),
 									],
 								)
@@ -207,6 +209,11 @@ class _PantallaInicioState extends ConsumerState<PantallaInicio> {
 								icon: Icon(Icons.point_of_sale_outlined),
 								selectedIcon: Icon(Icons.point_of_sale),
 								label: 'Caja',
+							),
+							NavigationDestination(
+								icon: Icon(Icons.fingerprint_outlined),
+								selectedIcon: Icon(Icons.fingerprint),
+								label: 'Asistencia',
 							),
 							NavigationDestination(
 								icon: Icon(Icons.assignment_outlined),

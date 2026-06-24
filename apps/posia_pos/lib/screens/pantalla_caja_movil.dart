@@ -425,6 +425,9 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 		try {
 			final hardware = await ref.read(hardwareRegistryProvider.future);
 			await hardware.obtenerImpresora().imprimirTicket(textoTicket);
+			try {
+				await hardware.obtenerCajon()?.abrir();
+			} catch (_) {}
 			ticketGuardado = true;
 		} catch (_) {}
 		if (!mounted) {

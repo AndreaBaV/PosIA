@@ -7,6 +7,7 @@ import 'package:posia_core/posia_core.dart';
 import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
+import '../providers/app_providers.dart';
 
 class PantallaUsuariosAdmin extends ConsumerStatefulWidget {
 	const PantallaUsuariosAdmin({super.key});
@@ -18,6 +19,7 @@ class PantallaUsuariosAdmin extends ConsumerStatefulWidget {
 class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 	final _nombreController = TextEditingController();
 	final _pinController = TextEditingController();
+	final _tarifaController = TextEditingController();
 	final _busquedaController = TextEditingController();
 	String _filtro = '';
 
@@ -25,6 +27,7 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 	void dispose() {
 		_nombreController.dispose();
 		_pinController.dispose();
+		_tarifaController.dispose();
 		_busquedaController.dispose();
 		super.dispose();
 	}
@@ -210,6 +213,14 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 		if (!rolesDisponibles.contains(rolSeleccionado)) {
 			rolSeleccionado = rolesDisponibles.first;
 		}
+		_tarifaController.clear();
+		if (editando != null) {
+			final contenedor = await ref.read(contenedorServiciosProvider.future);
+			final perfil = await contenedor.servicioNomina?.obtenerPerfil(editando.id);
+			if (perfil != null && perfil.tarifaHora > 0) {
+				_tarifaController.text = perfil.tarifaHora.toStringAsFixed(2);
+			}
+		}
 		if (!mounted) {
 			return;
 		}
@@ -312,6 +323,18 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 													: '4 digitos para entrar desde el celular o la caja',
 											),
 										),
+										if (rolSeleccionado != RolUsuario.administrador) ...[
+											const SizedBox(height: 12.0),
+											TextField(
+												controller: _tarifaController,
+												keyboardType: const TextInputType.numberWithOptions(decimal: true),
+												decoration: const InputDecoration(
+													labelText: 'Tarifa por hora (MXN)',
+													border: OutlineInputBorder(),
+													prefixText: '\$ ',
+												),
+											),
+										],
 										if (!esEdicion) ...[
 											const SizedBox(height: 4.0),
 											Text(
@@ -367,14 +390,16 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 	}) async {
 		try {
 			final servicio = await ref.read(servicioAdminProvider.future);
+			String? usuarioId;
 			if (editando == null) {
-				await servicio.registrarUsuario(
+				final creado = await servicio.registrarUsuario(
 					nombre: _nombreController.text,
 					rol: rolSeleccionado,
 					pin: _pinController.text,
 					tiendaId: tiendaSeleccionada,
 					operador: operador,
 				);
+				usuarioId = creado.id;
 			} else {
 				final actualizado = await servicio.actualizarUsuario(
 					editando.copiarCon(
@@ -387,8 +412,18 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 					operador: operador,
 					nuevoPin: _pinController.text,
 				);
+				usuarioId = actualizado.id;
 				if (actualizado.id == ref.read(sesionUsuarioProvider)?.id) {
 					ref.read(sesionUsuarioProvider.notifier).iniciar(actualizado);
+				}
+			}
+			if (usuarioId != null && rolSeleccionado != RolUsuario.administrador) {
+				final tarifa = double.tryParse(
+					_tarifaController.text.replaceAll(',', '.'),
+				);
+				if (tarifa != null && tarifa > 0) {
+					final contenedor = await ref.read(contenedorServiciosProvider.future);
+					await contenedor.servicioNomina?.guardarTarifaHora(usuarioId, tarifa);
 				}
 			}
 			ref.invalidate(_usuariosAdminProvider);

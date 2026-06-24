@@ -12,7 +12,7 @@ import 'package:posia_core/posia_core.dart';
 import '../theme/posia_theme.dart';
 
 /// Muestra catalogo como grid de tarjetas con icono e imagen fallback.
-class GrillaProductos extends StatelessWidget {
+class GrillaProductos extends StatefulWidget {
 	/// Crea grilla de productos activos.
 	///
 	/// [productos] Lista de productos a mostrar.
@@ -22,6 +22,7 @@ class GrillaProductos extends StatelessWidget {
 		required this.alSeleccionar,
 		this.categoriaId,
 		this.mensajeVacio = 'Sin productos en esta categoría',
+		this.indiceSeleccionado,
 		super.key,
 	});
 
@@ -37,9 +38,48 @@ class GrillaProductos extends StatelessWidget {
 	/// Accion al seleccionar producto.
 	final ValueChanged<Producto> alSeleccionar;
 
+	/// Indice resaltado para navegacion con teclado (opcional).
+	final int? indiceSeleccionado;
+
+	static const int columnas = 3;
+
+	@override
+	State<GrillaProductos> createState() => _GrillaProductosState();
+}
+
+class _GrillaProductosState extends State<GrillaProductos> {
+	final _clavesTarjetas = <int, GlobalKey>{};
+
+	@override
+	void didUpdateWidget(GrillaProductos oldWidget) {
+		super.didUpdateWidget(oldWidget);
+		if (widget.indiceSeleccionado != null &&
+			widget.indiceSeleccionado != oldWidget.indiceSeleccionado) {
+			_desplazarASeleccion(widget.indiceSeleccionado!);
+		}
+	}
+
+	void _desplazarASeleccion(int indice) {
+		WidgetsBinding.instance.addPostFrameCallback((_) {
+			if (!mounted) {
+				return;
+			}
+			final contexto = _clavesTarjetas[indice]?.currentContext;
+			if (contexto == null) {
+				return;
+			}
+			Scrollable.ensureVisible(
+				contexto,
+				alignment: 0.25,
+				duration: const Duration(milliseconds: 180),
+				curve: Curves.easeOut,
+			);
+		});
+	}
+
 	@override
 	Widget build(BuildContext context) {
-		if (productos.isEmpty) {
+		if (widget.productos.isEmpty) {
 			return Center(
 				child: Column(
 					mainAxisAlignment: MainAxisAlignment.center,
@@ -47,7 +87,7 @@ class GrillaProductos extends StatelessWidget {
 						Icon(Icons.inventory_2_outlined, size: 64.0, color: Colors.grey.shade400),
 						const SizedBox(height: 12.0),
 						Text(
-							mensajeVacio,
+							widget.mensajeVacio,
 							style: Theme.of(context).textTheme.titleMedium?.copyWith(
 								color: Colors.grey.shade600,
 							),
@@ -58,21 +98,24 @@ class GrillaProductos extends StatelessWidget {
 			);
 		}
 		return GridView.builder(
-			key: PageStorageKey<String>('grilla_${categoriaId ?? 'todos'}'),
+			key: PageStorageKey<String>('grilla_${widget.categoriaId ?? 'todos'}'),
 			padding: const EdgeInsets.all(12.0),
 			gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-				crossAxisCount: 3,
+				crossAxisCount: GrillaProductos.columnas,
 				mainAxisSpacing: 10.0,
 				crossAxisSpacing: 10.0,
 				childAspectRatio: 0.88,
 			),
-			itemCount: productos.length,
+			itemCount: widget.productos.length,
 			itemBuilder: (context, indice) {
-				final producto = productos[indice];
+				final producto = widget.productos[indice];
+				final seleccionado = widget.indiceSeleccionado == indice;
+				final clave = _clavesTarjetas.putIfAbsent(indice, GlobalKey.new);
 				return _TarjetaProducto(
-					key: ValueKey(producto.id),
+					key: clave,
 					producto: producto,
-					alPresionar: () => alSeleccionar(producto),
+					seleccionado: seleccionado,
+					alPresionar: () => widget.alSeleccionar(producto),
 				);
 			},
 		);
@@ -84,60 +127,72 @@ class _TarjetaProducto extends StatelessWidget {
 	const _TarjetaProducto({
 		required this.producto,
 		required this.alPresionar,
+		this.seleccionado = false,
 		super.key,
 	});
 
 	final Producto producto;
 	final VoidCallback alPresionar;
+	final bool seleccionado;
 
 	@override
 	Widget build(BuildContext context) {
 		return Material(
-			color: PosiaColors.tarjeta,
+			color: seleccionado
+				? PosiaColors.cobrar.withValues(alpha: 0.12)
+				: PosiaColors.tarjeta,
 			borderRadius: BorderRadius.circular(14.0),
-			elevation: 1.0,
+			elevation: seleccionado ? 3.0 : 1.0,
 			shadowColor: Colors.black.withValues(alpha: 0.08),
 			child: InkWell(
 				onTap: alPresionar,
 				borderRadius: BorderRadius.circular(14.0),
-				child: Padding(
-					padding: const EdgeInsets.all(10.0),
-					child: Column(
-						mainAxisAlignment: MainAxisAlignment.center,
-						children: [
-							Container(
-								padding: const EdgeInsets.all(10.0),
-								decoration: BoxDecoration(
-									color: PosiaColors.cobrar.withValues(alpha: 0.1),
-									borderRadius: BorderRadius.circular(12.0),
+				child: DecoratedBox(
+					decoration: BoxDecoration(
+						borderRadius: BorderRadius.circular(14.0),
+						border: seleccionado
+							? Border.all(color: PosiaColors.cobrar, width: 2.5)
+							: null,
+					),
+					child: Padding(
+						padding: const EdgeInsets.all(10.0),
+						child: Column(
+							mainAxisAlignment: MainAxisAlignment.center,
+							children: [
+								Container(
+									padding: const EdgeInsets.all(10.0),
+									decoration: BoxDecoration(
+										color: PosiaColors.cobrar.withValues(alpha: 0.1),
+										borderRadius: BorderRadius.circular(12.0),
+									),
+									child: Icon(
+										_resolverIconoProducto(producto),
+										size: 40.0,
+										color: PosiaColors.cobrar,
+									),
 								),
-								child: Icon(
-									_resolverIconoProducto(producto),
-									size: 40.0,
-									color: PosiaColors.cobrar,
+								const SizedBox(height: 8.0),
+								Text(
+									formatearMoneda(producto.precioBase),
+									style: Theme.of(context).textTheme.titleMedium?.copyWith(
+										color: PosiaColors.cobrar,
+										fontWeight: FontWeight.bold,
+									),
 								),
-							),
-							const SizedBox(height: 8.0),
-							Text(
-								formatearMoneda(producto.precioBase),
-								style: Theme.of(context).textTheme.titleMedium?.copyWith(
-									color: PosiaColors.cobrar,
-									fontWeight: FontWeight.bold,
+								if (producto.moduloVertical == ModuloVertical.carniceria)
+									Text('/ kg', style: TextStyle(color: Colors.grey.shade600, fontSize: 11.0)),
+								const SizedBox(height: 4.0),
+								Text(
+									producto.nombre,
+									textAlign: TextAlign.center,
+									maxLines: 2,
+									overflow: TextOverflow.ellipsis,
+									style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+										fontWeight: FontWeight.w500,
+									),
 								),
-							),
-							if (producto.moduloVertical == ModuloVertical.carniceria)
-								Text('/ kg', style: TextStyle(color: Colors.grey.shade600, fontSize: 11.0)),
-							const SizedBox(height: 4.0),
-							Text(
-								producto.nombre,
-								textAlign: TextAlign.center,
-								maxLines: 2,
-								overflow: TextOverflow.ellipsis,
-								style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-									fontWeight: FontWeight.w500,
-								),
-							),
-						],
+							],
+						),
 					),
 				),
 			),

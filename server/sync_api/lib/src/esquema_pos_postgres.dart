@@ -208,5 +208,24 @@ class EsquemaPosPostgres {
 		await conexion.execute('''
 			CREATE INDEX IF NOT EXISTS idx_users_codigo ON users(codigo)
 		''');
+		await conexion.execute('''
+			ALTER TABLE products ADD COLUMN IF NOT EXISTS permite_stock_negativo INTEGER NOT NULL DEFAULT 0
+		''');
+		await conexion.execute('''
+			CREATE TABLE IF NOT EXISTS almacenes (
+				id TEXT PRIMARY KEY,
+				nombre TEXT NOT NULL,
+				tienda_id TEXT,
+				activo INTEGER NOT NULL DEFAULT 1
+			)
+		''');
+		await conexion.execute('''
+			CREATE TABLE IF NOT EXISTS tipos_presentacion (
+				id TEXT PRIMARY KEY,
+				nombre TEXT NOT NULL,
+				unidad TEXT NOT NULL,
+				activo INTEGER NOT NULL DEFAULT 1
+			)
+		''');
 	}
 }
