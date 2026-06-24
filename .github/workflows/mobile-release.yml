@@ -140,15 +140,18 @@ jobs:
         env:
           IOS_CERT: ${{ secrets.IOS_DIST_CERTIFICATE_BASE64 }}
           IOS_PROFILE: ${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}
+          IOS_CERT_PASSWORD: ${{ secrets.IOS_DIST_CERTIFICATE_PASSWORD }}
+          IOS_PROFILE_NAME: ${{ secrets.IOS_PROVISION_PROFILE_NAME }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          if [ -z "$IOS_CERT" ] || [ -z "$IOS_PROFILE" ] || [ -z "$APPLE_TEAM_ID" ]; then
+          if [ -z "$IOS_CERT" ] || [ -z "$IOS_PROFILE" ] || [ -z "$IOS_CERT_PASSWORD" ] || \
+             [ -z "$IOS_PROFILE_NAME" ] || [ -z "$APPLE_TEAM_ID" ]; then
             if [ "${{ github.event_name }}" = "push" ]; then
               echo "::error::Secrets iOS incompletos para releases con tag."
               exit 1
             fi
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Secrets iOS incompletos. Configura IOS_DIST_CERTIFICATE_BASE64, IOS_DIST_CERTIFICATE_PASSWORD, IOS_PROVISION_PROFILE_BASE64, IOS_PROVISION_PROFILE_NAME y APPLE_TEAM_ID."
+            echo "::warning::Secrets iOS incompletos. Requeridos: IOS_DIST_CERTIFICATE_BASE64, IOS_DIST_CERTIFICATE_PASSWORD, IOS_PROVISION_PROFILE_BASE64, IOS_PROVISION_PROFILE_NAME, APPLE_TEAM_ID."
           else
             echo "configured=true" >> "$GITHUB_OUTPUT"
           fi
@@ -177,20 +180,84 @@ jobs:
           BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
+          set -euo pipefail
           KC_PASS="${KEYCHAIN_PASSWORD:-posia_ci_keychain}"
           CERTIFICATE_PATH="$RUNNER_TEMP/build_certificate.p12"
           PP_PATH="$RUNNER_TEMP/build_pp.mobileprovision"
           KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
-          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o "$CERTIFICATE_PATH"
-          echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o "$PP_PATH"
+
+          tr -d ' \n\r' <<< "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o "$CERTIFICATE_PATH"
+          tr -d ' \n\r' <<< "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o "$PP_PATH"
+
           security create-keychain -p "$KC_PASS" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KC_PASS" "$KEYCHAIN_PATH"
-          security import "$CERTIFICATE_PATH" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+
+          security import "$CERTIFICATE_PATH" -P "$P12_PASSWORD" -A -t cert -f pkcs12 \
+            -k "$KEYCHAIN_PATH" -T /usr/bin/codesign -T /usr/bin/security
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KC_PASS" "$KEYCHAIN_PATH"
-          security list-keychain -d user -s "$KEYCHAIN_PATH"
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          cp "$PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles
+
+          LOGIN_KEYCHAIN="$HOME/Library/Keychains/login.keychain-db"
+          security list-keychain -d user -s "$KEYCHAIN_PATH" "$LOGIN_KEYCHAIN"
+          security default-keychain -s "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KC_PASS" "$KEYCHAIN_PATH"
+
+          PP_UUID=$(security cms -D -i "$PP_PATH" | plutil -extract UUID raw -)
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$PP_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/${PP_UUID}.mobileprovision"
+
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+          echo "Identidades de firma disponibles:"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+          if ! security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -q "Apple Distribution"; then
+            echo "::error::No se encontro certificado Apple Distribution en el keychain. Verifica el .p12 y su contraseña."
+            exit 1
+          fi
+
+      - name: Configure Xcode manual signing
+        if: steps.signing.outputs.configured == 'true'
+        env:
+          APP_DIR: ${{ env.APP_DIR }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          IOS_PROVISION_PROFILE_NAME: ${{ secrets.IOS_PROVISION_PROFILE_NAME }}
+        run: |
+          set -euo pipefail
+          PBX="${{ env.APP_DIR }}/ios/Runner.xcodeproj/project.pbxproj"
+          sed -i '' \
+            -e 's/"CODE_SIGN_IDENTITY\[sdk=iphoneos\*\]" = "iPhone Developer"/"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution"/g' \
+            "$PBX"
+          python3 <<'PY'
+          import os
+          import re
+          pbx_path = os.path.join(os.environ["APP_DIR"], "ios/Runner.xcodeproj/project.pbxproj")
+          team = os.environ["APPLE_TEAM_ID"]
+          profile = os.environ["IOS_PROVISION_PROFILE_NAME"]
+          with open(pbx_path, "r", encoding="utf-8") as f:
+              content = f.read()
+          signing_block = (
+              f'\t\t\t\tCODE_SIGN_IDENTITY = "Apple Distribution";\n'
+              f'\t\t\t\tCODE_SIGN_STYLE = Manual;\n'
+              f'\t\t\t\tDEVELOPMENT_TEAM = {team};\n'
+              f'\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = "{profile}";\n'
+          )
+          def inject(match):
+              block = match.group(0)
+              if "PROVISIONING_PROFILE_SPECIFIER" in block:
+                  return block
+              return block.replace(
+                  "\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.posia.posiaPos;\n",
+                  "\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.posia.posiaPos;\n" + signing_block,
+              )
+          pattern = re.compile(
+              r"\t\t97C147071CF9000F007C117D /\* Release \*/ = \{.*?name = Release;\n\t\t\};|\t\t249021D4217E4FDB00AE95B9 /\* Profile \*/ = \{.*?name = Profile;\n\t\t\};",
+              re.S,
+          )
+          updated = pattern.sub(inject, content)
+          if updated == content:
+              raise SystemExit("No se pudo inyectar firma manual en Runner (Release/Profile)")
+          with open(pbx_path, "w", encoding="utf-8") as f:
+              f.write(updated)
+          PY
 
       - name: Prepare ExportOptions.plist
         if: steps.signing.outputs.configured == 'true'
@@ -208,6 +275,12 @@ jobs:
         env:
           POSIA_HUB_URL: ${{ secrets.POSIA_HUB_URL }}
           POSIA_HUB_API_KEY: ${{ secrets.POSIA_HUB_API_KEY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          IOS_PROVISION_PROFILE_NAME: ${{ secrets.IOS_PROVISION_PROFILE_NAME }}
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: Apple Distribution
+          DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
+          PROVISIONING_PROFILE_SPECIFIER: ${{ secrets.IOS_PROVISION_PROFILE_NAME }}
         run: |
           ARGS=""
           [ -n "$POSIA_HUB_URL" ] && ARGS="$ARGS --dart-define=POSIA_HUB_URL=$POSIA_HUB_URL"
