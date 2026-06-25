@@ -61,7 +61,7 @@ Future<bool> mostrarDialogoActualizarPrecioVenta({
 						if (precio == null || precio <= 0) {
 							ScaffoldMessenger.of(ctx).showSnackBar(
 								const SnackBar(
-									content: Text('Ingrese un precio valido'),
+									content: Text('Ingrese un precio válido'),
 									backgroundColor: PosiaColors.cancelar,
 								),
 							);
@@ -194,7 +194,7 @@ Future<void> mostrarDialogoPreciosPostCompra({
 								);
 								if (precio == null || precio <= 0) {
 									throw StateError(
-										'Precio invalido para ${linea.producto.nombre}',
+										'Precio inválido para ${linea.producto.nombre}',
 									);
 								}
 								if (!precioVentaEsValido(precio, linea.nuevoCosto)) {

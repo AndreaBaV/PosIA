@@ -30,7 +30,7 @@ String mensajePrecioMinimoInvalido(double costoUnitario) {
 	}
 	return 'El precio no puede ser menor a ${formatearMoneda(minimo)} '
 		'(costo ${formatearMoneda(costoUnitario)} + '
-		'utilidad minima $MARGEN_UTILIDAD_MINIMA_PORCENTAJE%)';
+		'utilidad mínima $MARGEN_UTILIDAD_MINIMA_PORCENTAJE%)';
 }
 
 /// Etiqueta legible del modo de calculo de utilidad.

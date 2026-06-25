@@ -59,7 +59,7 @@ final contenedorServiciosProvider = FutureProvider<ContenedorServicios>((ref) as
 	await ref.watch(estadoInicializacionProvider.future);
 	final usuario = ref.watch(sesionUsuarioProvider);
 	if (usuario == null) {
-		throw StateError('Inicie sesion para cargar servicios del tenant');
+		throw StateError('Inicie sesión para cargar servicios del tenant');
 	}
 	final tenantId = usuario.tenantId;
 	if (tenantId == null || tenantId.isEmpty) {

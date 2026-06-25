@@ -100,7 +100,7 @@ Future<String> construirTextoCotizacionPorId({
 }) async {
   final cotizacion = await servicioAdmin.obtenerCotizacion(cotizacionId);
   if (cotizacion == null) {
-    throw StateError('Cotizacion no encontrada');
+    throw StateError('Cotización no encontrada');
   }
   final tienda = await servicioAdmin.obtenerTiendaActiva();
   return construirTextoCotizacionGuardada(

@@ -1,35 +1,35 @@
-# POSIA — Punto de Venta Inteligente para Mexico
+# POSIA — Punto de Venta Inteligente para México
 
-POSIA es un sistema de punto de venta comercial, modular y offline-first, disenado para tiendas de abarrotes, farmacias y carnicerias en Mexico.
+POSIA es un sistema de punto de venta comercial, modular y offline-first, diseñado para tiendas de abarrotes, farmacias y carnicerías en México.
 
-## Caracteristicas principales
+## Características principales
 
-- Interfaz orientada a iconos para trabajadores con baja alfabetizacion
-- Administracion minimalista para duenos con baja alfabetizacion digital
+- Interfaz orientada a iconos para trabajadores con baja alfabetización
+- Administración minimalista para dueños con baja alfabetización digital
 - Multi-tienda con inventario compartido (hub central + sync LAN por sucursal)
 - Precios mayoreo y precios preferenciales por cliente
-- Licencia perpetua con modulos activables
+- Licencia perpetua con módulos activables
 - Hardware desacoplado mediante drivers plug-in
-- Funcionamiento offline con cola de sincronizacion
-- Categorias personalizables, corte de caja, historial de ventas
-- Gestion de clientes, vendedores, proveedores e inventario
+- Funcionamiento offline con cola de sincronización
+- Categorías personalizables, corte de caja, historial de ventas
+- Gestión de clientes, vendedores, proveedores e inventario
 
 ## Estructura del monorepo
 
 ```
 POSIA/
 ├── apps/
-│   └── posia_pos/          # Aplicacion de caja (Windows + Android)
+│   └── posia_pos/          # Aplicación de caja (Windows + Android)
 ├── packages/
 │   ├── posia_core/         # Dominio y contratos
 │   ├── posia_database/     # Persistencia SQLite local
 │   ├── posia_pricing/      # Motor de precios
 │   ├── posia_inventory/    # Inventario multi-tienda
-│   ├── posia_sync/         # Sincronizacion hub + LAN
-│   ├── posia_licensing/    # Validacion de licencia
+│   ├── posia_sync/         # Sincronización hub + LAN
+│   ├── posia_licensing/    # Validación de licencia
 │   ├── posia_hardware/     # Contratos de hardware
 │   └── posia_ui/           # Componentes visuales de caja
-├── docs/                   # Documentacion tecnica
+├── docs/                   # Documentación técnica
 ├── platform/               # Registro maestro de tenants + CLI aprovisionamiento
 │   └── tenant_registry/    # SQLite local → publica en Neon
 └── server/                 # Hub de sync (API + Postgres)
@@ -47,16 +47,16 @@ POSIA/
 
 - Flutter SDK >= 3.41.0
 - Dart SDK >= 3.11.0
-- Windows 10+ (caja de escritorio) o Android 8+ (caja movil)
+- Windows 10+ (caja de escritorio) o Android 8+ (caja móvil)
 
-## Inicio rapido
+## Inicio rápido
 
 ```bash
 # Instalar dependencias del workspace
 dart pub global activate melos
 melos bootstrap
 
-# Generar codigo de base de datos (Drift)
+# Generar código de base de datos (Drift)
 melos run build_runner
 
 # Ejecutar caja en Windows
@@ -70,6 +70,6 @@ Software comercial con licencia perpetua. Ver [docs/MANUAL_TECNICO.md](docs/MANU
 
 ## Autor
 
-Equipo POSIA — Matricula POSIA-2026-001
+Equipo POSIA — Matrícula POSIA-2026-001
 
-Fecha de creacion: 2026-06-07 18:30:00 (UTC-6)
+Fecha de creación: 2026-06-07 18:30:00 (UTC-6)

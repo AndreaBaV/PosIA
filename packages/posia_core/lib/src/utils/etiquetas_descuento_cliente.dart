@@ -26,9 +26,9 @@ String etiquetaCondicionDescuentoCliente(CondicionDescuentoCliente condicion) {
 		case CondicionDescuentoCliente.siempre:
 			return 'Siempre';
 		case CondicionDescuentoCliente.cantidadMinima:
-			return 'Cantidad minima';
+			return 'Cantidad mínima';
 		case CondicionDescuentoCliente.montoTicketMinimo:
-			return 'Monto minimo de ticket';
+			return 'Monto mínimo de ticket';
 	}
 }
 

@@ -55,7 +55,7 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 		if (!permiso.isGranted && mounted) {
 			setState(() {
 				_vozLista = false;
-				_errorVoz = 'Permiso de microfono denegado';
+				_errorVoz = 'Permiso de micrófono denegado';
 			});
 			return;
 		}
@@ -284,7 +284,7 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 								Padding(
 									padding: const EdgeInsets.only(top: 8.0),
 									child: Text(
-										_errorVoz ?? 'Microfono no disponible. Usa texto manual.',
+										_errorVoz ?? 'Micrófono no disponible. Usa texto manual.',
 										style: const TextStyle(fontSize: 12.0, color: PosiaColors.cancelar),
 										textAlign: TextAlign.center,
 									),

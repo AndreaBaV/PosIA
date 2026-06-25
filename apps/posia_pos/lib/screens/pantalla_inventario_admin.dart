@@ -354,7 +354,7 @@ class _PantallaInventarioAdminState extends ConsumerState<PantallaInventarioAdmi
 			}
 			ScaffoldMessenger.of(context).showSnackBar(
 				const SnackBar(
-					content: Text('Cantidad invalida'),
+					content: Text('Cantidad inválida'),
 					backgroundColor: PosiaColors.cancelar,
 				),
 			);

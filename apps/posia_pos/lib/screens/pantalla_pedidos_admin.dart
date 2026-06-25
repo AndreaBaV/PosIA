@@ -203,7 +203,7 @@ class _PantallaPedidosAdminState extends ConsumerState<PantallaPedidosAdmin>
 										controller: _telefonoEntregaController,
 										keyboardType: TextInputType.phone,
 										decoration: const InputDecoration(
-											labelText: 'Telefono *',
+											labelText: 'Teléfono *',
 											border: OutlineInputBorder(),
 										),
 									),
@@ -212,7 +212,7 @@ class _PantallaPedidosAdminState extends ConsumerState<PantallaPedidosAdmin>
 										controller: _direccionEntregaController,
 										maxLines: 2,
 										decoration: const InputDecoration(
-											labelText: 'Direccion de entrega *',
+											labelText: 'Dirección de entrega *',
 											border: OutlineInputBorder(),
 										),
 									),
@@ -229,7 +229,7 @@ class _PantallaPedidosAdminState extends ConsumerState<PantallaPedidosAdmin>
 											_metodoChip(MetodoPago.efectivo, 'Efectivo'),
 											_metodoChip(MetodoPago.tarjeta, 'Tarjeta'),
 											_metodoChip(MetodoPago.transferencia, 'Transferencia'),
-											_metodoChip(MetodoPago.credito, 'Credito'),
+											_metodoChip(MetodoPago.credito, 'Crédito'),
 										],
 									),
 									const SizedBox(height: 12.0),
@@ -509,13 +509,13 @@ class _PantallaPedidosAdminState extends ConsumerState<PantallaPedidosAdmin>
 								Text('Asignado a: ${pedido.asignadoAUsuarioNombre}'),
 							const Divider(height: 24.0),
 							_ListaDato('Entregar a', pedido.nombreEntrega),
-							_ListaDato('Telefono', pedido.telefonoEntrega),
-							_ListaDato('Direccion', pedido.direccionEntrega),
+							_ListaDato('Teléfono', pedido.telefonoEntrega),
+							_ListaDato('Dirección', pedido.direccionEntrega),
 							_ListaDato('Pago', etiquetaMetodoPago(pedido.metodoPago)),
 							if (pedido.esCredito)
 								_ListaDato(
-									'Credito',
-									'${pedido.creditoDias ?? '?'} dias'
+									'Crédito',
+									'${pedido.creditoDias ?? '?'} días'
 									'${pedido.creditoVenceEn != null ? ' · vence ${formatearFechaCredito(pedido.creditoVenceEn!.toLocal())}' : ''}',
 								),
 							_ListaDato('Total', formatearMoneda(pedido.total)),

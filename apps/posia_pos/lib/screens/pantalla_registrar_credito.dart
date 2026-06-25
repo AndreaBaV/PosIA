@@ -87,7 +87,7 @@ class _PantallaRegistrarCreditoState extends ConsumerState<PantallaRegistrarCred
 		final clientePendiente = clienteSeleccionado;
 
 		return Scaffold(
-			appBar: AppBar(title: const Text('Nuevo credito')),
+			appBar: AppBar(title: const Text('Nuevo crédito')),
 			body: ListView(
 				padding: const EdgeInsets.all(16.0),
 				children: [
@@ -97,8 +97,8 @@ class _PantallaRegistrarCreditoState extends ConsumerState<PantallaRegistrarCred
 					),
 					const SizedBox(height: 4.0),
 					const Text(
-						'Seleccione cliente y productos. Tambien puede fiar desde Caja '
-						'con metodo de pago "Credito".',
+						'Seleccione cliente y productos. También puede fiar desde Caja '
+						'con método de pago "Crédito".',
 						style: TextStyle(color: Colors.grey, fontSize: 13.0),
 					),
 					const SizedBox(height: 12.0),
@@ -120,7 +120,7 @@ class _PantallaRegistrarCreditoState extends ConsumerState<PantallaRegistrarCred
 										child: Text(
 											clientePuedeRecibirCredito(c)
 												? c.nombre
-												: '${c.nombre} (sin credito listo)',
+												: '${c.nombre} (sin crédito listo)',
 										),
 									),
 								),
@@ -148,7 +148,7 @@ class _PantallaRegistrarCreditoState extends ConsumerState<PantallaRegistrarCred
 						OutlinedButton.icon(
 							onPressed: () => _habilitarCreditoCliente(clientePendiente),
 							icon: const Icon(Icons.edit),
-							label: const Text('Completar datos y habilitar credito'),
+							label: const Text('Completar datos y habilitar crédito'),
 						),
 					],
 					const SizedBox(height: 16.0),
@@ -156,9 +156,9 @@ class _PantallaRegistrarCreditoState extends ConsumerState<PantallaRegistrarCred
 						controller: _diasCreditoController,
 						keyboardType: TextInputType.number,
 						decoration: const InputDecoration(
-							labelText: 'Dias para pagar',
+							labelText: 'Días para pagar',
 							border: OutlineInputBorder(),
-							suffixText: 'dias',
+							suffixText: 'días',
 						),
 					),
 					const SizedBox(height: 16.0),
@@ -187,7 +187,7 @@ class _PantallaRegistrarCreditoState extends ConsumerState<PantallaRegistrarCred
 									p.codigoBarras.contains(_filtroProducto);
 							}).toList();
 							if (filtrados.isEmpty) {
-								return const Text('Sin productos en catalogo');
+								return const Text('Sin productos en catálogo');
 							}
 							return Column(
 								children: filtrados.take(40).map((producto) {
@@ -278,7 +278,7 @@ class _PantallaRegistrarCreditoState extends ConsumerState<PantallaRegistrarCred
 								child: CircularProgressIndicator(strokeWidth: 2.0),
 							)
 							: const Icon(Icons.handshake),
-						label: const Text('Registrar credito'),
+						label: const Text('Registrar crédito'),
 					),
 				],
 			),
@@ -335,7 +335,7 @@ class _PantallaRegistrarCreditoState extends ConsumerState<PantallaRegistrarCred
 		if (dias <= 0) {
 			ScaffoldMessenger.of(context).showSnackBar(
 				const SnackBar(
-					content: Text('Indique dias de credito validos'),
+					content: Text('Indique días de crédito válidos'),
 					backgroundColor: PosiaColors.cancelar,
 				),
 			);
@@ -355,7 +355,7 @@ class _PantallaRegistrarCreditoState extends ConsumerState<PantallaRegistrarCred
 				}
 				ScaffoldMessenger.of(context).showSnackBar(
 					SnackBar(
-						content: Text('Cantidad invalida para ${producto.nombre}'),
+						content: Text('Cantidad inválida para ${producto.nombre}'),
 						backgroundColor: PosiaColors.cancelar,
 					),
 				);
@@ -394,7 +394,7 @@ class _PantallaRegistrarCreditoState extends ConsumerState<PantallaRegistrarCred
 			ScaffoldMessenger.of(context).showSnackBar(
 				SnackBar(
 					content: Text(
-						'Credito registrado: ${formatearMoneda(venta.total)}',
+						'Crédito registrado: ${formatearMoneda(venta.total)}',
 					),
 					backgroundColor: PosiaColors.cobrar,
 				),

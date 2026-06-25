@@ -302,14 +302,14 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 										),
 										_metodoChip(MetodoPago.mixto, 'Mixto', Icons.call_split),
 										if (_creditoDisponible)
-											_metodoChip(MetodoPago.credito, 'Credito', Icons.handshake),
+											_metodoChip(MetodoPago.credito, 'Crédito', Icons.handshake),
 									],
 								),
 								if (widget.cliente == null)
 									const Padding(
 										padding: EdgeInsets.only(top: 8.0),
 										child: Text(
-											'Seleccione un cliente para venta a credito.',
+											'Seleccione un cliente para venta a crédito.',
 											style: TextStyle(color: Colors.grey, fontSize: 12.0),
 										),
 									),
@@ -329,8 +329,8 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 									const SizedBox(height: 12.0),
 									_campoMontoLectura(
 										controlador: _diasCreditoCtrl,
-										etiqueta: 'Dias para pagar',
-										sufijo: 'dias',
+										etiqueta: 'Días para pagar',
+										sufijo: 'días',
 										activo: _campoMontoActivo == _CampoMontoCobro.diasCredito,
 										alSeleccionar: () =>
 											_seleccionarCampoMonto(_CampoMontoCobro.diasCredito),
@@ -513,7 +513,7 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 			if (!_creditoDisponible) {
 				ScaffoldMessenger.of(context).showSnackBar(
 					const SnackBar(
-						content: Text('No se puede otorgar credito con los datos actuales'),
+						content: Text('No se puede otorgar crédito con los datos actuales'),
 						backgroundColor: PosiaColors.cancelar,
 					),
 				);
@@ -522,7 +522,7 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 			if (_diasCredito <= 0) {
 				ScaffoldMessenger.of(context).showSnackBar(
 					const SnackBar(
-						content: Text('Indique dias de credito validos'),
+						content: Text('Indique días de crédito válidos'),
 						backgroundColor: PosiaColors.cancelar,
 					),
 				);

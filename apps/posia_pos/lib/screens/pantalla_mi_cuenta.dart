@@ -34,7 +34,7 @@ class _PantallaMiCuentaState extends ConsumerState<PantallaMiCuenta> {
 		final usuario = ref.watch(sesionUsuarioProvider);
 		if (usuario == null) {
 			return const Scaffold(
-				body: Center(child: Text('Sin sesion activa')),
+				body: Center(child: Text('Sin sesión activa')),
 			);
 		}
 		if (!_nombreInicializado) {
@@ -57,7 +57,7 @@ class _PantallaMiCuentaState extends ConsumerState<PantallaMiCuenta> {
 										style: Theme.of(context).textTheme.titleLarge,
 									),
 									const SizedBox(height: 8.0),
-									Text('Codigo: ${usuario.codigo}'),
+									Text('Código: ${usuario.codigo}'),
 									Text('Rol: ${PermisosUsuario.etiquetaRol(usuario.rol)}'),
 								],
 							),

@@ -67,7 +67,7 @@ class _PantallaCreditosPendientesState extends ConsumerState<PantallaCreditosPen
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Liquidar credito'),
+        title: const Text('Liquidar crédito'),
         content: Text(
           'Confirmar que el cliente pagó ${formatearMoneda(venta.total)} '
           'en una sola exhibición.',
@@ -98,7 +98,7 @@ class _PantallaCreditosPendientesState extends ConsumerState<PantallaCreditosPen
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Credito liquidado e impreso')),
+        const SnackBar(content: Text('Crédito liquidado e impreso')),
       );
     } catch (error) {
       if (!mounted) {
@@ -114,7 +114,7 @@ class _PantallaCreditosPendientesState extends ConsumerState<PantallaCreditosPen
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Creditos'),
+        title: const Text('Créditos'),
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: _recargar),
         ],
@@ -122,7 +122,7 @@ class _PantallaCreditosPendientesState extends ConsumerState<PantallaCreditosPen
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _abrirNuevoCredito,
         icon: const Icon(Icons.add),
-        label: const Text('Nuevo credito'),
+        label: const Text('Nuevo crédito'),
       ),
       body: _cargando
           ? const Center(child: CircularProgressIndicator())
@@ -136,13 +136,13 @@ class _PantallaCreditosPendientesState extends ConsumerState<PantallaCreditosPen
                     const Icon(Icons.account_balance_wallet_outlined, size: 56.0),
                     const SizedBox(height: 12.0),
                     const Text(
-                      'No hay creditos pendientes',
+                      'No hay créditos pendientes',
                       style: TextStyle(fontSize: 16.0),
                     ),
                     const SizedBox(height: 8.0),
                     const Text(
-                      'Registre un fiado con el boton "Nuevo credito" o desde Caja '
-                      'seleccionando cliente y pago a credito.',
+                      'Registre un fiado con el botón "Nuevo crédito" o desde Caja '
+                      'seleccionando cliente y pago a crédito.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.grey),
                     ),
@@ -150,7 +150,7 @@ class _PantallaCreditosPendientesState extends ConsumerState<PantallaCreditosPen
                     FilledButton.icon(
                       onPressed: _abrirNuevoCredito,
                       icon: const Icon(Icons.add),
-                      label: const Text('Nuevo credito'),
+                      label: const Text('Nuevo crédito'),
                     ),
                   ],
                 ),

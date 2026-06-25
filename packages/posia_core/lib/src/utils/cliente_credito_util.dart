@@ -23,10 +23,10 @@ List<String> camposFaltantesCredito(Cliente cliente) {
 		faltantes.add('nombre');
 	}
 	if (cliente.telefono.trim().isEmpty) {
-		faltantes.add('telefono');
+		faltantes.add('teléfono');
 	}
 	if (cliente.direccion.trim().isEmpty) {
-		faltantes.add('direccion');
+		faltantes.add('dirección');
 	}
 	return faltantes;
 }
@@ -34,21 +34,21 @@ List<String> camposFaltantesCredito(Cliente cliente) {
 /// Mensaje de error cuando no se puede fiar al cliente.
 String? validarClienteParaCredito(Cliente? cliente, {int? diasCredito}) {
 	if (cliente == null) {
-		return 'Seleccione un cliente para venta a credito';
+		return 'Seleccione un cliente para venta a crédito';
 	}
 	if (!cliente.creditoHabilitado) {
-		return 'El cliente no tiene credito habilitado';
+		return 'El cliente no tiene crédito habilitado';
 	}
 	if (!cliente.activo) {
-		return 'El cliente esta inactivo';
+		return 'El cliente está inactivo';
 	}
 	if (!clienteTieneDatosCredito(cliente)) {
 		final faltantes = camposFaltantesCredito(cliente);
-		return 'Complete ${faltantes.join(', ')} del cliente para otorgar credito';
+		return 'Complete ${faltantes.join(', ')} del cliente para otorgar crédito';
 	}
 	final dias = diasCredito ?? cliente.diasCredito;
 	if (dias <= 0) {
-		return 'Los dias de credito deben ser mayores a cero';
+		return 'Los días de crédito deben ser mayores a cero';
 	}
 	return null;
 }
@@ -75,6 +75,6 @@ String generarLeyendaCompromisoCredito({
 	required String nombreCliente,
 }) {
 	return 'El cliente $nombreCliente se compromete a pagar '
-		'${formatearMoneda(total)} en un plazo de $diasCredito dia(s), '
-		'a mas tardar el ${formatearFechaCredito(fechaVencimiento)}.';
+		'${formatearMoneda(total)} en un plazo de $diasCredito día(s), '
+		'a más tardar el ${formatearFechaCredito(fechaVencimiento)}.';
 }

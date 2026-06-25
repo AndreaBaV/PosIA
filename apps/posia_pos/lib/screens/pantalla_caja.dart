@@ -657,7 +657,7 @@ Future<void> ejecutarPonerEnEspera(BuildContext context, WidgetRef ref) async {
 	if (!servicio.carritoTieneLineas()) {
 		if (context.mounted) {
 			ScaffoldMessenger.of(context).showSnackBar(
-				const SnackBar(content: Text('El carrito esta vacio')),
+				const SnackBar(content: Text('El carrito está vacío')),
 			);
 		}
 		return;
@@ -690,7 +690,7 @@ Future<void> ejecutarPonerEnEspera(BuildContext context, WidgetRef ref) async {
 							controller: notasController,
 							decoration: const InputDecoration(
 								labelText: 'Referencia (opcional)',
-								hintText: 'Ej. Mesa 3, Juan, pedido telefono',
+								hintText: 'Ej. Mesa 3, Juan, pedido teléfono',
 								border: OutlineInputBorder(),
 							),
 						),
@@ -1093,7 +1093,7 @@ Future<void> ejecutarCobroCaja(BuildContext context, WidgetRef ref) async {
 			SnackBar(
 				content: Text(
 					esCredito
-						? 'Credito registrado · ${formatearMoneda(venta.total)}'
+						? 'Crédito registrado · ${formatearMoneda(venta.total)}'
 						: 'Venta completada · ${formatearMoneda(venta.total)}',
 				),
 				backgroundColor: PosiaColors.cobrar,
@@ -1132,7 +1132,7 @@ Future<void> ejecutarCotizacionCaja(BuildContext context, WidgetRef ref) async {
 			context: context,
 			builder: (dialogContext) => AlertDialog(
 				icon: const Icon(Icons.request_quote, color: PosiaColors.neutro, size: 56.0),
-				title: const Text('Cotizacion guardada'),
+				title: const Text('Cotización guardada'),
 				content: Text(
 					'Folio ${resultado.cotizacion.id.substring(0, 8).toUpperCase()}\n'
 					'${formatearMoneda(resultado.cotizacion.total)}',
@@ -1308,8 +1308,8 @@ class _BarraAccionesCaja extends ConsumerWidget {
 										subtitle: cliente.creditoHabilitado
 											? Text(
 												clientePuedeRecibirCredito(cliente)
-													? 'Credito · ${cliente.diasCredito} dias'
-													: 'Credito: faltan datos',
+													? 'Crédito · ${cliente.diasCredito} días'
+													: 'Crédito: faltan datos',
 												style: TextStyle(
 													fontSize: 12.0,
 													color: clientePuedeRecibirCredito(cliente)

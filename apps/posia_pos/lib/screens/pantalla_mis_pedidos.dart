@@ -96,13 +96,13 @@ class PantallaMisPedidos extends ConsumerWidget {
 							Text(etiquetaEstadoPedido(pedido.estado)),
 							const Divider(height: 24.0),
 							_DatoDetalle('Entregar a', pedido.nombreEntrega),
-							_DatoDetalle('Telefono', pedido.telefonoEntrega),
-							_DatoDetalle('Direccion', pedido.direccionEntrega),
+							_DatoDetalle('Teléfono', pedido.telefonoEntrega),
+							_DatoDetalle('Dirección', pedido.direccionEntrega),
 							_DatoDetalle('Pago', etiquetaMetodoPago(pedido.metodoPago)),
 							if (pedido.esCredito) ...[
 								_DatoDetalle(
-									'Credito',
-									'${pedido.creditoDias ?? '?'} dias'
+									'Crédito',
+									'${pedido.creditoDias ?? '?'} días'
 									'${pedido.creditoVenceEn != null ? ' · vence ${formatearFechaCredito(pedido.creditoVenceEn!.toLocal())}' : ''}',
 								),
 							],

@@ -317,7 +317,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 						border: const OutlineInputBorder(),
 						prefixText: '\$ ',
 						helperText: costo > 0
-							? 'Minimo permitido: ${formatearMoneda(minimo)}'
+							? 'Mínimo permitido: ${formatearMoneda(minimo)}'
 							: null,
 					),
 					onChanged: (_) => setState(() {}),

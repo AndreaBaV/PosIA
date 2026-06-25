@@ -18,7 +18,7 @@ Future<Cliente?> mostrarDialogoCompletarDatosCredito({
 	final resultado = await showDialog<Cliente>(
 		context: context,
 		builder: (ctx) => AlertDialog(
-			title: const Text('Datos para credito'),
+			title: const Text('Datos para crédito'),
 			content: SizedBox(
 				width: 420.0,
 				child: SingleChildScrollView(
@@ -29,7 +29,7 @@ Future<Cliente?> mostrarDialogoCompletarDatosCredito({
 							Text('Cliente: ${cliente.nombre}'),
 							const SizedBox(height: 8.0),
 							const Text(
-								'Para otorgar credito se requiere telefono y direccion.',
+								'Para otorgar crédito se requiere teléfono y dirección.',
 								style: TextStyle(color: Colors.grey),
 							),
 							const SizedBox(height: 12.0),
@@ -37,7 +37,7 @@ Future<Cliente?> mostrarDialogoCompletarDatosCredito({
 								controller: telefonoCtrl,
 								keyboardType: TextInputType.phone,
 								decoration: const InputDecoration(
-									labelText: 'Telefono *',
+									labelText: 'Teléfono *',
 									border: OutlineInputBorder(),
 								),
 							),
@@ -46,7 +46,7 @@ Future<Cliente?> mostrarDialogoCompletarDatosCredito({
 								controller: direccionCtrl,
 								maxLines: 2,
 								decoration: const InputDecoration(
-									labelText: 'Direccion *',
+									labelText: 'Dirección *',
 									border: OutlineInputBorder(),
 								),
 							),
@@ -55,9 +55,9 @@ Future<Cliente?> mostrarDialogoCompletarDatosCredito({
 								controller: diasCtrl,
 								keyboardType: TextInputType.number,
 								decoration: const InputDecoration(
-									labelText: 'Dias de credito (predeterminado)',
+									labelText: 'Días de crédito (predeterminado)',
 									border: OutlineInputBorder(),
-									suffixText: 'dias',
+									suffixText: 'días',
 								),
 							),
 						],
@@ -78,7 +78,7 @@ Future<Cliente?> mostrarDialogoCompletarDatosCredito({
 						if (telefono.isEmpty || direccion.isEmpty) {
 							ScaffoldMessenger.of(ctx).showSnackBar(
 								const SnackBar(
-									content: Text('Telefono y direccion son obligatorios'),
+									content: Text('Teléfono y dirección son obligatorios'),
 									backgroundColor: PosiaColors.cancelar,
 								),
 							);
@@ -87,7 +87,7 @@ Future<Cliente?> mostrarDialogoCompletarDatosCredito({
 						if (dias <= 0) {
 							ScaffoldMessenger.of(ctx).showSnackBar(
 								const SnackBar(
-									content: Text('Los dias de credito deben ser mayores a cero'),
+									content: Text('Los días de crédito deben ser mayores a cero'),
 									backgroundColor: PosiaColors.cancelar,
 								),
 							);

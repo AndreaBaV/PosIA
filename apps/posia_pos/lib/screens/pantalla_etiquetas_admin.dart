@@ -116,7 +116,7 @@ class _PantallaEtiquetasAdminState extends ConsumerState<PantallaEtiquetasAdmin>
 		final alto = double.tryParse(_altoCtrl.text.trim());
 		if (ancho == null || alto == null || ancho < 20 || alto < 15) {
 			ScaffoldMessenger.of(context).showSnackBar(
-				const SnackBar(content: Text('Tamano invalido (minimo 20 x 15 mm)')),
+				const SnackBar(content: Text('Tamaño inválido (mínimo 20 x 15 mm)')),
 			);
 			return;
 		}

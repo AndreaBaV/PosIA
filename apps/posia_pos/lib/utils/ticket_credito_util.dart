@@ -10,7 +10,7 @@ Future<List<String>> construirTextosPagareCredito({
   required ServicioAdmin servicioAdmin,
 }) async {
   if (venta.clienteId == null) {
-    throw StateError('La venta a credito requiere cliente');
+    throw StateError('La venta a crédito requiere cliente');
   }
   final cliente = await servicioAdmin.obtenerCliente(venta.clienteId!);
   if (cliente == null) {

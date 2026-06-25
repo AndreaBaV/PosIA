@@ -14,10 +14,10 @@ class ValidadorCodigoUsuario {
 	static String? validar(String codigo) {
 		final limpio = normalizar(codigo);
 		if (limpio.isEmpty) {
-			return 'El codigo es obligatorio';
+			return 'El código es obligatorio';
 		}
 		if (!_patron.hasMatch(limpio)) {
-			return 'Codigo invalido: usa 2-32 caracteres (letras, numeros, . _ -)';
+			return 'Código inválido: usa 2-32 caracteres (letras, números, . _ -)';
 		}
 		return null;
 	}

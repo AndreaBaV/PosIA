@@ -308,7 +308,7 @@ class _PantallaListasPreciosAdminState extends ConsumerState<PantallaListasPreci
 		}
 		if (disponibles.isEmpty) {
 			ScaffoldMessenger.of(context).showSnackBar(
-				const SnackBar(content: Text('Todos los productos ya estan en esta lista')),
+				const SnackBar(content: Text('Todos los productos ya están en esta lista')),
 			);
 			return;
 		}
@@ -367,7 +367,7 @@ class _PantallaListasPreciosAdminState extends ConsumerState<PantallaListasPreci
 								decoration: InputDecoration(
 									labelText: 'Precio en esta lista',
 									helperText:
-										'Minimo: ${formatearMoneda(calcularPrecioMinimoVenta(item.producto.costoUnitario))}',
+										'Mínimo: ${formatearMoneda(calcularPrecioMinimoVenta(item.producto.costoUnitario))}',
 									border: const OutlineInputBorder(),
 								),
 							),
@@ -439,7 +439,7 @@ class _PantallaListasPreciosAdminState extends ConsumerState<PantallaListasPreci
 				title: const Text('Quitar de la lista'),
 				content: Text(
 					'Quitar "${item.producto.nombre}" de esta lista?\n'
-					'El producto seguira en el catalogo.',
+					'El producto seguirá en el catálogo.',
 				),
 				actions: [
 					TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),

@@ -74,7 +74,7 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 												const SizedBox(width: 12.0),
 												Expanded(
 													child: Text(
-														'Cada persona entra con su codigo y PIN desde el celular o la caja. '
+														'Cada persona entra con su código y PIN desde el celular o la caja. '
 														'Sus ventas y tickets quedan a su nombre. '
 														'Usted puede crear cuentas y restablecer el PIN.',
 														style: Theme.of(context).textTheme.bodySmall,
@@ -145,10 +145,10 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 					child: Column(
 						crossAxisAlignment: CrossAxisAlignment.start,
 						children: [
-							Text('Codigo ${u.codigo} · $tiendaNombre'),
+							Text('Código ${u.codigo} · $tiendaNombre'),
 							if (u.rol != RolUsuario.administrador)
 								Text(
-									'Vende con codigo ${u.codigo} y PIN',
+									'Vende con código ${u.codigo} y PIN',
 									style: Theme.of(context).textTheme.bodySmall?.copyWith(
 										color: Colors.grey.shade700,
 									),
@@ -319,8 +319,8 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 												labelText: esEdicion ? 'Nuevo PIN (opcional)' : 'PIN inicial',
 												border: const OutlineInputBorder(),
 												helperText: esEdicion
-													? 'Deje vacio para mantener el PIN actual'
-													: '4 digitos para entrar desde el celular o la caja',
+													? 'Deje vacío para mantener el PIN actual'
+													: '4 dígitos para entrar desde el celular o la caja',
 											),
 										),
 										if (rolSeleccionado != RolUsuario.administrador) ...[

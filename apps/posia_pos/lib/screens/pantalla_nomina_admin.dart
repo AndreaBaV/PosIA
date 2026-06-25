@@ -27,7 +27,7 @@ class PantallaNominaAdmin extends ConsumerWidget {
 			),
 			body: periodosAsync.when(
 				data: (periodos) => periodos.isEmpty
-					? const Center(child: Text('Sin periodos. Calcule la nómina semanal.'))
+					? const Center(child: Text('Sin períodos. Calcule la nómina semanal.'))
 					: ListView.builder(
 						itemCount: periodos.length,
 						itemBuilder: (context, i) {

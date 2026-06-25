@@ -38,19 +38,19 @@ const List<DefinicionAtajoCaja> definicionesAtajosCaja = [
 	DefinicionAtajoCaja(
 		id: atajoAccionCobrar,
 		etiqueta: 'Cobrar',
-		descripcion: 'Abrir el dialogo de cobro desde caja',
+		descripcion: 'Abrir el diálogo de cobro desde caja',
 		valorPredeterminado: 'F2',
 	),
 	DefinicionAtajoCaja(
 		id: atajoAccionCreditos,
-		etiqueta: 'Creditos',
+		etiqueta: 'Créditos',
 		descripcion: 'Abrir pendientes por cobrar (Admin)',
 		valorPredeterminado: 'CTRL+T',
 	),
 	DefinicionAtajoCaja(
 		id: atajoAccionAdmin,
 		etiqueta: 'Panel Admin',
-		descripcion: 'Cambiar a la pestana de administracion',
+		descripcion: 'Cambiar a la pestaña de administración',
 		valorPredeterminado: 'CTRL+SHIFT+A',
 	),
 	DefinicionAtajoCaja(
@@ -68,13 +68,13 @@ const List<DefinicionAtajoCaja> definicionesAtajosCaja = [
 	DefinicionAtajoCaja(
 		id: atajoAccionCotizar,
 		etiqueta: 'Cotizar',
-		descripcion: 'Generar cotizacion del carrito',
+		descripcion: 'Generar cotización del carrito',
 		valorPredeterminado: 'CTRL+Q',
 	),
 	DefinicionAtajoCaja(
 		id: atajoAccionVaciarCarrito,
 		etiqueta: 'Vaciar carrito',
-		descripcion: 'Pedir confirmacion y vaciar el carrito',
+		descripcion: 'Pedir confirmación y vaciar el carrito',
 		valorPredeterminado: 'CTRL+DELETE',
 	),
 ];

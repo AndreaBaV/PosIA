@@ -226,7 +226,7 @@ class _PantallaTiendasAdminState extends ConsumerState<PantallaTiendasAdmin> {
 								controller: radioController,
 								keyboardType: TextInputType.number,
 								decoration: const InputDecoration(
-									labelText: 'Radio geocerca (metros)',
+									labelText: 'Radio de geocerca (metros)',
 								),
 							),
 						],
