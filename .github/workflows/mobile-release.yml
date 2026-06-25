@@ -241,13 +241,21 @@ jobs:
           flutter build ipa --release \
             --export-options-plist=ios/ExportOptions.plist \
             $ARGS
+          IPA_DIR="build/ios/ipa"
+          ls -la "$IPA_DIR"
+          if [ ! -f "$IPA_DIR/AppStoreInfo.plist" ]; then
+            echo "::error::No se genero AppStoreInfo.plist. Verifica generateAppStoreInformation en ios/ExportOptions.plist."
+            exit 1
+          fi
 
       - name: Upload IPA artifact
         if: steps.signing.outputs.configured == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: posia-ios-ipa
-          path: ${{ env.APP_DIR }}/build/ios/ipa/*.ipa
+          path: |
+            ${{ env.APP_DIR }}/build/ios/ipa/*.ipa
+            ${{ env.APP_DIR }}/build/ios/ipa/AppStoreInfo.plist
           if-no-files-found: error
           retention-days: 30
 
