@@ -178,7 +178,7 @@ jobs:
         with:
           p12-file-base64: ${{ secrets.IOS_DIST_CERTIFICATE_BASE64 }}
           p12-password: ${{ secrets.IOS_DIST_CERTIFICATE_PASSWORD }}
-          keychain: posia-build.keychain
+          keychain: posia-build
 
       - name: Install provisioning profile and signing xcconfig
         if: steps.signing.outputs.configured == 'true'
