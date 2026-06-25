@@ -31,6 +31,9 @@ build/
 **/*distribution*.key
 **/*.key
 
+# Firma iOS local / CI (generado en workflow, no commitear)
+**/ios/Flutter/Signing.xcconfig
+
 # Licencias comerciales por cliente
 **/*.lic
 
