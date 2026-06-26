@@ -176,7 +176,8 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 			),
 			body: categoriasAsync.when(
 				data: (categorias) {
-					_categoriaId ??= categorias.firstOrNull?.id;
+					final categoriasActivas = categorias.where((c) => c.activa);
+					_categoriaId ??= categoriasActivas.firstOrNull?.id;
 					return TabBarView(
 						controller: _tabs,
 						children: [
@@ -631,7 +632,9 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 
 	Future<void> _guardar(List<Categoria> categorias) async {
 		final nombre = _nombreController.text.trim();
-		if (nombre.isEmpty || _categoriaId == null) {
+		final categoriaValida = _categoriaId != null &&
+			categorias.any((c) => c.activa && c.id == _categoriaId);
+		if (nombre.isEmpty || !categoriaValida) {
 			ScaffoldMessenger.of(context).showSnackBar(
 				const SnackBar(
 					content: Text('Nombre y categoría son obligatorios'),
