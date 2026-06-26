@@ -34,6 +34,8 @@ build/
 # Firma iOS local / CI (generado en workflow, no commitear)
 **/ios/Flutter/Signing.xcconfig
 
+
+artifacts/
 # iOS App Store / Transporter (generados o locales, no commitear)
 **/ios/AppInfo.plist
 **/ios/AppStoreInfo.plist

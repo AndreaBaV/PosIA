@@ -124,7 +124,7 @@ String generarTextoTicket({
       nombreCliente.trim().isNotEmpty) {
     buffer
       ..writeln('----------------------------')
-      ..writeln('*** VENTA A CRÉDITO ***')
+      ..writeln('*** VENTA A CREDITO ***')
       ..writeln(
         generarLeyendaCompromisoCredito(
           total: venta.total,
@@ -133,9 +133,9 @@ String generarTextoTicket({
           nombreCliente: nombreCliente.trim(),
         ),
       )
-      ..writeln('Plazo: ${venta.creditoDias} día(s)')
+      ..writeln('Plazo: ${venta.creditoDias} dia(s)')
       ..writeln(
-        'Pagar a más tardar: ${formatearFechaCredito(venta.creditoVenceEn!.toLocal())}',
+        'Pagar a mas tardar: ${formatearFechaCredito(venta.creditoVenceEn!.toLocal())}',
       )
       ..writeln('Saldo pendiente: ${formatearMoneda(venta.total)}')
       ..writeln('----------------------------')
@@ -179,8 +179,8 @@ String generarTextoPagareCredito({
     ..writeln('----------------------------')
     ..writeln('DEUDOR')
     ..writeln('Nombre: $nombreCliente')
-    ..writeln('Teléfono: $telefonoCliente')
-    ..writeln('Dirección: $direccionCliente');
+    ..writeln('Telefono: $telefonoCliente')
+    ..writeln('Direccion: $direccionCliente');
   if (rfcCliente != null && rfcCliente.trim().isNotEmpty) {
     buffer.writeln('RFC: $rfcCliente');
   }
@@ -197,7 +197,7 @@ String generarTextoPagareCredito({
   buffer
     ..writeln('----------------------------')
     ..writeln('MONTO ADEUDADO: ${formatearMoneda(venta.total)}')
-    ..writeln('PAGO EN UNA SOLA EXHIBICIÓN');
+    ..writeln('PAGO EN UNA SOLA EXHIBICION');
   if (venta.creditoDias != null && venta.creditoVenceEn != null) {
     buffer.writeln(
       generarLeyendaCompromisoCredito(
@@ -280,7 +280,7 @@ String generarTextoLiquidacionCredito({
   String? telefonoCliente,
 }) {
   final buffer = StringBuffer()
-    ..writeln('=== LIQUIDACIÓN DE CRÉDITO ===')
+    ..writeln('=== LIQUIDACION DE CREDITO ===')
     ..writeln(nombreTienda);
   if (direccionTienda != null && direccionTienda.trim().isNotEmpty) {
     buffer.writeln(direccionTienda.trim());
@@ -290,15 +290,15 @@ String generarTextoLiquidacionCredito({
     ..writeln('Folio venta: ${venta.id.substring(0, 8).toUpperCase()}')
     ..writeln('Cliente: $nombreCliente');
   if (telefonoCliente != null && telefonoCliente.trim().isNotEmpty) {
-    buffer.writeln('Teléfono: $telefonoCliente');
+    buffer.writeln('Telefono: $telefonoCliente');
   }
   buffer
     ..writeln('----------------------------')
     ..writeln('MONTO LIQUIDADO: ${formatearMoneda(venta.total)}')
-    ..writeln('PAGO EN UNA SOLA EXHIBICIÓN')
-    ..writeln('Estado: CRÉDITO LIQUIDADO')
+    ..writeln('PAGO EN UNA SOLA EXHIBICION')
+    ..writeln('Estado: CREDITO LIQUIDADO')
     ..writeln(
-      'Fecha liquidación: ${_formatearFechaHora(venta.creditoLiquidadoEn ?? DateTime.now().toUtc())}',
+      'Fecha liquidacion: ${_formatearFechaHora(venta.creditoLiquidadoEn ?? DateTime.now().toUtc())}',
     )
     ..writeln('----------------------------')
     ..writeln('Gracias por su pago')

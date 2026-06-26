@@ -75,6 +75,6 @@ String generarLeyendaCompromisoCredito({
 	required String nombreCliente,
 }) {
 	return 'El cliente $nombreCliente se compromete a pagar '
-		'${formatearMoneda(total)} en un plazo de $diasCredito día(s), '
-		'a más tardar el ${formatearFechaCredito(fechaVencimiento)}.';
+		'${formatearMoneda(total)} en un plazo de $diasCredito dia(s), '
+		'a mas tardar el ${formatearFechaCredito(fechaVencimiento)}.';
 }
