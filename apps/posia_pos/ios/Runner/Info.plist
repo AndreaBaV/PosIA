@@ -32,6 +32,10 @@
 		<string>POSIA usa el microfono para registrar ventas por voz en caja.</string>
 		<key>NSLocationWhenInUseUsageDescription</key>
 		<string>POSIA valida tu ubicacion para registrar asistencia en la tienda.</string>
+		<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+		<string>POSIA valida tu ubicacion para registrar asistencia en la tienda.</string>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>POSIA puede acceder a la biblioteca de fotos para seleccionar archivos o compartir documentos de venta.</string>
 		<key>NSFaceIDUsageDescription</key>
 		<string>POSIA usa Face ID para confirmar tu identidad al marcar asistencia.</string>
 		<key>NSSpeechRecognitionUsageDescription</key>
