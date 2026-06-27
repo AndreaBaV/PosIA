@@ -340,6 +340,19 @@ jobs:
           uses-non-exempt-encryption: 'false'
           wait-for-processing: 'false'
 
+      - name: Install Apple Transporter
+        if: steps.signing.outputs.configured == 'true' && steps.asc_upload.outputs.method == 'password'
+        run: |
+          set -euo pipefail
+          if [ -x /usr/local/itms/bin/iTMSTransporter ]; then
+            /usr/local/itms/bin/iTMSTransporter -help >/dev/null
+            exit 0
+          fi
+          URL="https://itunesconnect.apple.com/WebObjects/iTunesConnect.woa/ra/resources/download/public/Transporter__OSX/bin/"
+          curl -fsSL "$URL" -o /tmp/itmstransporter.pkg
+          sudo installer -pkg /tmp/itmstransporter.pkg -target /
+          /usr/local/itms/bin/iTMSTransporter -help
+
       - name: Upload to TestFlight (Transporter)
         if: steps.signing.outputs.configured == 'true' && steps.asc_upload.outputs.method == 'password'
         env:
@@ -348,6 +361,11 @@ jobs:
           APPLE_ASC_PROVIDER: ${{ secrets.APPLE_ASC_PROVIDER }}
         run: |
           set -euo pipefail
+          TRANSPORTER=/usr/local/itms/bin/iTMSTransporter
+          if [ ! -x "$TRANSPORTER" ]; then
+            echo "::error::iTMSTransporter no instalado tras Install Apple Transporter"
+            exit 1
+          fi
           ARGS=(
             -m upload
             -assetFile "${{ steps.ipa.outputs.path }}"
@@ -359,7 +377,7 @@ jobs:
           if [ -n "$APPLE_ASC_PROVIDER" ]; then
             ARGS+=( -itc_provider "$APPLE_ASC_PROVIDER" )
           fi
-          xcrun iTMSTransporter "${ARGS[@]}"
+          "$TRANSPORTER" "${ARGS[@]}"
 
       - name: iOS skipped summary
         if: steps.signing.outputs.configured != 'true'
