@@ -42,7 +42,7 @@ artifacts/
 **/private_keys/
 **/.appstoreconnect/
 transporter*.log
-
+logTransporter/*
 # Licencias comerciales por cliente
 **/*.lic
 
