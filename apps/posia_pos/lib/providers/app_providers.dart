@@ -18,10 +18,17 @@ import 'package:posia_licensing/posia_licensing.dart';
 
 import '../bootstrap/inicializador_app.dart';
 import '../sync/sincronizador_automatico.dart';
+import '../services/gestor_sesion_persistente.dart';
 
 /// Estado de inicializacion de la aplicacion.
 final estadoInicializacionProvider = FutureProvider<void>((ref) async {
 	await InicializadorApp.preparar();
+});
+
+/// Restaura sesion persistida tras inicializar SQLite (sin pedir PIN de nuevo).
+final restauracionSesionProvider = FutureProvider<void>((ref) async {
+	await ref.watch(estadoInicializacionProvider.future);
+	await GestorSesionPersistente.restaurarSiExiste(ref);
 });
 
 /// Usuario autenticado en la sesion actual.

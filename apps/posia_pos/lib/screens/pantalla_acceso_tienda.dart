@@ -4,11 +4,11 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:posia_core/posia_core.dart';
-import 'package:posia_database/posia_database.dart';
 import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
+import '../services/gestor_sesion_persistente.dart';
 
 /// Permite al administrador elegir la tienda operativa de la sesion.
 class PantallaAccesoTienda extends ConsumerStatefulWidget {
@@ -30,10 +30,8 @@ class _PantallaAccesoTiendaState extends ConsumerState<PantallaAccesoTienda> {
 		return Scaffold(
 			backgroundColor: PosiaColors.fondo,
 			body: MarcoAutenticacion(
-				titulo: 'Selecciona tienda',
-				subtitulo: usuario == null
-					? 'Elige la sucursal donde operarás'
-					: '${usuario.nombre}, elige la sucursal donde operarás',
+				titulo: 'Tienda',
+				subtitulo: usuario == null ? '' : usuario.nombre,
 				etiquetaTienda: null,
 				icono: Icons.store,
 				contenido: tiendasAsync.when(
@@ -42,7 +40,7 @@ class _PantallaAccesoTiendaState extends ConsumerState<PantallaAccesoTienda> {
 							return const Card(
 								child: Padding(
 									padding: EdgeInsets.all(24.0),
-									child: Text('No hay tiendas activas configuradas'),
+									child: Text('Sin tiendas activas'),
 								),
 							);
 						}
@@ -80,7 +78,7 @@ class _PantallaAccesoTiendaState extends ConsumerState<PantallaAccesoTienda> {
 										),
 									)
 									: const Icon(Icons.check),
-								label: Text(_ingresando ? 'Conectando...' : 'Entrar a la caja'),
+								label: Text(_ingresando ? '…' : 'Continuar'),
 							),
 						),
 						TextButton.icon(
@@ -95,10 +93,7 @@ class _PantallaAccesoTiendaState extends ConsumerState<PantallaAccesoTienda> {
 	}
 
 	void _cerrarSesion() async {
-		await PosiaLocalDatabase.obtenerInstancia().liberarTenant();
-		ref.read(sesionUsuarioProvider.notifier).cerrar();
-		ref.read(sesionTiendaProvider.notifier).cerrar();
-		ref.invalidate(contenedorServiciosProvider);
+		await GestorSesionPersistente.cerrarSesion(ref);
 	}
 
 	Widget _listaTiendas(BuildContext context, List<Tienda> tiendas) {

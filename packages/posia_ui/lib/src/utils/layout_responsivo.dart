@@ -326,15 +326,17 @@ class _EncabezadoAutenticacion extends StatelessWidget {
 					),
 				),
 				const SizedBox(height: 8.0),
-				Text(
-					subtitulo,
-					textAlign: TextAlign.center,
-					style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-						color: Theme.of(context).colorScheme.outline,
+				if (subtitulo.isNotEmpty)
+					Text(
+						subtitulo,
+						textAlign: TextAlign.center,
+						style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+							color: Theme.of(context).colorScheme.outline,
+						),
 					),
-				),
-				if (etiquetaTienda != null) ...[
-					const SizedBox(height: 12.0),
+				if (subtitulo.isNotEmpty && etiquetaTienda != null) const SizedBox(height: 12.0),
+				if (subtitulo.isEmpty && etiquetaTienda != null) const SizedBox(height: 8.0),
+				if (etiquetaTienda != null)
 					Chip(
 						avatar: const Icon(Icons.storefront, size: 18.0, color: PosiaColors.cobrar),
 						label: Text(
@@ -344,7 +346,6 @@ class _EncabezadoAutenticacion extends StatelessWidget {
 						backgroundColor: PosiaColors.cobrar.withValues(alpha: 0.08),
 						side: BorderSide(color: PosiaColors.cobrar.withValues(alpha: 0.25)),
 					),
-				],
 			],
 		);
 	}

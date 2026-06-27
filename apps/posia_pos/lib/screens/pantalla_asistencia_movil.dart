@@ -1,4 +1,4 @@
-/// Asistencia movil: PIN + GPS o geocerca + Face ID.
+/// Asistencia móvil: PIN, GPS y biometría.
 library;
 
 import 'package:flutter/material.dart';
@@ -10,6 +10,7 @@ import 'package:posia_core/posia_core.dart';
 import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/app_providers.dart';
+import '../util/teclado_util.dart';
 
 class PantallaAsistenciaMovil extends ConsumerStatefulWidget {
 	const PantallaAsistenciaMovil({super.key});
@@ -21,6 +22,7 @@ class PantallaAsistenciaMovil extends ConsumerStatefulWidget {
 
 class _PantallaAsistenciaMovilState extends ConsumerState<PantallaAsistenciaMovil> {
 	final _pinController = TextEditingController();
+	final _pinFocus = FocusNode();
 	final _localAuth = LocalAuthentication();
 	RegistroAsistencia? _entradaAbierta;
 	bool _cargando = false;
@@ -28,12 +30,14 @@ class _PantallaAsistenciaMovilState extends ConsumerState<PantallaAsistenciaMovi
 	@override
 	void initState() {
 		super.initState();
+		_pinFocus.addListener(() => setState(() {}));
 		WidgetsBinding.instance.addPostFrameCallback((_) => _cargarEstado());
 	}
 
 	@override
 	void dispose() {
 		_pinController.dispose();
+		_pinFocus.dispose();
 		super.dispose();
 	}
 
@@ -54,11 +58,11 @@ class _PantallaAsistenciaMovilState extends ConsumerState<PantallaAsistenciaMovi
 	Future<Position?> _obtenerUbicacion() async {
 		final permiso = await Permission.locationWhenInUse.request();
 		if (!permiso.isGranted) {
-			throw StateError('Permiso de ubicación requerido');
+			throw StateError('Ubicación requerida');
 		}
 		final servicio = await Geolocator.isLocationServiceEnabled();
 		if (!servicio) {
-			throw StateError('Active el GPS del teléfono');
+			throw StateError('Activa el GPS');
 		}
 		return Geolocator.getCurrentPosition(
 			locationSettings: const LocationSettings(
@@ -95,6 +99,7 @@ class _PantallaAsistenciaMovilState extends ConsumerState<PantallaAsistenciaMovi
 				const SnackBar(
 					content: Text('Entrada registrada'),
 					backgroundColor: PosiaColors.cobrar,
+					duration: Duration(seconds: 2),
 				),
 			);
 		} catch (error) {
@@ -122,12 +127,12 @@ class _PantallaAsistenciaMovilState extends ConsumerState<PantallaAsistenciaMovi
 				return;
 			}
 			ScaffoldMessenger.of(context).showSnackBar(
-				const SnackBar(content: Text('Biometría no disponible en este dispositivo')),
+				const SnackBar(content: Text('Biometría no disponible')),
 			);
 			return;
 		}
 		final ok = await _localAuth.authenticate(
-			localizedReason: 'Confirme su identidad para marcar entrada',
+			localizedReason: 'Confirma tu identidad',
 		);
 		if (!ok) {
 			return;
@@ -152,6 +157,7 @@ class _PantallaAsistenciaMovilState extends ConsumerState<PantallaAsistenciaMovi
 				const SnackBar(
 					content: Text('Entrada registrada'),
 					backgroundColor: PosiaColors.cobrar,
+					duration: Duration(seconds: 2),
 				),
 			);
 		} catch (error) {
@@ -182,7 +188,10 @@ class _PantallaAsistenciaMovilState extends ConsumerState<PantallaAsistenciaMovi
 				return;
 			}
 			ScaffoldMessenger.of(context).showSnackBar(
-				const SnackBar(content: Text('Salida registrada')),
+				const SnackBar(
+					content: Text('Salida registrada'),
+					duration: Duration(seconds: 2),
+				),
 			);
 		} catch (error) {
 			if (!mounted) {
@@ -201,76 +210,102 @@ class _PantallaAsistenciaMovilState extends ConsumerState<PantallaAsistenciaMovi
 	@override
 	Widget build(BuildContext context) {
 		final abierta = _entradaAbierta;
-		return Scaffold(
-			appBar: AppBar(title: const Text('Mi asistencia')),
-			body: Padding(
-				padding: const EdgeInsets.all(16),
-				child: abierta != null
-					? Column(
-						mainAxisAlignment: MainAxisAlignment.center,
-						children: [
-							const Icon(Icons.check_circle, color: PosiaColors.cobrar, size: 72),
-							const SizedBox(height: 16),
-							Text(
-								'Entrada: ${abierta.entradaEn.toLocal().toString().substring(11, 16)}',
-								style: Theme.of(context).textTheme.titleLarge,
-							),
-							const SizedBox(height: 24),
-							FilledButton.icon(
-								onPressed: _cargando ? null : _registrarSalida,
-								icon: const Icon(Icons.logout),
-								label: const Text('Registrar salida'),
-							),
-						],
-					)
-					: ListView(
-						children: [
-							const Text(
-								'Modo PIN',
-								style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-							),
-							const SizedBox(height: 8),
-							const Text(
-								'Ingrese el PIN de 4 dígitos que muestra la laptop del administrador.',
-							),
-							const SizedBox(height: 12),
-							TextField(
-								controller: _pinController,
-								keyboardType: TextInputType.number,
-								maxLength: 4,
-								decoration: const InputDecoration(
-									labelText: 'PIN',
-									border: OutlineInputBorder(),
-									counterText: '',
+		return GestureDetector(
+			onTap: () => ocultarTeclado(context),
+			child: Scaffold(
+				appBar: AppBar(title: const Text('Asistencia')),
+				body: Padding(
+					padding: const EdgeInsets.all(16.0),
+					child: abierta != null
+						? Column(
+							mainAxisAlignment: MainAxisAlignment.center,
+							children: [
+								const Icon(Icons.check_circle, color: PosiaColors.cobrar, size: 72.0),
+								const SizedBox(height: 12.0),
+								Text(
+									abierta.entradaEn.toLocal().toString().substring(11, 16),
+									style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+										fontWeight: FontWeight.bold,
+									),
 								),
-							),
-							FilledButton(
-								onPressed: _cargando ? null : _entradaConPin,
-								child: _cargando
-									? const SizedBox(
-										height: 20,
-										width: 20,
-										child: CircularProgressIndicator(strokeWidth: 2),
-									)
-									: const Text('Marcar entrada con PIN'),
-							),
-							const Divider(height: 40),
-							const Text(
-								'Modo automático',
-								style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-							),
-							const SizedBox(height: 8),
-							const Text(
-								'Use Face ID o huella del teléfono cuando esté cerca de la tienda.',
-							),
-							const SizedBox(height: 12),
-							OutlinedButton.icon(
-								onPressed: _cargando ? null : _entradaBiometrica,
-								icon: const Icon(Icons.fingerprint),
-								label: const Text('Entrada con biometría'),
-							),
-						],
-					),
+								const SizedBox(height: 24.0),
+								FilledButton.icon(
+									onPressed: _cargando ? null : _registrarSalida,
+									icon: const Icon(Icons.logout),
+									label: const Text('Salida'),
+								),
+							],
+						)
+						: Column(
+							children: [
+								Expanded(
+									child: Column(
+										mainAxisAlignment: MainAxisAlignment.center,
+										children: [
+											OutlinedButton.icon(
+												onPressed: _cargando ? null : _entradaBiometrica,
+												icon: const Icon(Icons.fingerprint, size: 28.0),
+												label: const Text('Entrada biométrica'),
+												style: OutlinedButton.styleFrom(
+													minimumSize: const Size(double.infinity, 56.0),
+												),
+											),
+											const SizedBox(height: 24.0),
+											const Row(
+												children: [
+													Expanded(child: Divider()),
+													Padding(
+														padding: EdgeInsets.symmetric(horizontal: 10.0),
+														child: Text('o', style: TextStyle(color: Colors.grey)),
+													),
+													Expanded(child: Divider()),
+												],
+											),
+											const SizedBox(height: 24.0),
+											TextField(
+												controller: _pinController,
+												focusNode: _pinFocus,
+												keyboardType: TextInputType.number,
+												maxLength: 4,
+												textAlign: TextAlign.center,
+												style: const TextStyle(
+													fontSize: 24.0,
+													letterSpacing: 8.0,
+													fontWeight: FontWeight.bold,
+												),
+												decoration: InputDecoration(
+													labelText: 'PIN',
+													border: const OutlineInputBorder(),
+													counterText: '',
+													suffixIcon: _pinFocus.hasFocus
+														? IconButton(
+															icon: const Icon(Icons.keyboard_hide),
+															tooltip: 'Ocultar teclado',
+															onPressed: () => ocultarTeclado(context),
+														)
+														: null,
+												),
+											),
+										],
+									),
+								),
+								SizedBox(
+									width: double.infinity,
+									height: 48.0,
+									child: FilledButton(
+										onPressed: _cargando ? null : _entradaConPin,
+										child: _cargando
+											? const SizedBox(
+												height: 20.0,
+												width: 20.0,
+												child: CircularProgressIndicator(strokeWidth: 2.0),
+											)
+											: const Text('Entrada con PIN'),
+									),
+								),
+							],
+						),
+				),
 			),
 		);
 	}

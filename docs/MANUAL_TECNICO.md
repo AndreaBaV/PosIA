@@ -498,6 +498,30 @@ Artefactos: `posia-android-aab`, `posia-android-apk`, `posia-ios-ipa`
 | `APPLE_TEAM_ID` | Team ID (10 caracteres) |
 | `KEYCHAIN_PASSWORD` | String cualquiera (CI) |
 
+**TestFlight (subida automática tras compilar el IPA):**
+
+Opción A — **recomendada** (API Key, sin contraseña de aplicación):
+
+| Secret | Valor |
+|--------|-------|
+| `APPLE_ISSUER_ID` | Issuer ID en App Store Connect → Usuarios y acceso → Integraciones → Claves API |
+| `APPLE_API_KEY_ID` | Key ID de la clave API (ej. `AB12CD34EF`) |
+| `APPLE_API_PRIVATE_KEY` | Contenido completo del archivo `.p8` (incluye `-----BEGIN PRIVATE KEY-----`) |
+
+Crear la clave en App Store Connect con rol **App Manager** o **Admin** y permiso de subida de builds.
+
+Opción B — **contraseña de aplicación** (como Transporter manual):
+
+| Secret | Valor |
+|--------|-------|
+| `APPLE_ID` | Apple ID del desarrollador (correo) |
+| `APPLE_APP_SPECIFIC_PASSWORD` | Contraseña de aplicación generada en appleid.apple.com |
+| `APPLE_ASC_PROVIDER` | *(Opcional)* Provider short name si tienes varias cuentas (ej. `Z6WHV5G6M3`) |
+
+Si configuras ambas opciones, el workflow usa la **API Key** (opción A).
+
+Tras un release con tag `mobile-v*` o un run manual con `platform: ios` / `all`, el job **iOS IPA** sube el build a TestFlight automáticamente. En App Store Connect → TestFlight aparece en unos minutos (procesamiento de Apple).
+
 Codificar en PowerShell:
 
 ```powershell
@@ -505,15 +529,17 @@ Codificar en PowerShell:
 [Convert]::ToBase64String([IO.File]::ReadAllBytes('POSIA_AppStore.mobileprovision'))
 ```
 
-### Prueba en iPhone (TestFlight, sin Mac)
+### Prueba en iPhone (TestFlight)
 
 1. Apple Developer → App ID `com.posia.posiaPos` → certificado Distribution → perfil App Store
-2. Configurar secrets en GitHub
-3. Actions → Mobile Release → `platform: ios`
-4. Descargar artefacto `posia-ios-ipa`
-5. Subir con [Transporter](https://apps.apple.com/app/transporter/id1450874784)
-6. App Store Connect → TestFlight → tester interno
-7. Instalar vía app TestFlight en el iPhone
+2. Configurar secrets de firma iOS y **TestFlight** (§11) en GitHub
+3. Publicar release:
+   - Tag: `git tag mobile-v1.0.0 && git push origin mobile-v1.0.0`, o
+   - Actions → **Mobile Release** → `platform: ios`
+4. El workflow compila el IPA y **lo sube a TestFlight** automáticamente
+5. App Store Connect → TestFlight → tester interno → instalar con la app TestFlight
+
+**Subida manual (opcional):** descarga el artefacto `posia-ios-ipa` y usa [Transporter](https://apps.apple.com/app/transporter/id1450874784) si no configuraste secrets de TestFlight.
 
 **Ad Hoc:** registrar UDID, perfil Ad Hoc, cambiar `ios/ExportOptions.plist` → `method: ad-hoc`.
 

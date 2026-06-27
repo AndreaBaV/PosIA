@@ -34,6 +34,7 @@ class PosiaApp extends ConsumerWidget {
 	@override
 	Widget build(BuildContext context, WidgetRef ref) {
 		final inicializado = ref.watch(estadoInicializacionProvider);
+		final sesionRestaurada = ref.watch(restauracionSesionProvider);
 		final instalacionAsync = ref.watch(instalacionCompletaProvider);
 		final tiendaConfirmada = ref.watch(sesionTiendaProvider);
 		final usuario = ref.watch(sesionUsuarioProvider);
@@ -45,7 +46,8 @@ class PosiaApp extends ConsumerWidget {
 			debugShowCheckedModeBanner: false,
 			theme: PosiaTheme.construirTema(),
 			home: inicializado.when(
-				data: (_) => instalacionAsync.when(
+				data: (_) => sesionRestaurada.when(
+					data: (_) => instalacionAsync.when(
 					data: (instalacionLista) {
 						if (!instalacionLista && usuario == null) {
 							return const PantallaInstalacionTecnico();
@@ -58,6 +60,9 @@ class PosiaApp extends ConsumerWidget {
 						}
 						return const PantallaInicio();
 					},
+					loading: () => const _PantallaCarga(),
+					error: (error, _) => _PantallaError(mensaje: error.toString()),
+				),
 					loading: () => const _PantallaCarga(),
 					error: (error, _) => _PantallaError(mensaje: error.toString()),
 				),

@@ -64,15 +64,9 @@ class PanelCarrito extends StatelessWidget {
 										crossAxisAlignment: CrossAxisAlignment.start,
 										children: [
 											Text(
-												'Carrito',
+												'${lineas.length}',
 												style: Theme.of(context).textTheme.titleMedium?.copyWith(
 													fontWeight: FontWeight.bold,
-												),
-											),
-											Text(
-												'${lineas.length} artículo(s)',
-												style: Theme.of(context).textTheme.bodySmall?.copyWith(
-													color: Colors.grey.shade600,
 												),
 											),
 										],
@@ -113,7 +107,7 @@ class PanelCarrito extends StatelessWidget {
 														),
 														SizedBox(height: compacto ? 4.0 : 8.0),
 														Text(
-															'Carrito vacío',
+															'Vacío',
 															style: (compacto
 																	? Theme.of(context).textTheme.bodyMedium
 																	: Theme.of(context).textTheme.titleSmall)
@@ -122,16 +116,6 @@ class PanelCarrito extends StatelessWidget {
 																	fontWeight: FontWeight.w600,
 																),
 														),
-														if (!compacto) ...[
-															const SizedBox(height: 2.0),
-															Text(
-																'Toca un producto o escanea',
-																style: TextStyle(
-																	color: Colors.grey.shade500,
-																	fontSize: 12.0,
-																),
-															),
-														],
 													],
 												),
 											),

@@ -1,0 +1,331 @@
+$ Remove-Item -Recurse -Force "$env:USERPROFILE\.itmstransporter" -ErrorAction SilentlyContinue
+
+& "C:\Program Files (x86)\itms\iTMSTransporter.cmd" -m upload `
+  -assetFile "c:\Users\andyb\ProyectosPersonales2026\POSIA\artifacts\POSIA.ipa" `
+  -assetDescription "c:\Users\andyb\ProyectosPersonales2026\POSIA\artifacts\AppStoreInfo.plist" `
+  -u "andrea.bahena1011@icloud.com" `
+  -p "byqj-xdvt-frfd-pvft" `
+  -itc_provider "Z6WHV5G6M3" `
+  -v informational 2>&1
+iTMSTransporter.cmd : [2026-06-26 10:25:28 CST] <pool-1-thread-1>  INFO: Using embedded TrustStore
+En C:\Users\andyb\AppData\Local\Temp\ps-script-41106806-733e-4d75-9d3d-70e82e7873ca.ps1: 115 Car�cter: 1
++ & "C:\Program Files (x86)\itms\iTMSTransporter.cmd" -m upload `
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([2026-06-26 10:...dded TrustStore:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+[2026-06-26 10:25:28 CST] <main> DEBUG: Setting System property: DataCenters = 
+contentdelivery01.itunes.apple.com,contentdelivery02.itunes.apple.com
+[2026-06-26 10:25:28 CST] <main> DEBUG: Setting System property: DataCenters.host = contentdelivery01.itunes.apple.com
+[2026-06-26 10:25:28 CST] <main> DEBUG: Setting System property: DataCenters.setBy = Defaults.properties
+[2026-06-26 10:25:30 CST] <main>  INFO: Configuring logging...
+[2026-06-26 10:25:30 CST] <main>  INFO: Logging level set to informational
+[2026-06-26 10:25:33 CST] <main> DEBUG: SMART-CLIENT: initializing data center locking ops: [authenticateForSession, 
+validateAssets]
+[2026-06-26 10:25:33 CST] <main> DEBUG: SMART-CLIENT: initializing data centers with: 
+[contentdelivery01.itunes.apple.com, contentdelivery02.itunes.apple.com]
+[2026-06-26 10:25:33 CST] <main> DEBUG: TempFileManager activated at C:\Users\andyb\.itmstransporter\temp
+[2026-06-26 10:25:34 CST] <main>  INFO: iTMSTransporter : iTunes Store Transporter [4.2.0]
+[2026-06-26 10:25:34 CST] <main>  INFO: OS identifier: Windows 11 10.0 (amd64); jvm=21.0.5+11-LTS; jre=21.0.5+11-LTS
+[2026-06-26 10:25:34 CST] <main>  INFO: Memory: [JVM] 941M free, 1G total, 2G max [System] (Physical) 792M free, 8G 
+total (Swap) 9G free, 28G total
+[2026-06-26 10:25:34 CST] <main> DBG-X: Memory: [JVM] 940M free, 1G total, 2G max [System] (Physical) 786M free, 8G 
+total (Swap) 9G free, 28G total
+[2026-06-26 10:25:34 CST] <main> DBG-X: Using operation named: authenticateForSession
+[2026-06-26 10:25:34 CST] <main> DBG-X: Apple's web service operation input parameters:
+[2026-06-26 10:25:34 CST] <main> DBG-X:   parameter Application = iTMSTransporter
+[2026-06-26 10:25:34 CST] <main> DBG-X:   parameter BaseVersion = 4.2.0
+[2026-06-26 10:25:34 CST] <main> DBG-X:   parameter IncludeProviderPublicId = true
+[2026-06-26 10:25:34 CST] <main> DBG-X:   parameter ItcProviderName = Z6WHV5G6M3
+[2026-06-26 10:25:34 CST] <main> DBG-X:   parameter OSIdentifier = Windows 11 10.0 (amd64); jvm=21.0.5+11-LTS; 
+jre=21.0.5+11-LTS
+[2026-06-26 10:25:34 CST] <main> DBG-X:   parameter StatisticsClientStartDateTimeZoneISO = 2026-06-26T10:25:34-06:00
+[2026-06-26 10:25:34 CST] <main> DBG-X:   parameter StatisticsPreviousCallDurationInSecs = 0.4202696
+[2026-06-26 10:25:34 CST] <main> DBG-X:   parameter TransporterArguments = -m upload -assetFile 
+c:\Users\andyb\ProyectosPersonales2026\POSIA\artifacts\POSIA.ipa -assetDescription 
+c:\Users\andyb\ProyectosPersonales2026\POSIA\artifacts\AppStoreInfo.plist -u andrea.bahena1011@icloud.com -p **hidden 
+value** -itc_provider Z6WHV5G6M3 -v informational -callerPWD C:\Users\andyb\ProyectosPersonales2026\POSIA
+[2026-06-26 10:25:34 CST] <main> DBG-X:   parameter Version = 4.2.0
+[2026-06-26 10:25:34 CST] <main> DBG-X:   parameter iTMSTransporterMode = upload
+[2026-06-26 10:25:34 CST] <main>  INFO: id = 20260626102534-726
+[2026-06-26 10:25:34 CST] <main> DEBUG: SMART-CLIENT: getCurrent(); current data center is null
+[2026-06-26 10:25:34 CST] <main> DEBUG: SMART-CLIENT: getCurrent(); iterator was null, setting it
+[2026-06-26 10:25:34 CST] <main> DEBUG: SMART-CLIENT: getCurrent(); setting current data center to: 
+contentdelivery01.itunes.apple.com
+[2026-06-26 10:25:34 CST] <main>  INFO: iTMSTransporter Correlation Key: 92603c7b-e613-4e03-b14d-22b96390621f-0001
+[2026-06-26 10:25:34 CST] <main> DEBUG: SMART-CLIENT: Host HTTP header: contentdelivery01.itunes.apple.com
+[2026-06-26 10:25:34 CST] <main> DEBUG:   Request: POST /WebObjects/MZLabelService.woa/json/MZITunesProducerService 
+HTTP/1.1 (authenticateForSession)
+[2026-06-26 10:25:34 CST] <main> DEBUG: SMART-CLIENT: pinning data center to: contentdelivery01.itunes.apple.com
+[2026-06-26 10:25:34 CST] <main> DBG-X: Apple's web service operation return value:
+[2026-06-26 10:25:34 CST] <main> DBG-X:   parameter SharedSecret = **hidden value**
+[2026-06-26 10:25:34 CST] <main> DBG-X:   parameter MultipartUploadsEnabled = true
+[2026-06-26 10:25:34 CST] <main> DBG-X:   parameter AllowedPlatforms = [{validationMethod=iap, displayName=In-App 
+Purchase, type=3, serverID=InAppPurchase}, {restApiPlatformEnum=MAC_OS, validationMethod=osx, 
+platformCriteria={plistEntries={LSMinimumSystemVersion=}}, displayName=macOS App, sdkID=com.apple.platform.macosx, 
+xmlIDAliases=[macos], restApiPlatformUTI=com.apple.pkg, type=2, xmlID=osx, serverID=Firenze, 
+platformDirectory=MacOSX.platform}, {restApiPlatformEnum=IOS, validationMethod=ios, 
+platformCriteria={plistEntries={MinimumOSVersion=, LSRequiresIPhoneOS=}}, displayName=iOS App, 
+sdkID=com.apple.platform.iphoneos, restApiPlatformUTI=com.apple.ipa, type=1, xmlID=ios, serverID=Purple, 
+platformDirectory=iPhoneOS.platform}, {validationMethod=ios, displayName=watchOS, sdkID=com.apple.platform.watchos, 
+type=6, platformDirectory=WatchOS.platform}, {restApiPlatformEnum=VISION_OS, validationMethod=xros, 
+platformCriteria={plistEntries={UIDeviceFamily=7}}, displayName=visionOS App, sdkID=com.apple.platform.xros, 
+xmlIDAliases=[visionos], restApiPlatformUTI=com.apple.ipa, type=7, xmlID=xros, serverID=XROS, 
+platformDirectory=XROS.platform}, {restApiPlatformEnum=TV_OS, validationMethod=ios, 
+platformCriteria={plistEntries={UIDeviceFamily=3}}, displayName=tvOS App, sdkID=com.apple.platform.appletvos, 
+restApiPlatformUTI=com.apple.ipa, type=4, xmlID=appletvos, serverID=AppleTVOS, platformDirectory=AppleTVOS.platform}]
+[2026-06-26 10:25:34 CST] <main> DBG-X:   parameter TxHeaders = {jenga=true}
+[2026-06-26 10:25:34 CST] <main> DBG-X:   parameter ProviderPublicIds = 
+{Z6WHV5G6M3=3ac5587b-48dd-412e-8537-b3c07e48ff5d}
+[2026-06-26 10:25:34 CST] <main> DBG-X:   parameter SessionExpiration = 2026-06-30T16:25:34.344Z
+[2026-06-26 10:25:34 CST] <main> DBG-X:   parameter SessionId = CO6uDBIQdwTVCh+ARVeLzgCPfUjvvg==
+[2026-06-26 10:25:34 CST] <main> DBG-X:   parameter ShouldUseRESTAPIs = false
+[2026-06-26 10:25:34 CST] <main> DBG-X:   parameter Success = true
+[2026-06-26 10:25:34 CST] <main> DBG-X:   parameter StreamingSettings = {LogStreamingEnabled=true, 
+MultipartUploadsEnabled=true, AssetDescriptionStreamingEnabled=false}
+[2026-06-26 10:25:34 CST] <main> DEBUG: Upload phase transition: INITIAL -> CONFIGURED
+[2026-06-26 10:25:34 CST] <main> DEBUG: SMART-CLIENT: getCurrent(); using pinned data center = 
+contentdelivery01.itunes.apple.com
+[2026-06-26 10:25:34 CST] <main> DBG-X: Using operation named: generateAppleConnectToken
+[2026-06-26 10:25:34 CST] <main> DBG-X: Apple's web service operation input parameters:
+[2026-06-26 10:25:34 CST] <main> DBG-X:   parameter Application = iTMSTransporter
+[2026-06-26 10:25:34 CST] <main> DBG-X:   parameter BaseVersion = 4.2.0
+[2026-06-26 10:25:34 CST] <main> DBG-X:   parameter ItcProviderName = Z6WHV5G6M3
+[2026-06-26 10:25:34 CST] <main> DBG-X:   parameter iTMSTransporterMode = upload
+[2026-06-26 10:25:34 CST] <main> DBG-X:   parameter OSIdentifier = Windows 11 10.0 (amd64); jvm=21.0.5+11-LTS; 
+jre=21.0.5+11-LTS
+[2026-06-26 10:25:34 CST] <main> DBG-X:   parameter TransporterArguments = -m upload -assetFile 
+c:\Users\andyb\ProyectosPersonales2026\POSIA\artifacts\POSIA.ipa -assetDescription 
+c:\Users\andyb\ProyectosPersonales2026\POSIA\artifacts\AppStoreInfo.plist -u andrea.bahena1011@icloud.com -p **hidden 
+value** -itc_provider Z6WHV5G6M3 -v informational -callerPWD C:\Users\andyb\ProyectosPersonales2026\POSIA
+[2026-06-26 10:25:34 CST] <main> DBG-X:   parameter Username = andrea.bahena1011@icloud.com
+[2026-06-26 10:25:34 CST] <main> DBG-X:   parameter Version = 4.2.0
+[2026-06-26 10:25:34 CST] <main>  INFO: id = 20260626102534-494
+[2026-06-26 10:25:34 CST] <main> DEBUG: SMART-CLIENT: getCurrent(); using pinned data center = 
+contentdelivery01.itunes.apple.com
+[2026-06-26 10:25:34 CST] <main>  INFO: iTMSTransporter Correlation Key: 92603c7b-e613-4e03-b14d-22b96390621f-0001
+[2026-06-26 10:25:34 CST] <main> DEBUG: DataCenter: contentdelivery01.itunes.apple.com
+[2026-06-26 10:25:35 CST] <main> DEBUG:   Request: POST /WebObjects/MZLabelService.woa/json/MZITunesSoftwareService 
+HTTP/1.1 (generateAppleConnectToken)
+[2026-06-26 10:25:35 CST] <main> DBG-X: Apple's web service operation return value:
+[2026-06-26 10:25:35 CST] <main> DBG-X:   parameter DSToken = **hidden value**
+[2026-06-26 10:25:35 CST] <main> DBG-X:   parameter DSTokenCookieName = myacinfo
+[2026-06-26 10:25:35 CST] <main> DEBUG: SMART-CLIENT: getCurrent(); using pinned data center = 
+contentdelivery01.itunes.apple.com
+[2026-06-26 10:25:35 CST] <main> DEBUG: SMART-CLIENT: getCurrent(); using pinned data center = 
+contentdelivery01.itunes.apple.com
+[2026-06-26 10:25:35 CST] <main> DEBUG: SMART-CLIENT: getCurrent(); using pinned data center = 
+contentdelivery01.itunes.apple.com
+[2026-06-26 10:25:35 CST] <main> DEBUG: SMART-CLIENT: getCurrent(); using pinned data center = 
+contentdelivery01.itunes.apple.com
+[2026-06-26 10:25:35 CST] <main> DEBUG: SMART-CLIENT: getCurrent(); using pinned data center = 
+contentdelivery01.itunes.apple.com
+[2026-06-26 10:25:35 CST] <main>  INFO: Setting transport log file: 
+1ea0c8a6-1d13-4242-9dea-1aef03985384891287857111215907.tx.log
+[2026-06-26 10:25:35 CST] <main>  INFO: Configuring the AppStoreConnect Software Uploader...
+[2026-06-26 10:25:35 CST] <main> DEBUG: Upload phase transition: CONFIGURED -> PREPARED
+[2026-06-26 10:25:35 CST] <main>  INFO: Computing composite checksum (MD5) for POSIA.ipa ...
+[2026-06-26 10:25:35 CST] <main>  INFO: Computed composite checksum (MD5) for POSIA.ipa in 189 ms: 
+e622b4aa8889b979698cab35d36133c5-6-5242880
+[2026-06-26 10:25:35 CST] <main> DEBUG: Upload phase transition: PREPARED -> ANALYZER_RUN
+[2026-06-26 10:25:35 CST] <main>  INFO: Performing analysis...
+[2026-06-26 10:25:35 CST] <main> DEBUG: finding application by bundle ID...
+[2026-06-26 10:25:35 CST] <main> DEBUG: SMART-CLIENT: getCurrent(); using pinned data center = 
+contentdelivery01.itunes.apple.com
+[2026-06-26 10:25:36 CST] <main> DEBUG: finding application by bundle ID succeeded
+[2026-06-26 10:25:36 CST] <main> DEBUG: finding upload container...
+[2026-06-26 10:25:36 CST] <main> DEBUG: SMART-CLIENT: getCurrent(); using pinned data center = 
+contentdelivery01.itunes.apple.com
+[2026-06-26 10:25:37 CST] <main> DEBUG: finding upload container succeeded
+[2026-06-26 10:25:37 CST] <main> DEBUG: creating upload container...
+[2026-06-26 10:25:37 CST] <main> DEBUG: SMART-CLIENT: getCurrent(); using pinned data center = 
+contentdelivery01.itunes.apple.com
+[2026-06-26 10:25:37 CST] <main> DEBUG: creating upload container succeeded
+[2026-06-26 10:25:37 CST] <main>  INFO: Uploading software analysis file...
+[2026-06-26 10:25:37 CST] <main>  INFO: Uploading analysis file...
+[2026-06-26 10:25:37 CST] <main> DEBUG: finding upload file...
+[2026-06-26 10:25:37 CST] <main> DEBUG: SMART-CLIENT: getCurrent(); using pinned data center = 
+contentdelivery01.itunes.apple.com
+[2026-06-26 10:25:38 CST] <main> DEBUG: finding upload file succeeded
+[2026-06-26 10:25:38 CST] <main> DEBUG: creating upload file...
+[2026-06-26 10:25:38 CST] <main> DEBUG: SMART-CLIENT: getCurrent(); using pinned data center = 
+contentdelivery01.itunes.apple.com
+[2026-06-26 10:25:39 CST] <main> DEBUG: creating upload file succeeded
+[2026-06-26 10:25:39 CST] <main> DEBUG: updating upload file with checksum information...
+[2026-06-26 10:25:39 CST] <main> DEBUG: SMART-CLIENT: getCurrent(); using pinned data center = 
+contentdelivery01.itunes.apple.com
+[2026-06-26 10:25:40 CST] <main> DEBUG: updating upload file with checksum information succeeded
+[2026-06-26 10:25:40 CST] <main> DEBUG: Attempting upload via transport: HTTP
+[2026-06-26 10:25:40 CST] <main> DEBUG: Cached composite checksum (MD5) for AppStoreInfo.plist: 
+d06caf9ae0af14b44f00cd3a6f87d853-1-1069912
+[2026-06-26 10:25:40 CST] <main> DEBUG: Created resume tracking file for AppStoreInfo.plist
+[2026-06-26 10:25:40 CST] <main> DEBUG: Registered file for monitoring: 
+c:\Users\andyb\ProyectosPersonales2026\POSIA\artifacts\AppStoreInfo.plist with action CANCEL_ALL
+[2026-06-26 10:25:40 CST] <main> DEBUG: Started file monitor for 1 file(s)
+[2026-06-26 10:25:40 CST] <main>  INFO: Starting upload for package 
+d9b25daa-5d91-4efb-a0b4-5bf0bd4f4da2-AppStoreInfo.plist.
+[2026-06-26 10:25:40 CST] <main>  INFO: Computing total size of files to upload ...
+[2026-06-26 10:25:40 CST] <main> DBG-X:   adding file for % complete logging: AppStoreInfo.plist , size: 1069912
+[2026-06-26 10:25:40 CST] <main> DEBUG: Setting total size of files for upload to: 1069912
+[2026-06-26 10:25:40 CST] <main>  INFO: Done computing total size of files to upload.
+[2026-06-26 10:25:40 CST] <main>  INFO: Starting checksum calculations for 1 file(s) using up to 1 thread(s)...
+[2026-06-26 10:25:40 CST] <main>  INFO: Checksum calculations are complete, elapsed time: 0 d 0h 0m 0s.
+[2026-06-26 10:25:40 CST] <main>  INFO: Creating reservations for build upload: d9b25daa-5d91-4efb-a0b4-5bf0bd4f4da2
+[2026-06-26 10:25:40 CST] <RLT-001>  INFO: Starting upload for reservation: (3a7e6e47-2a37-4c5f-8996-08759d8feb34) 
+file: (AppStoreInfo.plist/1) attempt: 1 size: 1069912
+[2026-06-26 10:25:41 CST] <RLT-001>  INFO:      File: AppStoreInfo.plist 16384/1069912, 1.53% completed
+[2026-06-26 10:25:41 CST] <RLT-001>  INFO: Package upload progress: 1.53% completed
+[2026-06-26 10:25:41 CST] <RLT-001>  INFO:      File: AppStoreInfo.plist 1069912/1069912, 100.00% completed
+[2026-06-26 10:25:41 CST] <RLT-001>  INFO: Package upload progress: 100.00% completed
+[2026-06-26 10:25:41 CST] <RLT-001>  INFO: Finished part upload for: (AppStoreInfo.plist/1) 1.430 MB/s in 0.748 secs
+[2026-06-26 10:25:41 CST] <web-svc>  INFO: Getting reservations for: [3a7e6e47-2a37-4c5f-8996-08759d8feb34]
+[2026-06-26 10:25:41 CST] <web-svc> DEBUG: refreshing upload container...
+[2026-06-26 10:25:41 CST] <web-svc> DEBUG: SMART-CLIENT: getCurrent(); using pinned data center = 
+contentdelivery01.itunes.apple.com
+[2026-06-26 10:25:43 CST] <web-svc> DEBUG: refreshing upload container succeeded
+[2026-06-26 10:25:43 CST] <web-svc>  INFO: Committing reservation for build upload: 
+d9b25daa-5d91-4efb-a0b4-5bf0bd4f4da2 / AppStoreInfo.plist / 3a7e6e47-2a37-4c5f-8996-08759d8feb34
+[2026-06-26 10:25:43 CST] <web-svc> DEBUG: committing upload file...
+[2026-06-26 10:25:43 CST] <web-svc> DEBUG: SMART-CLIENT: getCurrent(); using pinned data center = 
+contentdelivery01.itunes.apple.com
+[2026-06-26 10:25:45 CST] <web-svc> DEBUG: committing upload file succeeded
+[2026-06-26 10:25:45 CST] <web-svc> ERROR: Commit failed for build upload: d9b25daa-5d91-4efb-a0b4-5bf0bd4f4da2 / 
+AppStoreInfo.plist / 3a7e6e47-2a37-4c5f-8996-08759d8feb34
+[2026-06-26 10:25:45 CST] <RLT-001>  INFO: Finished upload for reservation: (3a7e6e47-2a37-4c5f-8996-08759d8feb34) 
+file: (AppStoreInfo.plist)
+[2026-06-26 10:25:45 CST] <main>  INFO: Getting reservations for: [3a7e6e47-2a37-4c5f-8996-08759d8feb34]
+[2026-06-26 10:25:45 CST] <main> DEBUG: refreshing upload container...
+[2026-06-26 10:25:45 CST] <main> DEBUG: SMART-CLIENT: getCurrent(); using pinned data center = 
+contentdelivery01.itunes.apple.com
+[2026-06-26 10:25:46 CST] <main> DEBUG: refreshing upload container succeeded
+[2026-06-26 10:25:46 CST] <main>  INFO: Transfer Metrics Summary:
+[2026-06-26 10:25:46 CST] <main>  INFO:     bytes transmitted: 1069912
+[2026-06-26 10:25:46 CST] <main>  INFO:     AppStoreInfo.plist transfer metrics:
+[2026-06-26 10:25:46 CST] <main>  INFO:         bytes transmitted: 1069912
+[2026-06-26 10:25:46 CST] <main>  INFO: Sending transfer metrics: numPartsToUpload:1, numPartsUploaded:1, 
+numPartsPreviouslyUploaded:0, bytesSent:1069912, elapsedTimeSecs:5.757, throughput:190000.00, 
+packageName:d9b25daa-5d91-4efb-a0b4-5bf0bd4f4da2-AppStoreInfo.plist, usedAppleCdn:false
+[2026-06-26 10:25:47 CST] <main> DEBUG:   Request: POST https://contentdelivery01.itunes.apple.com/MZContentDeliverySer
+vice/iris/provider/3ac5587b-48dd-412e-8537-b3c07e48ff5d/v1/metricsAndLogging
+[2026-06-26 10:25:47 CST] <main> DEBUG: Deleted resume tracking file: 
+C:\Users\andyb\.itmstransporter\resume\d06caf9ae0af14b44f00cd3a6f87d853-1-1069912.resume.json
+[2026-06-26 10:25:47 CST] <main> DEBUG: Stopped file monitor
+[2026-06-26 10:25:47 CST] <main>  INFO: Upload succeeded via transport: HTTP
+[2026-06-26 10:25:49 CST] <main> DEBUG: refreshing upload container...
+[2026-06-26 10:25:49 CST] <main> DEBUG: SMART-CLIENT: getCurrent(); using pinned data center = 
+contentdelivery01.itunes.apple.com
+[2026-06-26 10:25:50 CST] <main> DEBUG: refreshing upload container succeeded
+[2026-06-26 10:25:51 CST] <main> DEBUG: refreshing upload container...
+[2026-06-26 10:25:51 CST] <main> DEBUG: SMART-CLIENT: getCurrent(); using pinned data center = 
+contentdelivery01.itunes.apple.com
+[2026-06-26 10:25:52 CST] <main> DEBUG: refreshing upload container succeeded
+[2026-06-26 10:25:53 CST] <main> DEBUG: refreshing upload container...
+[2026-06-26 10:25:53 CST] <main> DEBUG: SMART-CLIENT: getCurrent(); using pinned data center = 
+contentdelivery01.itunes.apple.com
+[2026-06-26 10:25:54 CST] <main> DEBUG: refreshing upload container succeeded
+[2026-06-26 10:25:59 CST] <main> DEBUG: refreshing upload container...
+[2026-06-26 10:25:59 CST] <main> DEBUG: SMART-CLIENT: getCurrent(); using pinned data center = 
+contentdelivery01.itunes.apple.com
+[2026-06-26 10:26:00 CST] <main> DEBUG: refreshing upload container succeeded
+[2026-06-26 10:26:10 CST] <main> DEBUG: refreshing upload container...
+[2026-06-26 10:26:10 CST] <main> DEBUG: SMART-CLIENT: getCurrent(); using pinned data center = 
+contentdelivery01.itunes.apple.com
+[2026-06-26 10:26:10 CST] <main> DEBUG: refreshing upload container succeeded
+[2026-06-26 10:26:10 CST] <main> DEBUG: Upload phase transition: ANALYZER_RUN -> ANALYZED
+[2026-06-26 10:26:12 CST] <main> DEBUG: refreshing upload container...
+[2026-06-26 10:26:12 CST] <main> DEBUG: SMART-CLIENT: getCurrent(); using pinned data center = 
+contentdelivery01.itunes.apple.com
+[2026-06-26 10:26:13 CST] <main> DEBUG: refreshing upload container succeeded
+[2026-06-26 10:26:13 CST] <main> DEBUG: finding upload file...
+[2026-06-26 10:26:13 CST] <main> DEBUG: SMART-CLIENT: getCurrent(); using pinned data center = 
+contentdelivery01.itunes.apple.com
+[2026-06-26 10:26:14 CST] <main> DEBUG: finding upload file succeeded
+[2026-06-26 10:26:14 CST] <main> DEBUG: creating upload file...
+[2026-06-26 10:26:14 CST] <main> DEBUG: SMART-CLIENT: getCurrent(); using pinned data center = 
+contentdelivery01.itunes.apple.com
+[2026-06-26 10:26:14 CST] <main> DEBUG: creating upload file succeeded
+[2026-06-26 10:26:14 CST] <main> DEBUG: updating upload file with checksum information...
+[2026-06-26 10:26:14 CST] <main> DEBUG: SMART-CLIENT: getCurrent(); using pinned data center = 
+contentdelivery01.itunes.apple.com
+[2026-06-26 10:26:16 CST] <main> DEBUG: updating upload file with checksum information succeeded
+[2026-06-26 10:26:16 CST] <main> DEBUG: Attempting upload via transport: HTTP
+[2026-06-26 10:26:16 CST] <main> DEBUG: Cached composite checksum (MD5) for POSIA.ipa: 
+e622b4aa8889b979698cab35d36133c5-6-5242880
+[2026-06-26 10:26:16 CST] <main> DEBUG: Created resume tracking file for POSIA.ipa
+[2026-06-26 10:26:16 CST] <main> DEBUG: Registered file for monitoring: 
+c:\Users\andyb\ProyectosPersonales2026\POSIA\artifacts\POSIA.ipa with action CANCEL_ALL
+[2026-06-26 10:26:16 CST] <main> DEBUG: Started file monitor for 1 file(s)
+[2026-06-26 10:26:16 CST] <main>  INFO: Starting upload for package d9b25daa-5d91-4efb-a0b4-5bf0bd4f4da2-POSIA.ipa.
+[2026-06-26 10:26:16 CST] <main>  INFO: Computing total size of files to upload ...
+[2026-06-26 10:26:16 CST] <main> DBG-X:   adding file for % complete logging: POSIA.ipa , size: 30027091
+[2026-06-26 10:26:16 CST] <main> DEBUG: Setting total size of files for upload to: 30027091
+[2026-06-26 10:26:16 CST] <main>  INFO: Done computing total size of files to upload.
+[2026-06-26 10:26:16 CST] <main>  INFO: Starting checksum calculations for 1 file(s) using up to 1 thread(s)...
+[2026-06-26 10:26:16 CST] <main>  INFO: Checksum calculations are complete, elapsed time: 0 d 0h 0m 0s.
+[2026-06-26 10:26:16 CST] <main>  INFO: Creating reservations for build upload: d9b25daa-5d91-4efb-a0b4-5bf0bd4f4da2
+[2026-06-26 10:26:16 CST] <RLT-003>  INFO: Starting upload for reservation: (ca6e70df-57dc-477c-b377-cdc539dc28e8) 
+file: (POSIA.ipa/5) attempt: 1 size: 5242880
+[2026-06-26 10:26:16 CST] <RLT-002>  INFO: Starting upload for reservation: (ca6e70df-57dc-477c-b377-cdc539dc28e8) 
+file: (POSIA.ipa/3) attempt: 1 size: 5242880
+[2026-06-26 10:26:16 CST] <RLT-004>  INFO: Starting upload for reservation: (ca6e70df-57dc-477c-b377-cdc539dc28e8) 
+file: (POSIA.ipa/4) attempt: 1 size: 5242880
+[2026-06-26 10:26:16 CST] <RLT-005>  INFO: Starting upload for reservation: (ca6e70df-57dc-477c-b377-cdc539dc28e8) 
+file: (POSIA.ipa/6) attempt: 1 size: 3812691
+[2026-06-26 10:26:16 CST] <RLT-007>  INFO: Starting upload for reservation: (ca6e70df-57dc-477c-b377-cdc539dc28e8) 
+file: (POSIA.ipa/1) attempt: 1 size: 5242880
+[2026-06-26 10:26:16 CST] <RLT-006>  INFO: Starting upload for reservation: (ca6e70df-57dc-477c-b377-cdc539dc28e8) 
+file: (POSIA.ipa/2) attempt: 1 size: 5242880
+[2026-06-26 10:26:16 CST] <RLT-004>  INFO:      File: POSIA.ipa 16384/30027091, 0.05% completed
+[2026-06-26 10:26:16 CST] <RLT-004>  INFO: Package upload progress: 0.05% completed
+[2026-06-26 10:26:18 CST] <RLT-006>  INFO: Finished part upload for: (POSIA.ipa/2) 3.061 MB/s in 1.713 secs
+[2026-06-26 10:26:18 CST] <RLT-005>  INFO: Finished part upload for: (POSIA.ipa/6) 1.830 MB/s in 2.084 secs
+[2026-06-26 10:26:18 CST] <RLT-007>  INFO: Finished part upload for: (POSIA.ipa/1) 2.470 MB/s in 2.123 secs
+[2026-06-26 10:26:18 CST] <RLT-003>  INFO: Finished part upload for: (POSIA.ipa/5) 2.269 MB/s in 2.311 secs
+[2026-06-26 10:26:18 CST] <RLT-002>  INFO:      File: POSIA.ipa 30027091/30027091, 100.00% completed
+[2026-06-26 10:26:18 CST] <RLT-002>  INFO: Package upload progress: 100.00% completed
+[2026-06-26 10:26:19 CST] <RLT-004>  INFO: Finished part upload for: (POSIA.ipa/4) 1.996 MB/s in 2.627 secs
+[2026-06-26 10:26:20 CST] <RLT-002>  INFO: Finished part upload for: (POSIA.ipa/3) 1.308 MB/s in 4.009 secs
+[2026-06-26 10:26:20 CST] <web-svc>  INFO: Getting reservations for: [ca6e70df-57dc-477c-b377-cdc539dc28e8]
+[2026-06-26 10:26:20 CST] <web-svc> DEBUG: refreshing upload container...
+[2026-06-26 10:26:20 CST] <web-svc> DEBUG: SMART-CLIENT: getCurrent(); using pinned data center = 
+contentdelivery01.itunes.apple.com
+[2026-06-26 10:26:21 CST] <web-svc> DEBUG: refreshing upload container succeeded
+[2026-06-26 10:26:21 CST] <web-svc>  INFO: Committing reservation for build upload: 
+d9b25daa-5d91-4efb-a0b4-5bf0bd4f4da2 / POSIA.ipa / ca6e70df-57dc-477c-b377-cdc539dc28e8
+[2026-06-26 10:26:21 CST] <web-svc> DEBUG: committing upload file...
+[2026-06-26 10:26:21 CST] <web-svc> DEBUG: SMART-CLIENT: getCurrent(); using pinned data center = 
+contentdelivery01.itunes.apple.com
+[2026-06-26 10:26:23 CST] <web-svc> DEBUG: committing upload file succeeded
+[2026-06-26 10:26:23 CST] <web-svc>  INFO: Commit successful for build upload: d9b25daa-5d91-4efb-a0b4-5bf0bd4f4da2 / 
+POSIA.ipa / ca6e70df-57dc-477c-b377-cdc539dc28e8
+[2026-06-26 10:26:23 CST] <RLT-002>  INFO: Finished upload for reservation: (ca6e70df-57dc-477c-b377-cdc539dc28e8) 
+file: (POSIA.ipa)
+[2026-06-26 10:26:23 CST] <main>  INFO: Transfer Metrics Summary:
+[2026-06-26 10:26:23 CST] <main>  INFO:     bytes transmitted: 30027091
+[2026-06-26 10:26:23 CST] <main>  INFO:     POSIA.ipa transfer metrics:
+[2026-06-26 10:26:23 CST] <main>  INFO:         bytes transmitted: 30027091
+[2026-06-26 10:26:23 CST] <main>  INFO: Sending transfer metrics: numPartsToUpload:6, numPartsUploaded:6, 
+numPartsPreviouslyUploaded:0, bytesSent:30027091, elapsedTimeSecs:7.908, throughput:3800000.00, 
+packageName:d9b25daa-5d91-4efb-a0b4-5bf0bd4f4da2-POSIA.ipa, usedAppleCdn:false
+[2026-06-26 10:26:24 CST] <main> DEBUG:   Request: POST https://contentdelivery01.itunes.apple.com/MZContentDeliverySer
+vice/iris/provider/3ac5587b-48dd-412e-8537-b3c07e48ff5d/v1/metricsAndLogging
+[2026-06-26 10:26:24 CST] <main> DEBUG: Deleted resume tracking file: 
+C:\Users\andyb\.itmstransporter\resume\e622b4aa8889b979698cab35d36133c5-6-5242880.resume.json
+[2026-06-26 10:26:24 CST] <main> DEBUG: Stopped file monitor
+[2026-06-26 10:26:24 CST] <main>  INFO: Upload succeeded via transport: HTTP
+[2026-06-26 10:26:24 CST] <main> DEBUG: Upload phase transition: ANALYZED -> UPLOADED
+[2026-06-26 10:26:24 CST] <main> DEBUG: refreshing upload container...
+[2026-06-26 10:26:24 CST] <main> DEBUG: SMART-CLIENT: getCurrent(); using pinned data center = 
+contentdelivery01.itunes.apple.com
+[2026-06-26 10:26:25 CST] <main> DEBUG: refreshing upload container succeeded
+[2026-06-26 10:26:25 CST] <main> DEBUG: Upload phase transition: UPLOADED -> COMPLETED
+[2026-06-26 10:26:25 CST] <main> DEBUG: Upload phase transition: CLOSED -> INITIAL
+
+
+
+Package Summary:
+ 
+1 package was uploaded successfully:
+        c:\Users\andyb\ProyectosPersonales2026\POSIA\artifacts\POSIA.ipa
+[2026-06-26 10:26:25 CST] <main> DBG-X: Returning 0
+Presione una tecla para continuar . . . 

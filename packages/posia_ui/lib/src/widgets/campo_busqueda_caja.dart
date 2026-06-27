@@ -12,6 +12,10 @@ class CampoBusquedaCaja extends StatefulWidget {
 		required this.focusNode,
 		required this.alCambiar,
 		required this.alEnviar,
+		this.hintText = 'Buscar…',
+		this.autofocus = true,
+		this.mostrarIconoEscaneo = true,
+		this.mostrarBotonOcultarTeclado = false,
 		super.key,
 	});
 
@@ -19,26 +23,45 @@ class CampoBusquedaCaja extends StatefulWidget {
 	final FocusNode focusNode;
 	final ValueChanged<String> alCambiar;
 	final ValueChanged<String> alEnviar;
+	final String hintText;
+	final bool autofocus;
+	final bool mostrarIconoEscaneo;
+	final bool mostrarBotonOcultarTeclado;
 
 	@override
 	State<CampoBusquedaCaja> createState() => _CampoBusquedaCajaState();
 }
 
 class _CampoBusquedaCajaState extends State<CampoBusquedaCaja> {
+	bool _tieneFoco = false;
+
 	@override
 	void initState() {
 		super.initState();
 		widget.controlador.addListener(_actualizar);
+		widget.focusNode.addListener(_actualizarFoco);
 	}
 
 	@override
 	void dispose() {
 		widget.controlador.removeListener(_actualizar);
+		widget.focusNode.removeListener(_actualizarFoco);
 		super.dispose();
 	}
 
 	void _actualizar() {
 		setState(() {});
+	}
+
+	void _actualizarFoco() {
+		final foco = widget.focusNode.hasFocus;
+		if (foco != _tieneFoco) {
+			setState(() => _tieneFoco = foco);
+		}
+	}
+
+	void _ocultarTeclado() {
+		widget.focusNode.unfocus();
 	}
 
 	@override
@@ -48,22 +71,29 @@ class _CampoBusquedaCajaState extends State<CampoBusquedaCaja> {
 			child: TextField(
 				controller: widget.controlador,
 				focusNode: widget.focusNode,
-				autofocus: true,
+				autofocus: widget.autofocus,
 				textInputAction: TextInputAction.search,
 				decoration: InputDecoration(
-					hintText: 'Buscar… flechas para elegir · Enter para cantidad',
+					hintText: widget.hintText,
 					prefixIcon: const Icon(Icons.search),
 					suffixIcon: Row(
 						mainAxisSize: MainAxisSize.min,
 						children: [
-							Tooltip(
-								message: 'Escaneo automático activo',
-								child: Icon(
-									Icons.qr_code_scanner,
-									color: PosiaColors.cobrar.withValues(alpha: 0.85),
-									size: 22.0,
+							if (widget.mostrarIconoEscaneo)
+								Tooltip(
+									message: 'Escaneo automático activo',
+									child: Icon(
+										Icons.qr_code_scanner,
+										color: PosiaColors.cobrar.withValues(alpha: 0.85),
+										size: 22.0,
+									),
 								),
-							),
+							if (widget.mostrarBotonOcultarTeclado && _tieneFoco)
+								IconButton(
+									icon: const Icon(Icons.keyboard_hide),
+									tooltip: 'Ocultar teclado',
+									onPressed: _ocultarTeclado,
+								),
 							if (widget.controlador.text.isNotEmpty)
 								IconButton(
 									icon: const Icon(Icons.clear),
@@ -90,7 +120,10 @@ class _CampoBusquedaCajaState extends State<CampoBusquedaCaja> {
 					contentPadding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 14.0),
 				),
 				onChanged: widget.alCambiar,
-				onSubmitted: widget.alEnviar,
+				onSubmitted: (texto) {
+					_ocultarTeclado();
+					widget.alEnviar(texto);
+				},
 			),
 		);
 	}

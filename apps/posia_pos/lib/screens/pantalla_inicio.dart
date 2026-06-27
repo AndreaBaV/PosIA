@@ -5,11 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:posia_core/posia_core.dart';
-import 'package:posia_database/posia_database.dart';
 import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
+import '../services/gestor_sesion_persistente.dart';
 import '../util/destinos_admin.dart';
 import '../util/plataforma_util.dart';
 import 'pantalla_admin.dart';
@@ -139,24 +139,26 @@ class _PantallaInicioState extends ConsumerState<PantallaInicio> {
 		}
 		final muestraAdmin = puedeAccederPanelAdmin(usuario);
 		final esEmpleado = usuario.rol == RolUsuario.empleado;
-		final caja = esPlataformaMovilNativa()
-			? const PantallaCajaMovil()
+		final esMovil = esPlataformaMovilNativa();
+		final caja = esMovil
+			? PantallaCajaMovil(
+				alAbrirMiCuenta: () => _abrirMiCuenta(context),
+				alCerrarSesion: () => GestorSesionPersistente.cerrarSesion(ref),
+			)
 			: const PantallaCaja();
+		final muestraBarraSesion = !esMovil || _indicePestana != 0;
 		return Scaffold(
 			body: Column(
 				children: [
-					BarraSesionUsuario(
-						nombreUsuario: usuario.nombre,
-						rol: usuario.rol,
-						nombreTienda: _nombreTienda(context, ref),
-						alAbrirMiCuenta: () => _abrirMiCuenta(context),
-						alCerrarSesion: () async {
-							await PosiaLocalDatabase.obtenerInstancia().liberarTenant();
-							ref.read(sesionUsuarioProvider.notifier).cerrar();
-							ref.read(sesionTiendaProvider.notifier).cerrar();
-							ref.invalidate(contenedorServiciosProvider);
-						},
-					),
+					if (muestraBarraSesion)
+						BarraSesionUsuario(
+							nombreUsuario: usuario.nombre,
+							rol: usuario.rol,
+							nombreTienda: _nombreTienda(context, ref),
+							compacto: esMovil,
+							alAbrirMiCuenta: () => _abrirMiCuenta(context),
+							alCerrarSesion: () => GestorSesionPersistente.cerrarSesion(ref),
+						),
 					Expanded(
 						child: muestraAdmin
 							? IndexedStack(

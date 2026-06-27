@@ -35,6 +35,9 @@ const String claveConfigCajaNombre = 'caja_nombre';
 /// Marca que el tecnico completo la instalacion inicial del dispositivo.
 const String claveConfigInstalacionCompleta = 'instalacion_completada';
 
+/// Ultimo usuario que inicio sesion (para restaurar sin volver a autenticar).
+const String claveConfigUltimoUsuarioId = 'ultimo_usuario_id';
+
 /// Clave de modo de impresora (archivo, red, ambos).
 const String claveConfigImpresoraModo = 'printer_mode';
 

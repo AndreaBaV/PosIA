@@ -288,6 +288,79 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Resolve IPA for TestFlight
+        if: steps.signing.outputs.configured == 'true'
+        id: ipa
+        run: |
+          set -euo pipefail
+          IPA_DIR="${{ github.workspace }}/${{ env.APP_DIR }}/build/ios/ipa"
+          IPA=$(find "$IPA_DIR" -maxdepth 1 -name '*.ipa' -print -quit)
+          PLIST="$IPA_DIR/AppStoreInfo.plist"
+          if [ -z "$IPA" ] || [ ! -f "$PLIST" ]; then
+            echo "::error::No se encontró .ipa o AppStoreInfo.plist en $IPA_DIR"
+            exit 1
+          fi
+          echo "path=$IPA" >> "$GITHUB_OUTPUT"
+          echo "plist=$PLIST" >> "$GITHUB_OUTPUT"
+          ls -la "$IPA_DIR"
+
+      - name: Detect TestFlight credentials
+        id: asc_upload
+        if: steps.signing.outputs.configured == 'true'
+        env:
+          API_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+          API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APPLE_ISSUER_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APP_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          if [ -n "$API_KEY" ] && [ -n "$API_KEY_ID" ] && [ -n "$ISSUER_ID" ]; then
+            echo "method=api" >> "$GITHUB_OUTPUT"
+            echo "TestFlight: App Store Connect API Key"
+          elif [ -n "$APPLE_ID" ] && [ -n "$APP_PASSWORD" ]; then
+            echo "method=password" >> "$GITHUB_OUTPUT"
+            echo "TestFlight: Apple ID + contraseña de aplicación"
+          else
+            echo "method=skip" >> "$GITHUB_OUTPUT"
+            if [ "${{ github.event_name }}" = "push" ]; then
+              echo "::warning::TestFlight omitido. Configura APPLE_API_PRIVATE_KEY + APPLE_API_KEY_ID + APPLE_ISSUER_ID (recomendado) o APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD."
+            else
+              echo "::notice::TestFlight omitido: sin credenciales de App Store Connect."
+            fi
+          fi
+
+      - name: Upload to TestFlight (App Store Connect API)
+        if: steps.signing.outputs.configured == 'true' && steps.asc_upload.outputs.method == 'api'
+        uses: apple-actions/upload-testflight-build@v5
+        with:
+          app-path: ${{ steps.ipa.outputs.path }}
+          issuer-id: ${{ secrets.APPLE_ISSUER_ID }}
+          api-key-id: ${{ secrets.APPLE_API_KEY_ID }}
+          api-private-key: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+          uses-non-exempt-encryption: 'false'
+          wait-for-processing: 'false'
+
+      - name: Upload to TestFlight (Transporter)
+        if: steps.signing.outputs.configured == 'true' && steps.asc_upload.outputs.method == 'password'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_ASC_PROVIDER: ${{ secrets.APPLE_ASC_PROVIDER }}
+        run: |
+          set -euo pipefail
+          ARGS=(
+            -m upload
+            -assetFile "${{ steps.ipa.outputs.path }}"
+            -assetDescription "${{ steps.ipa.outputs.plist }}"
+            -u "$APPLE_ID"
+            -p "$APPLE_APP_SPECIFIC_PASSWORD"
+            -v informational
+          )
+          if [ -n "$APPLE_ASC_PROVIDER" ]; then
+            ARGS+=( -itc_provider "$APPLE_ASC_PROVIDER" )
+          fi
+          xcrun iTMSTransporter "${ARGS[@]}"
+
       - name: iOS skipped summary
         if: steps.signing.outputs.configured != 'true'
         run: |

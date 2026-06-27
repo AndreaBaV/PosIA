@@ -21,8 +21,9 @@ class GrillaProductos extends StatefulWidget {
 		required this.productos,
 		required this.alSeleccionar,
 		this.categoriaId,
-		this.mensajeVacio = 'Sin productos en esta categoría',
+		this.mensajeVacio = 'Sin productos',
 		this.indiceSeleccionado,
+		this.columnas = 3,
 		super.key,
 	});
 
@@ -41,7 +42,10 @@ class GrillaProductos extends StatefulWidget {
 	/// Indice resaltado para navegacion con teclado (opcional).
 	final int? indiceSeleccionado;
 
-	static const int columnas = 3;
+	/// Numero de columnas del grid (2 en movil, 3 en escritorio).
+	final int columnas;
+
+	static const int columnasPredeterminadas = 3;
 
 	@override
 	State<GrillaProductos> createState() => _GrillaProductosState();
@@ -100,8 +104,8 @@ class _GrillaProductosState extends State<GrillaProductos> {
 		return GridView.builder(
 			key: PageStorageKey<String>('grilla_${widget.categoriaId ?? 'todos'}'),
 			padding: const EdgeInsets.all(12.0),
-			gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-				crossAxisCount: GrillaProductos.columnas,
+			gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+				crossAxisCount: widget.columnas,
 				mainAxisSpacing: 10.0,
 				crossAxisSpacing: 10.0,
 				childAspectRatio: 0.88,

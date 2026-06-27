@@ -1,4 +1,4 @@
-/// Inicio de sesion: usuario, contrasena y activacion por rol.
+/// Inicio de sesion: usuario, contrasena, Face ID y activacion por rol.
 library;
 
 import 'package:flutter/material.dart';
@@ -6,11 +6,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:posia_core/posia_core.dart';
 import 'package:posia_database/posia_database.dart';
-import 'package:posia_sync/posia_sync.dart';
 import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
-import '../providers/app_providers.dart';
+import '../services/gestor_acceso_biometrico.dart';
+import '../services/servicio_inicio_sesion.dart';
+import '../util/plataforma_util.dart';
+import '../util/teclado_util.dart';
 import 'pantalla_instalacion_tecnico.dart';
 
 enum _PasoInicioSesion { identificacion, contrasena }
@@ -26,11 +28,24 @@ class PantallaInicioSesion extends ConsumerStatefulWidget {
 class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 	final _codigoController = TextEditingController();
 	final _codigoFocus = FocusNode();
+	final _gestorBiometria = GestorAccesoBiometrico();
 	_PasoInicioSesion _paso = _PasoInicioSesion.identificacion;
 	Usuario? _usuarioIdentificado;
 	String _pinIngresado = '';
 	String? _mensajeError;
 	bool _validando = false;
+	bool _biometriaDisponible = false;
+	String _etiquetaBiometria = 'Biometría';
+	List<PerfilAccesoBiometrico> _perfilesBiometricos = [];
+	String? _tenantId;
+	bool _intentoBiometricoAutomatico = false;
+
+	@override
+	void initState() {
+		super.initState();
+		_codigoFocus.addListener(() => setState(() {}));
+		WidgetsBinding.instance.addPostFrameCallback((_) => _prepararBiometria());
+	}
 
 	@override
 	void dispose() {
@@ -39,53 +54,74 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 		super.dispose();
 	}
 
+	Future<void> _prepararBiometria() async {
+		if (!esPlataformaMovilNativa()) {
+			return;
+		}
+		final configRepo = await ref.read(configDispositivoRepoProvider.future);
+		final config = await configRepo.obtenerConfigDispositivo();
+		final tenantId = config.tenantId;
+		if (tenantId.isEmpty) {
+			return;
+		}
+		final disponible = await _gestorBiometria.estaDisponible();
+		final perfiles = await _gestorBiometria.listarPerfiles(tenantId);
+		final etiqueta = await _gestorBiometria.etiquetaBiometria();
+		if (!mounted) {
+			return;
+		}
+		setState(() {
+			_biometriaDisponible = disponible;
+			_perfilesBiometricos = perfiles;
+			_tenantId = tenantId;
+			_etiquetaBiometria = etiqueta;
+		});
+		if (disponible && perfiles.length == 1 && !_intentoBiometricoAutomatico) {
+			_intentoBiometricoAutomatico = true;
+			await _iniciarConBiometria(perfiles.first.usuarioId);
+		}
+	}
+
 	@override
 	Widget build(BuildContext context) {
-		return Scaffold(
-			backgroundColor: PosiaColors.fondo,
-			body: MarcoAutenticacion(
-				titulo: _paso == _PasoInicioSesion.identificacion
-					? 'Iniciar sesión'
-					: 'Confirma tu acceso',
-				subtitulo: _paso == _PasoInicioSesion.identificacion
-					? 'Ingresa tu usuario para continuar'
-					: _subtituloPasoPin(),
-				icono: _paso == _PasoInicioSesion.identificacion
-					? Icons.lock_person
-					: PresentacionRol.icono(_usuarioIdentificado!.rol),
-				contenido: _paso == _PasoInicioSesion.identificacion
-					? _tarjetaIdentificacion(context)
-					: _tarjetaContrasena(context),
-				pie: Column(
-					crossAxisAlignment: CrossAxisAlignment.stretch,
-					children: [
-						if (_paso == _PasoInicioSesion.contrasena)
+		return GestureDetector(
+			onTap: () => ocultarTeclado(context),
+			child: Scaffold(
+				backgroundColor: PosiaColors.fondo,
+				body: MarcoAutenticacion(
+					titulo: _paso == _PasoInicioSesion.identificacion
+						? 'Iniciar sesión'
+						: _usuarioIdentificado!.nombre,
+					subtitulo: _paso == _PasoInicioSesion.identificacion
+						? (_biometriaDisponible && _perfilesBiometricos.isNotEmpty
+							? ''
+							: 'Código de usuario')
+						: '',
+					icono: _paso == _PasoInicioSesion.identificacion
+						? Icons.lock_person
+						: PresentacionRol.icono(_usuarioIdentificado!.rol),
+					contenido: _paso == _PasoInicioSesion.identificacion
+						? _tarjetaIdentificacion(context)
+						: _tarjetaContrasena(context),
+					pie: Column(
+						crossAxisAlignment: CrossAxisAlignment.stretch,
+						children: [
+							if (_paso == _PasoInicioSesion.contrasena)
+								TextButton.icon(
+									onPressed: _validando ? null : _volverIdentificacion,
+									icon: const Icon(Icons.arrow_back, size: 20.0),
+									label: const Text('Atrás'),
+								),
 							TextButton.icon(
-								onPressed: _validando ? null : _volverIdentificacion,
-								icon: const Icon(Icons.arrow_back, size: 20.0),
-								label: const Text('Cambiar usuario'),
+								onPressed: () => abrirInstalacionTecnica(context, ref),
+								icon: const Icon(Icons.engineering, size: 18.0),
+								label: const Text('Técnico'),
 							),
-						TextButton.icon(
-							onPressed: () => abrirInstalacionTecnica(context, ref),
-							icon: const Icon(Icons.engineering, size: 18.0),
-							label: const Text('Configuración técnica'),
-						),
-					],
+						],
+					),
 				),
 			),
 		);
-	}
-
-	String _subtituloPasoPin() {
-		final usuario = _usuarioIdentificado;
-		if (usuario == null) {
-			return 'Ingresa tu contraseña';
-		}
-		final rol = PermisosUsuario.etiquetaRol(usuario.rol);
-		if (usuario.rol == RolUsuario.administrador) {
-			return 'Hola ${usuario.nombre}. Como $rol podrás elegir la tienda después.';
-		}
-		return 'Hola ${usuario.nombre}. Acceso como $rol a tu tienda asignada.';
 	}
 
 	Widget _tarjetaIdentificacion(BuildContext context) {
@@ -96,10 +132,29 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 				child: Column(
 					crossAxisAlignment: CrossAxisAlignment.stretch,
 					children: [
+						if (_biometriaDisponible && _perfilesBiometricos.isNotEmpty) ...[
+							_seccionAccesoBiometrico(context),
+							Padding(
+								padding: const EdgeInsets.symmetric(vertical: 12.0),
+								child: Row(
+									children: [
+										Expanded(child: Divider(color: Colors.grey.shade300)),
+										Padding(
+											padding: const EdgeInsets.symmetric(horizontal: 10.0),
+											child: Text(
+												'o',
+												style: TextStyle(color: Colors.grey.shade500, fontSize: 13.0),
+											),
+										),
+										Expanded(child: Divider(color: Colors.grey.shade300)),
+									],
+								),
+							),
+						],
 						TextField(
 							controller: _codigoController,
 							focusNode: _codigoFocus,
-							autofocus: true,
+							autofocus: _perfilesBiometricos.isEmpty,
 							keyboardType: TextInputType.text,
 							textCapitalization: TextCapitalization.characters,
 							autocorrect: false,
@@ -110,14 +165,24 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 							],
 							decoration: InputDecoration(
 								labelText: 'Usuario',
-								hintText: 'Ej. ADM001 o CAJERO1',
+								hintText: 'ADM001',
 								prefixIcon: const Icon(Icons.person_outline),
+								suffixIcon: _codigoFocus.hasFocus
+									? IconButton(
+										icon: const Icon(Icons.keyboard_hide),
+										tooltip: 'Ocultar teclado',
+										onPressed: () => ocultarTeclado(context),
+									)
+									: null,
 								border: OutlineInputBorder(
 									borderRadius: BorderRadius.circular(12.0),
 								),
 								filled: true,
 							),
-							onSubmitted: (_) => _continuarIdentificacion(),
+							onSubmitted: (_) {
+								ocultarTeclado(context);
+								_continuarIdentificacion();
+							},
 							onChanged: (_) => setState(() => _mensajeError = null),
 						),
 						if (_mensajeError != null) ...[
@@ -148,6 +213,41 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 		);
 	}
 
+	Widget _seccionAccesoBiometrico(BuildContext context) {
+		if (_perfilesBiometricos.length == 1) {
+			final perfil = _perfilesBiometricos.first;
+			return SizedBox(
+				width: double.infinity,
+				height: 52.0,
+				child: FilledButton.tonalIcon(
+					onPressed: _validando ? null : () => _iniciarConBiometria(perfil.usuarioId),
+					icon: const Icon(Icons.face_unlock_outlined),
+					label: Text(perfil.nombre),
+				),
+			);
+		}
+		return Column(
+			children: _perfilesBiometricos.map((perfil) {
+				return Padding(
+					padding: const EdgeInsets.only(bottom: 8.0),
+					child: ListTile(
+						shape: RoundedRectangleBorder(
+							borderRadius: BorderRadius.circular(12.0),
+							side: BorderSide(color: Colors.grey.shade300),
+						),
+						leading: CircleAvatar(
+							backgroundColor: PosiaColors.cobrar.withValues(alpha: 0.12),
+							child: const Icon(Icons.face_unlock_outlined, color: PosiaColors.cobrar),
+						),
+						title: Text(perfil.nombre),
+						trailing: const Icon(Icons.chevron_right),
+						onTap: _validando ? null : () => _iniciarConBiometria(perfil.usuarioId),
+					),
+				);
+			}).toList(),
+		);
+	}
+
 	Widget _tarjetaContrasena(BuildContext context) {
 		final usuario = _usuarioIdentificado!;
 		final colorRol = PresentacionRol.color(usuario.rol);
@@ -159,40 +259,22 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 					crossAxisAlignment: CrossAxisAlignment.stretch,
 					children: [
 						Row(
+							mainAxisAlignment: MainAxisAlignment.center,
 							children: [
 								CircleAvatar(
 									backgroundColor: colorRol.withValues(alpha: 0.12),
+									radius: 28.0,
 									child: Icon(
 										PresentacionRol.icono(usuario.rol),
 										color: colorRol,
-									),
-								),
-								const SizedBox(width: 12.0),
-								Expanded(
-									child: Column(
-										crossAxisAlignment: CrossAxisAlignment.start,
-										children: [
-											Text(
-												usuario.nombre,
-												style: Theme.of(context).textTheme.titleMedium?.copyWith(
-													fontWeight: FontWeight.w600,
-												),
-											),
-											const SizedBox(height: 4.0),
-											InsigniaRol(rol: usuario.rol, compacto: true),
-										],
+										size: 28.0,
 									),
 								),
 							],
 						),
-						const SizedBox(height: 20.0),
-						Text(
-							'Contraseña',
-							style: Theme.of(context).textTheme.titleSmall?.copyWith(
-								fontWeight: FontWeight.w600,
-							),
-						),
-						const SizedBox(height: 12.0),
+						const SizedBox(height: 8.0),
+						Center(child: InsigniaRol(rol: usuario.rol, compacto: true)),
+						const SizedBox(height: 16.0),
 						DecoratedBox(
 							decoration: BoxDecoration(
 								color: colorRol.withValues(alpha: 0.06),
@@ -232,6 +314,66 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 				),
 			),
 		);
+	}
+
+	Future<void> _iniciarConBiometria(String usuarioId) async {
+		final tenantId = _tenantId;
+		if (tenantId == null || tenantId.isEmpty) {
+			return;
+		}
+		setState(() {
+			_validando = true;
+			_mensajeError = null;
+		});
+		try {
+			final perfil = await _gestorBiometria.autenticarYRecuperar(
+				tenantId: tenantId,
+				usuarioId: usuarioId,
+			);
+			if (perfil == null) {
+				if (mounted) {
+					setState(() => _mensajeError = '$_etiquetaBiometria no disponible');
+				}
+				return;
+			}
+			final auth = await ref.read(servicioAutenticacionProvider.future);
+			final intento = await auth.autenticar(perfil.codigo, perfil.pin);
+			if (!intento.exitoso) {
+				if (!mounted) {
+					return;
+				}
+				await _gestorBiometria.eliminarPerfil(perfil.usuarioId);
+				await _prepararBiometria();
+				setState(() {
+					_mensajeError = intento.motivoFallo?.mensajeUsuario ??
+						'PIN desactualizado';
+				});
+				return;
+			}
+			final usuario = await ServicioInicioSesion.completar(
+				ref,
+				intento.resultado!,
+				pinPlano: perfil.pin,
+			);
+			if (!mounted) {
+				return;
+			}
+			ScaffoldMessenger.of(context).showSnackBar(
+				SnackBar(
+					content: Text('Hola, ${usuario.nombre}'),
+					backgroundColor: PresentacionRol.color(usuario.rol),
+					duration: const Duration(seconds: 2),
+				),
+			);
+		} on Object catch (error) {
+			if (mounted) {
+				setState(() => _mensajeError = '$error');
+			}
+		} finally {
+			if (mounted) {
+				setState(() => _validando = false);
+			}
+		}
 	}
 
 	Future<void> _continuarIdentificacion() async {
@@ -324,78 +466,32 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 				return;
 			}
 
-			final resultado = intento.resultado!;
-			final usuario = resultado.usuario;
-			final tenantId = resultado.tenantId;
-
-			await PosiaLocalDatabase.obtenerInstancia().establecerTenant(tenantId);
-			final configRepo = await ref.read(configDispositivoRepoProvider.future);
-			final config = await configRepo.obtenerConfigDispositivo();
-			await configRepo.guardarConfigDispositivo(
-				ConfigDispositivo(
-					tenantId: tenantId,
-					tiendaId: config.tiendaId,
-					cajaId: config.cajaId,
-					nombreCaja: config.nombreCaja,
-				),
+			final registrarBiometria = esPlataformaMovilNativa();
+			final usuario = await ServicioInicioSesion.completar(
+				ref,
+				intento.resultado!,
+				pinPlano: pin,
+				registrarBiometria: registrarBiometria,
 			);
-			await auth.guardarUsuarioRemoto(resultado);
 
-			ref.read(sesionUsuarioProvider.notifier).iniciar(usuario);
-			ref.invalidate(contenedorServiciosProvider);
-			await ref.read(contenedorServiciosProvider.future);
-
-			final servicio = await ref.read(servicioAdminProvider.future);
-			final hubUrl = await configRepo.obtenerHubUrl();
-			final hubApiKey = await configRepo.obtenerValor(claveConfigHubApiKey);
-			HubSyncClient? clienteHub;
-			if (hubUrl != null && hubUrl.isNotEmpty) {
-				clienteHub = HubSyncClient(urlBase: hubUrl, claveApi: hubApiKey);
+			if (!mounted) {
+				return;
 			}
-			await servicio.activarSesionTrasLogin(
-				usuario,
-				tenantId,
-				tiendasDesdeHub: resultado.tiendas,
-				obtenerTiendasRemotas: clienteHub == null
-					? null
-					: (id) async {
-						final remotas = await clienteHub!.obtenerTiendasPorTenant(id);
-						return remotas
-							.map(
-								(t) => Tienda(
-									id: t.id,
-									nombre: t.nombre,
-									direccion: t.direccion,
-									activa: t.activa,
-								),
-							)
-							.toList();
-					},
-			);
-			ref.invalidate(contenedorServiciosProvider);
-
-			if (usuario.rol != RolUsuario.administrador) {
-				final tiendaId = usuario.tiendaId;
-				if (tiendaId == null) {
-					throw StateError('Usuario sin tienda asignada');
-				}
-				ref.read(sesionTiendaProvider.notifier).confirmar(tiendaId);
+			if (registrarBiometria) {
+				await _prepararBiometria();
 			}
-
-			ref.read(sesionUsuarioProvider.notifier).iniciar(usuario);
-			final servicioCaja = await ref.read(servicioCajaProvider.future);
-			await servicioCaja.asegurarVendedorDesdeUsuario(usuario);
-
 			if (!mounted) {
 				return;
 			}
 			ScaffoldMessenger.of(context).showSnackBar(
 				SnackBar(
 					content: Text(
-						'Sesión iniciada · ${usuario.nombre} '
-						'(${PermisosUsuario.etiquetaRol(usuario.rol)})',
+						registrarBiometria && _biometriaDisponible
+							? 'Hola, ${usuario.nombre}'
+							: 'Hola, ${usuario.nombre}',
 					),
 					backgroundColor: PresentacionRol.color(usuario.rol),
+					duration: const Duration(seconds: 2),
 				),
 			);
 		} on Object catch (error) {
