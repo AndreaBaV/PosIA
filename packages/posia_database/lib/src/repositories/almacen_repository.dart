@@ -56,8 +56,13 @@ class AlmacenRepository {
 		);
 	}
 
-	Future<StockAlmacen?> obtenerStock(String productoId, String almacenId) async {
-		final filas = await _baseDatos.query(
+	Future<StockAlmacen?> obtenerStock(
+		String productoId,
+		String almacenId, {
+		DatabaseExecutor? db,
+	}) async {
+		final exec = db ?? _baseDatos;
+		final filas = await exec.query(
 			'stock_almacen',
 			where: 'producto_id = ? AND almacen_id = ?',
 			whereArgs: [productoId, almacenId],
@@ -69,8 +74,9 @@ class AlmacenRepository {
 		return _mapearStock(filas.first);
 	}
 
-	Future<void> guardarStock(StockAlmacen stock) async {
-		await _baseDatos.insert(
+	Future<void> guardarStock(StockAlmacen stock, {DatabaseExecutor? db}) async {
+		final exec = db ?? _baseDatos;
+		await exec.insert(
 			'stock_almacen',
 			{
 				'producto_id': stock.productoId,
@@ -89,6 +95,20 @@ class AlmacenRepository {
 			where: 'almacen_id = ?',
 			whereArgs: [almacenId],
 		);
+		return filas.map(_mapearStock).toList();
+	}
+
+	Future<List<StockAlmacen>> listarStockPorProducto(String productoId) async {
+		final filas = await _baseDatos.query(
+			'stock_almacen',
+			where: 'producto_id = ?',
+			whereArgs: [productoId],
+		);
+		return filas.map(_mapearStock).toList();
+	}
+
+	Future<List<StockAlmacen>> listarTodoStock() async {
+		final filas = await _baseDatos.query('stock_almacen');
 		return filas.map(_mapearStock).toList();
 	}
 

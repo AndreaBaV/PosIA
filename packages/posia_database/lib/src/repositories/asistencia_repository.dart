@@ -10,8 +10,12 @@ class AsistenciaRepository {
 
 	final Database _baseDatos;
 
-	Future<void> guardarDesafio(DesafioAsistencia desafio) async {
-		await _baseDatos.insert(
+	Future<void> guardarDesafio(
+		DesafioAsistencia desafio, {
+		DatabaseExecutor? db,
+	}) async {
+		final exec = db ?? _baseDatos;
+		await exec.insert(
 			'desafios_asistencia',
 			{
 				'id': desafio.id,
@@ -28,8 +32,12 @@ class AsistenciaRepository {
 		);
 	}
 
-	Future<void> desactivarDesafiosTienda(String tiendaId) async {
-		await _baseDatos.update(
+	Future<void> desactivarDesafiosTienda(
+		String tiendaId, {
+		DatabaseExecutor? db,
+	}) async {
+		final exec = db ?? _baseDatos;
+		await exec.update(
 			'desafios_asistencia',
 			{'activo': 0},
 			where: 'tienda_id = ? AND activo = 1',

@@ -1,6 +1,7 @@
 /// Generador de texto plano para ticket de venta.
 library;
 
+import '../constants/posia_constants.dart';
 import '../models/linea_venta.dart';
 import '../models/turno_caja.dart';
 import '../models/traspaso.dart';
@@ -58,7 +59,7 @@ String generarTextoTicket({
   String? direccionCliente,
 }) {
   final buffer = StringBuffer()
-    ..writeln('========== POSIA ==========')
+    ..writeln('========== ${NOMBRE_COMERCIAL_APP.toUpperCase()} ==========')
     ..writeln(nombreTienda);
   if (direccionTienda != null && direccionTienda.trim().isNotEmpty) {
     buffer.writeln(direccionTienda.trim());
@@ -166,7 +167,7 @@ String generarTextoPagareCredito({
   String? rfcCliente,
 }) {
   final buffer = StringBuffer()
-    ..writeln('====== PAGARE POSIA ======')
+    ..writeln('====== PAGARE ${NOMBRE_COMERCIAL_APP.toUpperCase()} ======')
     ..writeln(etiquetaCopia.toUpperCase())
     ..writeln(nombreTienda);
   if (direccionTienda != null && direccionTienda.trim().isNotEmpty) {
@@ -349,7 +350,7 @@ String generarTextoTicketTraspaso({
   String? nombreOperador,
 }) {
   final buffer = StringBuffer()
-    ..writeln('====== TRASPASO POSIA ======')
+    ..writeln('====== TRASPASO ${NOMBRE_COMERCIAL_APP.toUpperCase()} ======')
     ..writeln('Folio: ${traspaso.id.substring(0, 8).toUpperCase()}')
     ..writeln('Fecha: ${_formatearFechaHora(traspaso.solicitadoEn)}')
     ..writeln('Origen: $nombreTiendaOrigen')

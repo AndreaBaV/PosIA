@@ -8,7 +8,6 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:posia_core/posia_core.dart';
-import 'package:posia_module_butcher/posia_module_butcher.dart';
 
 import '../theme/posia_theme.dart';
 

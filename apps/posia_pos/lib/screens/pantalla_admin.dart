@@ -5,105 +5,143 @@ import 'package:flutter/material.dart';
 import 'package:posia_core/posia_core.dart';
 import 'package:posia_ui/posia_ui.dart';
 
-import '../providers/admin_providers.dart';
-import 'pantalla_almacenes_admin.dart';
-import 'pantalla_asistencia_admin.dart';
-import 'pantalla_nomina_admin.dart';
-import 'pantalla_tipos_presentacion_admin.dart';
-import 'pantalla_categorias_admin.dart';
-import 'pantalla_clientes_admin.dart';
-import 'pantalla_compras_admin.dart';
-import 'pantalla_corte_caja.dart';
-import 'pantalla_cotizaciones_admin.dart';
-import 'pantalla_creditos_pendientes.dart';
-import 'pantalla_etiquetas_admin.dart';
-import 'pantalla_historial_ventas.dart';
-import 'pantalla_inventario_admin.dart';
-import 'pantalla_listas_precios_admin.dart';
-import 'pantalla_mi_cuenta.dart';
-import 'pantalla_movimientos_inventario.dart';
-import 'pantalla_pedidos_admin.dart';
-import 'pantalla_productos_admin.dart';
-import 'pantalla_proveedores_admin.dart';
-import 'pantalla_reportes_admin.dart';
-import 'pantalla_configuracion_admin.dart';
-import 'pantalla_sync_admin.dart';
-import 'pantalla_tiendas_admin.dart';
-import 'pantalla_traspasos_admin.dart';
-import 'pantalla_usuarios_admin.dart';
-import 'pantalla_ventas_dia.dart';
+import '../util/catalogo_menu_admin.dart';
 
 /// Panel admin organizado por secciones operativas.
-class PantallaAdmin extends StatelessWidget {
+class PantallaAdmin extends StatefulWidget {
 	const PantallaAdmin({required this.usuario, super.key});
 
 	final Usuario usuario;
 
 	@override
+	State<PantallaAdmin> createState() => _PantallaAdminState();
+}
+
+class _PantallaAdminState extends State<PantallaAdmin> {
+	final _busquedaController = TextEditingController();
+	String _filtro = '';
+
+	@override
+	void dispose() {
+		_busquedaController.dispose();
+		super.dispose();
+	}
+
+	@override
 	Widget build(BuildContext context) {
-		final tiles = _construirTiles(usuario);
-		final colorRol = PresentacionRol.color(usuario.rol);
+		final catalogo = construirCatalogoMenuAdmin(widget.usuario);
+		final filtradas = filtrarCatalogoMenuAdmin(catalogo, _filtro);
+		final colorRol = PresentacionRol.color(widget.usuario.rol);
+		final compacto = LayoutResponsivo.de(context) == TipoPantalla.compacto;
+		final buscando = _filtro.trim().isNotEmpty;
+
 		return Scaffold(
-			appBar: AppBar(
-				title: const Text('Administración'),
-			),
+			appBar: compacto
+				? null
+				: AppBar(
+					title: const Text('Administración'),
+				),
 			body: LayoutBuilder(
 				builder: (context, constraints) {
 					final padding = LayoutResponsivo.padding(constraints.maxWidth);
 					final columnas = LayoutResponsivo.columnasGrid(constraints.maxWidth);
-					final secciones = <Widget>[];
-					for (final entrada in tiles.entries) {
-						if (entrada.value.isEmpty) {
-							continue;
-						}
-						secciones.add(_seccion(context, entrada.key, entrada.value, columnas));
-					}
+					final agrupadas = agruparPorSeccion(filtradas);
+
 					return ListView(
-						padding: EdgeInsets.all(padding),
+						padding: EdgeInsets.fromLTRB(
+							padding,
+							compacto ? 8.0 : padding,
+							padding,
+							padding,
+						),
 						children: [
-							Card(
-								color: colorRol.withValues(alpha: 0.08),
-								child: Padding(
-									padding: const EdgeInsets.all(16.0),
-									child: Row(
-										children: [
-											CircleAvatar(
-												radius: 26.0,
-												backgroundColor: colorRol.withValues(alpha: 0.15),
-												child: Icon(
-													PresentacionRol.icono(usuario.rol),
-													color: colorRol,
-													size: 28.0,
-												),
-											),
-											const SizedBox(width: 14.0),
-											Expanded(
-												child: Column(
-													crossAxisAlignment: CrossAxisAlignment.start,
-													children: [
-														Text(
-															usuario.nombre,
-															style: Theme.of(context).textTheme.titleMedium?.copyWith(
-																fontWeight: FontWeight.bold,
-															),
-														),
-														const SizedBox(height: 4.0),
-														InsigniaRol(rol: usuario.rol),
-														const SizedBox(height: 6.0),
-														Text(
-															PermisosUsuario.descripcionRol(usuario.rol),
-															style: Theme.of(context).textTheme.bodySmall?.copyWith(
-																color: Colors.grey.shade700,
-															),
-														),
-													],
-												),
-											),
-										],
+							CampoBusqueda(
+								controlador: _busquedaController,
+								sugerencia: 'Buscar en administración…',
+								alCambiar: (v) => setState(() => _filtro = v),
+							),
+							if (buscando) ...[
+								Padding(
+									padding: const EdgeInsets.fromLTRB(16.0, 0.0, 16.0, 8.0),
+									child: Text(
+										filtradas.isEmpty
+											? 'Sin resultados para "$_filtro"'
+											: '${filtradas.length} resultado${filtradas.length == 1 ? '' : 's'}',
+										style: Theme.of(context).textTheme.bodySmall?.copyWith(
+											color: Colors.grey.shade700,
+										),
 									),
 								),
-							),
-							...secciones,
+								if (filtradas.isEmpty)
+									Padding(
+										padding: const EdgeInsets.symmetric(horizontal: 16.0),
+										child: Text(
+											'Pruebe con otra palabra: latitud, productos, crédito, sync…',
+											style: TextStyle(color: Colors.grey.shade600, fontSize: 13.0),
+										),
+									)
+								else
+									...filtradas.map(
+										(e) => _ResultadoBusquedaAdmin(
+											entrada: e,
+											alPresionar: () => _abrirEntrada(context, e),
+										),
+									),
+							] else ...[
+								if (!compacto)
+									Card(
+										color: colorRol.withValues(alpha: 0.08),
+										child: Padding(
+											padding: const EdgeInsets.all(16.0),
+											child: Row(
+												children: [
+													CircleAvatar(
+														radius: 26.0,
+														backgroundColor: colorRol.withValues(alpha: 0.15),
+														child: Icon(
+															PresentacionRol.icono(widget.usuario.rol),
+															color: colorRol,
+															size: 28.0,
+														),
+													),
+													const SizedBox(width: 14.0),
+													Expanded(
+														child: Column(
+															crossAxisAlignment: CrossAxisAlignment.start,
+															children: [
+																Text(
+																	widget.usuario.nombre,
+																	style: Theme.of(context)
+																		.textTheme
+																		.titleMedium
+																		?.copyWith(fontWeight: FontWeight.bold),
+																	maxLines: 1,
+																	overflow: TextOverflow.ellipsis,
+																),
+																const SizedBox(height: 4.0),
+																InsigniaRol(rol: widget.usuario.rol),
+																const SizedBox(height: 6.0),
+																Text(
+																	PermisosUsuario.descripcionRol(widget.usuario.rol),
+																	style: Theme.of(context).textTheme.bodySmall?.copyWith(
+																		color: Colors.grey.shade700,
+																	),
+																),
+															],
+														),
+													),
+												],
+											),
+										),
+									),
+								for (final entrada in agrupadas.entries)
+									_seccion(
+										context,
+										entrada.key,
+										entrada.value,
+										columnas,
+									),
+							],
 						],
 					);
 				},
@@ -111,111 +149,16 @@ class PantallaAdmin extends StatelessWidget {
 		);
 	}
 
-	Map<String, List<Widget>> _construirTiles(Usuario? usuario) {
-		Widget? tile(
-			String clave,
-			IconData icono,
-			String titulo,
-			String subtitulo,
-			Color color,
-			Widget destino,
-		) {
-			if (!tileAdminVisible(usuario, clave)) {
-				return null;
-			}
-			return _AdminTile(
-				icono: icono,
-				titulo: titulo,
-				subtitulo: subtitulo,
-				color: color,
-				destino: destino,
-			);
-		}
-
-		final cuenta = [
-			tile('mi_cuenta', Icons.account_circle, 'Mi cuenta', 'Perfil y PIN',
-				Colors.blueGrey, const PantallaMiCuenta()),
-			tile('usuarios', Icons.groups, 'Equipo', 'Cuentas, PIN y ventas',
-				Colors.deepPurple, const PantallaUsuariosAdmin()),
-			tile('asistencia', Icons.pin, 'Asistencia', 'PIN entrada empleados',
-				Colors.teal, const PantallaAsistenciaAdmin()),
-			tile('nomina', Icons.payments, 'Nómina', 'Horas y tarifa',
-				Colors.green.shade700, const PantallaNominaAdmin()),
-		].whereType<Widget>().toList();
-
-		final ventas = [
-			tile('ventas', Icons.attach_money, 'Ventas por tienda', 'Detalle multi-sucursal',
-				PosiaColors.cobrar, const PantallaVentasDia()),
-			tile('pedidos', Icons.local_shipping, 'Pedidos', 'Recibir y asignar a empleados',
-				Colors.deepOrange, const PantallaPedidosAdmin()),
-			tile('historial', Icons.history, 'Historial', 'Ventas y cancelaciones',
-				Colors.green, const PantallaHistorialVentas()),
-			tile('creditos', Icons.account_balance_wallet, 'Créditos', 'Fiar, pendientes y liquidar',
-				Colors.amber.shade800, const PantallaCreditosPendientes()),
-			tile('cotizaciones', Icons.request_quote, 'Cotizaciones', 'Historial guardado',
-				Colors.blueGrey, const PantallaCotizacionesAdmin()),
-			tile('corte', Icons.point_of_sale, 'Corte de caja', 'Abrir / cerrar turno',
-				Colors.teal, const PantallaCorteCaja()),
-		].whereType<Widget>().toList();
-
-		final catalogo = [
-			tile('categorias', Icons.category, 'Categorías', 'Iconos, color y orden',
-				Colors.orange, const PantallaCategoriasAdmin()),
-			tile('productos', Icons.inventory_2, 'Productos', 'Catálogo unificado',
-				PosiaColors.neutro, const PantallaProductosAdmin()),
-			tile('etiquetas', Icons.label, 'Etiquetas', 'PDF con código de barras',
-				Colors.blueGrey, const PantallaEtiquetasAdmin()),
-			tile('precios', Icons.sell, 'Listas de precios', 'Precios por lista y clientes',
-				Colors.green, const PantallaListasPreciosAdmin()),
-		].whereType<Widget>().toList();
-
-		final inventario = [
-			tile('existencias', Icons.warehouse, 'Existencias', 'Multi-tienda',
-				Colors.blueGrey, const PantallaInventarioAdmin()),
-			tile('compras', Icons.shopping_cart, 'Compras', 'Proveedor, productos y costo',
-				Colors.brown, const PantallaComprasAdmin()),
-			tile('movimientos', Icons.swap_vert, 'Movimientos', 'Salidas y ajustes',
-				Colors.indigo, const PantallaMovimientosInventario()),
-			tile('traspasos', Icons.swap_horiz, 'Traspasos', 'Entre sucursales',
-				Colors.cyan, const PantallaTraspasosAdmin()),
-			tile('almacenes', Icons.inventory, 'Almacenes', 'Centros de distribución',
-				Colors.blue, const PantallaAlmacenesAdmin()),
-			tile('presentaciones', Icons.layers, 'Presentaciones', 'Tipos caja/bulto',
-				Colors.orange.shade800, const PantallaTiposPresentacionAdmin()),
-		].whereType<Widget>().toList();
-
-		final personas = [
-			tile('clientes', Icons.people, 'Clientes', 'Gestión de clientes',
-				Colors.blue, const PantallaClientesAdmin()),
-			tile('proveedores', Icons.local_shipping, 'Proveedores', 'Gestión de proveedores',
-				Colors.brown, const PantallaProveedoresAdmin()),
-		].whereType<Widget>().toList();
-
-		final sistema = [
-			tile('tiendas', Icons.store, 'Tiendas', 'Alta, baja y límite 5',
-				Colors.deepOrange, const PantallaTiendasAdmin()),
-			tile('reportes', Icons.assessment, 'Reportes', 'Ventas y alertas',
-				Colors.purple, const PantallaReportesAdmin()),
-			tile('sync', Icons.cloud_sync, 'Estado de la nube', 'Sync automática',
-				Colors.indigo, const PantallaSyncAdmin()),
-			tile('config', Icons.settings, 'Configuración', 'PIN y dispositivo',
-				Colors.grey, const PantallaConfiguracionAdmin()),
-		].whereType<Widget>().toList();
-
-		return {
-			'Cuenta': cuenta,
-			'Ventas': ventas,
-			'Catálogo': catalogo,
-			'Inventario': inventario,
-			'Personas': personas,
-			'Reportes y sistema': sistema,
-		};
+	void _abrirEntrada(BuildContext context, EntradaMenuAdmin entrada) {
+		Navigator.of(context).push(
+			MaterialPageRoute<void>(builder: (_) => entrada.destino),
+		);
 	}
 
 	Widget _seccion(
 		BuildContext context,
 		String titulo,
-		List<Widget> hijos,
+		List<EntradaMenuAdmin> entradas,
 		int columnas,
 	) {
 		return Column(
@@ -250,7 +193,17 @@ class PantallaAdmin extends StatelessWidget {
 					mainAxisSpacing: 12.0,
 					crossAxisSpacing: 12.0,
 					childAspectRatio: columnas >= 4 ? 1.05 : 1.1,
-					children: hijos,
+					children: entradas
+						.map(
+							(e) => TarjetaMenuAdmin(
+								icono: e.icono,
+								titulo: e.titulo,
+								subtitulo: e.subtitulo,
+								color: e.color,
+								alPresionar: () => _abrirEntrada(context, e),
+							),
+						)
+						.toList(),
 				),
 				const SizedBox(height: 8.0),
 			],
@@ -258,33 +211,51 @@ class PantallaAdmin extends StatelessWidget {
 	}
 }
 
-class _AdminTile extends StatelessWidget {
-	const _AdminTile({
-		required this.icono,
-		required this.titulo,
-		required this.subtitulo,
-		required this.color,
-		required this.destino,
+class _ResultadoBusquedaAdmin extends StatelessWidget {
+	const _ResultadoBusquedaAdmin({
+		required this.entrada,
+		required this.alPresionar,
 	});
 
-	final IconData icono;
-	final String titulo;
-	final String subtitulo;
-	final Color color;
-	final Widget destino;
+	final EntradaMenuAdmin entrada;
+	final VoidCallback alPresionar;
 
 	@override
 	Widget build(BuildContext context) {
-		return TarjetaMenuAdmin(
-			icono: icono,
-			titulo: titulo,
-			subtitulo: subtitulo,
-			color: color,
-			alPresionar: () {
-				Navigator.of(context).push(
-					MaterialPageRoute<void>(builder: (_) => destino),
-				);
-			},
+		return Card(
+			margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+			child: ListTile(
+				leading: CircleAvatar(
+					backgroundColor: entrada.color.withValues(alpha: 0.15),
+					child: Icon(entrada.icono, color: entrada.color, size: 22.0),
+				),
+				title: Text(
+					entrada.titulo,
+					maxLines: 1,
+					overflow: TextOverflow.ellipsis,
+				),
+				subtitle: Column(
+					crossAxisAlignment: CrossAxisAlignment.start,
+					children: [
+						const SizedBox(height: 2.0),
+						Text(
+							entrada.subtitulo,
+							maxLines: 2,
+							overflow: TextOverflow.ellipsis,
+						),
+						const SizedBox(height: 4.0),
+						Text(
+							entrada.seccion,
+							style: Theme.of(context).textTheme.labelSmall?.copyWith(
+								color: PosiaColors.cobrar,
+								fontWeight: FontWeight.w600,
+							),
+						),
+					],
+				),
+				trailing: const Icon(Icons.chevron_right),
+				onTap: alPresionar,
+			),
 		);
 	}
 }

@@ -30,7 +30,9 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 	String? _tiendaOrigenId;
 	String? _tiendaDestinoId;
 	String? _almacenOrigenId;
+	String? _almacenDestinoId;
 	var _origenEsAlmacen = false;
+	var _destinoEsAlmacen = false;
 	String _filtroHistorial = '';
 	String _filtroProducto = '';
 
@@ -102,8 +104,17 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 		final origenId = _origenEsAlmacen
 			? _almacenOrigenId ?? datos.almacenes.firstOrNull?.id
 			: _resolverOrigenId(datos, operador);
-		final destinos = datos.tiendas.where((t) => t.id != origenId).toList();
-		final destinoId = _tiendaDestinoId ?? destinos.firstOrNull?.id;
+		final destinosTienda = datos.tiendas
+			.where((t) => !_origenEsAlmacen && t.id != origenId)
+			.toList();
+		final destinosAlmacen = datos.almacenes
+			.where((a) => _origenEsAlmacen && a.id != origenId)
+			.toList();
+		final destinoId = _origenEsAlmacen
+			? (_destinoEsAlmacen
+				? _almacenDestinoId ?? destinosAlmacen.firstOrNull?.id
+				: _tiendaDestinoId ?? destinosTienda.firstOrNull?.id)
+			: _tiendaDestinoId ?? destinosTienda.firstOrNull?.id;
 		final productos = _origenEsAlmacen
 			? (datos.productosPorAlmacen[origenId] ?? [])
 					.map((e) => e.producto)
@@ -139,6 +150,7 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 								selected: {_origenEsAlmacen},
 								onSelectionChanged: (v) => setState(() {
 									_origenEsAlmacen = v.first;
+									_destinoEsAlmacen = false;
 									_seleccionados.clear();
 								}),
 							),
@@ -189,26 +201,59 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 									),
 								),
 							const SizedBox(height: 8.0),
-							DropdownButtonFormField<String>(
-								initialValue: destinoId,
-								items: destinos
-									.map(
-										(t) => DropdownMenuItem(
-											value: t.id,
-											child: Text(t.nombre),
-										),
-									)
-									.toList(),
-								onChanged: destinos.isEmpty
-									? null
-									: (v) => setState(() => _tiendaDestinoId = v),
-								decoration: InputDecoration(
-									labelText: _origenEsAlmacen
-										? 'Tienda destino (abastecimiento)'
-										: 'Tienda destino',
-									border: const OutlineInputBorder(),
+							if (_origenEsAlmacen)
+								SegmentedButton<bool>(
+									segments: const [
+										ButtonSegment(value: false, label: Text('A tienda')),
+										ButtonSegment(value: true, label: Text('A almacén')),
+									],
+									selected: {_destinoEsAlmacen},
+									onSelectionChanged: (v) => setState(() {
+										_destinoEsAlmacen = v.first;
+										_seleccionados.clear();
+									}),
 								),
-							),
+							if (_origenEsAlmacen) const SizedBox(height: 8.0),
+							if (_origenEsAlmacen && _destinoEsAlmacen)
+								DropdownButtonFormField<String>(
+									initialValue: destinoId,
+									items: destinosAlmacen
+										.map(
+											(a) => DropdownMenuItem(
+												value: a.id,
+												child: Text(a.nombre),
+											),
+										)
+										.toList(),
+									onChanged: destinosAlmacen.isEmpty
+										? null
+										: (v) => setState(() => _almacenDestinoId = v),
+									decoration: const InputDecoration(
+										labelText: 'Almacén destino',
+										border: OutlineInputBorder(),
+									),
+								)
+							else
+								DropdownButtonFormField<String>(
+									initialValue: destinoId,
+									items: destinosTienda
+										.map(
+											(t) => DropdownMenuItem(
+												value: t.id,
+												child: Text(t.nombre),
+											),
+										)
+										.toList(),
+									onChanged: destinosTienda.isEmpty
+										? null
+										: (v) => setState(() => _tiendaDestinoId = v),
+									decoration: InputDecoration(
+										labelText: _origenEsAlmacen
+											? 'Tienda destino (abastecimiento)'
+											: 'Tienda destino',
+										border: const OutlineInputBorder(),
+									),
+								),
 						],
 					),
 				),
@@ -309,6 +354,7 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 										destinoId: destinoId,
 										operador: operador,
 										desdeAlmacen: _origenEsAlmacen,
+										destinoAlmacen: _destinoEsAlmacen,
 									)
 									: null,
 								icon: const Icon(Icons.swap_horiz),
@@ -425,27 +471,45 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 		required String destinoId,
 		required Usuario? operador,
 		bool desdeAlmacen = false,
+		bool destinoAlmacen = false,
 	}) async {
 		try {
 			final servicio = await ref.read(servicioAdminProvider.future);
 			if (desdeAlmacen) {
-				await servicio.traspasarAlmacenATiendaMultiple(
-					almacenId: origenId,
-					tiendaDestinoId: destinoId,
-					lineas: _construirLineas(),
-				);
+				if (destinoAlmacen) {
+					await servicio.traspasarAlmacenAAlmacenMultiple(
+						almacenOrigenId: origenId,
+						almacenDestinoId: destinoId,
+						lineas: _construirLineas(),
+					);
+					if (!mounted) {
+						return;
+					}
+					ScaffoldMessenger.of(context).showSnackBar(
+						const SnackBar(
+							content: Text('Traspaso entre almacenes completado'),
+							backgroundColor: PosiaColors.cobrar,
+						),
+					);
+				} else {
+					await servicio.traspasarAlmacenATiendaMultiple(
+						almacenId: origenId,
+						tiendaDestinoId: destinoId,
+						lineas: _construirLineas(),
+					);
+					if (!mounted) {
+						return;
+					}
+					ScaffoldMessenger.of(context).showSnackBar(
+						const SnackBar(
+							content: Text('Abastecimiento desde almacén completado'),
+							backgroundColor: PosiaColors.cobrar,
+						),
+					);
+				}
 				ref.invalidate(_traspasosDatosProvider);
 				_limpiarSeleccion();
 				_notasController.clear();
-				if (!mounted) {
-					return;
-				}
-				ScaffoldMessenger.of(context).showSnackBar(
-					const SnackBar(
-						content: Text('Abastecimiento desde almacén completado'),
-						backgroundColor: PosiaColors.cobrar,
-					),
-				);
 				return;
 			}
 			final traspaso = await servicio.realizarTraspasoMultiple(

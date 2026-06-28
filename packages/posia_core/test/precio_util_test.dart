@@ -58,4 +58,21 @@ void main() {
 			20.0,
 		);
 	});
+
+	test('precioPresentacionEsValido valida precio total del paquete', () {
+		expect(calcularPrecioMinimoPresentacion(10.0, 12.0), 121.2);
+		expect(precioPresentacionEsValido(120.0, 10.0, 12.0), false);
+		expect(precioPresentacionEsValido(121.2, 10.0, 12.0), true);
+	});
+
+	test('errorPrecioVentaDesdeTexto interpreta coma decimal', () {
+		expect(
+			errorPrecioVentaDesdeTexto('101,00', costoUnitario: 100.0),
+			isNull,
+		);
+		expect(
+			errorPrecioVentaDesdeTexto('100,00', costoUnitario: 100.0),
+			isNotNull,
+		);
+	});
 }

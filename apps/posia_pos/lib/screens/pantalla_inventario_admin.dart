@@ -17,6 +17,7 @@ import 'package:posia_ui/posia_ui.dart';
 
 
 import '../providers/admin_providers.dart';
+import '../providers/inventario_admin_providers.dart';
 import 'pantalla_compras_admin.dart';
 
 
@@ -61,9 +62,9 @@ class _PantallaInventarioAdminState extends ConsumerState<PantallaInventarioAdmi
 
 	@override
 	Widget build(BuildContext context) {
-		final tiendasAsync = ref.watch(_tiendasInventarioProvider);
+		final tiendasAsync = ref.watch(tiendasInventarioProvider);
 		final tiendaGestionId = _tiendaOperacionId ?? tiendasAsync.asData?.value.firstOrNull?.id;
-		final inventarioAsync = ref.watch(_inventarioAgrupadoProvider(tiendaGestionId));
+		final inventarioAsync = ref.watch(inventarioAgrupadoProvider(tiendaGestionId));
 		return Scaffold(
 			appBar: AppBar(title: const Text('Existencias')),
 			body: Column(
@@ -154,14 +155,67 @@ class _PantallaInventarioAdminState extends ConsumerState<PantallaInventarioAdmi
 								}
 
 								final nombreTienda = datos.nombresTienda[tiendaId] ?? 'Tienda';
+								final totalTiendas = filtrados.fold<double>(
+									0.0,
+									(s, r) => s + r.totalGlobal,
+								);
+								final totalAlmacenes = filtrados.fold<double>(
+									0.0,
+									(s, r) => s + r.totalAlmacenes,
+								);
 
 								return ListView.builder(
-
-									itemCount: filtrados.length,
-
+									itemCount: filtrados.length + 1,
 									itemBuilder: (_, i) {
+										if (i == 0) {
+											return Card(
+												margin: const EdgeInsets.fromLTRB(12.0, 8.0, 12.0, 8.0),
+												color: PosiaColors.tarjeta,
+												child: Padding(
+													padding: const EdgeInsets.all(16.0),
+													child: Column(
+														crossAxisAlignment: CrossAxisAlignment.stretch,
+														children: [
+															Text(
+																'Resumen general',
+																style: Theme.of(context).textTheme.titleSmall,
+															),
+															const SizedBox(height: 8.0),
+															Row(
+																children: [
+																	Expanded(
+																		child: _KpiExistencia(
+																			etiqueta: 'En tiendas',
+																			valor: totalTiendas,
+																			icono: Icons.storefront,
+																			color: PosiaColors.cobrar,
+																		),
+																	),
+																	const SizedBox(width: 8.0),
+																	Expanded(
+																		child: _KpiExistencia(
+																			etiqueta: 'En almacenes',
+																			valor: totalAlmacenes,
+																			icono: Icons.warehouse,
+																			color: PosiaColors.neutro,
+																		),
+																	),
+																],
+															),
+															const SizedBox(height: 8.0),
+															_KpiExistencia(
+																etiqueta: 'Total empresa',
+																valor: totalTiendas + totalAlmacenes,
+																icono: Icons.inventory_2,
+																color: Theme.of(context).colorScheme.primary,
+															),
+														],
+													),
+												),
+											);
+										}
 
-										final reg = filtrados[i];
+										final reg = filtrados[i - 1];
 
 										final cantidadTienda = reg.cantidadEn(tiendaId);
 
@@ -197,16 +251,77 @@ class _PantallaInventarioAdminState extends ConsumerState<PantallaInventarioAdmi
 
 												subtitle: Text(
 													'$nombreTienda: ${cantidadTienda.toStringAsFixed(1)} · '
-													'Total: ${reg.totalGlobal.toStringAsFixed(1)}',
+													'Almacenes: ${reg.totalAlmacenes.toStringAsFixed(1)} · '
+													'Total: ${reg.totalEmpresa.toStringAsFixed(1)}',
 												),
 
 												children: [
-
-													...reg.existenciasPorTienda.entries.map(
-														(e) => ListTile(
+													if (reg.existenciasPorTienda.isNotEmpty) ...[
+														const ListTile(
 															dense: true,
-															title: Text(e.key),
-															trailing: Text(e.value.toStringAsFixed(1)),
+															title: Text(
+																'Tiendas',
+																style: TextStyle(fontWeight: FontWeight.w600),
+															),
+														),
+														...reg.existenciasPorTienda.entries.map(
+															(e) => ListTile(
+																dense: true,
+																leading: const Icon(Icons.storefront, size: 18.0),
+																title: Text(e.key),
+																trailing: Text(e.value.toStringAsFixed(1)),
+															),
+														),
+														ListTile(
+															dense: true,
+															title: const Text(
+																'Subtotal tiendas',
+																style: TextStyle(fontWeight: FontWeight.w500),
+															),
+															trailing: Text(
+																reg.totalGlobal.toStringAsFixed(1),
+																style: const TextStyle(fontWeight: FontWeight.bold),
+															),
+														),
+													],
+													if (reg.existenciasPorAlmacen.isNotEmpty) ...[
+														const Divider(height: 8.0),
+														const ListTile(
+															dense: true,
+															title: Text(
+																'Almacenes',
+																style: TextStyle(fontWeight: FontWeight.w600),
+															),
+														),
+														...reg.existenciasPorAlmacen.entries.map(
+															(e) => ListTile(
+																dense: true,
+																leading: const Icon(Icons.warehouse, size: 18.0),
+																title: Text(e.key),
+																trailing: Text(e.value.toStringAsFixed(1)),
+															),
+														),
+														ListTile(
+															dense: true,
+															title: const Text(
+																'Subtotal almacenes',
+																style: TextStyle(fontWeight: FontWeight.w500),
+															),
+															trailing: Text(
+																reg.totalAlmacenes.toStringAsFixed(1),
+																style: const TextStyle(fontWeight: FontWeight.bold),
+															),
+														),
+													],
+													ListTile(
+														dense: true,
+														title: const Text(
+															'Total general',
+															style: TextStyle(fontWeight: FontWeight.bold),
+														),
+														trailing: Text(
+															reg.totalEmpresa.toStringAsFixed(1),
+															style: const TextStyle(fontWeight: FontWeight.bold),
 														),
 													),
 
@@ -371,8 +486,8 @@ class _PantallaInventarioAdminState extends ConsumerState<PantallaInventarioAdmi
 				tiendaId: tiendaId,
 				operador: operador,
 			);
-			ref.invalidate(_inventarioAgrupadoProvider);
-			await ref.read(_inventarioAgrupadoProvider(tiendaId).future);
+			ref.invalidate(inventarioAgrupadoProvider);
+			await ref.read(inventarioAgrupadoProvider(tiendaId).future);
 			if (!mounted) {
 				return;
 			}
@@ -396,72 +511,49 @@ class _PantallaInventarioAdminState extends ConsumerState<PantallaInventarioAdmi
 	}
 }
 
-
-
-class _DatosInventarioAgrupado {
-
-	const _DatosInventarioAgrupado({
-
-		required this.registros,
-
-		required this.tiendaReferenciaId,
-
-		required this.nombresTienda,
-
+class _KpiExistencia extends StatelessWidget {
+	const _KpiExistencia({
+		required this.etiqueta,
+		required this.valor,
+		required this.icono,
+		required this.color,
 	});
 
+	final String etiqueta;
+	final double valor;
+	final IconData icono;
+	final Color color;
 
-
-	final List<InventarioAgrupado> registros;
-
-	final String tiendaReferenciaId;
-
-	final Map<String, String> nombresTienda;
-
+	@override
+	Widget build(BuildContext context) {
+		return Container(
+			padding: const EdgeInsets.all(12.0),
+			decoration: BoxDecoration(
+				borderRadius: BorderRadius.circular(8.0),
+				border: Border.all(color: color.withValues(alpha: 0.3)),
+			),
+			child: Row(
+				children: [
+					Icon(icono, color: color, size: 22.0),
+					const SizedBox(width: 8.0),
+					Expanded(
+						child: Column(
+							crossAxisAlignment: CrossAxisAlignment.start,
+							children: [
+								Text(etiqueta, style: Theme.of(context).textTheme.labelSmall),
+								Text(
+									valor.toStringAsFixed(1),
+									style: Theme.of(context).textTheme.titleMedium?.copyWith(
+										fontWeight: FontWeight.bold,
+										color: color,
+									),
+								),
+							],
+						),
+					),
+				],
+			),
+		);
+	}
 }
-
-
-
-final _tiendasInventarioProvider = FutureProvider<List<Tienda>>((ref) async {
-
-	final servicio = await ref.watch(servicioAdminProvider.future);
-
-	final operador = ref.watch(sesionUsuarioProvider);
-
-	return servicio.obtenerTiendasPermitidas(operador: operador);
-
-});
-
-
-
-final _inventarioAgrupadoProvider = FutureProvider.family<_DatosInventarioAgrupado, String?>(
-
-	(ref, tiendaReferenciaId) async {
-
-		final servicio = await ref.watch(servicioAdminProvider.future);
-
-		final tiendas = await servicio.obtenerTiendasPermitidas(
-
-			operador: ref.watch(sesionUsuarioProvider),
-
-		);
-
-		final referencia = tiendaReferenciaId ?? tiendas.firstOrNull?.id ?? servicio.tiendaActivaId;
-
-		final registros = await servicio.obtenerInventarioAgrupado(tiendaReferenciaId: referencia);
-
-		return _DatosInventarioAgrupado(
-
-			registros: registros,
-
-			tiendaReferenciaId: referencia,
-
-			nombresTienda: {for (final t in tiendas) t.id: t.nombre},
-
-		);
-
-	},
-
-);
-
 

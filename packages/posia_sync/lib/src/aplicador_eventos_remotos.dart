@@ -11,7 +11,8 @@ import 'package:posia_core/posia_core.dart';
 /// Aplica eventos recibidos del hub sobre el almacenamiento local.
 abstract class AplicadorEventosRemotos {
 	/// Aplica un evento remoto de forma idempotente.
-	///
-	/// [evento] Evento recibido de otro dispositivo.
 	Future<void> aplicarEvento(SyncEvent evento);
+
+	/// Aplica varios eventos; la implementación SQLite usa una sola transacción.
+	Future<void> aplicarLote(List<SyncEvent> eventos);
 }

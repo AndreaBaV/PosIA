@@ -37,7 +37,7 @@ class ExportadorReportes {
 		final horasActivas =
 			resumenPorHora.where((h) => h.cantidadVentas > 0).toList();
 		final lineas = <String>[
-			'# POSIA - Reporte de ventas e inventario',
+			'# $NOMBRE_COMERCIAL_APP - Reporte de ventas e inventario',
 			'# Periodo: $etiquetaPeriodo',
 			'# Tienda: $etiquetaTienda',
 			'# Generado: ${generado.toIso8601String().substring(0, 19)}',
@@ -101,7 +101,7 @@ class ExportadorReportes {
 			await getApplicationDocumentsDirectory();
 		final marca = DateTime.now().toLocal().toIso8601String().replaceAll(':', '-');
 		final ruta =
-			'${carpeta.path}${Platform.pathSeparator}posia_reporte_$marca.csv';
+			'${carpeta.path}${Platform.pathSeparator}la_fortuna_reporte_$marca.csv';
 		final archivo = File(ruta);
 		await archivo.writeAsString(contenido);
 		return ruta;

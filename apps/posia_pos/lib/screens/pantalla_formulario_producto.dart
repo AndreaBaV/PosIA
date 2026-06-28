@@ -9,6 +9,7 @@ import 'package:posia_pricing/posia_pricing.dart';
 import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
+import '../widgets/panel_empaques_producto.dart';
 
 class PantallaFormularioProducto extends ConsumerStatefulWidget {
 	const PantallaFormularioProducto({this.productoExistente, super.key});
@@ -28,8 +29,6 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 	final _precioController = TextEditingController();
 	final _costoController = TextEditingController(text: '0');
 	final _notasController = TextEditingController();
-	final _piezasCajaController = TextEditingController();
-	final _bultoController = TextEditingController();
 	final _stockController = TextEditingController(text: '0');
 	final _minimoController = TextEditingController(text: '0');
 	String? _categoriaId;
@@ -38,13 +37,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 	bool _activo = true;
 	bool _permiteStockNegativo = false;
 	final _escalas = <_EscalaEditable>[];
-	final _nombrePresentacionController = TextEditingController();
-	final _factorPresentacionController = TextEditingController(text: '1');
-	final _codigoPresentacionController = TextEditingController();
-	final _precioPresentacionController = TextEditingController();
-	String? _tipoPresentacionId;
-	List<PresentacionProducto> _presentaciones = [];
-	List<TipoPresentacion> _tiposPresentacion = [];
+	List<EmpaqueProductoDraft> _empaquesPendientes = [];
 	bool _guardando = false;
 
 	bool get _esEdicion => widget.productoExistente != null;
@@ -52,7 +45,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 	@override
 	void initState() {
 		super.initState();
-		_tabs = TabController(length: _esEdicion ? 5 : 4, vsync: this);
+		_tabs = TabController(length: 4, vsync: this);
 		final p = widget.productoExistente;
 		if (p != null) {
 			_nombreController.text = p.nombre;
@@ -65,16 +58,9 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 			_proveedorId = p.proveedorId;
 			_activo = p.activo;
 			_permiteStockNegativo = p.permiteStockNegativo;
-			if (p.piezasPorCaja != null) {
-				_piezasCajaController.text = '${p.piezasPorCaja}';
-			}
-			if (p.unidadesPorBulto != null) {
-				_bultoController.text = '${p.unidadesPorBulto}';
-			}
 			WidgetsBinding.instance.addPostFrameCallback((_) {
 				_cargarEscalas(p.id);
 				_cargarStock(p.id);
-				_cargarPresentaciones(p.id);
 			});
 		}
 	}
@@ -119,20 +105,6 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 		});
 	}
 
-	Future<void> _cargarPresentaciones(String productoId) async {
-		final servicio = await ref.read(servicioAdminProvider.future);
-		final presentaciones = await servicio.listarPresentacionesProducto(productoId);
-		final tipos = await servicio.listarTiposPresentacion();
-		if (!mounted) {
-			return;
-		}
-		setState(() {
-			_presentaciones = presentaciones;
-			_tiposPresentacion = tipos.where((t) => t.activo).toList();
-			_tipoPresentacionId ??= _tiposPresentacion.firstOrNull?.id;
-		});
-	}
-
 	@override
 	void dispose() {
 		_tabs.dispose();
@@ -141,14 +113,8 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 		_precioController.dispose();
 		_costoController.dispose();
 		_notasController.dispose();
-		_piezasCajaController.dispose();
-		_bultoController.dispose();
 		_stockController.dispose();
 		_minimoController.dispose();
-		_nombrePresentacionController.dispose();
-		_factorPresentacionController.dispose();
-		_codigoPresentacionController.dispose();
-		_precioPresentacionController.dispose();
 		for (final e in _escalas) {
 			e.dispose();
 		}
@@ -165,12 +131,11 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 				bottom: TabBar(
 					controller: _tabs,
 					isScrollable: true,
-					tabs: [
-						const Tab(text: 'General'),
-						const Tab(text: 'Precios'),
-						const Tab(text: 'Empaque'),
-						if (_esEdicion) const Tab(text: 'Presentaciones'),
-						const Tab(text: 'Inventario'),
+					tabs: const [
+						Tab(text: 'General'),
+						Tab(text: 'Precios'),
+						Tab(text: 'Empaque'),
+						Tab(text: 'Inventario'),
 					],
 				),
 			),
@@ -184,7 +149,6 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 							_pestanaGeneral(categorias, proveedoresAsync),
 							_pestanaPrecios(),
 							_pestanaEmpaque(),
-							if (_esEdicion) _pestanaPresentaciones(),
 							_pestanaInventario(),
 						],
 					);
@@ -293,8 +257,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 	}
 
 	Widget _pestanaPrecios() {
-		final costo = double.tryParse(_costoController.text.replaceAll(',', '.')) ?? 0.0;
-		final minimo = calcularPrecioMinimoVenta(costo);
+		final costo = parsearPrecioTexto(_costoController.text) ?? 0.0;
 		return ListView(
 			padding: const EdgeInsets.all(16.0),
 			children: [
@@ -310,17 +273,10 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 					onChanged: (_) => setState(() {}),
 				),
 				const SizedBox(height: 12.0),
-				TextField(
+				CampoPrecioVenta(
 					controller: _precioController,
-					keyboardType: const TextInputType.numberWithOptions(decimal: true),
-					decoration: InputDecoration(
-						labelText: 'Precio menudeo (MXN) *',
-						border: const OutlineInputBorder(),
-						prefixText: '\$ ',
-						helperText: costo > 0
-							? 'Mínimo permitido: ${formatearMoneda(minimo)}'
-							: null,
-					),
+					costoUnitario: costo,
+					labelText: 'Precio menudeo (MXN) *',
 					onChanged: (_) => setState(() {}),
 				),
 				const SizedBox(height: 12.0),
@@ -363,13 +319,13 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 									),
 									const SizedBox(width: 8.0),
 									Expanded(
-										child: TextField(
+										child: CampoPrecioVenta(
 											controller: escala.precioController,
-											keyboardType: TextInputType.number,
-											decoration: const InputDecoration(
-												labelText: 'Precio unit.',
-												isDense: true,
-											),
+											costoUnitario: costo,
+											labelText: 'Precio unit.',
+											isDense: true,
+											prefixText: r'$ ',
+											obligatorio: false,
 										),
 									),
 									IconButton(
@@ -389,186 +345,21 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 	}
 
 	Widget _pestanaEmpaque() {
-		return ListView(
-			padding: const EdgeInsets.all(16.0),
-			children: [
-				const Text(
-					'Conversiones de empaque para venta por caja o bulto.',
-					style: TextStyle(color: Colors.grey),
-				),
-				const SizedBox(height: 16.0),
-				TextField(
-					controller: _piezasCajaController,
-					keyboardType: TextInputType.number,
-					decoration: const InputDecoration(
-						labelText: 'Piezas por caja',
-						border: OutlineInputBorder(),
-						helperText: 'Ej. 12 leches = 1 caja',
-					),
-				),
-				const SizedBox(height: 12.0),
-				TextField(
-					controller: _bultoController,
-					keyboardType: TextInputType.number,
-					decoration: const InputDecoration(
-						labelText: 'Unidades por bulto',
-						border: OutlineInputBorder(),
-						helperText: 'Ej. 144 unidades = 1 bulto',
-					),
-				),
-			],
-		);
-	}
-
-	Widget _pestanaPresentaciones() {
-		return ListView(
-			padding: const EdgeInsets.all(16.0),
-			children: [
-				const Text(
-					'Presentaciones comerciales',
-					style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16.0),
-				),
-				const SizedBox(height: 8.0),
-				if (_presentaciones.isEmpty)
-					const Text('Sin presentaciones adicionales')
-				else
-					..._presentaciones.map(
-						(p) => ListTile(
-							title: Text(p.nombre),
-							subtitle: Text(
-								p.esPresentacionBase
-									? 'Unidad base'
-									: 'Factor ${p.factorABase.toStringAsFixed(0)} · '
-										'${p.codigoBarras.isNotEmpty ? p.codigoBarras : 'Sin código'}',
-							),
-							trailing: p.precio != null
-								? Text(formatearMoneda(p.precio!))
-								: null,
-						),
-					),
-				const Divider(height: 32.0),
-				const Text(
-					'Agregar presentación',
-					style: TextStyle(fontWeight: FontWeight.w600),
-				),
-				const SizedBox(height: 12.0),
-				TextField(
-					controller: _nombrePresentacionController,
-					decoration: const InputDecoration(
-						labelText: 'Nombre (ej. Caja 12)',
-						border: OutlineInputBorder(),
-					),
-				),
-				const SizedBox(height: 12.0),
-				TextField(
-					controller: _factorPresentacionController,
-					keyboardType: TextInputType.number,
-					decoration: const InputDecoration(
-						labelText: 'Factor a unidad base',
-						border: OutlineInputBorder(),
-					),
-				),
-				const SizedBox(height: 12.0),
-				DropdownButtonFormField<String>(
-					initialValue: _tipoPresentacionId,
-					items: _tiposPresentacion
-						.map(
-							(t) => DropdownMenuItem(value: t.id, child: Text(t.nombre)),
-						)
-						.toList(),
-					onChanged: (v) => setState(() => _tipoPresentacionId = v),
-					decoration: const InputDecoration(
-						labelText: 'Tipo',
-						border: OutlineInputBorder(),
-					),
-				),
-				const SizedBox(height: 12.0),
-				TextField(
-					controller: _codigoPresentacionController,
-					decoration: const InputDecoration(
-						labelText: 'Código de barras',
-						border: OutlineInputBorder(),
-					),
-				),
-				const SizedBox(height: 12.0),
-				TextField(
-					controller: _precioPresentacionController,
-					keyboardType: TextInputType.number,
-					decoration: const InputDecoration(
-						labelText: 'Precio (opcional)',
-						border: OutlineInputBorder(),
-					),
-				),
-				const SizedBox(height: 16.0),
-				OutlinedButton.icon(
-					onPressed: _guardandoPresentacion ? null : _agregarPresentacion,
-					icon: const Icon(Icons.add),
-					label: const Text('Guardar presentación'),
-				),
-			],
-		);
-	}
-
-	var _guardandoPresentacion = false;
-
-	Future<void> _agregarPresentacion() async {
-		final productoId = widget.productoExistente?.id;
-		if (productoId == null) {
-			return;
-		}
-		final nombre = _nombrePresentacionController.text.trim();
-		final factor =
-			double.tryParse(_factorPresentacionController.text.replaceAll(',', '.')) ??
+		final costo = parsearPrecioTexto(_costoController.text) ??
+			widget.productoExistente?.costoUnitario ??
 			0.0;
-		if (nombre.isEmpty || factor <= 0) {
-			ScaffoldMessenger.of(context).showSnackBar(
-				const SnackBar(
-					content: Text('Nombre y factor válido son obligatorios'),
-					backgroundColor: PosiaColors.cancelar,
-				),
-			);
-			return;
-		}
-		setState(() => _guardandoPresentacion = true);
-		try {
-			final servicio = await ref.read(servicioAdminProvider.future);
-			final precio = double.tryParse(
-				_precioPresentacionController.text.replaceAll(',', '.'),
-			);
-			await servicio.guardarPresentacionProducto(
-				productoId: productoId,
-				nombre: nombre,
-				factorABase: factor,
-				tipoPresentacionId: _tipoPresentacionId,
-				codigoBarras: _codigoPresentacionController.text.trim(),
-				precio: precio,
-			);
-			_nombrePresentacionController.clear();
-			_factorPresentacionController.text = '1';
-			_codigoPresentacionController.clear();
-			_precioPresentacionController.clear();
-			await _cargarPresentaciones(productoId);
-			if (!mounted) {
-				return;
-			}
-			ScaffoldMessenger.of(context).showSnackBar(
-				const SnackBar(content: Text('Presentación guardada')),
-			);
-		} catch (error) {
-			if (!mounted) {
-				return;
-			}
-			ScaffoldMessenger.of(context).showSnackBar(
-				SnackBar(
-					content: Text('$error'),
-					backgroundColor: PosiaColors.cancelar,
-				),
-			);
-		} finally {
-			if (mounted) {
-				setState(() => _guardandoPresentacion = false);
-			}
-		}
+		final precio = parsearPrecioTexto(_precioController.text) ??
+			widget.productoExistente?.precioBase ??
+			0.0;
+		return PanelEmpaquesProducto(
+			productoId: widget.productoExistente?.id,
+			costoUnitario: costo,
+			precioMenudeo: precio,
+			unidadMedida: _unidad,
+			empaquesPendientes: _empaquesPendientes,
+			alCambiarEmpaquesPendientes: (lista) =>
+				setState(() => _empaquesPendientes = lista),
+		);
 	}
 
 	Widget _pestanaInventario() {
@@ -613,8 +404,8 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 	List<EscalaMayoreo> _parseEscalas(String productoId) {
 		return _escalas
 			.map((e) {
-				final cant = double.tryParse(e.cantidadController.text) ?? 0.0;
-				final precio = double.tryParse(e.precioController.text) ?? 0.0;
+				final cant = parsearPrecioTexto(e.cantidadController.text) ?? 0.0;
+				final precio = parsearPrecioTexto(e.precioController.text) ?? 0.0;
 				return EscalaMayoreo(
 					productoId: productoId,
 					cantidadMinima: cant,
@@ -625,9 +416,35 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 			.toList();
 	}
 
-	int? _parseInt(String texto) {
-		final v = int.tryParse(texto.trim());
-		return v == null || v <= 0 ? null : v;
+	Future<({int? piezasPorCaja, int? unidadesPorBulto})> _resolverEmpaqueLegacy(
+		ServicioAdmin servicio,
+	) async {
+		final tipos = await servicio.listarTiposPresentacion();
+		if (_esEdicion) {
+			final presentaciones = await servicio.listarPresentacionesProducto(
+				widget.productoExistente!.id,
+			);
+			return derivarEmpaqueLegacy(
+				presentaciones: presentaciones,
+				tipos: tipos,
+			);
+		}
+		final simuladas = _empaquesPendientes
+			.map(
+				(e) => PresentacionProducto(
+					id: '',
+					productoId: '',
+					tipoPresentacionId: e.tipoPresentacionId,
+					nombre: e.nombre,
+					factorABase: e.factorABase,
+					esPresentacionBase: false,
+					codigoBarras: e.codigoBarras,
+					precio: e.precio,
+					activo: true,
+				),
+			)
+			.toList();
+		return derivarEmpaqueLegacy(presentaciones: simuladas, tipos: tipos);
 	}
 
 	Future<void> _guardar(List<Categoria> categorias) async {
@@ -643,11 +460,43 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 			);
 			return;
 		}
+		final costo = parsearPrecioTexto(_costoController.text) ?? 0.0;
+		final errorMenudeo = errorPrecioVentaDesdeTexto(
+			_precioController.text,
+			costoUnitario: costo,
+		);
+		if (errorMenudeo != null) {
+			ScaffoldMessenger.of(context).showSnackBar(
+				SnackBar(
+					content: Text(errorMenudeo),
+					backgroundColor: PosiaColors.cancelar,
+				),
+			);
+			return;
+		}
+		for (final escala in _escalas) {
+			if (escala.precioController.text.trim().isEmpty) {
+				continue;
+			}
+			final errorEscala = errorPrecioVentaDesdeTexto(
+				escala.precioController.text,
+				costoUnitario: costo,
+			);
+			if (errorEscala != null) {
+				ScaffoldMessenger.of(context).showSnackBar(
+					SnackBar(
+						content: Text('Mayoreo: $errorEscala'),
+						backgroundColor: PosiaColors.cancelar,
+					),
+				);
+				return;
+			}
+		}
 		setState(() => _guardando = true);
 		try {
 			final servicio = await ref.read(servicioAdminProvider.future);
-			final precio = double.tryParse(_precioController.text.replaceAll(',', '.')) ?? 0.0;
-			final costo = double.tryParse(_costoController.text.replaceAll(',', '.')) ?? 0.0;
+			final precio = parsearPrecioTexto(_precioController.text) ?? 0.0;
+			final empaqueLegacy = await _resolverEmpaqueLegacy(servicio);
 			if (_esEdicion) {
 				final base = widget.productoExistente!;
 				final actualizado = base.copiarCon(
@@ -657,8 +506,8 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 					costoUnitario: costo,
 					categoriaId: _categoriaId,
 					unidadMedida: _unidad,
-					piezasPorCaja: _parseInt(_piezasCajaController.text),
-					unidadesPorBulto: _parseInt(_bultoController.text),
+					piezasPorCaja: empaqueLegacy.piezasPorCaja,
+					unidadesPorBulto: empaqueLegacy.unidadesPorBulto,
 					proveedorId: _proveedorId,
 					notas: _notasController.text.trim(),
 					activo: _activo,
@@ -673,8 +522,8 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 			} else {
 				final escalasNuevas = _escalas
 					.map((e) {
-						final cant = double.tryParse(e.cantidadController.text) ?? 0.0;
-						final precioE = double.tryParse(e.precioController.text) ?? 0.0;
+						final cant = parsearPrecioTexto(e.cantidadController.text) ?? 0.0;
+						final precioE = parsearPrecioTexto(e.precioController.text) ?? 0.0;
 						return EscalaMayoreo(
 							productoId: '',
 							cantidadMinima: cant,
@@ -683,7 +532,10 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 					})
 					.where((e) => e.cantidadMinima > 0.0 && e.precioUnitario > 0.0)
 					.toList();
-				await servicio.registrarProductoCompleto(
+				final legacyAlta = _empaquesPendientes.isNotEmpty
+					? (piezasPorCaja: null, unidadesPorBulto: null)
+					: empaqueLegacy;
+				final producto = await servicio.registrarProductoCompleto(
 					AltaProductoRequest(
 						nombre: nombre,
 						codigoBarras: _codigoController.text.trim(),
@@ -691,8 +543,8 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 						costoUnitario: costo,
 						categoriaId: _categoriaId!,
 						unidadMedida: _unidad,
-						piezasPorCaja: _parseInt(_piezasCajaController.text),
-						unidadesPorBulto: _parseInt(_bultoController.text),
+						piezasPorCaja: legacyAlta.piezasPorCaja,
+						unidadesPorBulto: legacyAlta.unidadesPorBulto,
 						proveedorId: _proveedorId,
 						notas: _notasController.text.trim(),
 						activo: _activo,
@@ -702,6 +554,19 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 						permiteStockNegativo: _permiteStockNegativo,
 					),
 				);
+				if (_empaquesPendientes.isNotEmpty) {
+					await guardarEmpaquesPendientes(
+						servicio: servicio,
+						productoId: producto.id,
+						empaques: _empaquesPendientes,
+					);
+					await servicio.actualizarProducto(
+						producto.copiarCon(
+							piezasPorCaja: empaqueLegacy.piezasPorCaja,
+							unidadesPorBulto: empaqueLegacy.unidadesPorBulto,
+						),
+					);
+				}
 			}
 			await refrescarDatosMaestros(ref);
 			if (!mounted) {

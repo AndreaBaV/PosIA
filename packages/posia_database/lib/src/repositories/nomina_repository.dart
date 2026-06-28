@@ -10,8 +10,9 @@ class NominaRepository {
 
 	final Database _baseDatos;
 
-	Future<void> guardarPeriodo(PeriodoNomina periodo) async {
-		await _baseDatos.insert(
+	Future<void> guardarPeriodo(PeriodoNomina periodo, {DatabaseExecutor? db}) async {
+		final exec = db ?? _baseDatos;
+		await exec.insert(
 			'periodos_nomina',
 			{
 				'id': periodo.id,
@@ -41,8 +42,9 @@ class NominaRepository {
 		return filas.map(_mapearPeriodo).toList();
 	}
 
-	Future<void> guardarLinea(LineaNomina linea) async {
-		await _baseDatos.insert(
+	Future<void> guardarLinea(LineaNomina linea, {DatabaseExecutor? db}) async {
+		final exec = db ?? _baseDatos;
+		await exec.insert(
 			'lineas_nomina',
 			{
 				'id': linea.id,

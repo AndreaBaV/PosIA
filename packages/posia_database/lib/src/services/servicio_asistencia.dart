@@ -5,6 +5,7 @@ import 'dart:math';
 
 import 'package:posia_core/posia_core.dart';
 import 'package:posia_sync/posia_sync.dart';
+import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 
 import '../repositories/asistencia_repository.dart';
@@ -26,12 +27,14 @@ class ServicioAsistencia {
 	ServicioAsistencia({
 		required AsistenciaRepository asistenciaRepository,
 		required TiendaRepository tiendaRepository,
+		required Database baseDatos,
 		SyncOrchestrator? syncOrchestrator,
 		required String tenantId,
 		required String tiendaId,
 		required String dispositivoId,
 	}) : _asistenciaRepository = asistenciaRepository,
        _tiendaRepository = tiendaRepository,
+       _baseDatos = baseDatos,
        _syncOrchestrator = syncOrchestrator,
        _tenantId = tenantId,
        _tiendaId = tiendaId,
@@ -39,6 +42,7 @@ class ServicioAsistencia {
 
 	final AsistenciaRepository _asistenciaRepository;
 	final TiendaRepository _tiendaRepository;
+	final Database _baseDatos;
 	final SyncOrchestrator? _syncOrchestrator;
 	final String _tenantId;
 	final String _tiendaId;
@@ -57,7 +61,6 @@ class ServicioAsistencia {
 				'Configure latitud y longitud de la tienda para asistencia',
 			);
 		}
-		await _asistenciaRepository.desactivarDesafiosTienda(_tiendaId);
 		final pin = (_random.nextInt(9000) + 1000).toString();
 		final sal = HasherPin.generarSal();
 		final pinHash = HasherPin.hashPin(pin, sal);
@@ -72,7 +75,10 @@ class ServicioAsistencia {
 			radioMetros: tienda.radioMetrosAsistencia,
 			activo: true,
 		);
-		await _asistenciaRepository.guardarDesafio(desafio);
+		await _baseDatos.transaction((tx) async {
+			await _asistenciaRepository.desactivarDesafiosTienda(_tiendaId, db: tx);
+			await _asistenciaRepository.guardarDesafio(desafio, db: tx);
+		});
 		await _emitirEvento(
 			TipoSyncEvento.attendanceChallengeCreated,
 			{

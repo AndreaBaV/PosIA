@@ -271,14 +271,12 @@ class HubSyncClient {
 		}
 	}
 
-	/// Lista tiendas activas del tenant en el hub (bootstrap tras login admin).
-	Future<List<TiendaHub>> obtenerTiendasPorTenant(String tenantId) async {
-		final limpio = tenantId.trim();
-		if (limpio.isEmpty) {
-			return const [];
-		}
+	/// Lista tiendas activas del hub (una base por despliegue).
+	Future<List<TiendaHub>> obtenerTiendasPorTenant([String tenantId = '']) async {
 		final uri = Uri.parse('$_urlBase/v1/stores').replace(
-			queryParameters: {'tenantId': limpio},
+			queryParameters: tenantId.trim().isEmpty
+				? null
+				: {'tenantId': tenantId.trim()},
 		);
 		try {
 			final respuesta = await _clienteHttp

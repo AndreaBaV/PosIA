@@ -7,6 +7,7 @@ import 'package:posia_core/posia_core.dart';
 import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
+import '../widgets/selector_ubicacion_tienda.dart';
 
 class PantallaTiendasAdmin extends ConsumerStatefulWidget {
 	const PantallaTiendasAdmin({super.key});
@@ -70,7 +71,14 @@ class _PantallaTiendasAdminState extends ConsumerState<PantallaTiendasAdmin> {
 										color: tienda.activa ? PosiaColors.cobrar : Colors.grey,
 									),
 									title: Text(tienda.nombre),
-									subtitle: Text(tienda.direccion),
+									subtitle: Text(
+										tienda.latitud != null && tienda.longitud != null
+											? '${tienda.direccion}\nGPS configurado'
+											: tienda.direccion.isNotEmpty
+												? '${tienda.direccion}\nSin ubicación GPS'
+												: 'Sin ubicación GPS',
+									),
+									isThreeLine: true,
 									trailing: Row(
 										mainAxisSize: MainAxisSize.min,
 										children: [
@@ -183,66 +191,103 @@ class _PantallaTiendasAdminState extends ConsumerState<PantallaTiendasAdmin> {
 	Future<void> _editar(Tienda tienda) async {
 		final nombreController = TextEditingController(text: tienda.nombre);
 		final direccionController = TextEditingController(text: tienda.direccion);
-		final latController = TextEditingController(
-			text: tienda.latitud?.toString() ?? '',
-		);
-		final lngController = TextEditingController(
-			text: tienda.longitud?.toString() ?? '',
-		);
 		final radioController = TextEditingController(
 			text: tienda.radioMetrosAsistencia.toStringAsFixed(0),
 		);
+		var latitud = tienda.latitud;
+		var longitud = tienda.longitud;
 		final guardar = await showDialog<bool>(
 			context: context,
-			builder: (ctx) => AlertDialog(
-				title: const Text('Editar tienda'),
-				content: SingleChildScrollView(
-					child: Column(
-						mainAxisSize: MainAxisSize.min,
-						children: [
-							TextField(
-								controller: nombreController,
-								decoration: const InputDecoration(labelText: 'Nombre'),
-							),
-							TextField(
-								controller: direccionController,
-								decoration: const InputDecoration(labelText: 'Dirección'),
-							),
-							TextField(
-								controller: latController,
-								keyboardType: const TextInputType.numberWithOptions(decimal: true),
-								decoration: const InputDecoration(
-									labelText: 'Latitud (asistencia)',
+			builder: (ctx) => StatefulBuilder(
+				builder: (ctx, setLocal) => AlertDialog(
+					title: const Text('Editar tienda'),
+					content: SingleChildScrollView(
+						child: Column(
+							mainAxisSize: MainAxisSize.min,
+							crossAxisAlignment: CrossAxisAlignment.stretch,
+							children: [
+								TextField(
+									controller: nombreController,
+									decoration: const InputDecoration(labelText: 'Nombre'),
 								),
-							),
-							TextField(
-								controller: lngController,
-								keyboardType: const TextInputType.numberWithOptions(decimal: true),
-								decoration: const InputDecoration(
-									labelText: 'Longitud (asistencia)',
+								const SizedBox(height: 8.0),
+								TextField(
+									controller: direccionController,
+									decoration: const InputDecoration(labelText: 'Dirección'),
 								),
-							),
-							TextField(
-								controller: radioController,
-								keyboardType: TextInputType.number,
-								decoration: const InputDecoration(
-									labelText: 'Radio de geocerca (metros)',
+								const SizedBox(height: 16.0),
+								Text(
+									'Ubicación para asistencia',
+									style: Theme.of(ctx).textTheme.titleSmall?.copyWith(
+										fontWeight: FontWeight.w600,
+									),
 								),
-							),
-						],
+								const SizedBox(height: 8.0),
+								if (latitud != null && longitud != null)
+									Text(
+										'Lat ${latitud!.toStringAsFixed(6)} · '
+										'Lng ${longitud!.toStringAsFixed(6)}',
+										style: Theme.of(ctx).textTheme.bodySmall,
+									)
+								else
+									Text(
+										'Sin ubicación. Use el mapa para marcar dónde está la tienda.',
+										style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+											color: Colors.grey.shade700,
+										),
+									),
+								const SizedBox(height: 8.0),
+								FilledButton.tonalIcon(
+									onPressed: () async {
+										final seleccion = await mostrarSelectorUbicacionTienda(
+											ctx,
+											latitudInicial: latitud,
+											longitudInicial: longitud,
+											titulo: tienda.nombre,
+										);
+										if (seleccion == null) {
+											return;
+										}
+										setLocal(() {
+											latitud = seleccion.latitud;
+											longitud = seleccion.longitud;
+										});
+									},
+									icon: const Icon(Icons.map_outlined),
+									label: const Text('Elegir en mapa'),
+								),
+								if (latitud != null && longitud != null) ...[
+									const SizedBox(height: 4.0),
+									TextButton(
+										onPressed: () => setLocal(() {
+											latitud = null;
+											longitud = null;
+										}),
+										child: const Text('Quitar ubicación'),
+									),
+								],
+								const SizedBox(height: 12.0),
+								TextField(
+									controller: radioController,
+									keyboardType: TextInputType.number,
+									decoration: const InputDecoration(
+										labelText: 'Radio de geocerca (metros)',
+										helperText: 'Distancia permitida para marcar asistencia',
+									),
+								),
+							],
+						),
 					),
+					actions: [
+						TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+						FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Guardar')),
+					],
 				),
-				actions: [
-					TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-					FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Guardar')),
-				],
 			),
 		);
 		if (guardar != true) {
 			nombreController.dispose();
 			direccionController.dispose();
-			latController.dispose();
-			lngController.dispose();
 			radioController.dispose();
 			return;
 		}
@@ -253,16 +298,14 @@ class _PantallaTiendasAdminState extends ConsumerState<PantallaTiendasAdmin> {
 				nombre: nombreController.text.trim(),
 				direccion: direccionController.text.trim(),
 				activa: tienda.activa,
-				latitud: double.tryParse(latController.text.trim()),
-				longitud: double.tryParse(lngController.text.trim()),
+				latitud: latitud,
+				longitud: longitud,
 				radioMetrosAsistencia:
 					double.tryParse(radioController.text.trim()) ?? 150,
 			),
 		);
 		nombreController.dispose();
 		direccionController.dispose();
-		latController.dispose();
-		lngController.dispose();
 		radioController.dispose();
 		ref.invalidate(_tiendasAdminProvider);
 	}

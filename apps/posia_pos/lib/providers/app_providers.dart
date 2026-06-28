@@ -150,7 +150,7 @@ ModoImpresora _resolverModoImpresora(String modo) {
 Future<String> _resolverDirectorioTickets() async {
 	if (!kIsWeb && (Platform.isIOS || Platform.isAndroid)) {
 		final docs = await getApplicationDocumentsDirectory();
-		final dir = Directory('${docs.path}${Platform.pathSeparator}POSIA${Platform.pathSeparator}tickets');
+		final dir = Directory('${docs.path}${Platform.pathSeparator}$CARPETA_DOCUMENTOS_APP${Platform.pathSeparator}tickets');
 		if (!dir.existsSync()) {
 			dir.createSync(recursive: true);
 		}
@@ -158,7 +158,7 @@ Future<String> _resolverDirectorioTickets() async {
 	}
 	final perfil = Platform.environment['USERPROFILE'];
 	if (perfil != null && perfil.isNotEmpty) {
-		return '$perfil${Platform.pathSeparator}Documents${Platform.pathSeparator}POSIA${Platform.pathSeparator}tickets';
+		return '$perfil${Platform.pathSeparator}Documents${Platform.pathSeparator}$CARPETA_DOCUMENTOS_APP${Platform.pathSeparator}tickets';
 	}
 	return '${Directory.current.path}${Platform.pathSeparator}tickets';
 }

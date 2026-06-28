@@ -52,6 +52,13 @@ class AplicadorMemoria implements AplicadorEventosRemotos {
 	Future<void> aplicarEvento(SyncEvent evento) async {
 		aplicados.add(evento);
 	}
+
+	@override
+	Future<void> aplicarLote(List<SyncEvent> eventos) async {
+		for (final evento in eventos) {
+			await aplicarEvento(evento);
+		}
+	}
 }
 
 /// Cursor en memoria para pruebas.

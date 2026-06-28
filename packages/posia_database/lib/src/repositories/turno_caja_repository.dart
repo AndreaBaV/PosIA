@@ -28,8 +28,9 @@ class TurnoCajaRepository {
 		return _mapear(filas.first);
 	}
 
-	Future<void> guardar(TurnoCaja turno) async {
-		await _baseDatos.insert(
+	Future<void> guardar(TurnoCaja turno, {DatabaseExecutor? db}) async {
+		final exec = db ?? _baseDatos;
+		await exec.insert(
 			'cash_shifts',
 			_mapearMapa(turno),
 			conflictAlgorithm: ConflictAlgorithm.replace,

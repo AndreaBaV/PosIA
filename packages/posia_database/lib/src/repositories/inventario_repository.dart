@@ -20,8 +20,13 @@ class InventarioRepository implements RepositorioInventario {
 	final Database _baseDatos;
 
 	@override
-	Future<StockNivel?> obtenerStock(String productoId, String tiendaId) async {
-		final filas = await _baseDatos.query(
+	Future<StockNivel?> obtenerStock(
+		String productoId,
+		String tiendaId, {
+		DatabaseExecutor? db,
+	}) async {
+		final exec = db ?? _baseDatos;
+		final filas = await exec.query(
 			'stock_levels',
 			where: 'producto_id = ? AND tienda_id = ?',
 			whereArgs: [productoId, tiendaId],
@@ -34,8 +39,9 @@ class InventarioRepository implements RepositorioInventario {
 	}
 
 	@override
-	Future<void> guardarStock(StockNivel stock) async {
-		await _baseDatos.insert(
+	Future<void> guardarStock(StockNivel stock, {DatabaseExecutor? db}) async {
+		final exec = db ?? _baseDatos;
+		await exec.insert(
 			'stock_levels',
 			{
 				'producto_id': stock.productoId,
@@ -73,8 +79,12 @@ class InventarioRepository implements RepositorioInventario {
 	}
 
 	/// Elimina registros de stock del producto en todas las tiendas.
-	Future<void> eliminarStockPorProducto(String productoId) async {
-		await _baseDatos.delete(
+	Future<void> eliminarStockPorProducto(
+		String productoId, {
+		DatabaseExecutor? db,
+	}) async {
+		final exec = db ?? _baseDatos;
+		await exec.delete(
 			'stock_levels',
 			where: 'producto_id = ?',
 			whereArgs: [productoId],

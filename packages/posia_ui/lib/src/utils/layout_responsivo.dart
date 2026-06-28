@@ -2,6 +2,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:posia_core/posia_core.dart';
 
 import '../theme/posia_theme.dart';
 
@@ -243,7 +244,7 @@ class _PanelMarca extends StatelessWidget {
 							),
 							const SizedBox(height: 28.0),
 							Text(
-								'POSIA',
+								NOMBRE_COMERCIAL_APP,
 								style: Theme.of(context).textTheme.headlineMedium?.copyWith(
 									color: Colors.white,
 									fontWeight: FontWeight.w800,

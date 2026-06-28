@@ -97,7 +97,7 @@ class _PantallaVistaPreviaEtiquetasPdfState extends State<PantallaVistaPreviaEti
 							allowSharing: false,
 							canChangeOrientation: false,
 							canChangePageFormat: false,
-							pdfFileName: 'etiquetas_posia.pdf',
+							pdfFileName: 'etiquetas_la_fortuna.pdf',
 						),
 					),
 				],

@@ -37,34 +37,39 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 	@override
 	Future<int> guardarLote(List<EventoHub> eventos) async {
 		final conexion = await _abrirConexion();
-		final proyector = ProyectorEventosPostgres(conexion);
 		var aceptados = 0;
 		for (final evento in eventos) {
-			final resultado = await conexion.execute(
-				Sql.named('''
-					INSERT INTO sync_events
-						(id, tenant_id, store_id, device_id, type, payload, created_at)
-					VALUES
-						(@id, @tenantId, @storeId, @deviceId, @type, @payload, @createdAt)
-					ON CONFLICT (id) DO NOTHING
-				'''),
-				parameters: {
-					'id': evento.id,
-					'tenantId': evento.tenantId,
-					'storeId': evento.tiendaId,
-					'deviceId': evento.dispositivoId,
-					'type': evento.tipo,
-					'payload': jsonEncode(evento.payload),
-					'createdAt': evento.creadoEn,
-				},
-			);
-			if (resultado.affectedRows > 0) {
-				aceptados = aceptados + 1;
-				try {
-					await proyector.aplicar(evento);
-				} on Object catch (error) {
-					stdout.writeln('Proyector: error en ${evento.tipo} (${evento.id}): $error');
+			try {
+				final insertado = await conexion.runTx((tx) async {
+					final resultado = await tx.execute(
+						Sql.named('''
+							INSERT INTO sync_events
+								(id, tenant_id, store_id, device_id, type, payload, created_at)
+							VALUES
+								(@id, @tenantId, @storeId, @deviceId, @type, @payload, @createdAt)
+							ON CONFLICT (id) DO NOTHING
+						'''),
+						parameters: {
+							'id': evento.id,
+							'tenantId': evento.tenantId,
+							'storeId': evento.tiendaId,
+							'deviceId': evento.dispositivoId,
+							'type': evento.tipo,
+							'payload': jsonEncode(evento.payload),
+							'createdAt': evento.creadoEn,
+						},
+					);
+					if (resultado.affectedRows <= 0) {
+						return false;
+					}
+					await ProyectorEventosPostgres(tx).aplicar(evento);
+					return true;
+				});
+				if (insertado) {
+					aceptados = aceptados + 1;
 				}
+			} on Object catch (error) {
+				stdout.writeln('Sync: error en ${evento.tipo} (${evento.id}): $error');
 			}
 		}
 		return aceptados;
@@ -78,18 +83,20 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 		int limite = 500,
 	}) async {
 		final conexion = await _abrirConexion();
+		final filtrarTenant = tenantId.trim().isNotEmpty;
 		final resultado = await conexion.execute(
 			Sql.named('''
 				SELECT seq, id, tenant_id, store_id, device_id, type, payload, created_at
 				FROM sync_events
-				WHERE tenant_id = @tenantId
-					AND seq > @desdeSeq
+				WHERE seq > @desdeSeq
+					AND (@filtrarTenant = FALSE OR tenant_id = @tenantId)
 					AND (@deviceId::TEXT IS NULL OR device_id <> @deviceId)
 				ORDER BY seq ASC
 				LIMIT @limite
 			'''),
 			parameters: {
 				'tenantId': tenantId,
+				'filtrarTenant': filtrarTenant,
 				'desdeSeq': desdeSeq,
 				'deviceId': excluirDispositivoId,
 				'limite': limite,

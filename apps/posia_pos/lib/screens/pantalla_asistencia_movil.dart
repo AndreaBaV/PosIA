@@ -5,12 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:local_auth/local_auth.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:posia_core/posia_core.dart';
 import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/app_providers.dart';
 import '../util/teclado_util.dart';
+import '../util/ubicacion_util.dart';
 
 class PantallaAsistenciaMovil extends ConsumerStatefulWidget {
 	const PantallaAsistenciaMovil({super.key});
@@ -56,20 +56,11 @@ class _PantallaAsistenciaMovilState extends ConsumerState<PantallaAsistenciaMovi
 	}
 
 	Future<Position?> _obtenerUbicacion() async {
-		final permiso = await Permission.locationWhenInUse.request();
-		if (!permiso.isGranted) {
-			throw StateError('Ubicación requerida');
+		try {
+			return await obtenerUbicacionActual();
+		} on StateError {
+			rethrow;
 		}
-		final servicio = await Geolocator.isLocationServiceEnabled();
-		if (!servicio) {
-			throw StateError('Activa el GPS');
-		}
-		return Geolocator.getCurrentPosition(
-			locationSettings: const LocationSettings(
-				accuracy: LocationAccuracy.high,
-				timeLimit: Duration(seconds: 15),
-			),
-		);
 	}
 
 	Future<void> _entradaConPin() async {

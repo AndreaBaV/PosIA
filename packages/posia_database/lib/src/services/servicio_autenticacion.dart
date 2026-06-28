@@ -9,6 +9,7 @@ import '../models/motivo_fallo_auth.dart';
 import '../models/resultado_autenticacion.dart';
 import '../repositories/config_repository.dart';
 import '../repositories/usuario_repository.dart';
+import '../utils/limpiador_base_local.dart';
 
 /// Valida credenciales contra el hub (fuente de verdad) con respaldo local offline.
 class ServicioAutenticacion {
@@ -115,6 +116,12 @@ class ServicioAutenticacion {
 			return;
 		}
 		try {
+			final tenantId = await _tenantIdConfigurado();
+			if (tenantId != null && tenantId.isNotEmpty) {
+				await PosiaLocalDatabase.obtenerInstancia().establecerTenant(tenantId);
+				final base = await PosiaLocalDatabase.obtenerInstancia().obtenerBaseDatos();
+				await LimpiadorBaseLocal.eliminarDatosEjemplo(base);
+			}
 			await orquestador.sincronizarCompleto();
 		} on Object {
 			// El login puede continuar con copia local si el hub falla.

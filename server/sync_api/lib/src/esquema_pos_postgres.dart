@@ -4,6 +4,8 @@ library;
 import 'package:postgres/postgres.dart';
 
 /// DDL del modelo operativo POSIA en Postgres (Neon / on-premise).
+///
+/// Una base Neon por despliegue: sin tablas huérfanas ni multi-tenant en stores.
 class EsquemaPosPostgres {
 	EsquemaPosPostgres._();
 
@@ -14,15 +16,8 @@ class EsquemaPosPostgres {
 				id TEXT PRIMARY KEY,
 				nombre TEXT NOT NULL,
 				direccion TEXT NOT NULL,
-				activa INTEGER NOT NULL,
-				tenant_id TEXT
+				activa INTEGER NOT NULL
 			)
-		''');
-		await conexion.execute('''
-			ALTER TABLE stores ADD COLUMN IF NOT EXISTS tenant_id TEXT
-		''');
-		await conexion.execute('''
-			CREATE INDEX IF NOT EXISTS idx_stores_tenant ON stores(tenant_id)
 		''');
 		await conexion.execute('''
 			CREATE TABLE IF NOT EXISTS categories (
@@ -67,28 +62,6 @@ class EsquemaPosPostgres {
 				rfc TEXT NOT NULL DEFAULT '',
 				direccion TEXT NOT NULL DEFAULT '',
 				notas TEXT NOT NULL DEFAULT ''
-			)
-		''');
-		await conexion.execute('''
-			CREATE TABLE IF NOT EXISTS vendedores (
-				id TEXT PRIMARY KEY,
-				nombre TEXT NOT NULL,
-				codigo TEXT NOT NULL,
-				activo INTEGER NOT NULL
-			)
-		''');
-		await conexion.execute('''
-			CREATE TABLE IF NOT EXISTS proveedores (
-				id TEXT PRIMARY KEY,
-				nombre TEXT NOT NULL,
-				contacto TEXT NOT NULL DEFAULT '',
-				telefono TEXT NOT NULL DEFAULT '',
-				activo INTEGER NOT NULL,
-				email TEXT NOT NULL DEFAULT '',
-				rfc TEXT NOT NULL DEFAULT '',
-				direccion TEXT NOT NULL DEFAULT '',
-				notas TEXT NOT NULL DEFAULT '',
-				dias_credito INTEGER NOT NULL DEFAULT 0
 			)
 		''');
 		await conexion.execute('''
@@ -163,21 +136,10 @@ class EsquemaPosPostgres {
 			)
 		''');
 		await conexion.execute('''
-			CREATE TABLE IF NOT EXISTS pharmacy_lots (
-				id TEXT PRIMARY KEY,
-				producto_id TEXT NOT NULL,
-				tienda_id TEXT NOT NULL,
-				numero_lote TEXT NOT NULL,
-				caduca_en TEXT NOT NULL,
-				cantidad DOUBLE PRECISION NOT NULL,
-				activo INTEGER NOT NULL
-			)
-		''');
-		await conexion.execute('''
 			CREATE TABLE IF NOT EXISTS sync_events (
 				seq BIGSERIAL PRIMARY KEY,
 				id TEXT UNIQUE NOT NULL,
-				tenant_id TEXT NOT NULL,
+				tenant_id TEXT NOT NULL DEFAULT '',
 				store_id TEXT NOT NULL,
 				device_id TEXT NOT NULL,
 				type TEXT NOT NULL,
@@ -187,15 +149,14 @@ class EsquemaPosPostgres {
 			)
 		''');
 		await conexion.execute('''
-			CREATE INDEX IF NOT EXISTS idx_sync_events_tenant_seq
-			ON sync_events (tenant_id, seq)
+			CREATE INDEX IF NOT EXISTS idx_sync_events_seq ON sync_events (seq)
 		''');
 		await conexion.execute('''
 			CREATE TABLE IF NOT EXISTS users (
 				id TEXT PRIMARY KEY,
-				tenant_id TEXT NOT NULL,
+				tenant_id TEXT NOT NULL DEFAULT '',
 				nombre TEXT NOT NULL,
-				codigo TEXT NOT NULL UNIQUE,
+				codigo TEXT NOT NULL,
 				rol TEXT NOT NULL,
 				tienda_id TEXT,
 				activo INTEGER NOT NULL DEFAULT 1,
@@ -209,13 +170,6 @@ class EsquemaPosPostgres {
 			CREATE INDEX IF NOT EXISTS idx_users_codigo ON users(codigo)
 		''');
 		await conexion.execute('''
-			ALTER TABLE users DROP CONSTRAINT IF EXISTS users_codigo_key
-		''');
-		await conexion.execute('''
-			CREATE UNIQUE INDEX IF NOT EXISTS idx_users_tenant_codigo
-			ON users (tenant_id, codigo)
-		''');
-		await conexion.execute('''
 			ALTER TABLE products ADD COLUMN IF NOT EXISTS permite_stock_negativo INTEGER NOT NULL DEFAULT 0
 		''');
 		await conexion.execute('''
@@ -227,12 +181,34 @@ class EsquemaPosPostgres {
 			)
 		''');
 		await conexion.execute('''
-			CREATE TABLE IF NOT EXISTS tipos_presentacion (
-				id TEXT PRIMARY KEY,
-				nombre TEXT NOT NULL,
-				unidad TEXT NOT NULL,
-				activo INTEGER NOT NULL DEFAULT 1
+			CREATE TABLE IF NOT EXISTS warehouse_stock (
+				producto_id TEXT NOT NULL,
+				almacen_id TEXT NOT NULL,
+				cantidad DOUBLE PRECISION NOT NULL,
+				actualizado_en TEXT NOT NULL,
+				stock_minimo DOUBLE PRECISION NOT NULL DEFAULT 0,
+				PRIMARY KEY (producto_id, almacen_id)
 			)
+		''');
+		await _migrarLegacy(conexion);
+	}
+
+	/// Elimina tablas/columnas de despliegues multi-tenant anteriores.
+	static Future<void> _migrarLegacy(Connection conexion) async {
+		for (final tabla in [
+			'vendedores',
+			'proveedores',
+			'pharmacy_lots',
+			'tipos_presentacion',
+		]) {
+			await conexion.execute('DROP TABLE IF EXISTS $tabla');
+		}
+		await conexion.execute('DROP INDEX IF EXISTS idx_stores_tenant');
+		await conexion.execute('DROP INDEX IF EXISTS idx_users_tenant_codigo');
+		await conexion.execute('DROP INDEX IF EXISTS idx_sync_events_tenant_seq');
+		await conexion.execute('ALTER TABLE stores DROP COLUMN IF EXISTS tenant_id');
+		await conexion.execute('''
+			CREATE UNIQUE INDEX IF NOT EXISTS idx_users_codigo_unico ON users(codigo)
 		''');
 	}
 }

@@ -7,7 +7,7 @@
 		<key>CFBundleDevelopmentRegion</key>
 		<string>$(DEVELOPMENT_LANGUAGE)</string>
 		<key>CFBundleDisplayName</key>
-		<string>POSIA</string>
+		<string>La Fortuna</string>
 		<key>CFBundleExecutable</key>
 		<string>$(EXECUTABLE_NAME)</string>
 		<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 		<key>CFBundleInfoDictionaryVersion</key>
 		<string>6.0</string>
 		<key>CFBundleName</key>
-		<string>POSIA</string>
+		<string>La Fortuna</string>
 		<key>CFBundlePackageType</key>
 		<string>APPL</string>
 		<key>CFBundleShortVersionString</key>
@@ -29,17 +29,17 @@
 		<key>LSRequiresIPhoneOS</key>
 		<true/>
 		<key>NSMicrophoneUsageDescription</key>
-		<string>POSIA usa el micrófono para registrar ventas por voz en caja.</string>
+		<string>La Fortuna usa el micrófono para registrar ventas por voz en caja.</string>
 		<key>NSLocationWhenInUseUsageDescription</key>
-		<string>POSIA valida tu ubicación para registrar asistencia en la tienda.</string>
+		<string>La Fortuna usa tu ubicación para registrar asistencia y configurar la ubicación de la tienda en el mapa.</string>
 		<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-		<string>POSIA valida tu ubicación para registrar asistencia en la tienda.</string>
+		<string>La Fortuna usa tu ubicación para registrar asistencia y configurar la ubicación de la tienda en el mapa.</string>
 		<key>NSPhotoLibraryUsageDescription</key>
-		<string>POSIA puede acceder a la biblioteca de fotos para seleccionar archivos o compartir documentos de venta.</string>
+		<string>La Fortuna puede acceder a la biblioteca de fotos para seleccionar archivos o compartir documentos de venta.</string>
 		<key>NSFaceIDUsageDescription</key>
-		<string>POSIA usa Face ID para iniciar sesión y confirmar tu identidad al marcar asistencia.</string>
+		<string>La Fortuna usa Face ID para iniciar sesión y confirmar tu identidad al marcar asistencia.</string>
 		<key>NSSpeechRecognitionUsageDescription</key>
-		<string>POSIA convierte tus comandos de voz en productos y tickets de venta.</string>
+		<string>La Fortuna convierte tus comandos de voz en productos y tickets de venta.</string>
 		<key>UIApplicationSceneManifest</key>
 		<dict>
 			<key>UIApplicationSupportsMultipleScenes</key>

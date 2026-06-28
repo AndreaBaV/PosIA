@@ -10,6 +10,8 @@ import 'package:posia_pricing/posia_pricing.dart';
 import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../utils/transaccion_sqlite.dart';
+
 /// Implementa [RepositorioPrecio] sobre SQLite local.
 class PrecioRepository implements RepositorioPrecio {
 	/// Crea repositorio con conexion SQLite activa.
@@ -86,8 +88,12 @@ class PrecioRepository implements RepositorioPrecio {
 	}
 
 	/// Elimina escalas de mayoreo de un producto.
-	Future<void> eliminarEscalasPorProducto(String productoId) async {
-		await _baseDatos.delete(
+	Future<void> eliminarEscalasPorProducto(
+		String productoId, {
+		DatabaseExecutor? db,
+	}) async {
+		final exec = db ?? _baseDatos;
+		await exec.delete(
 			'wholesale_tiers',
 			where: 'producto_id = ?',
 			whereArgs: [productoId],
@@ -97,9 +103,10 @@ class PrecioRepository implements RepositorioPrecio {
 	/// Reemplaza todas las escalas de mayoreo de un producto.
 	Future<void> reemplazarEscalasMayoreo(
 		String productoId,
-		List<EscalaMayoreo> escalas,
-	) async {
-		await _baseDatos.transaction((transaccion) async {
+		List<EscalaMayoreo> escalas, {
+		DatabaseExecutor? db,
+	}) async {
+		await ejecutarEscrituraTransaccional(_baseDatos, db, (transaccion) async {
 			await transaccion.delete(
 				'wholesale_tiers',
 				where: 'producto_id = ?',
@@ -194,17 +201,22 @@ class PrecioRepository implements RepositorioPrecio {
 	}
 
 	/// Elimina precios de listas y clientes asociados al producto.
-	Future<void> eliminarPreciosPorProducto(String productoId) async {
-		await _baseDatos.delete(
-			'price_list_items',
-			where: 'producto_id = ?',
-			whereArgs: [productoId],
-		);
-		await _baseDatos.delete(
-			'customer_product_prices',
-			where: 'producto_id = ?',
-			whereArgs: [productoId],
-		);
+	Future<void> eliminarPreciosPorProducto(
+		String productoId, {
+		DatabaseExecutor? db,
+	}) async {
+		await ejecutarEscrituraTransaccional(_baseDatos, db, (exec) async {
+			await exec.delete(
+				'price_list_items',
+				where: 'producto_id = ?',
+				whereArgs: [productoId],
+			);
+			await exec.delete(
+				'customer_product_prices',
+				where: 'producto_id = ?',
+				whereArgs: [productoId],
+			);
+		});
 	}
 
 	/// Lista catalogos de precios activos.

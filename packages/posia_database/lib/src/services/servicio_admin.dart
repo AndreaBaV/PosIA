@@ -11,6 +11,7 @@ import 'dart:convert';
 import 'package:posia_core/posia_core.dart';
 import 'package:posia_pricing/posia_pricing.dart';
 import 'package:posia_sync/posia_sync.dart';
+import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/alta_producto_request.dart';
@@ -26,6 +27,7 @@ import '../models/resumen_precios_producto.dart';
 import '../models/resumen_vendedor.dart';
 import '../models/resumen_ventas_dia.dart';
 import '../models/stock_por_tienda.dart';
+import '../models/stock_por_almacen.dart';
 import '../database/posia_local_database.dart';
 import '../repositories/categoria_repository.dart';
 import '../repositories/cliente_repository.dart';
@@ -48,7 +50,11 @@ import '../repositories/vendedor_repository.dart';
 import '../repositories/venta_repository.dart';
 import '../repositories/almacen_repository.dart';
 import '../repositories/presentacion_repository.dart';
+import '../repositories/sync_state_repository.dart';
+import '../utils/limpiador_base_local.dart';
 import '../utils/sincronizador_vendedor_usuario.dart';
+import '../models/resultado_reconciliacion_hub.dart';
+import '../services/servicio_reconciliacion_hub.dart';
 import 'servicio_corte_caja.dart';
 
 /// Coordina operaciones del panel de administracion minimalista.
@@ -89,6 +95,7 @@ class ServicioAdmin {
     AlmacenRepository? almacenRepository,
     PresentacionRepository? presentacionRepository,
     ServicioCorteCaja? servicioCorteCaja,
+    required Database baseDatos,
     required String tenantId,
     required String tiendaActivaId,
     required String cajaId,
@@ -115,6 +122,7 @@ class ServicioAdmin {
        _almacenRepository = almacenRepository,
        _presentacionRepository = presentacionRepository,
        _servicioCorteCaja = servicioCorteCaja,
+       _baseDatos = baseDatos,
        _tenantId = tenantId,
        _tiendaActivaId = tiendaActivaId,
        _cajaId = cajaId;
@@ -142,10 +150,15 @@ class ServicioAdmin {
   final AlmacenRepository? _almacenRepository;
   final PresentacionRepository? _presentacionRepository;
   final ServicioCorteCaja? _servicioCorteCaja;
+  final Database _baseDatos;
   final String _tenantId;
   final String _tiendaActivaId;
   final String _cajaId;
   final Uuid _generadorId = const Uuid();
+
+  Future<T> _enTransaccion<T>(Future<T> Function(Transaction tx) accion) {
+    return _baseDatos.transaction(accion);
+  }
 
   /// Identificador de la tienda activa en este dispositivo.
   String get tiendaActivaId => _tiendaActivaId;
@@ -269,31 +282,38 @@ class ServicioAdmin {
       costoUnitario: redondearMonto(req.costoUnitario),
       permiteStockNegativo: req.permiteStockNegativo,
     );
-    await _productoRepository.guardar(producto);
-    final ahora = DateTime.now().toUtc();
-    await _inventarioRepository.guardarStock(
-      StockNivel(
-        productoId: producto.id,
-        tiendaId: _tiendaActivaId,
-        cantidad: req.stockInicial,
-        actualizadoEn: ahora,
-        stockMinimo: req.stockMinimo,
-      ),
-    );
-    if (req.escalasMayoreo.isNotEmpty && _precioRepository != null) {
-      final escalas = req.escalasMayoreo
-          .map(
-            (e) => EscalaMayoreo(
-              productoId: producto.id,
-              cantidadMinima: e.cantidadMinima,
-              precioUnitario: e.precioUnitario,
-            ),
-          )
-          .toList();
-      await _precioRepository.reemplazarEscalasMayoreo(producto.id, escalas);
-    }
+    await _enTransaccion((tx) async {
+      await _productoRepository.guardar(producto, db: tx);
+      final ahora = DateTime.now().toUtc();
+      await _inventarioRepository.guardarStock(
+        StockNivel(
+          productoId: producto.id,
+          tiendaId: _tiendaActivaId,
+          cantidad: req.stockInicial,
+          actualizadoEn: ahora,
+          stockMinimo: req.stockMinimo,
+        ),
+        db: tx,
+      );
+      if (req.escalasMayoreo.isNotEmpty && _precioRepository != null) {
+        final escalas = req.escalasMayoreo
+            .map(
+              (e) => EscalaMayoreo(
+                productoId: producto.id,
+                cantidadMinima: e.cantidadMinima,
+                precioUnitario: e.precioUnitario,
+              ),
+            )
+            .toList();
+        await _precioRepository.reemplazarEscalasMayoreo(
+          producto.id,
+          escalas,
+          db: tx,
+        );
+      }
+      await asegurarPresentacionBase(producto, db: tx);
+    });
     await _registrarEventoProducto(producto);
-    await asegurarPresentacionBase(producto);
     return producto;
   }
 
@@ -319,21 +339,24 @@ class ServicioAdmin {
       unidadMedida: unidad,
       precioBase: redondearMonto(producto.precioBase),
     );
-    await _productoRepository.guardar(actualizado);
-    if (escalasMayoreo != null && _precioRepository != null) {
-      await _precioRepository.reemplazarEscalasMayoreo(
-        actualizado.id,
-        escalasMayoreo
-            .map(
-              (e) => EscalaMayoreo(
-                productoId: actualizado.id,
-                cantidadMinima: e.cantidadMinima,
-                precioUnitario: e.precioUnitario,
-              ),
-            )
-            .toList(),
-      );
-    }
+    await _enTransaccion((tx) async {
+      await _productoRepository.guardar(actualizado, db: tx);
+      if (escalasMayoreo != null && _precioRepository != null) {
+        await _precioRepository.reemplazarEscalasMayoreo(
+          actualizado.id,
+          escalasMayoreo
+              .map(
+                (e) => EscalaMayoreo(
+                  productoId: actualizado.id,
+                  cantidadMinima: e.cantidadMinima,
+                  precioUnitario: e.precioUnitario,
+                ),
+              )
+              .toList(),
+          db: tx,
+        );
+      }
+    });
     await _registrarEventoProducto(actualizado);
     return actualizado;
   }
@@ -370,11 +393,13 @@ class ServicioAdmin {
     if (producto == null) {
       return false;
     }
-    await _precioRepository?.eliminarEscalasPorProducto(productoId);
-    await _precioRepository?.eliminarPreciosPorProducto(productoId);
-    await _varianteRepository?.eliminarPorProductoPadre(productoId);
-    await _inventarioRepository.eliminarStockPorProducto(productoId);
-    await _productoRepository.eliminar(productoId);
+    await _enTransaccion((tx) async {
+      await _precioRepository?.eliminarEscalasPorProducto(productoId, db: tx);
+      await _precioRepository?.eliminarPreciosPorProducto(productoId, db: tx);
+      await _varianteRepository?.eliminarPorProductoPadre(productoId, db: tx);
+      await _inventarioRepository.eliminarStockPorProducto(productoId, db: tx);
+      await _productoRepository.eliminar(productoId, db: tx);
+    });
     return true;
   }
 
@@ -417,16 +442,19 @@ class ServicioAdmin {
       activo: true,
       tiendaId: _tiendaActivaId,
     );
-    await _productoRepository.guardar(producto);
-    final ahora = DateTime.now().toUtc();
-    await _inventarioRepository.guardarStock(
-      StockNivel(
-        productoId: producto.id,
-        tiendaId: _tiendaActivaId,
-        cantidad: 0.0,
-        actualizadoEn: ahora,
-      ),
-    );
+    await _enTransaccion((tx) async {
+      await _productoRepository.guardar(producto, db: tx);
+      final ahora = DateTime.now().toUtc();
+      await _inventarioRepository.guardarStock(
+        StockNivel(
+          productoId: producto.id,
+          tiendaId: _tiendaActivaId,
+          cantidad: 0.0,
+          actualizadoEn: ahora,
+        ),
+        db: tx,
+      );
+    });
     await _registrarEventoProducto(producto);
     return producto;
   }
@@ -463,12 +491,21 @@ class ServicioAdmin {
     return resultado;
   }
 
-  /// Agrupa existencias por producto con totales por tienda.
+  /// Agrupa existencias por producto con totales por tienda y almacén.
   Future<List<InventarioAgrupado>> obtenerInventarioAgrupado({
     String? tiendaReferenciaId,
   }) async {
     final tiendaRef = tiendaReferenciaId ?? _tiendaActivaId;
     final tiendas = await _tiendaRepository.listarActivas();
+    final almacenRepo = _almacenRepository;
+    final almacenes = almacenRepo != null ? await almacenRepo.listarActivos() : <Almacen>[];
+    final stockAlmacenPorProducto = <String, Map<String, StockAlmacen>>{};
+    if (almacenRepo != null) {
+      for (final stock in await almacenRepo.listarTodoStock()) {
+        stockAlmacenPorProducto
+            .putIfAbsent(stock.productoId, () => {})[stock.almacenId] = stock;
+      }
+    }
     final productosPorId = <String, Producto>{};
     for (final tienda in tiendas) {
       final productos = await _productoRepository.listarActivosPorTienda(
@@ -476,6 +513,15 @@ class ServicioAdmin {
       );
       for (final producto in productos) {
         productosPorId[producto.id] = producto;
+      }
+    }
+    for (final productoId in stockAlmacenPorProducto.keys) {
+      if (productosPorId.containsKey(productoId)) {
+        continue;
+      }
+      final producto = await _productoRepository.obtenerPorId(productoId);
+      if (producto != null) {
+        productosPorId[productoId] = producto;
       }
     }
     final agrupados = <InventarioAgrupado>[];
@@ -492,6 +538,16 @@ class ServicioAdmin {
         porTiendaId[tienda.id] = stock?.cantidad ?? 0.0;
         minimosPorTiendaId[tienda.id] = stock?.stockMinimo ?? 0.0;
       }
+      final porAlmacenNombre = <String, double>{};
+      final porAlmacenId = <String, double>{};
+      final minimosPorAlmacenId = <String, double>{};
+      final stocksProducto = stockAlmacenPorProducto[producto.id] ?? {};
+      for (final almacen in almacenes) {
+        final stock = stocksProducto[almacen.id];
+        porAlmacenNombre[almacen.nombre] = stock?.cantidad ?? 0.0;
+        porAlmacenId[almacen.id] = stock?.cantidad ?? 0.0;
+        minimosPorAlmacenId[almacen.id] = stock?.stockMinimo ?? 0.0;
+      }
       final referencia = await _inventarioRepository.obtenerStock(
         producto.id,
         tiendaRef,
@@ -503,6 +559,9 @@ class ServicioAdmin {
           existenciasPorTienda: porNombre,
           existenciasPorTiendaId: porTiendaId,
           stockMinimoPorTiendaId: minimosPorTiendaId,
+          existenciasPorAlmacen: porAlmacenNombre,
+          existenciasPorAlmacenId: porAlmacenId,
+          stockMinimoPorAlmacenId: minimosPorAlmacenId,
           stockMinimoLocal: referencia?.stockMinimo ?? 0.0,
           cantidadLocal: referencia?.cantidad ?? 0.0,
         ),
@@ -535,6 +594,19 @@ class ServicioAdmin {
   /// Retorna resultado con eventos enviados y recibidos.
   Future<ResultadoSync> sincronizarManual() async {
     return _syncOrchestrator.sincronizarCompleto();
+  }
+
+  /// Limpia placeholders, compara con la nube y descarga datos si hace falta.
+  Future<ResultadoReconciliacionHub> reconciliarConHub() async {
+    final servicio = ServicioReconciliacionHub(
+      baseDatos: _baseDatos,
+      configRepository: _configRepository,
+      syncOrchestrator: _syncOrchestrator,
+      syncStateRepository: SyncStateRepository(baseDatos: _baseDatos),
+      tiendaRepository: _tiendaRepository,
+      tenantId: _tenantId,
+    );
+    return servicio.reconciliar();
   }
 
   /// Empuja cambios locales y descarga usuarios del hub (reparacion).
@@ -702,6 +774,10 @@ class ServicioAdmin {
     if (repo == null) {
       throw StateError('Repositorio de variantes no configurado');
     }
+    final padre = await _productoRepository.obtenerPorId(productoPadreId);
+    if (padre != null) {
+      _validarPrecioVenta(precioBase, padre.costoUnitario);
+    }
     final variante = VarianteProducto(
       id: _generadorId.v4(),
       productoPadreId: productoPadreId,
@@ -717,6 +793,10 @@ class ServicioAdmin {
   }
 
   Future<void> actualizarVariante(VarianteProducto variante) async {
+    final padre = await _productoRepository.obtenerPorId(variante.productoPadreId);
+    if (padre != null) {
+      _validarPrecioVenta(variante.precioBase, padre.costoUnitario);
+    }
     await _varianteRepository?.guardar(variante);
     await _registrarEventoVariante(variante);
   }
@@ -1051,19 +1131,20 @@ class ServicioAdmin {
         throw StateError('Usuario sin tienda asignada');
       }
       await cambiarTiendaActiva(tiendaId);
-		} else if (tiendasDesdeHub.isNotEmpty) {
-      await importarTiendasDesdeHub(tiendasDesdeHub);
-    }
-    final hub = await _configRepository.obtenerHubUrl();
-    if (hub != null && hub.isNotEmpty) {
-      await sincronizarManual();
-    }
-    if (usuario.rol == RolUsuario.administrador) {
+    } else {
+      await LimpiadorBaseLocal.eliminarDatosEjemplo(_baseDatos);
+      if (tiendasDesdeHub.isNotEmpty) {
+        await importarTiendasDesdeHub(tiendasDesdeHub);
+      }
       await _asegurarTiendasAdministrador(
         tenantId: tenantLimpio,
         tiendasIniciales: tiendasDesdeHub,
         obtenerRemotas: obtenerTiendasRemotas,
       );
+    }
+    final hub = await _configRepository.obtenerHubUrl();
+    if (hub != null && hub.isNotEmpty) {
+      await reconciliarConHub();
     }
   }
 
@@ -1094,7 +1175,7 @@ class ServicioAdmin {
   }
 
   Future<List<Tienda>> obtenerTiendasPermitidas({Usuario? operador}) async {
-    final tiendas = await _tiendaRepository.listarActivas();
+    final tiendas = await _tiendaRepository.listarActivasOperativas();
     if (operador == null ||
         PermisosUsuario.puedeGestionarTodasLasTiendas(operador)) {
       return tiendas;
@@ -1436,6 +1517,8 @@ class ServicioAdmin {
     final ahora = DateTime.now().toUtc();
     final compraId = _generadorId.v4();
     final lineasCompra = <LineaCompra>[];
+    final productosActualizados = <Producto>[];
+    final movimientosPendientes = <MovimientoInventario>[];
     var total = 0.0;
 
     for (final solicitud in lineas) {
@@ -1461,26 +1544,15 @@ class ServicioAdmin {
       );
       final anterior = stockActual?.cantidad ?? 0.0;
       final nuevo = anterior + solicitud.cantidad;
-      await _inventarioRepository.guardarStock(
-        StockNivel(
-          productoId: solicitud.productoId,
-          tiendaId: tiendaDestino,
-          cantidad: nuevo,
-          actualizadoEn: ahora,
-          stockMinimo: stockActual?.stockMinimo ?? 0.0,
-        ),
-      );
 
       final productoActualizado = producto.copiarCon(
         costoUnitario: costo,
         proveedorId: proveedorId,
       );
-      await _productoRepository.guardar(productoActualizado);
-      await _registrarEventoProducto(productoActualizado);
+      productosActualizados.add(productoActualizado);
 
-      final movRepo = _movimientoRepository;
-      if (movRepo != null) {
-        await movRepo.guardar(
+      if (_movimientoRepository != null) {
+        movimientosPendientes.add(
           MovimientoInventario(
             id: _generadorId.v4(),
             productoId: solicitud.productoId,
@@ -1520,7 +1592,40 @@ class ServicioAdmin {
       creadoPor: operador?.id,
       lineas: lineasCompra,
     );
-    await repo.guardar(compra);
+
+    await _enTransaccion((tx) async {
+      for (var i = 0; i < lineasCompra.length; i++) {
+        final linea = lineasCompra[i];
+        final movimiento = i < movimientosPendientes.length
+            ? movimientosPendientes[i]
+            : null;
+        final stockActual = await _inventarioRepository.obtenerStock(
+          linea.productoId,
+          tiendaDestino,
+          db: tx,
+        );
+        final anterior = stockActual?.cantidad ?? 0.0;
+        await _inventarioRepository.guardarStock(
+          StockNivel(
+            productoId: linea.productoId,
+            tiendaId: tiendaDestino,
+            cantidad: anterior + linea.cantidad,
+            actualizadoEn: ahora,
+            stockMinimo: stockActual?.stockMinimo ?? 0.0,
+          ),
+          db: tx,
+        );
+        await _productoRepository.guardar(productosActualizados[i], db: tx);
+        if (movimiento != null) {
+          await _movimientoRepository!.guardar(movimiento, db: tx);
+        }
+      }
+      await repo.guardar(compra, db: tx);
+    });
+
+    for (final producto in productosActualizados) {
+      await _registrarEventoProducto(producto);
+    }
     return compra;
   }
 
@@ -1617,6 +1722,46 @@ class ServicioAdmin {
 
   Future<Cotizacion?> obtenerCotizacion(String cotizacionId) async {
     return _cotizacionRepository?.obtenerPorId(cotizacionId);
+  }
+
+  /// Registra cotizacion desde administracion (sin carrito de caja).
+  Future<Cotizacion> registrarCotizacion({
+    required List<LineaCotizacion> lineas,
+    String? clienteId,
+    String notas = '',
+    int vigenciaDias = VIGENCIA_COTIZACION_DIAS,
+    String? vendedorId,
+  }) async {
+    final repo = _cotizacionRepository;
+    if (repo == null) {
+      throw StateError('Repositorio de cotizaciones no configurado');
+    }
+    if (lineas.isEmpty) {
+      throw StateError('Agregue al menos un producto a la cotización');
+    }
+    if (vigenciaDias <= 0) {
+      throw StateError('Indique días de vigencia válidos');
+    }
+    String? nombreCliente;
+    if (clienteId != null) {
+      final cliente = await _clienteRepository?.obtenerPorId(clienteId);
+      nombreCliente = cliente?.nombre;
+    }
+    final cotizacion = Cotizacion(
+      id: _generadorId.v4(),
+      tiendaId: _tiendaActivaId,
+      clienteId: clienteId,
+      nombreCliente: nombreCliente,
+      total: Cotizacion.calcularTotalDesdeLineas(lineas),
+      notas: notas.trim(),
+      vigenciaDias: vigenciaDias,
+      creadaEn: DateTime.now().toUtc(),
+      cajaId: _cajaId,
+      vendedorId: vendedorId,
+      lineas: lineas,
+    );
+    await repo.guardar(cotizacion);
+    return cotizacion;
   }
 
   Future<Pedido> registrarPedido({
@@ -1972,26 +2117,30 @@ class ServicioAdmin {
       creditoVenceEn: creditoVenceEn,
     );
 
-    await _ventaRepository.guardar(venta);
-    final ahora = DateTime.now().toUtc();
-    for (final linea in lineasVenta) {
-      final stock = await _inventarioRepository.obtenerStock(
-        linea.productoId,
-        _tiendaActivaId,
-      );
-      await _inventarioRepository.guardarStock(
-        StockNivel(
-          productoId: linea.productoId,
-          tiendaId: _tiendaActivaId,
-          cantidad: (stock?.cantidad ?? 0.0) - linea.cantidad,
-          actualizadoEn: ahora,
-          stockMinimo: stock?.stockMinimo ?? 0.0,
-        ),
-      );
-    }
-    if (turno != null && _servicioCorteCaja != null) {
-      await _servicioCorteCaja.registrarVenta(turno, venta);
-    }
+    await _enTransaccion((tx) async {
+      await _ventaRepository.guardar(venta, db: tx);
+      final ahora = DateTime.now().toUtc();
+      for (final linea in lineasVenta) {
+        final stock = await _inventarioRepository.obtenerStock(
+          linea.productoId,
+          _tiendaActivaId,
+          db: tx,
+        );
+        await _inventarioRepository.guardarStock(
+          StockNivel(
+            productoId: linea.productoId,
+            tiendaId: _tiendaActivaId,
+            cantidad: (stock?.cantidad ?? 0.0) - linea.cantidad,
+            actualizadoEn: ahora,
+            stockMinimo: stock?.stockMinimo ?? 0.0,
+          ),
+          db: tx,
+        );
+      }
+      if (turno != null && _servicioCorteCaja != null) {
+        await _servicioCorteCaja.registrarVenta(turno, venta, db: tx);
+      }
+    });
     await _registrarEventoVentaCompletada(venta);
     return venta;
   }
@@ -2101,19 +2250,6 @@ class ServicioAdmin {
         'productoId': linea.productoId,
         'cantidadDevuelta': devolver,
       });
-      final stock = await _inventarioRepository.obtenerStock(
-        linea.productoId,
-        venta.tiendaId,
-      );
-      await _inventarioRepository.guardarStock(
-        StockNivel(
-          productoId: linea.productoId,
-          tiendaId: venta.tiendaId,
-          cantidad: (stock?.cantidad ?? 0.0) + devolver,
-          actualizadoEn: ahora,
-          stockMinimo: stock?.stockMinimo ?? 0.0,
-        ),
-      );
       final restante = linea.cantidad - devolver;
       if (restante > 0.0) {
         lineasActualizadas.add(
@@ -2140,8 +2276,35 @@ class ServicioAdmin {
           ? EstadoVenta.devuelta
           : EstadoVenta.completada,
     );
-    await _ventaRepository.actualizarVenta(ventaActualizada);
-    await _servicioCorteCaja?.registrarDevolucion(venta, montoDevuelto);
+    await _enTransaccion((tx) async {
+      for (final linea in venta.lineas) {
+        final devolver = cantidadesPorProducto[linea.productoId] ?? 0.0;
+        if (devolver <= 0.0) {
+          continue;
+        }
+        final stock = await _inventarioRepository.obtenerStock(
+          linea.productoId,
+          venta.tiendaId,
+          db: tx,
+        );
+        await _inventarioRepository.guardarStock(
+          StockNivel(
+            productoId: linea.productoId,
+            tiendaId: venta.tiendaId,
+            cantidad: (stock?.cantidad ?? 0.0) + devolver,
+            actualizadoEn: ahora,
+            stockMinimo: stock?.stockMinimo ?? 0.0,
+          ),
+          db: tx,
+        );
+      }
+      await _ventaRepository.actualizarVenta(ventaActualizada, db: tx);
+      await _servicioCorteCaja?.registrarDevolucion(
+        venta,
+        montoDevuelto,
+        db: tx,
+      );
+    });
     await _registrarEventoDevolucionParcial(
       venta,
       lineasDevueltas,
@@ -2156,24 +2319,32 @@ class ServicioAdmin {
       return false;
     }
     final ahora = DateTime.now().toUtc();
-    for (final linea in venta.lineas) {
-      final stock = await _inventarioRepository.obtenerStock(
-        linea.productoId,
-        venta.tiendaId,
+    await _enTransaccion((tx) async {
+      for (final linea in venta.lineas) {
+        final stock = await _inventarioRepository.obtenerStock(
+          linea.productoId,
+          venta.tiendaId,
+          db: tx,
+        );
+        final cantidadNueva = (stock?.cantidad ?? 0.0) + linea.cantidad;
+        await _inventarioRepository.guardarStock(
+          StockNivel(
+            productoId: linea.productoId,
+            tiendaId: venta.tiendaId,
+            cantidad: cantidadNueva,
+            actualizadoEn: ahora,
+            stockMinimo: stock?.stockMinimo ?? 0.0,
+          ),
+          db: tx,
+        );
+      }
+      await _ventaRepository.actualizarEstado(
+        ventaId,
+        EstadoVenta.cancelada,
+        db: tx,
       );
-      final cantidadNueva = (stock?.cantidad ?? 0.0) + linea.cantidad;
-      await _inventarioRepository.guardarStock(
-        StockNivel(
-          productoId: linea.productoId,
-          tiendaId: venta.tiendaId,
-          cantidad: cantidadNueva,
-          actualizadoEn: ahora,
-          stockMinimo: stock?.stockMinimo ?? 0.0,
-        ),
-      );
-    }
-    await _ventaRepository.actualizarEstado(ventaId, EstadoVenta.cancelada);
-    await _servicioCorteCaja?.registrarAnulacion(venta);
+      await _servicioCorteCaja?.registrarAnulacion(venta, db: tx);
+    });
     await _registrarEventoAnulacion(venta);
     return true;
   }
@@ -2203,20 +2374,18 @@ class ServicioAdmin {
     List<Tienda> tiendasIniciales = const [],
     Future<List<Tienda>> Function(String tenantId)? obtenerRemotas,
   }) async {
-    if ((await listarTiendasActivas()).isNotEmpty) {
-      return;
-    }
-    if (tiendasIniciales.isNotEmpty) {
-      await importarTiendasDesdeHub(tiendasIniciales);
-      if ((await listarTiendasActivas()).isNotEmpty) {
-        return;
+    var remotas = tiendasIniciales;
+    final fetch = obtenerRemotas;
+    if (fetch != null) {
+      try {
+        final desdeHub = await fetch(tenantId);
+        if (desdeHub.isNotEmpty) {
+          remotas = desdeHub;
+        }
+      } on Object {
+        // Si el hub falla, se conserva la copia local o la del login.
       }
     }
-    final fetch = obtenerRemotas;
-    if (fetch == null) {
-      return;
-    }
-    final remotas = await fetch(tenantId);
     if (remotas.isNotEmpty) {
       await importarTiendasDesdeHub(remotas);
     }
@@ -2301,24 +2470,30 @@ class ServicioAdmin {
     }
     if (venta.estado == EstadoVenta.completada) {
       final ahora = DateTime.now().toUtc();
-      for (final linea in venta.lineas) {
-        final stock = await _inventarioRepository.obtenerStock(
-          linea.productoId,
-          venta.tiendaId,
-        );
-        await _inventarioRepository.guardarStock(
-          StockNivel(
-            productoId: linea.productoId,
-            tiendaId: venta.tiendaId,
-            cantidad: (stock?.cantidad ?? 0.0) + linea.cantidad,
-            actualizadoEn: ahora,
-            stockMinimo: stock?.stockMinimo ?? 0.0,
-          ),
-        );
-      }
-      await _servicioCorteCaja?.registrarAnulacion(venta);
+      await _enTransaccion((tx) async {
+        for (final linea in venta.lineas) {
+          final stock = await _inventarioRepository.obtenerStock(
+            linea.productoId,
+            venta.tiendaId,
+            db: tx,
+          );
+          await _inventarioRepository.guardarStock(
+            StockNivel(
+              productoId: linea.productoId,
+              tiendaId: venta.tiendaId,
+              cantidad: (stock?.cantidad ?? 0.0) + linea.cantidad,
+              actualizadoEn: ahora,
+              stockMinimo: stock?.stockMinimo ?? 0.0,
+            ),
+            db: tx,
+          );
+        }
+        await _servicioCorteCaja?.registrarAnulacion(venta, db: tx);
+        await _ventaRepository.eliminar(ventaId, db: tx);
+      });
+    } else {
+      await _ventaRepository.eliminar(ventaId);
     }
-    await _ventaRepository.eliminar(ventaId);
     return true;
   }
 
@@ -2375,6 +2550,13 @@ class ServicioAdmin {
 
     final lineasTraspaso = <LineaTraspaso>[];
     final ahora = DateTime.now().toUtc();
+    final lineasPendientes = <
+        ({
+          String productoId,
+          double cantidad,
+          double anteriorOrigen,
+          double anteriorDestino,
+        })>[];
 
     for (final solicitud in lineas) {
       if (solicitud.cantidad <= 0) {
@@ -2398,55 +2580,18 @@ class ServicioAdmin {
         throw StateError('Stock insuficiente de ${producto.nombre} en origen');
       }
 
-      final nuevoOrigen = anteriorOrigen - solicitud.cantidad;
-      await _inventarioRepository.guardarStock(
-        StockNivel(
-          productoId: solicitud.productoId,
-          tiendaId: tiendaOrigenId,
-          cantidad: nuevoOrigen,
-          actualizadoEn: ahora,
-          stockMinimo: stockOrigen?.stockMinimo ?? 0.0,
-        ),
-      );
-
       final stockDestino = await _inventarioRepository.obtenerStock(
         solicitud.productoId,
         tiendaDestinoId,
       );
       final anteriorDestino = stockDestino?.cantidad ?? 0.0;
-      final nuevoDestino = anteriorDestino + solicitud.cantidad;
-      await _inventarioRepository.guardarStock(
-        StockNivel(
-          productoId: solicitud.productoId,
-          tiendaId: tiendaDestinoId,
-          cantidad: nuevoDestino,
-          actualizadoEn: ahora,
-          stockMinimo: stockDestino?.stockMinimo ?? 0.0,
-        ),
-      );
 
-      await _registrarAuditoriaInventario(
+      lineasPendientes.add((
         productoId: solicitud.productoId,
-        tiendaId: tiendaOrigenId,
-        tipo: TipoMovimientoInventario.traspasoSalida,
         cantidad: solicitud.cantidad,
-        cantidadAnterior: anteriorOrigen,
-        cantidadNueva: nuevoOrigen,
-        motivo: 'Traspaso enviado',
-        operadorId: operador?.id,
-        creadoEn: ahora,
-      );
-      await _registrarAuditoriaInventario(
-        productoId: solicitud.productoId,
-        tiendaId: tiendaDestinoId,
-        tipo: TipoMovimientoInventario.traspasoEntrada,
-        cantidad: solicitud.cantidad,
-        cantidadAnterior: anteriorDestino,
-        cantidadNueva: nuevoDestino,
-        motivo: 'Traspaso recibido',
-        operadorId: operador?.id,
-        creadoEn: ahora,
-      );
+        anteriorOrigen: anteriorOrigen,
+        anteriorDestino: anteriorDestino,
+      ));
 
       lineasTraspaso.add(
         LineaTraspaso(
@@ -2468,7 +2613,72 @@ class ServicioAdmin {
       notas: notas,
       lineas: lineasTraspaso,
     );
-    await repo.guardar(traspaso);
+
+    await _enTransaccion((tx) async {
+      for (final linea in lineasPendientes) {
+        final stockOrigen = await _inventarioRepository.obtenerStock(
+          linea.productoId,
+          tiendaOrigenId,
+          db: tx,
+        );
+        final anteriorOrigen = stockOrigen?.cantidad ?? 0.0;
+        final nuevoOrigen = anteriorOrigen - linea.cantidad;
+        await _inventarioRepository.guardarStock(
+          StockNivel(
+            productoId: linea.productoId,
+            tiendaId: tiendaOrigenId,
+            cantidad: nuevoOrigen,
+            actualizadoEn: ahora,
+            stockMinimo: stockOrigen?.stockMinimo ?? 0.0,
+          ),
+          db: tx,
+        );
+
+        final stockDestino = await _inventarioRepository.obtenerStock(
+          linea.productoId,
+          tiendaDestinoId,
+          db: tx,
+        );
+        final anteriorDestino = stockDestino?.cantidad ?? 0.0;
+        final nuevoDestino = anteriorDestino + linea.cantidad;
+        await _inventarioRepository.guardarStock(
+          StockNivel(
+            productoId: linea.productoId,
+            tiendaId: tiendaDestinoId,
+            cantidad: nuevoDestino,
+            actualizadoEn: ahora,
+            stockMinimo: stockDestino?.stockMinimo ?? 0.0,
+          ),
+          db: tx,
+        );
+
+        await _registrarAuditoriaInventario(
+          productoId: linea.productoId,
+          tiendaId: tiendaOrigenId,
+          tipo: TipoMovimientoInventario.traspasoSalida,
+          cantidad: linea.cantidad,
+          cantidadAnterior: anteriorOrigen,
+          cantidadNueva: nuevoOrigen,
+          motivo: 'Traspaso enviado',
+          operadorId: operador?.id,
+          creadoEn: ahora,
+          db: tx,
+        );
+        await _registrarAuditoriaInventario(
+          productoId: linea.productoId,
+          tiendaId: tiendaDestinoId,
+          tipo: TipoMovimientoInventario.traspasoEntrada,
+          cantidad: linea.cantidad,
+          cantidadAnterior: anteriorDestino,
+          cantidadNueva: nuevoDestino,
+          motivo: 'Traspaso recibido',
+          operadorId: operador?.id,
+          creadoEn: ahora,
+          db: tx,
+        );
+      }
+      await repo.guardar(traspaso, db: tx);
+    });
     await _registrarEventoTraspaso(traspaso, TipoSyncEvento.transferCompleted);
     return traspaso;
   }
@@ -2506,42 +2716,16 @@ class ServicioAdmin {
       return false;
     }
     final ahora = DateTime.now().toUtc();
-    final lineasRecibidas = <LineaTraspaso>[];
-    for (final linea in traspaso.lineas) {
-      final stock = await _inventarioRepository.obtenerStock(
-        linea.productoId,
-        _tiendaActivaId,
-      );
-      final anterior = stock?.cantidad ?? 0.0;
-      final cantidadNueva = anterior + linea.cantidadSolicitada;
-      await _inventarioRepository.guardarStock(
-        StockNivel(
-          productoId: linea.productoId,
-          tiendaId: _tiendaActivaId,
-          cantidad: cantidadNueva,
-          actualizadoEn: ahora,
-          stockMinimo: stock?.stockMinimo ?? 0.0,
-        ),
-      );
-      await _registrarAuditoriaInventario(
-        productoId: linea.productoId,
-        tiendaId: _tiendaActivaId,
-        tipo: TipoMovimientoInventario.traspasoEntrada,
-        cantidad: linea.cantidadSolicitada,
-        cantidadAnterior: anterior,
-        cantidadNueva: cantidadNueva,
-        motivo: 'Traspaso recibido',
-        creadoEn: ahora,
-      );
-      lineasRecibidas.add(
-        LineaTraspaso(
-          productoId: linea.productoId,
-          nombreProducto: linea.nombreProducto,
-          cantidadSolicitada: linea.cantidadSolicitada,
-          cantidadRecibida: linea.cantidadSolicitada,
-        ),
-      );
-    }
+    final lineasRecibidas = traspaso.lineas
+        .map(
+          (linea) => LineaTraspaso(
+            productoId: linea.productoId,
+            nombreProducto: linea.nombreProducto,
+            cantidadSolicitada: linea.cantidadSolicitada,
+            cantidadRecibida: linea.cantidadSolicitada,
+          ),
+        )
+        .toList();
     final completado = Traspaso(
       id: traspaso.id,
       tiendaOrigenId: traspaso.tiendaOrigenId,
@@ -2552,7 +2736,39 @@ class ServicioAdmin {
       notas: traspaso.notas,
       lineas: lineasRecibidas,
     );
-    await repo.guardar(completado);
+    await _enTransaccion((tx) async {
+      for (final linea in traspaso.lineas) {
+        final stock = await _inventarioRepository.obtenerStock(
+          linea.productoId,
+          _tiendaActivaId,
+          db: tx,
+        );
+        final anterior = stock?.cantidad ?? 0.0;
+        final cantidadNueva = anterior + linea.cantidadSolicitada;
+        await _inventarioRepository.guardarStock(
+          StockNivel(
+            productoId: linea.productoId,
+            tiendaId: _tiendaActivaId,
+            cantidad: cantidadNueva,
+            actualizadoEn: ahora,
+            stockMinimo: stock?.stockMinimo ?? 0.0,
+          ),
+          db: tx,
+        );
+        await _registrarAuditoriaInventario(
+          productoId: linea.productoId,
+          tiendaId: _tiendaActivaId,
+          tipo: TipoMovimientoInventario.traspasoEntrada,
+          cantidad: linea.cantidadSolicitada,
+          cantidadAnterior: anterior,
+          cantidadNueva: cantidadNueva,
+          motivo: 'Traspaso recibido',
+          creadoEn: ahora,
+          db: tx,
+        );
+      }
+      await repo.guardar(completado, db: tx);
+    });
     await _registrarEventoTraspaso(
       completado,
       TipoSyncEvento.transferCompleted,
@@ -2570,6 +2786,7 @@ class ServicioAdmin {
     required String motivo,
     required DateTime creadoEn,
     String? operadorId,
+    DatabaseExecutor? db,
   }) async {
     final repo = _movimientoRepository;
     if (repo == null) {
@@ -2590,6 +2807,7 @@ class ServicioAdmin {
         creadoEn: creadoEn,
         creadoPor: operadorId,
       ),
+      db: db,
     );
   }
 
@@ -2642,36 +2860,49 @@ class ServicioAdmin {
       delta = cantidad;
     }
     final ahora = DateTime.now().toUtc();
-    await _inventarioRepository.guardarStock(
-      StockNivel(
-        productoId: productoId,
-        tiendaId: tiendaDestino,
-        cantidad: nuevo,
-        actualizadoEn: ahora,
-        stockMinimo: stockActual?.stockMinimo ?? 0.0,
-      ),
-    );
+    await _enTransaccion((tx) async {
+      final stockEnTx = await _inventarioRepository.obtenerStock(
+        productoId,
+        tiendaDestino,
+        db: tx,
+      );
+      final baseAnterior = stockEnTx?.cantidad ?? anterior;
+      final cantidadFinal = tipo == TipoMovimientoInventario.ajuste
+          ? cantidad
+          : baseAnterior + delta;
+      await _inventarioRepository.guardarStock(
+        StockNivel(
+          productoId: productoId,
+          tiendaId: tiendaDestino,
+          cantidad: cantidadFinal,
+          actualizadoEn: ahora,
+          stockMinimo: stockEnTx?.stockMinimo ?? stockActual?.stockMinimo ?? 0.0,
+        ),
+        db: tx,
+      );
+      await repo.guardar(
+        MovimientoInventario(
+          id: _generadorId.v4(),
+          productoId: productoId,
+          tiendaId: tiendaDestino,
+          tipo: tipo,
+          cantidad: cantidad,
+          cantidadAnterior: baseAnterior,
+          cantidadNueva: cantidadFinal,
+          motivo: motivoLimpio,
+          referenciaId: null,
+          proveedorId: proveedorId,
+          creadoEn: ahora,
+          creadoPor: operador?.id,
+        ),
+        db: tx,
+      );
+    });
     await _registrarEventoAjusteStock(
       productoId,
       delta,
       motivoLimpio,
       tiendaId: tiendaDestino,
-    );
-    await repo.guardar(
-      MovimientoInventario(
-        id: _generadorId.v4(),
-        productoId: productoId,
-        tiendaId: tiendaDestino,
-        tipo: tipo,
-        cantidad: cantidad,
-        cantidadAnterior: anterior,
-        cantidadNueva: nuevo,
-        motivo: motivoLimpio,
-        referenciaId: null,
-        proveedorId: proveedorId,
-        creadoEn: ahora,
-        creadoPor: operador?.id,
-      ),
     );
   }
 
@@ -3036,8 +3267,10 @@ class ServicioAdmin {
 
   Future<void> _registrarEventoTraspaso(
     Traspaso traspaso,
-    TipoSyncEvento tipo,
-  ) async {
+    TipoSyncEvento tipo, {
+    String? almacenOrigenId,
+    String? almacenDestinoId,
+  }) async {
     final evento = SyncEvent(
       id: _generadorId.v4(),
       tenantId: _tenantId,
@@ -3048,6 +3281,10 @@ class ServicioAdmin {
         'traspasoId': traspaso.id,
         'tiendaOrigenId': traspaso.tiendaOrigenId,
         'tiendaDestinoId': traspaso.tiendaDestinoId,
+        if (almacenOrigenId != null && almacenOrigenId.isNotEmpty)
+          'almacenOrigenId': almacenOrigenId,
+        if (almacenDestinoId != null && almacenDestinoId.isNotEmpty)
+          'almacenDestinoId': almacenDestinoId,
         'estado': traspaso.estado.name,
         'lineas': traspaso.lineas
             .map(
@@ -3063,6 +3300,40 @@ class ServicioAdmin {
       estado: EstadoSyncEvento.pendiente,
     );
     await _syncOrchestrator.registrarEvento(evento);
+  }
+
+  Future<void> _registrarEventoTraspasoAlmacen({
+    required String movimientoId,
+    required String almacenOrigenId,
+    String? almacenDestinoId,
+    String? tiendaDestinoId,
+    required List<LineaTraspasoSolicitud> lineas,
+  }) async {
+    final traspaso = Traspaso(
+      id: movimientoId,
+      tiendaOrigenId: '',
+      tiendaDestinoId: tiendaDestinoId ?? '',
+      estado: EstadoTraspaso.completado,
+      solicitadoEn: DateTime.now().toUtc(),
+      completadoEn: DateTime.now().toUtc(),
+      notas: 'Movimiento de almacén',
+      lineas: lineas
+          .map(
+            (l) => LineaTraspaso(
+              productoId: l.productoId,
+              nombreProducto: '',
+              cantidadSolicitada: l.cantidad,
+              cantidadRecibida: l.cantidad,
+            ),
+          )
+          .toList(),
+    );
+    await _registrarEventoTraspaso(
+      traspaso,
+      TipoSyncEvento.transferCompleted,
+      almacenOrigenId: almacenOrigenId,
+      almacenDestinoId: almacenDestinoId,
+    );
   }
 
   Future<void> _registrarEventoVariante(VarianteProducto variante) async {
@@ -3321,26 +3592,151 @@ class ServicioAdmin {
       throw StateError('Stock insuficiente en almacén');
     }
     final ahora = DateTime.now().toUtc();
+    await _enTransaccion((tx) async {
+      final stockAlmacen = await almacenRepo.obtenerStock(
+        productoId,
+        almacenId,
+        db: tx,
+      );
+      final anteriorAlmacen = stockAlmacen?.cantidad ?? anterior;
+      await almacenRepo.guardarStock(
+        StockAlmacen(
+          productoId: productoId,
+          almacenId: almacenId,
+          cantidad: anteriorAlmacen - cantidad,
+          actualizadoEn: ahora,
+          stockMinimo: stockAlmacen?.stockMinimo ?? stock?.stockMinimo ?? 0,
+        ),
+        db: tx,
+      );
+      final stockTienda = await _inventarioRepository.obtenerStock(
+        productoId,
+        tiendaDestinoId,
+        db: tx,
+      );
+      await _inventarioRepository.guardarStock(
+        StockNivel(
+          productoId: productoId,
+          tiendaId: tiendaDestinoId,
+          cantidad: (stockTienda?.cantidad ?? 0) + cantidad,
+          actualizadoEn: ahora,
+          stockMinimo: stockTienda?.stockMinimo ?? 0,
+        ),
+        db: tx,
+      );
+    });
+  }
+
+  /// Resumen de existencias por almacén activo.
+  Future<List<ResumenStockAlmacen>> obtenerResumenAlmacenes() async {
+    final almacenRepo = _almacenRepository;
+    if (almacenRepo == null) {
+      return [];
+    }
+    final almacenes = await almacenRepo.listarActivos();
+    final resumenes = <ResumenStockAlmacen>[];
+    for (final almacen in almacenes) {
+      final stocks = await almacenRepo.listarStockPorAlmacen(almacen.id);
+      var productos = 0;
+      var unidades = 0.0;
+      for (final stock in stocks) {
+        if (stock.cantidad <= 0) {
+          continue;
+        }
+        productos++;
+        unidades += stock.cantidad;
+      }
+      resumenes.add(
+        ResumenStockAlmacen(
+          almacenId: almacen.id,
+          nombreAlmacen: almacen.nombre,
+          productosConStock: productos,
+          totalUnidades: redondearMonto(unidades),
+        ),
+      );
+    }
+    return resumenes;
+  }
+
+  /// Inventario detallado de un almacén (productos con cantidad).
+  Future<List<StockPorAlmacen>> obtenerInventarioAlmacen(String almacenId) async {
+    final almacenRepo = _almacenRepository;
+    if (almacenRepo == null) {
+      return [];
+    }
+    final almacen = await almacenRepo.obtenerPorId(almacenId);
+    if (almacen == null) {
+      throw StateError('Almacén no encontrado');
+    }
+    final stocks = await almacenRepo.listarStockPorAlmacen(almacenId);
+    final resultado = <StockPorAlmacen>[];
+    for (final stock in stocks) {
+      if (stock.cantidad <= 0) {
+        continue;
+      }
+      final producto = await _productoRepository.obtenerPorId(stock.productoId);
+      if (producto == null || !producto.activo) {
+        continue;
+      }
+      resultado.add(
+        StockPorAlmacen(
+          productoId: stock.productoId,
+          nombreProducto: producto.nombre,
+          almacenId: almacenId,
+          nombreAlmacen: almacen.nombre,
+          cantidad: stock.cantidad,
+          actualizadoEn: stock.actualizadoEn,
+          stockMinimo: stock.stockMinimo,
+        ),
+      );
+    }
+    resultado.sort((a, b) => a.nombreProducto.compareTo(b.nombreProducto));
+    return resultado;
+  }
+
+  /// Ajusta existencias en almacén (entrada, salida o ajuste a cantidad fija).
+  Future<void> ajustarStockAlmacen({
+    required String productoId,
+    required String almacenId,
+    required TipoMovimientoInventario tipo,
+    required double cantidad,
+  }) async {
+    final almacenRepo = _almacenRepository;
+    if (almacenRepo == null) {
+      throw StateError('Almacenes no disponibles');
+    }
+    final almacen = await almacenRepo.obtenerPorId(almacenId);
+    if (almacen == null) {
+      throw StateError('Almacén no encontrado');
+    }
+    final producto = await _productoRepository.obtenerPorId(productoId);
+    if (producto == null) {
+      throw StateError('Producto no encontrado');
+    }
+    if (cantidad < 0) {
+      throw StateError('La cantidad no puede ser negativa');
+    }
+    final stockActual = await almacenRepo.obtenerStock(productoId, almacenId);
+    final anterior = stockActual?.cantidad ?? 0.0;
+    late double nuevo;
+    if (tipo == TipoMovimientoInventario.ajuste) {
+      nuevo = cantidad;
+    } else if (tipo == TipoMovimientoInventario.salida) {
+      if (anterior < cantidad) {
+        throw StateError('Stock insuficiente en almacén');
+      }
+      nuevo = anterior - cantidad;
+    } else {
+      nuevo = anterior + cantidad;
+    }
+    final ahora = DateTime.now().toUtc();
     await almacenRepo.guardarStock(
       StockAlmacen(
         productoId: productoId,
         almacenId: almacenId,
-        cantidad: anterior - cantidad,
+        cantidad: nuevo,
         actualizadoEn: ahora,
-        stockMinimo: stock?.stockMinimo ?? 0,
-      ),
-    );
-    final stockTienda = await _inventarioRepository.obtenerStock(
-      productoId,
-      tiendaDestinoId,
-    );
-    await _inventarioRepository.guardarStock(
-      StockNivel(
-        productoId: productoId,
-        tiendaId: tiendaDestinoId,
-        cantidad: (stockTienda?.cantidad ?? 0) + cantidad,
-        actualizadoEn: ahora,
-        stockMinimo: stockTienda?.stockMinimo ?? 0,
+        stockMinimo: stockActual?.stockMinimo ?? 0,
       ),
     );
   }
@@ -3375,17 +3771,122 @@ class ServicioAdmin {
     required String tiendaDestinoId,
     required List<LineaTraspasoSolicitud> lineas,
   }) async {
-    for (final linea in lineas) {
-      if (linea.cantidad <= 0) {
-        continue;
+    final movimientoId = _generadorId.v4();
+    await _enTransaccion((tx) async {
+      for (final linea in lineas) {
+        if (linea.cantidad <= 0) {
+          continue;
+        }
+        final almacenRepo = _almacenRepository;
+        if (almacenRepo == null) {
+          throw StateError('Almacenes no disponibles');
+        }
+        final stock = await almacenRepo.obtenerStock(
+          linea.productoId,
+          almacenId,
+          db: tx,
+        );
+        final anterior = stock?.cantidad ?? 0.0;
+        if (anterior < linea.cantidad) {
+          throw StateError('Stock insuficiente en almacén');
+        }
+        final ahora = DateTime.now().toUtc();
+        await almacenRepo.guardarStock(
+          StockAlmacen(
+            productoId: linea.productoId,
+            almacenId: almacenId,
+            cantidad: anterior - linea.cantidad,
+            actualizadoEn: ahora,
+            stockMinimo: stock?.stockMinimo ?? 0,
+          ),
+          db: tx,
+        );
+        final stockTienda = await _inventarioRepository.obtenerStock(
+          linea.productoId,
+          tiendaDestinoId,
+          db: tx,
+        );
+        await _inventarioRepository.guardarStock(
+          StockNivel(
+            productoId: linea.productoId,
+            tiendaId: tiendaDestinoId,
+            cantidad: (stockTienda?.cantidad ?? 0) + linea.cantidad,
+            actualizadoEn: ahora,
+            stockMinimo: stockTienda?.stockMinimo ?? 0,
+          ),
+          db: tx,
+        );
       }
-      await traspasarAlmacenATienda(
-        almacenId: almacenId,
-        tiendaDestinoId: tiendaDestinoId,
-        productoId: linea.productoId,
-        cantidad: linea.cantidad,
-      );
+    });
+    await _registrarEventoTraspasoAlmacen(
+      movimientoId: movimientoId,
+      almacenOrigenId: almacenId,
+      tiendaDestinoId: tiendaDestinoId,
+      lineas: lineas,
+    );
+  }
+
+  Future<void> traspasarAlmacenAAlmacenMultiple({
+    required String almacenOrigenId,
+    required String almacenDestinoId,
+    required List<LineaTraspasoSolicitud> lineas,
+  }) async {
+    if (almacenOrigenId == almacenDestinoId) {
+      throw StateError('El almacén origen y destino deben ser distintos');
     }
+    final movimientoId = _generadorId.v4();
+    await _enTransaccion((tx) async {
+      final almacenRepo = _almacenRepository;
+      if (almacenRepo == null) {
+        throw StateError('Almacenes no disponibles');
+      }
+      for (final linea in lineas) {
+        if (linea.cantidad <= 0) {
+          continue;
+        }
+        final stockOrigen = await almacenRepo.obtenerStock(
+          linea.productoId,
+          almacenOrigenId,
+          db: tx,
+        );
+        final anteriorOrigen = stockOrigen?.cantidad ?? 0.0;
+        if (anteriorOrigen < linea.cantidad) {
+          throw StateError('Stock insuficiente en almacén origen');
+        }
+        final ahora = DateTime.now().toUtc();
+        await almacenRepo.guardarStock(
+          StockAlmacen(
+            productoId: linea.productoId,
+            almacenId: almacenOrigenId,
+            cantidad: anteriorOrigen - linea.cantidad,
+            actualizadoEn: ahora,
+            stockMinimo: stockOrigen?.stockMinimo ?? 0,
+          ),
+          db: tx,
+        );
+        final stockDestino = await almacenRepo.obtenerStock(
+          linea.productoId,
+          almacenDestinoId,
+          db: tx,
+        );
+        await almacenRepo.guardarStock(
+          StockAlmacen(
+            productoId: linea.productoId,
+            almacenId: almacenDestinoId,
+            cantidad: (stockDestino?.cantidad ?? 0) + linea.cantidad,
+            actualizadoEn: ahora,
+            stockMinimo: stockDestino?.stockMinimo ?? 0,
+          ),
+          db: tx,
+        );
+      }
+    });
+    await _registrarEventoTraspasoAlmacen(
+      movimientoId: movimientoId,
+      almacenOrigenId: almacenOrigenId,
+      almacenDestinoId: almacenDestinoId,
+      lineas: lineas,
+    );
   }
 
   Future<void> _registrarEventoAlmacen(Almacen almacen) async {
@@ -3439,6 +3940,7 @@ class ServicioAdmin {
   }
 
   Future<PresentacionProducto> guardarPresentacionProducto({
+    String? id,
     required String productoId,
     required String nombre,
     required double factorABase,
@@ -3451,8 +3953,33 @@ class ServicioAdmin {
     if (repo == null) {
       throw StateError('Presentaciones no disponibles');
     }
+    if (precio != null) {
+      final producto = await _productoRepository.obtenerPorId(productoId);
+      if (producto != null &&
+          !precioPresentacionEsValido(
+            precio,
+            producto.costoUnitario,
+            factorABase,
+          )) {
+        throw StateError(
+          mensajePrecioMinimoPresentacionInvalido(
+            producto.costoUnitario,
+            factorABase,
+          ),
+        );
+      }
+    }
+    if (id != null) {
+      final existente = await repo.obtenerPorId(id);
+      if (existente == null) {
+        throw StateError('Presentación no encontrada');
+      }
+      if (existente.esPresentacionBase && factorABase != existente.factorABase) {
+        throw StateError('No se puede cambiar el factor de la unidad base');
+      }
+    }
     final presentacion = PresentacionProducto(
-      id: _generadorId.v4(),
+      id: id ?? _generadorId.v4(),
       productoId: productoId,
       tipoPresentacionId: tipoPresentacionId,
       nombre: nombre.trim(),
@@ -3466,7 +3993,25 @@ class ServicioAdmin {
     return presentacion;
   }
 
-  Future<void> asegurarPresentacionBase(Producto producto) async {
+  Future<void> eliminarPresentacionProducto(String presentacionId) async {
+    final repo = _presentacionRepository;
+    if (repo == null) {
+      throw StateError('Presentaciones no disponibles');
+    }
+    final existente = await repo.obtenerPorId(presentacionId);
+    if (existente == null) {
+      throw StateError('Presentación no encontrada');
+    }
+    if (existente.esPresentacionBase) {
+      throw StateError('No se puede eliminar la unidad base');
+    }
+    await repo.guardarPresentacion(existente.copiarWith(activo: false));
+  }
+
+  Future<void> asegurarPresentacionBase(
+    Producto producto, {
+    DatabaseExecutor? db,
+  }) async {
     final repo = _presentacionRepository;
     if (repo == null) {
       return;
@@ -3485,6 +4030,7 @@ class ServicioAdmin {
         precio: producto.precioBase,
         activo: true,
       ),
+      db: db,
     );
     if (producto.piezasPorCaja != null && producto.piezasPorCaja! > 1) {
       await repo.guardarPresentacion(
@@ -3498,6 +4044,7 @@ class ServicioAdmin {
           precio: producto.precioBase * producto.piezasPorCaja!,
           activo: true,
         ),
+        db: db,
       );
     }
   }

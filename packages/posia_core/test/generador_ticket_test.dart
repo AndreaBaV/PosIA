@@ -35,6 +35,7 @@ void main() {
 			telefonoCliente: '5551234567',
 		);
 		expect(texto, contains('Tienda Centro'));
+		expect(texto, contains('LA FORTUNA'));
 		expect(texto, contains('Av. Principal 123'));
 		expect(texto, contains('Caja: Caja 1'));
 		expect(texto, contains('Juan Perez (001)'));
@@ -119,7 +120,7 @@ void main() {
 			nombreTiendaDestino: 'Norte',
 			nombreOperadorEnvio: 'Ana',
 		);
-		expect(ticket, contains('TRASPASO POSIA'));
+		expect(ticket, contains('TRASPASO LA FORTUNA'));
 		expect(ticket, contains('Arroz 1kg'));
 		expect(ticket, contains('Total unidades: 15'));
 		expect(comprobante, contains('PRODUCTOS RECIBIDOS'));
@@ -157,7 +158,7 @@ void main() {
 			direccionCliente: 'Calle 5 #10',
 			etiquetaCopia: 'COPIA CLIENTE',
 		);
-		expect(texto, contains('PAGARE POSIA'));
+		expect(texto, contains('PAGARE LA FORTUNA'));
 		expect(texto, contains('COPIA CLIENTE'));
 		expect(texto, contains('Juan Lopez'));
 		expect(texto, contains('UNA SOLA EXHIBICION'));

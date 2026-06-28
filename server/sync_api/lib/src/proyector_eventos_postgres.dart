@@ -8,9 +8,9 @@ import 'evento_hub.dart';
 
 /// Aplica eventos de dominio sobre el esquema operativo Postgres.
 class ProyectorEventosPostgres {
-	ProyectorEventosPostgres(this._conexion);
+	ProyectorEventosPostgres(this._sesion);
 
-	final Connection _conexion;
+	final Session _sesion;
 
 	/// Proyecta un evento recien persistido en sync_events.
 	Future<void> aplicar(EventoHub evento) async {
@@ -54,7 +54,7 @@ class ProyectorEventosPostgres {
 		}
 		final tiendaId = p['tiendaId'] as String? ?? evento.tiendaId;
 		await _asegurarTienda(tiendaId);
-		await _conexion.execute(
+		await _sesion.execute(
 			Sql.named('''
 				INSERT INTO products (
 					id, nombre, codigo_barras, precio_base, unidad_medida, ruta_imagen,
@@ -104,7 +104,7 @@ class ProyectorEventosPostgres {
 		if (id.isEmpty) {
 			return;
 		}
-		await _conexion.execute(
+		await _sesion.execute(
 			Sql.named('''
 				INSERT INTO customers (
 					id, nombre, lista_precios_id, credito_habilitado, activo,
@@ -145,7 +145,7 @@ class ProyectorEventosPostgres {
 		if (id.isEmpty) {
 			return;
 		}
-		await _conexion.execute(
+		await _sesion.execute(
 			Sql.named('''
 				INSERT INTO categories (id, nombre, icono, color_hex, orden, activa)
 				VALUES (@id, @nombre, @icono, @color, @orden, @activa)
@@ -173,7 +173,7 @@ class ProyectorEventosPostgres {
 		if (id.isEmpty) {
 			return;
 		}
-		await _conexion.execute(
+		await _sesion.execute(
 			Sql.named('''
 				INSERT INTO product_variants (
 					id, producto_padre_id, nombre, sku, codigo_barras, precio_base, activo
@@ -206,7 +206,7 @@ class ProyectorEventosPostgres {
 		if (ventaId.isEmpty) {
 			return;
 		}
-		final existente = await _conexion.execute(
+		final existente = await _sesion.execute(
 			Sql.named('SELECT 1 FROM sales WHERE id = @id LIMIT 1'),
 			parameters: {'id': ventaId},
 		);
@@ -215,7 +215,7 @@ class ProyectorEventosPostgres {
 		}
 		await _asegurarTienda(evento.tiendaId);
 		final creadaEn = evento.creadoEn.toUtc().toIso8601String();
-		await _conexion.execute(
+		await _sesion.execute(
 			Sql.named('''
 				INSERT INTO sales (
 					id, tienda_id, caja_id, cliente_id, metodo_pago, total,
@@ -239,7 +239,7 @@ class ProyectorEventosPostgres {
 		);
 		final lineas = _listaMapas(p['lineas']);
 		for (final linea in lineas) {
-			await _conexion.execute(
+			await _sesion.execute(
 				Sql.named('''
 					INSERT INTO sale_lines (
 						venta_id, producto_id, nombre_producto, cantidad,
@@ -276,11 +276,17 @@ class ProyectorEventosPostgres {
 		if (productoId.isEmpty || delta == 0.0) {
 			return;
 		}
+		final almacenId = p['almacenId'] as String? ?? '';
+		final actualizado = evento.creadoEn.toUtc().toIso8601String();
+		if (almacenId.isNotEmpty) {
+			await _deltaStockAlmacen(productoId, almacenId, delta, actualizado);
+			return;
+		}
 		await _deltaStock(
 			productoId,
 			evento.tiendaId,
 			delta,
-			evento.creadoEn.toUtc().toIso8601String(),
+			actualizado,
 		);
 	}
 
@@ -289,7 +295,7 @@ class ProyectorEventosPostgres {
 		if (ventaId.isEmpty) {
 			return;
 		}
-		final venta = await _conexion.execute(
+		final venta = await _sesion.execute(
 			Sql.named('SELECT tienda_id, estado FROM sales WHERE id = @id'),
 			parameters: {'id': ventaId},
 		);
@@ -301,7 +307,7 @@ class ProyectorEventosPostgres {
 			return;
 		}
 		final tiendaId = fila['tienda_id'] as String;
-		final lineas = await _conexion.execute(
+		final lineas = await _sesion.execute(
 			Sql.named(
 				'SELECT producto_id, cantidad FROM sale_lines WHERE venta_id = @id',
 			),
@@ -317,7 +323,7 @@ class ProyectorEventosPostgres {
 				ahora,
 			);
 		}
-		await _conexion.execute(
+		await _sesion.execute(
 			Sql.named("UPDATE sales SET estado = 'cancelada' WHERE id = @id"),
 			parameters: {'id': ventaId},
 		);
@@ -329,7 +335,7 @@ class ProyectorEventosPostgres {
 		final estado = completado ? 'completado' : 'enTransito';
 		final solicitado = evento.creadoEn.toUtc().toIso8601String();
 		final completadoEn = completado ? solicitado : null;
-		await _conexion.execute(
+		await _sesion.execute(
 			Sql.named('''
 				INSERT INTO transfers (
 					id, tienda_origen_id, tienda_destino_id, estado,
@@ -350,13 +356,13 @@ class ProyectorEventosPostgres {
 				'completado': completadoEn,
 			},
 		);
-		await _conexion.execute(
+		await _sesion.execute(
 			Sql.named('DELETE FROM transfer_lines WHERE transfer_id = @id'),
 			parameters: {'id': id},
 		);
 		final lineas = _listaMapas(p['lineas']);
 		for (final linea in lineas) {
-			await _conexion.execute(
+			await _sesion.execute(
 				Sql.named('''
 					INSERT INTO transfer_lines (
 						transfer_id, producto_id, cantidad_solicitada, cantidad_recibida
@@ -371,16 +377,39 @@ class ProyectorEventosPostgres {
 						: null,
 				},
 			);
-			if (completado) {
-				final cantidad = linea['cantidadRecibida'] != null
-					? _dbl(linea['cantidadRecibida'])
-					: _dbl(linea['cantidadSolicitada']);
-				await _deltaStock(
-					linea['productoId'] as String? ?? '',
-					p['tiendaDestinoId'] as String? ?? '',
+			if (!completado) {
+				continue;
+			}
+			final cantidad = linea['cantidadRecibida'] != null
+				? _dbl(linea['cantidadRecibida'])
+				: _dbl(linea['cantidadSolicitada']);
+			final productoId = linea['productoId'] as String? ?? '';
+			final almacenOrigen = p['almacenOrigenId'] as String? ?? '';
+			final almacenDestino = p['almacenDestinoId'] as String? ?? '';
+			final tiendaOrigen = p['tiendaOrigenId'] as String? ?? '';
+			final tiendaDestino = p['tiendaDestinoId'] as String? ?? '';
+			if (productoId.isEmpty || cantidad <= 0) {
+				continue;
+			}
+			if (almacenOrigen.isNotEmpty) {
+				await _deltaStockAlmacen(
+					productoId,
+					almacenOrigen,
+					-cantidad,
+					solicitado,
+				);
+			} else if (tiendaOrigen.isNotEmpty) {
+				await _deltaStock(productoId, tiendaOrigen, -cantidad, solicitado);
+			}
+			if (almacenDestino.isNotEmpty) {
+				await _deltaStockAlmacen(
+					productoId,
+					almacenDestino,
 					cantidad,
 					solicitado,
 				);
+			} else if (tiendaDestino.isNotEmpty) {
+				await _deltaStock(productoId, tiendaDestino, cantidad, solicitado);
 			}
 		}
 	}
@@ -391,7 +420,7 @@ class ProyectorEventosPostgres {
 		if (ventaId.isEmpty) {
 			return;
 		}
-		final ventaRows = await _conexion.execute(
+		final ventaRows = await _sesion.execute(
 			Sql.named('SELECT tienda_id, estado FROM sales WHERE id = @id'),
 			parameters: {'id': ventaId},
 		);
@@ -403,7 +432,7 @@ class ProyectorEventosPostgres {
 			return;
 		}
 		final tiendaId = venta['tienda_id'] as String;
-		final lineasActuales = await _conexion.execute(
+		final lineasActuales = await _sesion.execute(
 			Sql.named('SELECT * FROM sale_lines WHERE venta_id = @id'),
 			parameters: {'id': ventaId},
 		);
@@ -425,7 +454,7 @@ class ProyectorEventosPostgres {
 				lineasRestantes.add({...cols, 'cantidad': cantidad});
 			}
 		}
-		await _conexion.execute(
+		await _sesion.execute(
 			Sql.named('DELETE FROM sale_lines WHERE venta_id = @id'),
 			parameters: {'id': ventaId},
 		);
@@ -433,7 +462,7 @@ class ProyectorEventosPostgres {
 		for (final linea in lineasRestantes) {
 			final sub = _dbl(linea['cantidad']) * _dbl(linea['precio_unitario']);
 			total = total + sub;
-			await _conexion.execute(
+			await _sesion.execute(
 				Sql.named('''
 					INSERT INTO sale_lines (
 						venta_id, producto_id, nombre_producto, cantidad,
@@ -456,7 +485,7 @@ class ProyectorEventosPostgres {
 			);
 		}
 		final nuevoEstado = lineasRestantes.isEmpty ? 'devuelta' : 'completada';
-		await _conexion.execute(
+		await _sesion.execute(
 			Sql.named('UPDATE sales SET total = @total, estado = @estado WHERE id = @id'),
 			parameters: {'total': total, 'estado': nuevoEstado, 'id': ventaId},
 		);
@@ -466,7 +495,7 @@ class ProyectorEventosPostgres {
 		if (tiendaId.isEmpty) {
 			return;
 		}
-		await _conexion.execute(
+		await _sesion.execute(
 			Sql.named('''
 				INSERT INTO stores (id, nombre, direccion, activa)
 				VALUES (@id, @nombre, '', 1)
@@ -485,7 +514,7 @@ class ProyectorEventosPostgres {
 		if (id.isEmpty) {
 			return;
 		}
-		await _conexion.execute(
+		await _sesion.execute(
 			Sql.named('''
 				INSERT INTO stores (id, nombre, direccion, activa)
 				VALUES (@id, @nombre, @direccion, @activa)
@@ -509,7 +538,7 @@ class ProyectorEventosPostgres {
 		if (id.isEmpty) {
 			return;
 		}
-		await _conexion.execute(
+		await _sesion.execute(
 			Sql.named('''
 				INSERT INTO almacenes (id, nombre, tienda_id, activo)
 				VALUES (@id, @nombre, @tienda, @activo)
@@ -540,7 +569,7 @@ class ProyectorEventosPostgres {
 		if (codigo.isEmpty) {
 			return;
 		}
-		final existente = await _conexion.execute(
+		final existente = await _sesion.execute(
 			Sql.named('SELECT actualizado_en FROM users WHERE id = @id'),
 			parameters: {'id': id},
 		);
@@ -556,7 +585,7 @@ class ProyectorEventosPostgres {
 			usuarioId: id,
 			actualizadoEn: actualizadoEn,
 		);
-		await _conexion.execute(
+		await _sesion.execute(
 			Sql.named('''
 				INSERT INTO users (
 					id, tenant_id, nombre, codigo, rol, tienda_id, activo,
@@ -600,7 +629,7 @@ class ProyectorEventosPostgres {
 		required String usuarioId,
 		required String actualizadoEn,
 	}) async {
-		final conflicto = await _conexion.execute(
+		final conflicto = await _sesion.execute(
 			Sql.named('''
 				SELECT id, actualizado_en
 				FROM users
@@ -623,7 +652,7 @@ class ProyectorEventosPostgres {
 			return;
 		}
 		final sufijo = otroId.length > 8 ? otroId.substring(0, 8) : otroId;
-		await _conexion.execute(
+		await _sesion.execute(
 			Sql.named('''
 				UPDATE users
 				SET codigo = @nuevo, actualizado_en = @actualizado
@@ -646,7 +675,7 @@ class ProyectorEventosPostgres {
 		if (productoId.isEmpty || tiendaId.isEmpty) {
 			return;
 		}
-		await _conexion.execute(
+		await _sesion.execute(
 			Sql.named('''
 				INSERT INTO stock_levels (producto_id, tienda_id, cantidad, actualizado_en, stock_minimo)
 				VALUES (@producto, @tienda, @delta, @actualizado, 0)
@@ -657,6 +686,32 @@ class ProyectorEventosPostgres {
 			parameters: {
 				'producto': productoId,
 				'tienda': tiendaId,
+				'delta': delta,
+				'actualizado': actualizadoEn,
+			},
+		);
+	}
+
+	Future<void> _deltaStockAlmacen(
+		String productoId,
+		String almacenId,
+		double delta,
+		String actualizadoEn,
+	) async {
+		if (productoId.isEmpty || almacenId.isEmpty) {
+			return;
+		}
+		await _sesion.execute(
+			Sql.named('''
+				INSERT INTO warehouse_stock (producto_id, almacen_id, cantidad, actualizado_en, stock_minimo)
+				VALUES (@producto, @almacen, @delta, @actualizado, 0)
+				ON CONFLICT (producto_id, almacen_id) DO UPDATE SET
+					cantidad = warehouse_stock.cantidad + @delta,
+					actualizado_en = @actualizado
+			'''),
+			parameters: {
+				'producto': productoId,
+				'almacen': almacenId,
 				'delta': delta,
 				'actualizado': actualizadoEn,
 			},

@@ -22,6 +22,7 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 	final _tarifaController = TextEditingController();
 	final _busquedaController = TextEditingController();
 	String _filtro = '';
+	String? _actualizandoUsuarioId;
 
 	@override
 	void dispose() {
@@ -120,64 +121,92 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 		final colorRol = PresentacionRol.color(u.rol);
 		return Card(
 			margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-			child: ListTile(
-				contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-				leading: CircleAvatar(
-					backgroundColor: colorRol.withValues(alpha: 0.15),
-					child: Icon(PresentacionRol.icono(u.rol), color: colorRol, size: 22.0),
-				),
-				title: Row(
-					children: [
-						Expanded(
-							child: Text(
-								u.nombre,
-								style: TextStyle(
-									fontWeight: FontWeight.w600,
-									decoration: u.activo ? null : TextDecoration.lineThrough,
-								),
-							),
-						),
-						InsigniaRol(rol: u.rol, compacto: true),
-					],
-				),
-				subtitle: Padding(
-					padding: const EdgeInsets.only(top: 6.0),
-					child: Column(
-						crossAxisAlignment: CrossAxisAlignment.start,
-						children: [
-							Text('Código ${u.codigo} · $tiendaNombre'),
-							if (u.rol != RolUsuario.administrador)
-								Text(
-									'Vende con código ${u.codigo} y PIN',
-									style: Theme.of(context).textTheme.bodySmall?.copyWith(
-										color: Colors.grey.shade700,
-									),
-								),
-						],
-					),
-				),
-				trailing: puedeEditar
-					? Row(
-						mainAxisSize: MainAxisSize.min,
-						children: [
-							Switch(
-								value: u.activo,
-								onChanged: (activo) => _cambiarActivo(u, activo, operador),
-							),
-							IconButton(
-								icon: const Icon(Icons.edit_outlined),
-								tooltip: 'Editar',
-								onPressed: () => _abrirFormulario(
-									operador: operador,
-									editando: u,
-								),
-							),
-						],
-					)
-					: null,
+			child: InkWell(
+				borderRadius: BorderRadius.circular(12.0),
 				onTap: puedeEditar
 					? () => _abrirFormulario(operador: operador, editando: u)
 					: null,
+				child: Padding(
+				padding: const EdgeInsets.fromLTRB(12.0, 10.0, 8.0, 10.0),
+				child: Row(
+					crossAxisAlignment: CrossAxisAlignment.start,
+					children: [
+						CircleAvatar(
+							backgroundColor: colorRol.withValues(alpha: 0.15),
+							child: Icon(PresentacionRol.icono(u.rol), color: colorRol, size: 22.0),
+						),
+						const SizedBox(width: 12.0),
+						Expanded(
+							child: Column(
+								crossAxisAlignment: CrossAxisAlignment.start,
+								children: [
+									Text(
+										u.nombre,
+										style: TextStyle(
+											fontWeight: FontWeight.w600,
+											fontSize: 16.0,
+											decoration: u.activo ? null : TextDecoration.lineThrough,
+										),
+										maxLines: 1,
+										overflow: TextOverflow.ellipsis,
+									),
+									const SizedBox(height: 6.0),
+									InsigniaRol(rol: u.rol, compacto: true),
+									const SizedBox(height: 8.0),
+									Text(
+										'Código ${u.codigo} · $tiendaNombre',
+										style: Theme.of(context).textTheme.bodySmall,
+										maxLines: 2,
+										overflow: TextOverflow.ellipsis,
+									),
+									if (u.rol != RolUsuario.administrador)
+										Padding(
+											padding: const EdgeInsets.only(top: 2.0),
+											child: Text(
+												'Vende con código ${u.codigo} y PIN',
+												style: Theme.of(context).textTheme.bodySmall?.copyWith(
+													color: Colors.grey.shade700,
+												),
+												maxLines: 1,
+												overflow: TextOverflow.ellipsis,
+											),
+										),
+								],
+							),
+						),
+						if (puedeEditar)
+							Column(
+								mainAxisSize: MainAxisSize.min,
+								children: [
+									if (_actualizandoUsuarioId == u.id)
+										const Padding(
+											padding: EdgeInsets.all(12.0),
+											child: SizedBox(
+												width: 24.0,
+												height: 24.0,
+												child: CircularProgressIndicator(strokeWidth: 2.0),
+											),
+										)
+									else
+										Switch(
+											value: u.activo,
+											onChanged: (activo) => _cambiarActivo(u, activo, operador),
+										),
+									IconButton(
+										icon: const Icon(Icons.edit_outlined),
+										tooltip: 'Editar',
+										onPressed: _actualizandoUsuarioId != null
+											? null
+											: () => _abrirFormulario(
+												operador: operador,
+												editando: u,
+											),
+									),
+								],
+							),
+					],
+				),
+			),
 			),
 		);
 	}
@@ -226,161 +255,198 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 		}
 		await showDialog<void>(
 			context: context,
-			builder: (ctx) => StatefulBuilder(
-				builder: (ctx, setLocal) {
-					final puedeEditarRol = _puedeEditarRol(operador, editando);
-					return AlertDialog(
-						title: Text(esEdicion ? 'Editar cuenta' : 'Nueva cuenta'),
-						content: SingleChildScrollView(
-							child: SizedBox(
-								width: 380.0,
-								child: Column(
-									mainAxisSize: MainAxisSize.min,
-									crossAxisAlignment: CrossAxisAlignment.stretch,
-									children: [
-										if (esEdicion) ...[
-											Row(
-												children: [
-													InsigniaRol(rol: editando.rol),
-													const SizedBox(width: 8.0),
-													Text('Código ${editando.codigo}'),
-												],
-											),
-											const SizedBox(height: 12.0),
-										],
-										TextField(
-											controller: _nombreController,
-											textCapitalization: TextCapitalization.words,
-											decoration: const InputDecoration(
-												labelText: 'Nombre',
-												border: OutlineInputBorder(),
-											),
-										),
-										const SizedBox(height: 12.0),
-										DropdownButtonFormField<RolUsuario>(
-											initialValue: rolSeleccionado,
-											items: rolesDisponibles
-												.map(
-													(r) => DropdownMenuItem(
-														value: r,
-														child: Text(PermisosUsuario.etiquetaRol(r)),
-													),
-												)
-												.toList(),
-											onChanged: puedeEditarRol
-												? (v) => setLocal(() {
-													rolSeleccionado = v!;
-													if (rolSeleccionado == RolUsuario.administrador) {
-														tiendaSeleccionada = null;
-													} else {
-														tiendaSeleccionada ??=
-															operador.tiendaId ?? datos.tiendas.firstOrNull?.id;
-													}
-												})
-												: null,
-											decoration: InputDecoration(
-												labelText: 'Rol',
-												border: const OutlineInputBorder(),
-												helperText: puedeEditarRol
-													? null
-													: 'No puede cambiar su propio rol',
-											),
-										),
-										if (rolSeleccionado != RolUsuario.administrador) ...[
-											const SizedBox(height: 12.0),
-											DropdownButtonFormField<String>(
-												initialValue: tiendaSeleccionada,
-												items: datos.tiendas
-													.map(
-														(t) => DropdownMenuItem(
-															value: t.id,
-															child: Text(t.nombre),
+			barrierDismissible: false,
+			builder: (ctx) {
+				var guardando = false;
+				return StatefulBuilder(
+					builder: (ctx, setLocal) {
+						final puedeEditarRol = _puedeEditarRol(operador, editando);
+						return PopScope(
+							canPop: !guardando,
+							child: AlertDialog(
+								title: Text(esEdicion ? 'Editar cuenta' : 'Nueva cuenta'),
+								content: SingleChildScrollView(
+									child: AbsorbPointer(
+										absorbing: guardando,
+										child: Opacity(
+											opacity: guardando ? 0.55 : 1.0,
+											child: SizedBox(
+												width: 380.0,
+												child: Column(
+													mainAxisSize: MainAxisSize.min,
+													crossAxisAlignment: CrossAxisAlignment.stretch,
+													children: [
+														if (esEdicion) ...[
+															Row(
+																children: [
+																	InsigniaRol(rol: editando.rol),
+																	const SizedBox(width: 8.0),
+																	Text('Código ${editando.codigo}'),
+																],
+															),
+															const SizedBox(height: 12.0),
+														],
+														TextField(
+															controller: _nombreController,
+															textCapitalization: TextCapitalization.words,
+															decoration: const InputDecoration(
+																labelText: 'Nombre',
+																border: OutlineInputBorder(),
+															),
 														),
-													)
-													.toList(),
-												onChanged: operador.rol == RolUsuario.administrador
-													? (v) => setLocal(() => tiendaSeleccionada = v)
-													: null,
-												decoration: InputDecoration(
-													labelText: 'Tienda',
-													border: const OutlineInputBorder(),
-													helperText: operador.rol == RolUsuario.administrador
-														? null
-														: 'Solo su tienda asignada',
+														const SizedBox(height: 12.0),
+														DropdownButtonFormField<RolUsuario>(
+															initialValue: rolSeleccionado,
+															items: rolesDisponibles
+																.map(
+																	(r) => DropdownMenuItem(
+																		value: r,
+																		child: Text(PermisosUsuario.etiquetaRol(r)),
+																	),
+																)
+																.toList(),
+															onChanged: puedeEditarRol
+																? (v) => setLocal(() {
+																	rolSeleccionado = v!;
+																	if (rolSeleccionado == RolUsuario.administrador) {
+																		tiendaSeleccionada = null;
+																	} else {
+																		tiendaSeleccionada ??=
+																			operador.tiendaId ?? datos.tiendas.firstOrNull?.id;
+																	}
+																})
+																: null,
+															decoration: InputDecoration(
+																labelText: 'Rol',
+																border: const OutlineInputBorder(),
+																helperText: puedeEditarRol
+																	? null
+																	: 'No puede cambiar su propio rol',
+															),
+														),
+														if (rolSeleccionado != RolUsuario.administrador) ...[
+															const SizedBox(height: 12.0),
+															DropdownButtonFormField<String>(
+																initialValue: tiendaSeleccionada,
+																items: datos.tiendas
+																	.map(
+																		(t) => DropdownMenuItem(
+																			value: t.id,
+																			child: Text(t.nombre),
+																		),
+																	)
+																	.toList(),
+																onChanged: operador.rol == RolUsuario.administrador
+																	? (v) => setLocal(() => tiendaSeleccionada = v)
+																	: null,
+																decoration: InputDecoration(
+																	labelText: 'Tienda',
+																	border: const OutlineInputBorder(),
+																	helperText: operador.rol == RolUsuario.administrador
+																		? null
+																		: 'Solo su tienda asignada',
+																),
+															),
+														],
+														const SizedBox(height: 12.0),
+														CampoSecreto(
+															controller: _pinController,
+															keyboardType: TextInputType.number,
+															maxLength: LONGITUD_PIN_ADMIN,
+															decoration: InputDecoration(
+																labelText: esEdicion ? 'Nuevo PIN (opcional)' : 'PIN inicial',
+																border: const OutlineInputBorder(),
+																helperText: esEdicion
+																	? 'Deje vacío para mantener el PIN actual'
+																	: '4 dígitos para entrar desde el celular o la caja',
+															),
+														),
+														if (rolSeleccionado != RolUsuario.administrador) ...[
+															const SizedBox(height: 12.0),
+															TextField(
+																controller: _tarifaController,
+																keyboardType: const TextInputType.numberWithOptions(decimal: true),
+																decoration: const InputDecoration(
+																	labelText: 'Tarifa por hora (MXN)',
+																	border: OutlineInputBorder(),
+																	prefixText: '\$ ',
+																),
+															),
+														],
+														if (!esEdicion) ...[
+															const SizedBox(height: 4.0),
+															Text(
+																PermisosUsuario.descripcionRol(rolSeleccionado),
+																style: Theme.of(context).textTheme.bodySmall,
+															),
+														],
+														if (esEdicion) ...[
+															const SizedBox(height: 8.0),
+															SwitchListTile(
+																contentPadding: EdgeInsets.zero,
+																title: const Text('Usuario activo'),
+																subtitle: editando.id == operador.id
+																	? const Text('No puede desactivarse a sí mismo')
+																	: null,
+																value: activo,
+																onChanged: editando.id == operador.id
+																	? null
+																	: (v) => setLocal(() => activo = v),
+															),
+														],
+													],
 												),
-											),
-										],
-										const SizedBox(height: 12.0),
-										CampoSecreto(
-											controller: _pinController,
-											keyboardType: TextInputType.number,
-											maxLength: LONGITUD_PIN_ADMIN,
-											decoration: InputDecoration(
-												labelText: esEdicion ? 'Nuevo PIN (opcional)' : 'PIN inicial',
-												border: const OutlineInputBorder(),
-												helperText: esEdicion
-													? 'Deje vacío para mantener el PIN actual'
-													: '4 dígitos para entrar desde el celular o la caja',
 											),
 										),
-										if (rolSeleccionado != RolUsuario.administrador) ...[
-											const SizedBox(height: 12.0),
-											TextField(
-												controller: _tarifaController,
-												keyboardType: const TextInputType.numberWithOptions(decimal: true),
-												decoration: const InputDecoration(
-													labelText: 'Tarifa por hora (MXN)',
-													border: OutlineInputBorder(),
-													prefixText: '\$ ',
-												),
-											),
-										],
-										if (!esEdicion) ...[
-											const SizedBox(height: 4.0),
-											Text(
-												PermisosUsuario.descripcionRol(rolSeleccionado),
-												style: Theme.of(context).textTheme.bodySmall,
-											),
-										],
-										if (esEdicion) ...[
-											const SizedBox(height: 8.0),
-											SwitchListTile(
-												contentPadding: EdgeInsets.zero,
-												title: const Text('Usuario activo'),
-												subtitle: editando.id == operador.id
-													? const Text('No puede desactivarse a sí mismo')
-													: null,
-												value: activo,
-												onChanged: editando.id == operador.id
-													? null
-													: (v) => setLocal(() => activo = v),
-											),
-										],
-									],
+									),
 								),
+								actions: [
+									TextButton(
+										onPressed: guardando ? null : () => Navigator.pop(ctx),
+										child: const Text('Cancelar'),
+									),
+									FilledButton(
+										onPressed: guardando
+											? null
+											: () async {
+												setLocal(() => guardando = true);
+												final ok = await _guardarFormulario(
+													ctx: ctx,
+													operador: operador,
+													editando: editando,
+													rolSeleccionado: rolSeleccionado,
+													tiendaSeleccionada: tiendaSeleccionada,
+													activo: activo,
+												);
+												if (ctx.mounted && !ok) {
+													setLocal(() => guardando = false);
+												}
+											},
+										child: guardando
+											? const Row(
+												mainAxisSize: MainAxisSize.min,
+												children: [
+													SizedBox(
+														width: 18.0,
+														height: 18.0,
+														child: CircularProgressIndicator(strokeWidth: 2.0),
+													),
+													SizedBox(width: 10.0),
+													Text('Guardando...'),
+												],
+											)
+											: const Text('Guardar'),
+									),
+								],
 							),
-						),
-						actions: [
-							TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
-							FilledButton(
-								onPressed: () => _guardarFormulario(
-									ctx: ctx,
-									operador: operador,
-									editando: editando,
-									rolSeleccionado: rolSeleccionado,
-									tiendaSeleccionada: tiendaSeleccionada,
-									activo: activo,
-								),
-								child: const Text('Guardar'),
-							),
-						],
-					);
-				},
-			),
+						);
+					},
+				);
+			},
 		);
 	}
 
-	Future<void> _guardarFormulario({
+	Future<bool> _guardarFormulario({
 		required BuildContext ctx,
 		required Usuario operador,
 		required Usuario? editando,
@@ -439,12 +505,14 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 					),
 				);
 			}
+			return true;
 		} on StateError catch (e) {
 			if (ctx.mounted) {
 				ScaffoldMessenger.of(ctx).showSnackBar(
 					SnackBar(content: Text(e.message), backgroundColor: PosiaColors.cancelar),
 				);
 			}
+			return false;
 		}
 	}
 
@@ -459,6 +527,7 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 			return;
 		}
 		try {
+			setState(() => _actualizandoUsuarioId = usuario.id);
 			final servicio = await ref.read(servicioAdminProvider.future);
 			await servicio.actualizarUsuario(
 				usuario.copiarCon(activo: activo),
@@ -467,6 +536,15 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 			ref.invalidate(_usuariosAdminProvider);
 			ref.invalidate(empleadosAsignacionProvider);
 			await refrescarDatosMaestros(ref);
+			if (mounted) {
+				ScaffoldMessenger.of(context).showSnackBar(
+					SnackBar(
+						content: Text(
+							activo ? '${usuario.nombre} activado' : '${usuario.nombre} desactivado',
+						),
+					),
+				);
+			}
 		} on StateError catch (e) {
 			if (!mounted) {
 				return;
@@ -474,6 +552,10 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 			ScaffoldMessenger.of(context).showSnackBar(
 				SnackBar(content: Text(e.message), backgroundColor: PosiaColors.cancelar),
 			);
+		} finally {
+			if (mounted) {
+				setState(() => _actualizandoUsuarioId = null);
+			}
 		}
 	}
 }

@@ -108,12 +108,29 @@ void main() {
 		expect((cuerpo['events'] as List<Object?>).isEmpty, isTrue);
 	});
 
-	test('lote sin tenant es rechazado', () async {
+	test('lote sin deviceId es rechazado', () async {
 		final respuesta = await http.post(
 			Uri.parse('$urlBase/v1/events'),
 			headers: {'Content-Type': 'application/json'},
 			body: jsonEncode(<String, Object?>{'events': <Object?>[]}),
 		);
 		expect(respuesta.statusCode, 400);
+	});
+
+	test('pull sin tenantId devuelve todos los eventos', () async {
+		await enviarLote([
+			{
+				'id': 'ev-sin-tenant',
+				'type': 'saleCompleted',
+				'payload': {'ventaId': 'v3'},
+				'createdAt': '2026-06-11T16:21:00Z',
+			},
+		]);
+		final respuesta = await http.get(
+			Uri.parse('$urlBase/v1/events?since=0'),
+		);
+		final cuerpo = jsonDecode(respuesta.body) as Map<String, Object?>;
+		final eventos = cuerpo['events'] as List<Object?>;
+		expect(eventos.length, greaterThanOrEqualTo(1));
 	});
 }

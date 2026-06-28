@@ -85,8 +85,12 @@ class VarianteRepository {
 		);
 	}
 
-	Future<void> eliminarPorProductoPadre(String productoPadreId) async {
-		await _baseDatos.delete(
+	Future<void> eliminarPorProductoPadre(
+		String productoPadreId, {
+		DatabaseExecutor? db,
+	}) async {
+		final exec = db ?? _baseDatos;
+		await exec.delete(
 			'product_variants',
 			where: 'producto_padre_id = ?',
 			whereArgs: [productoPadreId],

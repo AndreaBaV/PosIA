@@ -4,6 +4,8 @@ library;
 import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../utils/transaccion_sqlite.dart';
+
 /// Persiste compras y sus lineas de detalle.
 class CompraRepository {
 	CompraRepository({required Database baseDatos}) : _baseDatos = baseDatos;
@@ -19,8 +21,8 @@ class CompraRepository {
 		return (filas.first['total'] as int?) ?? 0;
 	}
 
-	Future<void> guardar(Compra compra) async {
-		await _baseDatos.transaction((tx) async {
+	Future<void> guardar(Compra compra, {DatabaseExecutor? db}) async {
+		await ejecutarEscrituraTransaccional(_baseDatos, db, (tx) async {
 			await tx.insert(
 				'purchases',
 				{

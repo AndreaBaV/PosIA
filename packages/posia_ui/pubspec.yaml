@@ -12,10 +12,6 @@ dependencies:
     sdk: flutter
   posia_core:
     path: ../posia_core
-  posia_module_pharmacy:
-    path: ../posia_module_pharmacy
-  posia_module_butcher:
-    path: ../posia_module_butcher
 
 dev_dependencies:
   flutter_lints: ^6.0.0

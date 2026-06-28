@@ -141,16 +141,10 @@ class _PantallaCreditosPendientesState extends ConsumerState<PantallaCreditosPen
                     ),
                     const SizedBox(height: 8.0),
                     const Text(
-                      'Registre un fiado con el botón "Nuevo crédito" o desde Caja '
+                      'Use el botón flotante o registre un fiado desde Caja '
                       'seleccionando cliente y pago a crédito.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.grey),
-                    ),
-                    const SizedBox(height: 16.0),
-                    FilledButton.icon(
-                      onPressed: _abrirNuevoCredito,
-                      icon: const Icon(Icons.add),
-                      label: const Text('Nuevo crédito'),
                     ),
                   ],
                 ),

@@ -7,6 +7,7 @@ library;
 
 import 'package:posia_core/posia_core.dart';
 import 'package:uuid/uuid.dart';
+import 'package:sqflite/sqflite.dart';
 
 import '../repositories/turno_caja_repository.dart';
 
@@ -70,7 +71,11 @@ class ServicioCorteCaja {
 	/// Acumula venta en turno abierto.
 	///
 	/// [venta] Venta completada.
-	Future<void> registrarVenta(TurnoCaja turno, Venta venta) async {
+	Future<void> registrarVenta(
+		TurnoCaja turno,
+		Venta venta, {
+		DatabaseExecutor? db,
+	}) async {
 		var totalEfectivo = turno.totalEfectivo;
 		var totalTarjeta = turno.totalTarjeta;
 		var totalTransferencia = turno.totalTransferencia;
@@ -104,11 +109,15 @@ class ServicioCorteCaja {
 			cerradoEn: null,
 			estado: EstadoTurnoCaja.abierto,
 		);
-		await _turnoRepository.guardar(actualizado);
+		await _turnoRepository.guardar(actualizado, db: db);
 	}
 
 	/// Resta monto devuelto parcialmente del turno abierto.
-	Future<void> registrarDevolucion(Venta venta, double montoDevuelto) async {
+	Future<void> registrarDevolucion(
+		Venta venta,
+		double montoDevuelto, {
+		DatabaseExecutor? db,
+	}) async {
 		final turnoId = venta.turnoCajaId;
 		if (turnoId == null || montoDevuelto <= 0.0) {
 			return;
@@ -140,13 +149,13 @@ class ServicioCorteCaja {
 			cerradoEn: null,
 			estado: EstadoTurnoCaja.abierto,
 		);
-		await _turnoRepository.guardar(actualizado);
+		await _turnoRepository.guardar(actualizado, db: db);
 	}
 
 	/// Resta venta anulada del turno abierto asociado.
 	///
 	/// [venta] Venta anulada con turno_caja_id.
-	Future<void> registrarAnulacion(Venta venta) async {
+	Future<void> registrarAnulacion(Venta venta, {DatabaseExecutor? db}) async {
 		final turnoId = venta.turnoCajaId;
 		if (turnoId == null) {
 			return;
@@ -180,7 +189,7 @@ class ServicioCorteCaja {
 			cerradoEn: null,
 			estado: EstadoTurnoCaja.abierto,
 		);
-		await _turnoRepository.guardar(actualizado);
+		await _turnoRepository.guardar(actualizado, db: db);
 	}
 
 	/// Cierra turno abierto.

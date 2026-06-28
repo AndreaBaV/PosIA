@@ -103,10 +103,7 @@ class EnrutadorApi {
 		if (resultado == null) {
 			return _respuestaJson({'error': 'Credenciales invalidas'}, codigo: 401);
 		}
-		final tenantId = resultado['tenantId'] as String? ?? '';
-		final tiendas = tenantId.isEmpty
-			? <Map<String, Object?>>[]
-			: await almacen.listarTiendasActivasPorTenant(tenantId);
+		final tiendas = await almacen.listarTiendasActivas();
 		return _respuestaJson({...resultado, 'tiendas': tiendas});
 	}
 
@@ -116,10 +113,9 @@ class EnrutadorApi {
 			return _respuestaJson({'error': 'Auth no disponible sin Postgres'}, codigo: 503);
 		}
 		final tenantId = solicitud.url.queryParameters['tenantId'] ?? '';
-		if (tenantId.trim().isEmpty) {
-			return _respuestaJson({'error': 'tenantId es obligatorio'}, codigo: 400);
-		}
-		final tiendas = await almacen.listarTiendasActivasPorTenant(tenantId);
+		final tiendas = tenantId.isEmpty
+			? await almacen.listarTiendasActivas()
+			: await almacen.listarTiendasActivasPorTenant(tenantId);
 		return _respuestaJson({'tiendas': tiendas});
 	}
 
@@ -138,9 +134,9 @@ class EnrutadorApi {
 		final dispositivoId = cuerpo['deviceId'] as String? ?? '';
 		final tiendaId = cuerpo['storeId'] as String? ?? '';
 		final eventosCrudos = cuerpo['events'] as List<Object?>? ?? [];
-		if (tenantId.isEmpty || dispositivoId.isEmpty || tiendaId.isEmpty) {
+		if (dispositivoId.isEmpty || tiendaId.isEmpty) {
 			return _respuestaJson(
-				{'error': 'tenantId, deviceId y storeId son obligatorios'},
+				{'error': 'deviceId y storeId son obligatorios'},
 				codigo: 400,
 			);
 		}
@@ -170,9 +166,6 @@ class EnrutadorApi {
 	Future<Response> _manejarConsultaEventos(Request solicitud) async {
 		final parametros = solicitud.url.queryParameters;
 		final tenantId = parametros['tenantId'] ?? '';
-		if (tenantId.isEmpty) {
-			return _respuestaJson({'error': 'tenantId es obligatorio'}, codigo: 400);
-		}
 		final desdeSeq = int.tryParse(parametros['since'] ?? '0') ?? 0;
 		final excluirDispositivo = parametros['excludeDevice'];
 		final eventos = await _almacen.obtenerDesde(

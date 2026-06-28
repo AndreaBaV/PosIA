@@ -15,8 +15,9 @@ class MovimientoInventarioRepository {
 
 	final Database _baseDatos;
 
-	Future<void> guardar(MovimientoInventario movimiento) async {
-		await _baseDatos.insert('inventory_movements', {
+	Future<void> guardar(MovimientoInventario movimiento, {DatabaseExecutor? db}) async {
+		final exec = db ?? _baseDatos;
+		await exec.insert('inventory_movements', {
 			'id': movimiento.id,
 			'producto_id': movimiento.productoId,
 			'tienda_id': movimiento.tiendaId,

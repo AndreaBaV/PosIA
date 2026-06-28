@@ -10,6 +10,7 @@ import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
 import '../utils/compartir_whatsapp_util.dart';
 import '../utils/ticket_venta_util.dart';
+import 'pantalla_registrar_cotizacion.dart';
 
 class PantallaCotizacionesAdmin extends ConsumerStatefulWidget {
   const PantallaCotizacionesAdmin({super.key});
@@ -35,6 +36,11 @@ class _PantallaCotizacionesAdminState extends ConsumerState<PantallaCotizaciones
     final cotizacionesAsync = ref.watch(_cotizacionesProvider(_dias));
     return Scaffold(
       appBar: AppBar(title: const Text('Cotizaciones')),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _abrirNuevaCotizacion,
+        icon: const Icon(Icons.add),
+        label: const Text('Nueva cotización'),
+      ),
       body: Column(
         children: [
           Padding(
@@ -70,9 +76,32 @@ class _PantallaCotizacionesAdminState extends ConsumerState<PantallaCotizaciones
                   return formatearMoneda(c.total).toLowerCase().contains(_filtro);
                 }).toList();
                 if (filtradas.isEmpty) {
-                  return const Center(child: Text('Sin cotizaciones en el período'));
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.request_quote_outlined, size: 56.0),
+                          const SizedBox(height: 12.0),
+                          const Text(
+                            'Sin cotizaciones en el período',
+                            style: TextStyle(fontSize: 16.0),
+                          ),
+                          const SizedBox(height: 8.0),
+                          const Text(
+                            'Use el botón flotante o genere una desde Caja '
+                            'con productos en el carrito y "Cotizar".',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
                 }
                 return ListView.builder(
+                  padding: const EdgeInsets.only(bottom: 88.0),
                   itemCount: filtradas.length,
                   itemBuilder: (context, indice) {
                     final cotizacion = filtradas[indice];
@@ -106,6 +135,17 @@ class _PantallaCotizacionesAdminState extends ConsumerState<PantallaCotizaciones
         ],
       ),
     );
+  }
+
+  Future<void> _abrirNuevaCotizacion() async {
+    final ok = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => const PantallaRegistrarCotizacion(),
+      ),
+    );
+    if (ok == true) {
+      ref.invalidate(_cotizacionesProvider(_dias));
+    }
   }
 
   Future<void> _mostrarDetalle(Cotizacion cotizacion) async {

@@ -121,6 +121,15 @@ class SyncOrchestrator {
 	///
 	/// Retorna resultado con conteos de envio y recepcion.
 	Future<ResultadoSync> sincronizarCompleto() async {
+		return _sincronizarInterno(reiniciarCursor: false);
+	}
+
+	/// Reinicia cursor y descarga todos los eventos del hub (pull completo).
+	Future<ResultadoSync> sincronizarDesdeOrigen() async {
+		return _sincronizarInterno(reiniciarCursor: true);
+	}
+
+	Future<ResultadoSync> _sincronizarInterno({required bool reiniciarCursor}) async {
 		final clienteHub = _clienteHub;
 		if (clienteHub == null) {
 			return const ResultadoSync(
@@ -128,6 +137,12 @@ class SyncOrchestrator {
 				eventosRecibidos: 0,
 				hubDisponible: false,
 			);
+		}
+		if (reiniciarCursor) {
+			final almacenCursor = _almacenCursor;
+			if (almacenCursor != null) {
+				await almacenCursor.guardarCursorHub(0);
+			}
 		}
 		final hubOk = await clienteHub.verificarSalud();
 		if (!hubOk) {
@@ -168,10 +183,8 @@ class SyncOrchestrator {
 			if (!resultado.exitoso || resultado.eventos.isEmpty) {
 				continuar = false;
 			} else {
-				for (final evento in resultado.eventos) {
-					await aplicador.aplicarEvento(evento);
-					aplicados = aplicados + 1;
-				}
+				await aplicador.aplicarLote(resultado.eventos);
+				aplicados = aplicados + resultado.eventos.length;
 				cursor = resultado.ultimoSeq;
 				await almacenCursor.guardarCursorHub(cursor);
 			}

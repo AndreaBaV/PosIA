@@ -9,6 +9,8 @@ library;
 import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../seed/placeholders_ejemplo.dart';
+
 /// Persiste y consulta sucursales del tenant.
 class TiendaRepository {
 	/// Crea repositorio con conexion SQLite activa.
@@ -25,6 +27,17 @@ class TiendaRepository {
 		final filas = await _baseDatos.query(
 			'stores',
 			where: 'activa = 1',
+			orderBy: 'nombre ASC',
+		);
+		return filas.map(_mapearTienda).toList();
+	}
+
+	/// Lista tiendas activas excluyendo placeholders de desarrollo.
+	Future<List<Tienda>> listarActivasOperativas() async {
+		final filas = await _baseDatos.query(
+			'stores',
+			where: 'activa = 1 AND id <> ?',
+			whereArgs: [IdsEjemplo.tienda],
 			orderBy: 'nombre ASC',
 		);
 		return filas.map(_mapearTienda).toList();

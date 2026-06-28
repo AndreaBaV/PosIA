@@ -1,4 +1,4 @@
-/// Gestor SQLite: dispositivo (config) + una base operativa por tenant.
+/// Gestor SQLite: dispositivo (config) + base operativa unica por instalacion.
 library;
 
 import 'package:posia_core/posia_core.dart';
@@ -19,6 +19,7 @@ class PosiaLocalDatabase {
 	static String? _tenantActivo;
 
 	static const String _archivoDispositivo = 'posia_dispositivo.db';
+	static const String _archivoOperativa = 'posia_operativa.db';
 
 	/// Obtiene instancia singleton del gestor de base de datos.
 	static PosiaLocalDatabase obtenerInstancia() {
@@ -52,19 +53,18 @@ class PosiaLocalDatabase {
 		return base;
 	}
 
-	/// Base operativa del tenant activo (catalogo, ventas, usuarios locales).
+	/// Base operativa (catalogo, ventas, usuarios locales).
 	Future<Database> obtenerBaseDatos() async {
-		final tenant = _tenantActivo;
-		if (tenant == null || tenant.isEmpty) {
-			throw StateError('No hay tenant activo. Inicie sesion primero.');
+		if (_tenantActivo == null || _tenantActivo!.isEmpty) {
+			throw StateError('No hay sesion activa. Inicie sesion primero.');
 		}
-		return _abrirBaseTenant(tenant);
+		return _abrirBaseOperativa();
 	}
 
 	/// Tenant actualmente cargado en memoria.
 	String? get tenantActivo => _tenantActivo;
 
-	/// Cambia a la base SQLite del tenant indicado.
+	/// Marca sesion activa y abre la base operativa unica.
 	Future<void> establecerTenant(String tenantId) async {
 		final limpio = tenantId.trim();
 		if (limpio.isEmpty) {
@@ -78,7 +78,7 @@ class PosiaLocalDatabase {
 			_baseTenant = null;
 		}
 		_tenantActivo = limpio;
-		await _abrirBaseTenant(limpio);
+		await _abrirBaseOperativa();
 	}
 
 	/// Cierra la base del tenant (p. ej. al cerrar sesion).
@@ -90,12 +90,12 @@ class PosiaLocalDatabase {
 		_tenantActivo = null;
 	}
 
-	Future<Database> _abrirBaseTenant(String tenantId) async {
+	Future<Database> _abrirBaseOperativa() async {
 		final existente = _baseTenant;
-		if (existente != null && _tenantActivo == tenantId) {
+		if (existente != null) {
 			return existente;
 		}
-		final ruta = await motor_sqlite.resolverRutaBaseDatos(_archivoTenant(tenantId));
+		final ruta = await motor_sqlite.resolverRutaBaseDatos(_archivoOperativa);
 		final base = await openDatabase(
 			ruta,
 			version: SCHEMA_VERSION,
@@ -104,11 +104,6 @@ class PosiaLocalDatabase {
 		);
 		_baseTenant = base;
 		return base;
-	}
-
-	static String _archivoTenant(String tenantId) {
-		final seguro = tenantId.replaceAll(RegExp(r'[^\w\-.]'), '_');
-		return 'posia_t_$seguro.db';
 	}
 
 	Future<void> _crearEsquemaTenant(Database base, int version) async {

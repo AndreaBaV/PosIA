@@ -121,17 +121,13 @@ Future<void> _limpiarCompleto(Connection conexion) async {
 		'transfer_lines',
 		'transfers',
 		'stock_levels',
-		'pharmacy_lots',
 		'product_variants',
 		'products',
 		'categories',
 		'customers',
-		'vendedores',
-		'proveedores',
 		'users',
 		'stores',
 		'almacenes',
-		'tipos_presentacion',
 		'sync_events',
 	];
 	for (final tabla in tablas) {

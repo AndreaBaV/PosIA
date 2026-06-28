@@ -145,8 +145,8 @@ class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguraci
 								style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
 							),
 							const SizedBox(height: 8.0),
-							const Text(
-								'Modo archivo guarda en Documents/POSIA/tickets. '
+							Text(
+								'Modo archivo guarda en Documents/$CARPETA_DOCUMENTOS_APP/tickets. '
 								'Modo red usa ESC/POS por TCP (puerto 9100). '
 								'El modo ambos intenta la red y respalda en archivo.',
 							),

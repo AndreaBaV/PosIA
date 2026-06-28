@@ -4,6 +4,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:posia_core/posia_core.dart';
+import 'package:posia_ui/posia_ui.dart';
 import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
 
@@ -96,10 +97,10 @@ class _PantallaVariantesAdminState extends ConsumerState<PantallaVariantesAdmin>
 							controller: codigoController,
 							decoration: const InputDecoration(labelText: 'Código de barras'),
 						),
-						TextField(
+						CampoPrecioVenta(
 							controller: precioController,
-							keyboardType: TextInputType.number,
-							decoration: const InputDecoration(labelText: 'Precio'),
+							costoUnitario: widget.producto.costoUnitario,
+							labelText: 'Precio',
 						),
 					],
 				),
@@ -119,14 +120,46 @@ class _PantallaVariantesAdminState extends ConsumerState<PantallaVariantesAdmin>
 			precioController.dispose();
 			return;
 		}
-		final servicio = await ref.read(servicioAdminProvider.future);
-		await servicio.registrarVariante(
-			productoPadreId: widget.producto.id,
-			nombre: nombreController.text.trim(),
-			sku: skuController.text.trim(),
-			codigoBarras: codigoController.text.trim(),
-			precioBase: double.tryParse(precioController.text) ?? 0.0,
+		final errorPrecio = CampoPrecioVenta.validarController(
+			precioController,
+			costoUnitario: widget.producto.costoUnitario,
 		);
+		if (errorPrecio != null) {
+			if (mounted) {
+				ScaffoldMessenger.of(context).showSnackBar(
+					SnackBar(
+						content: Text(errorPrecio),
+						backgroundColor: PosiaColors.cancelar,
+					),
+				);
+			}
+			nombreController.dispose();
+			skuController.dispose();
+			codigoController.dispose();
+			precioController.dispose();
+			return;
+		}
+		try {
+			final servicio = await ref.read(servicioAdminProvider.future);
+			await servicio.registrarVariante(
+				productoPadreId: widget.producto.id,
+				nombre: nombreController.text.trim(),
+				sku: skuController.text.trim(),
+				codigoBarras: codigoController.text.trim(),
+				precioBase: parsearPrecioTexto(precioController.text) ?? 0.0,
+			);
+		} on StateError catch (e) {
+			if (mounted) {
+				ScaffoldMessenger.of(context).showSnackBar(
+					SnackBar(content: Text(e.message), backgroundColor: PosiaColors.cancelar),
+				);
+			}
+			nombreController.dispose();
+			skuController.dispose();
+			codigoController.dispose();
+			precioController.dispose();
+			return;
+		}
 		nombreController.dispose();
 		skuController.dispose();
 		codigoController.dispose();
@@ -159,10 +192,10 @@ class _PantallaVariantesAdminState extends ConsumerState<PantallaVariantesAdmin>
 							controller: codigoController,
 							decoration: const InputDecoration(labelText: 'Código de barras'),
 						),
-						TextField(
+						CampoPrecioVenta(
 							controller: precioController,
-							keyboardType: TextInputType.number,
-							decoration: const InputDecoration(labelText: 'Precio'),
+							costoUnitario: widget.producto.costoUnitario,
+							labelText: 'Precio',
 						),
 					],
 				),
@@ -182,15 +215,47 @@ class _PantallaVariantesAdminState extends ConsumerState<PantallaVariantesAdmin>
 			precioController.dispose();
 			return;
 		}
-		final servicio = await ref.read(servicioAdminProvider.future);
-		await servicio.actualizarVariante(
-			variante.copiarCon(
-				nombre: nombreController.text.trim(),
-				sku: skuController.text.trim(),
-				codigoBarras: codigoController.text.trim(),
-				precioBase: double.tryParse(precioController.text) ?? variante.precioBase,
-			),
+		final errorPrecio = CampoPrecioVenta.validarController(
+			precioController,
+			costoUnitario: widget.producto.costoUnitario,
 		);
+		if (errorPrecio != null) {
+			if (mounted) {
+				ScaffoldMessenger.of(context).showSnackBar(
+					SnackBar(
+						content: Text(errorPrecio),
+						backgroundColor: PosiaColors.cancelar,
+					),
+				);
+			}
+			nombreController.dispose();
+			skuController.dispose();
+			codigoController.dispose();
+			precioController.dispose();
+			return;
+		}
+		try {
+			final servicio = await ref.read(servicioAdminProvider.future);
+			await servicio.actualizarVariante(
+				variante.copiarCon(
+					nombre: nombreController.text.trim(),
+					sku: skuController.text.trim(),
+					codigoBarras: codigoController.text.trim(),
+					precioBase: parsearPrecioTexto(precioController.text) ?? variante.precioBase,
+				),
+			);
+		} on StateError catch (e) {
+			if (mounted) {
+				ScaffoldMessenger.of(context).showSnackBar(
+					SnackBar(content: Text(e.message), backgroundColor: PosiaColors.cancelar),
+				);
+			}
+			nombreController.dispose();
+			skuController.dispose();
+			codigoController.dispose();
+			precioController.dispose();
+			return;
+		}
 		nombreController.dispose();
 		skuController.dispose();
 		codigoController.dispose();

@@ -72,3 +72,9 @@ const String ID_CAT_FARMACIA = 'cat-farmacia';
 
 /// Dias de vigencia por defecto en cotizaciones impresas.
 const int VIGENCIA_COTIZACION_DIAS = 7;
+
+/// Nombre comercial visible en interfaz, tickets y documentos.
+const String NOMBRE_COMERCIAL_APP = 'La Fortuna';
+
+/// Carpeta bajo Documents para tickets, etiquetas y archivos locales.
+const String CARPETA_DOCUMENTOS_APP = 'La Fortuna';

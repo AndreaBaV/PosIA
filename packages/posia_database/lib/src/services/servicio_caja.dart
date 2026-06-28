@@ -10,15 +10,16 @@ library;
 
 import 'package:posia_core/posia_core.dart';
 import 'package:posia_inventory/posia_inventory.dart';
-import 'package:posia_module_butcher/posia_module_butcher.dart';
-import 'package:posia_module_pharmacy/posia_module_pharmacy.dart';
 import 'package:posia_pricing/posia_pricing.dart';
 import 'package:posia_sync/posia_sync.dart';
+import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 
 import '../repositories/categoria_repository.dart';
 import '../repositories/cliente_repository.dart';
 import '../repositories/cotizacion_repository.dart';
+import '../repositories/inventario_repository.dart';
+import '../repositories/lote_farmacia_repository.dart';
 import '../repositories/producto_repository.dart';
 import '../repositories/ticket_espera_repository.dart';
 import '../repositories/presentacion_repository.dart';
@@ -26,6 +27,7 @@ import '../repositories/variante_repository.dart';
 import '../repositories/vendedor_repository.dart';
 import '../utils/sincronizador_vendedor_usuario.dart';
 import '../repositories/venta_repository.dart';
+import 'servicio_carniceria.dart';
 import 'servicio_corte_caja.dart';
 
 /// Coordina flujo de venta en caja con persistencia y sync.
@@ -45,6 +47,9 @@ class ServicioCaja {
   /// [cajaId] Identificador de caja registradora.
   ServicioCaja({
     required ProductoRepository productoRepository,
+    required InventarioRepository inventarioRepository,
+    LoteFarmaciaRepository? loteFarmaciaRepository,
+    required Database baseDatos,
     VarianteRepository? varianteRepository,
     PresentacionRepository? presentacionRepository,
     required ClienteRepository clienteRepository,
@@ -63,6 +68,9 @@ class ServicioCaja {
     required String tiendaId,
     required String cajaId,
   }) : _productoRepository = productoRepository,
+       _inventarioRepository = inventarioRepository,
+       _loteFarmaciaRepository = loteFarmaciaRepository,
+       _baseDatos = baseDatos,
        _varianteRepository = varianteRepository,
        _presentacionRepository = presentacionRepository,
        _clienteRepository = clienteRepository,
@@ -82,6 +90,9 @@ class ServicioCaja {
        _cajaId = cajaId;
 
   final ProductoRepository _productoRepository;
+  final InventarioRepository _inventarioRepository;
+  final LoteFarmaciaRepository? _loteFarmaciaRepository;
+  final Database _baseDatos;
   final VarianteRepository? _varianteRepository;
   final PresentacionRepository? _presentacionRepository;
   final ClienteRepository _clienteRepository;
@@ -628,12 +639,15 @@ class ServicioCaja {
       creditoDias: creditoDias,
       creditoVenceEn: creditoVenceEn,
     );
-    await _ventaRepository.guardar(venta);
-    if (turno != null && _servicioCorteCaja != null) {
-      await _servicioCorteCaja.registrarVenta(turno, venta);
-    }
-    await _aplicarInventarioVenta();
-    await _aplicarDescuentosLote(venta);
+    await _baseDatos.transaction((tx) async {
+      await _ventaRepository.guardar(venta, db: tx);
+      if (turno != null && _servicioCorteCaja != null) {
+        await _servicioCorteCaja.registrarVenta(turno, venta, db: tx);
+      }
+      final lineasInventario = List<LineaCarrito>.from(_lineasCarrito);
+      await _aplicarInventarioVentaTransaccional(tx, lineasInventario);
+      await _aplicarDescuentosLoteTransaccional(tx, venta);
+    });
     await _registrarEventoVenta(venta);
     vaciarCarrito();
     return venta;
@@ -1007,6 +1021,50 @@ class ServicioCaja {
       return variante.productoPadreId;
     }
     return producto.id;
+  }
+
+  Future<void> _aplicarInventarioVentaTransaccional(
+    Transaction tx,
+    List<LineaCarrito> lineas,
+  ) async {
+    final ahora = DateTime.now().toUtc();
+    for (final linea in lineas) {
+      final stockId =
+          linea.productoStockId ?? await _resolverIdStock(linea.producto);
+      final cantidadBase = linea.cantidad * linea.factorABase;
+      final stock = await _inventarioRepository.obtenerStock(
+        stockId,
+        _tiendaId,
+        db: tx,
+      );
+      await _inventarioRepository.guardarStock(
+        StockNivel(
+          productoId: stockId,
+          tiendaId: _tiendaId,
+          cantidad: (stock?.cantidad ?? 0.0) - cantidadBase,
+          actualizadoEn: ahora,
+          stockMinimo: stock?.stockMinimo ?? 0.0,
+        ),
+        db: tx,
+      );
+    }
+  }
+
+  Future<void> _aplicarDescuentosLoteTransaccional(
+    Transaction tx,
+    Venta venta,
+  ) async {
+    final loteRepo = _loteFarmaciaRepository;
+    if (loteRepo == null) {
+      return;
+    }
+    for (final linea in venta.lineas) {
+      final loteId = linea.loteId;
+      if (loteId == null) {
+        continue;
+      }
+      await loteRepo.descontarCantidad(loteId, linea.cantidad, db: tx);
+    }
   }
 
   Future<void> _aplicarInventarioVenta() async {

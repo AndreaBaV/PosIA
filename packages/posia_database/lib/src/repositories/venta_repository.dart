@@ -9,6 +9,8 @@ library;
 import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../utils/transaccion_sqlite.dart';
+
 /// Persiste ventas y lineas de detalle en SQLite.
 class VentaRepository {
 	/// Crea repositorio con conexion SQLite activa.
@@ -21,8 +23,8 @@ class VentaRepository {
 	/// Guarda venta completa con lineas en transaccion.
 	///
 	/// [venta] Venta cerrada a persistir.
-	Future<void> guardar(Venta venta) async {
-		await _baseDatos.transaction((transaccion) async {
+	Future<void> guardar(Venta venta, {DatabaseExecutor? db}) async {
+		await ejecutarEscrituraTransaccional(_baseDatos, db, (transaccion) async {
 			await transaccion.insert('sales', {
 				'id': venta.id,
 				'tienda_id': venta.tiendaId,
@@ -58,7 +60,6 @@ class VentaRepository {
 			}
 		});
 	}
-
 	/// Obtiene ventas del dia actual en tienda (frontera en hora local).
 	///
 	/// [tiendaId] Tienda consultada.
@@ -132,8 +133,8 @@ class VentaRepository {
 	}
 
 	/// Reemplaza lineas, total y estado de una venta existente.
-	Future<void> actualizarVenta(Venta venta) async {
-		await _baseDatos.transaction((transaccion) async {
+	Future<void> actualizarVenta(Venta venta, {DatabaseExecutor? db}) async {
+		await ejecutarEscrituraTransaccional(_baseDatos, db, (transaccion) async {
 			await transaccion.update(
 				'sales',
 				{
@@ -234,8 +235,13 @@ class VentaRepository {
 	}
 
 	/// Actualiza estado de una venta.
-	Future<void> actualizarEstado(String ventaId, EstadoVenta estado) async {
-		await _baseDatos.update(
+	Future<void> actualizarEstado(
+		String ventaId,
+		EstadoVenta estado, {
+		DatabaseExecutor? db,
+	}) async {
+		final exec = db ?? _baseDatos;
+		await exec.update(
 			'sales',
 			{'estado': estado.name},
 			where: 'id = ?',
@@ -270,8 +276,9 @@ class VentaRepository {
 	}
 
 	/// Marca credito como liquidado.
-	Future<void> actualizarCreditoLiquidado(Venta venta) async {
-		await _baseDatos.update(
+	Future<void> actualizarCreditoLiquidado(Venta venta, {DatabaseExecutor? db}) async {
+		final exec = db ?? _baseDatos;
+		await exec.update(
 			'sales',
 			{
 				'credito_liquidado': venta.creditoLiquidado ? 1 : 0,
@@ -348,8 +355,8 @@ class VentaRepository {
 	}
 
 	/// Elimina venta y sus lineas de detalle.
-	Future<void> eliminar(String ventaId) async {
-		await _baseDatos.transaction((transaccion) async {
+	Future<void> eliminar(String ventaId, {DatabaseExecutor? db}) async {
+		await ejecutarEscrituraTransaccional(_baseDatos, db, (transaccion) async {
 			await transaccion.delete(
 				'sale_lines',
 				where: 'venta_id = ?',

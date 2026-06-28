@@ -480,6 +480,15 @@ Artefactos: `posia-android-aab`, `posia-android-apk`, `posia-ios-ipa`
 | `ANDROID_KEY_PASSWORD` | Contraseña clave |
 | `ANDROID_KEY_ALIAS` | `posia` |
 
+**Google Play (subida automática del AAB tras compilar):**
+
+| Secret | Valor |
+|--------|-------|
+| `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | Contenido completo del JSON de la cuenta de servicio (Google Cloud → IAM → claves JSON) |
+| `GOOGLE_PLAY_TRACK` | *(Opcional)* `internal` (default), `alpha`, `beta` o `production` |
+
+En Play Console → **Usuarios y permisos**, invita la cuenta de servicio con permiso **Publicar en Google Play**. La app `com.posia.posia_pos` debe existir al menos una vez subida manualmente (primera versión).
+
 **Hub (recomendado):**
 
 | Secret | Valor |

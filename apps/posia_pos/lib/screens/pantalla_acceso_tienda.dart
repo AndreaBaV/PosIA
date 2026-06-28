@@ -44,8 +44,11 @@ class _PantallaAccesoTiendaState extends ConsumerState<PantallaAccesoTienda> {
 								),
 							);
 						}
+						final tiendaGuardada = configAsync.value?.tiendaId;
+						final tiendaValida = tiendaGuardada != null &&
+							tiendas.any((t) => t.id == tiendaGuardada);
 						_tiendaSeleccionadaId ??=
-							configAsync.value?.tiendaId ?? tiendas.first.id;
+							tiendaValida ? tiendaGuardada : tiendas.first.id;
 						return Column(
 							crossAxisAlignment: CrossAxisAlignment.stretch,
 							children: [

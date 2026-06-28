@@ -39,17 +39,20 @@ class GestorSesionPersistente {
 		final usuarioConTenant = usuario.copiarCon(tenantId: config.tenantId);
 		ref.read(sesionUsuarioProvider.notifier).iniciar(usuarioConTenant);
 
-		final tiendaId = usuario.rol == RolUsuario.administrador
-			? config.tiendaId
-			: usuario.tiendaId;
-		if (tiendaId != null && tiendaId.isNotEmpty) {
-			ref.read(sesionTiendaProvider.notifier).confirmar(tiendaId);
+		if (usuario.rol != RolUsuario.administrador) {
+			final tiendaId = usuario.tiendaId;
+			if (tiendaId != null && tiendaId.isNotEmpty) {
+				ref.read(sesionTiendaProvider.notifier).confirmar(tiendaId);
+			}
 		}
 
 		ref.invalidate(contenedorServiciosProvider);
 		final contenedor = await ref.read(contenedorServiciosProvider.future);
-		if (tiendaId != null && tiendaId.isNotEmpty) {
-			await contenedor.servicioAdmin.cambiarTiendaActiva(tiendaId);
+		if (usuario.rol != RolUsuario.administrador) {
+			final tiendaId = usuario.tiendaId;
+			if (tiendaId != null && tiendaId.isNotEmpty) {
+				await contenedor.servicioAdmin.cambiarTiendaActiva(tiendaId);
+			}
 		}
 		final servicioCaja = await ref.read(servicioCajaProvider.future);
 		await servicioCaja.asegurarVendedorDesdeUsuario(usuarioConTenant);

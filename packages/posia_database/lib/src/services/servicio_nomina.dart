@@ -3,6 +3,7 @@ library;
 
 import 'package:posia_core/posia_core.dart';
 import 'package:posia_sync/posia_sync.dart';
+import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 
 import '../repositories/asistencia_repository.dart';
@@ -17,6 +18,7 @@ class ServicioNomina {
 		required AsistenciaRepository asistenciaRepository,
 		required EmpleadoPerfilRepository empleadoPerfilRepository,
 		required UsuarioRepository usuarioRepository,
+		required Database baseDatos,
 		SyncOrchestrator? syncOrchestrator,
 		required String tenantId,
 		required String tiendaId,
@@ -25,6 +27,7 @@ class ServicioNomina {
        _asistenciaRepository = asistenciaRepository,
        _empleadoPerfilRepository = empleadoPerfilRepository,
        _usuarioRepository = usuarioRepository,
+       _baseDatos = baseDatos,
        _syncOrchestrator = syncOrchestrator,
        _tenantId = tenantId,
        _tiendaId = tiendaId,
@@ -34,6 +37,7 @@ class ServicioNomina {
 	final AsistenciaRepository _asistenciaRepository;
 	final EmpleadoPerfilRepository _empleadoPerfilRepository;
 	final UsuarioRepository _usuarioRepository;
+	final Database _baseDatos;
 	final SyncOrchestrator? _syncOrchestrator;
 	final String _tenantId;
 	final String _tiendaId;
@@ -108,41 +112,44 @@ class ServicioNomina {
 			cerradoEn: DateTime.now().toUtc(),
 			cerradoPor: cerradoPor,
 		);
-		await _nominaRepository.guardarPeriodo(periodo);
-		final usuarios = await _usuarioRepository.listarActivos();
-		for (final usuario in usuarios) {
-			if (usuario.rol == RolUsuario.administrador) {
-				continue;
-			}
-			final perfil = await _empleadoPerfilRepository.obtenerPorUsuario(
-				usuario.id,
-			);
-			final tarifa = perfil?.tarifaHora ?? 0.0;
-			if (tarifa <= 0) {
-				continue;
-			}
-			final registros = await _asistenciaRepository.listarPorUsuarioRango(
-				usuarioId: usuario.id,
-				inicio: inicio,
-				fin: fin,
-			);
-			final horas = calcularHorasTrabajadas(registros);
-			if (horas <= 0) {
-				continue;
-			}
-			final bruto = redondearMonto(horas * tarifa);
-			await _nominaRepository.guardarLinea(
-				LineaNomina(
-					id: _generadorId.v4(),
-					periodoId: periodoId,
+		await _baseDatos.transaction((tx) async {
+			await _nominaRepository.guardarPeriodo(periodo, db: tx);
+			final usuarios = await _usuarioRepository.listarActivos();
+			for (final usuario in usuarios) {
+				if (usuario.rol == RolUsuario.administrador) {
+					continue;
+				}
+				final perfil = await _empleadoPerfilRepository.obtenerPorUsuario(
+					usuario.id,
+				);
+				final tarifa = perfil?.tarifaHora ?? 0.0;
+				if (tarifa <= 0) {
+					continue;
+				}
+				final registros = await _asistenciaRepository.listarPorUsuarioRango(
 					usuarioId: usuario.id,
-					horasTrabajadas: horas,
-					tarifaHora: tarifa,
-					montoBruto: bruto,
-					montoNeto: bruto,
-				),
-			);
-		}
+					inicio: inicio,
+					fin: fin,
+				);
+				final horas = calcularHorasTrabajadas(registros);
+				if (horas <= 0) {
+					continue;
+				}
+				final bruto = redondearMonto(horas * tarifa);
+				await _nominaRepository.guardarLinea(
+					LineaNomina(
+						id: _generadorId.v4(),
+						periodoId: periodoId,
+						usuarioId: usuario.id,
+						horasTrabajadas: horas,
+						tarifaHora: tarifa,
+						montoBruto: bruto,
+						montoNeto: bruto,
+					),
+					db: tx,
+				);
+			}
+		});
 		final sync = _syncOrchestrator;
 		if (sync != null) {
 			await sync.registrarEvento(

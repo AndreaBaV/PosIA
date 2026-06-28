@@ -3,6 +3,8 @@ library;
 
 import 'package:posia_core/posia_core.dart';
 import 'package:posia_database/posia_database.dart';
+import 'package:posia_inventory/posia_inventory.dart';
+import 'package:posia_pricing/posia_pricing.dart';
 import 'package:posia_sync/posia_sync.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -18,6 +20,8 @@ class FixtureAdmin {
 		required this.base,
 		required this.inventarioRepository,
 		required this.ventaRepository,
+		required this.almacenRepository,
+		required this.cotizacionRepository,
 		required this.tiendaOrigenId,
 		required this.tiendaDestinoId,
 		required this.categoriaId,
@@ -26,6 +30,8 @@ class FixtureAdmin {
 	final Database base;
 	final InventarioRepository inventarioRepository;
 	final VentaRepository ventaRepository;
+	final AlmacenRepository almacenRepository;
+	final CotizacionRepository cotizacionRepository;
 	final String tiendaOrigenId;
 	final String tiendaDestinoId;
 	final String categoriaId;
@@ -53,12 +59,42 @@ class FixtureAdmin {
 			vendedorRepository: VendedorRepository(baseDatos: base),
 			proveedorRepository: ProveedorRepository(baseDatos: base),
 			compraRepository: CompraRepository(baseDatos: base),
+			cotizacionRepository: cotizacionRepository,
+			almacenRepository: almacenRepository,
 			precioRepository: PrecioRepository(baseDatos: base),
 			movimientoRepository: MovimientoInventarioRepository(baseDatos: base),
 			traspasoRepository: TraspasoRepository(baseDatos: base),
 			varianteRepository: VarianteRepository(baseDatos: base),
+			baseDatos: base,
 			tenantId: tenantPruebaId,
 			tiendaActivaId: tiendaId,
+			cajaId: cajaPruebaId,
+		);
+	}
+
+	ServicioCaja crearServicioCaja({required String tiendaId}) {
+		final productoRepo = ProductoRepository(baseDatos: base);
+		return ServicioCaja(
+			productoRepository: productoRepo,
+			inventarioRepository: inventarioRepository,
+			baseDatos: base,
+			clienteRepository: ClienteRepository(baseDatos: base),
+			ventaRepository: ventaRepository,
+			cotizacionRepository: cotizacionRepository,
+			motorPrecio: MotorPrecio(
+				repositorioPrecio: PrecioRepository(baseDatos: base),
+			),
+			gestorInventario: GestorInventario(repositorioInventario: inventarioRepository),
+			syncOrchestrator: SyncOrchestrator(
+				colaLocal: SyncEventRepository(baseDatos: base),
+				clienteHub: null,
+				clienteLan: null,
+				tenantId: tenantPruebaId,
+				tiendaId: tiendaId,
+				dispositivoId: cajaPruebaId,
+			),
+			tenantId: tenantPruebaId,
+			tiendaId: tiendaId,
 			cajaId: cajaPruebaId,
 		);
 	}
@@ -105,6 +141,8 @@ class FixtureAdmin {
 			base: base,
 			inventarioRepository: InventarioRepository(baseDatos: base),
 			ventaRepository: VentaRepository(baseDatos: base),
+			almacenRepository: AlmacenRepository(baseDatos: base),
+			cotizacionRepository: CotizacionRepository(baseDatos: base),
 			tiendaOrigenId: tiendaOrigenPruebaId,
 			tiendaDestinoId: tiendaDestinoPruebaId,
 			categoriaId: categoriaPruebaId,

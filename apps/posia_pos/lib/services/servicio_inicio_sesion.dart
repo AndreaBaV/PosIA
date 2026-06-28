@@ -42,6 +42,9 @@ class ServicioInicioSesion {
 		await GestorSesionPersistente.guardar(configRepo, usuario);
 
 		ref.read(sesionUsuarioProvider.notifier).iniciar(usuario);
+		if (usuario.rol == RolUsuario.administrador) {
+			ref.read(sesionTiendaProvider.notifier).cerrar();
+		}
 		ref.invalidate(contenedorServiciosProvider);
 		await ref.read(contenedorServiciosProvider.future);
 

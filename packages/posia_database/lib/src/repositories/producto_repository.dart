@@ -86,8 +86,9 @@ class ProductoRepository {
 	}
 
 	/// Elimina producto del catalogo.
-	Future<void> eliminar(String productoId) async {
-		await _baseDatos.delete(
+	Future<void> eliminar(String productoId, {DatabaseExecutor? db}) async {
+		final exec = db ?? _baseDatos;
+		await exec.delete(
 			'products',
 			where: 'id = ?',
 			whereArgs: [productoId],
@@ -114,8 +115,9 @@ class ProductoRepository {
 	/// Inserta o reemplaza producto en catalogo local.
 	///
 	/// [producto] Producto a persistir.
-	Future<void> guardar(Producto producto) async {
-		await _baseDatos.insert(
+	Future<void> guardar(Producto producto, {DatabaseExecutor? db}) async {
+		final exec = db ?? _baseDatos;
+		await exec.insert(
 			'products',
 			_mapearProductoMapa(producto),
 			conflictAlgorithm: ConflictAlgorithm.replace,

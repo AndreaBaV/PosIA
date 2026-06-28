@@ -136,7 +136,7 @@ class PlaceholdersEjemplo {
 		final hash = HasherPin.hashPin('1234', sal);
 		await base.insert('usuarios', {
 			'id': IdsEjemplo.usuario,
-			'nombre': 'ejemplo',
+			'nombre': 'Administrador',
 			'codigo': '9998',
 			'pin_hash': hash,
 			'pin_salt': sal,

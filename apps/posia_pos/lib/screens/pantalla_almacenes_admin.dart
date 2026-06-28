@@ -3,10 +3,11 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:posia_core/posia_core.dart';
 import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
+import '../providers/inventario_admin_providers.dart';
+import 'pantalla_detalle_almacen.dart';
 
 class PantallaAlmacenesAdmin extends ConsumerStatefulWidget {
 	const PantallaAlmacenesAdmin({super.key});
@@ -19,11 +20,19 @@ class PantallaAlmacenesAdmin extends ConsumerStatefulWidget {
 class _PantallaAlmacenesAdminState extends ConsumerState<PantallaAlmacenesAdmin> {
 	@override
 	Widget build(BuildContext context) {
-		final almacenesAsync = ref.watch(_almacenesProvider);
+		final almacenesAsync = ref.watch(almacenesAdminProvider);
+		final resumenAsync = ref.watch(resumenAlmacenesProvider);
 		return Scaffold(
 			appBar: AppBar(
 				title: const Text('Almacenes'),
 				actions: [
+					IconButton(
+						icon: const Icon(Icons.refresh),
+						onPressed: () {
+							ref.invalidate(almacenesAdminProvider);
+							ref.invalidate(resumenAlmacenesProvider);
+						},
+					),
 					IconButton(
 						icon: const Icon(Icons.add),
 						onPressed: _crearAlmacen,
@@ -31,26 +40,65 @@ class _PantallaAlmacenesAdminState extends ConsumerState<PantallaAlmacenesAdmin>
 				],
 			),
 			body: almacenesAsync.when(
-				data: (lista) => lista.isEmpty
-					? const Center(child: Text('Sin almacenes'))
-					: ListView.builder(
-						itemCount: lista.length,
-						itemBuilder: (context, i) {
-							final alm = lista[i];
-							return ListTile(
-								leading: const Icon(Icons.warehouse),
-								title: Text(alm.nombre),
-								subtitle: Text(
-									alm.tiendaId == null
-										? 'Central independiente'
-										: 'Vinculado a tienda',
+				data: (lista) {
+					if (lista.isEmpty) {
+						return const Center(child: Text('Sin almacenes'));
+					}
+					final resumenes = resumenAsync.asData?.value ?? [];
+					final resumenPorId = {for (final r in resumenes) r.almacenId: r};
+					return ListView(
+						padding: const EdgeInsets.symmetric(vertical: 8.0),
+						children: [
+							Padding(
+								padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+								child: Text(
+									'Ubicaciones de inventario central. Toque un almacén para ver '
+									'existencias por producto o registrar entradas.',
+									style: Theme.of(context).textTheme.bodySmall?.copyWith(
+										color: Colors.grey,
+									),
 								),
-								trailing: alm.activo
-									? const Icon(Icons.check_circle, color: PosiaColors.cobrar)
-									: const Icon(Icons.cancel, color: Colors.grey),
-							);
-						},
-					),
+							),
+							...lista.map((alm) {
+								final resumen = resumenPorId[alm.id];
+								return Card(
+									margin: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+									child: ListTile(
+										leading: CircleAvatar(
+											backgroundColor: PosiaColors.neutro.withValues(alpha: 0.15),
+											child: const Icon(Icons.warehouse, color: PosiaColors.neutro),
+										),
+										title: Text(alm.nombre),
+										subtitle: Text(
+											[
+												alm.tiendaId == null
+													? 'Central independiente'
+													: 'Vinculado a tienda',
+												if (resumen != null)
+													'${resumen.productosConStock} productos · '
+													'${resumen.totalUnidades.toStringAsFixed(1)} u.',
+												if (resumen == null) 'Sin existencias registradas',
+											].join(' · '),
+										),
+										trailing: alm.activo
+											? const Icon(Icons.chevron_right)
+											: const Icon(Icons.cancel, color: Colors.grey),
+										onTap: alm.activo
+											? () => Navigator.of(context).push<void>(
+												MaterialPageRoute<void>(
+													builder: (_) => PantallaDetalleAlmacen(
+														almacenId: alm.id,
+														nombreAlmacen: alm.nombre,
+													),
+												),
+											)
+											: null,
+									),
+								);
+							}),
+						],
+					);
+				},
 				loading: () => const Center(child: CircularProgressIndicator()),
 				error: (e, _) => Center(child: Text('$e')),
 			),
@@ -66,7 +114,7 @@ class _PantallaAlmacenesAdminState extends ConsumerState<PantallaAlmacenesAdmin>
 				content: TextField(
 					controller: controller,
 					decoration: const InputDecoration(
-						labelText: 'Nombre',
+						labelText: 'Nombre (ej. Norte, Sur, Centro)',
 						border: OutlineInputBorder(),
 					),
 					autofocus: true,
@@ -86,11 +134,8 @@ class _PantallaAlmacenesAdminState extends ConsumerState<PantallaAlmacenesAdmin>
 		}
 		final servicio = await ref.read(servicioAdminProvider.future);
 		await servicio.registrarAlmacen(nombre);
-		ref.invalidate(_almacenesProvider);
+		ref.invalidate(almacenesAdminProvider);
+		ref.invalidate(resumenAlmacenesProvider);
+		ref.invalidate(inventarioAgrupadoProvider);
 	}
 }
-
-final _almacenesProvider = FutureProvider<List<Almacen>>((ref) async {
-	final servicio = await ref.watch(servicioAdminProvider.future);
-	return servicio.listarAlmacenes();
-});

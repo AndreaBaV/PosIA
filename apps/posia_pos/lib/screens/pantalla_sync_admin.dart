@@ -34,6 +34,7 @@ class _PantallaSyncAdminState extends ConsumerState<PantallaSyncAdmin> {
 					sincronizando: _sincronizando,
 					mensajeResultado: _mensajeResultado,
 					alSincronizar: _ejecutarSyncManual,
+					alReconciliar: _ejecutarReconciliacion,
 					alRepararEquipo: _ejecutarReparacionEquipo,
 					alReconfigurar: () => abrirInstalacionTecnica(context, ref),
 				),
@@ -57,6 +58,39 @@ class _PantallaSyncAdminState extends ConsumerState<PantallaSyncAdmin> {
 				? 'Enviados: ${resultado.eventosEnviados} · Recibidos: ${resultado.eventosRecibidos}'
 				: 'Sin conexión al hub o dispositivo en modo offline';
 		});
+	}
+
+	Future<void> _ejecutarReconciliacion() async {
+		setState(() {
+			_sincronizando = true;
+			_mensajeResultado = null;
+		});
+		final servicio = await ref.read(servicioAdminProvider.future);
+		final resultado = await servicio.reconciliarConHub();
+		ref.invalidate(_estadoSyncProvider);
+		setState(() {
+			_sincronizando = false;
+			_mensajeResultado = _mensajeReconciliacion(resultado);
+		});
+	}
+
+	String _mensajeReconciliacion(ResultadoReconciliacionHub resultado) {
+		if (!resultado.hubDisponible) {
+			return 'Sin conexión al hub o dispositivo en modo offline';
+		}
+		final accion = switch (resultado.accion) {
+			AccionReconciliacionHub.pullCompleto =>
+				'Base local vacía: datos descargados desde la nube.',
+			AccionReconciliacionHub.reconstruidaDesdeNube =>
+				'Datos locales no coincidían con la nube: base reconstruida.',
+			AccionReconciliacionHub.incremental =>
+				resultado.tiendasCoinciden
+					? 'Datos locales verificados con la nube.'
+					: 'Sincronización incremental completada.',
+			AccionReconciliacionHub.omitida => 'Reconciliación omitida.',
+		};
+		return '$accion Enviados: ${resultado.sync.eventosEnviados} · '
+			'Recibidos: ${resultado.sync.eventosRecibidos}';
 	}
 
 	Future<void> _ejecutarReparacionEquipo() async {
@@ -104,6 +138,7 @@ class _ConstruirContenidoSync extends StatelessWidget {
 		required this.sincronizando,
 		required this.mensajeResultado,
 		required this.alSincronizar,
+		required this.alReconciliar,
 		required this.alRepararEquipo,
 		required this.alReconfigurar,
 	});
@@ -112,6 +147,7 @@ class _ConstruirContenidoSync extends StatelessWidget {
 	final bool sincronizando;
 	final String? mensajeResultado;
 	final VoidCallback alSincronizar;
+	final VoidCallback alReconciliar;
 	final VoidCallback alRepararEquipo;
 	final VoidCallback alReconfigurar;
 
@@ -185,6 +221,15 @@ class _ConstruirContenidoSync extends StatelessWidget {
 							),
 						),
 					if (hubActivo) ...[
+						const SizedBox(height: 8.0),
+						SizedBox(
+							height: 48.0,
+							child: OutlinedButton.icon(
+								onPressed: sincronizando ? null : alReconciliar,
+								icon: const Icon(Icons.cloud_download),
+								label: const Text('Reconciliar con la nube'),
+							),
+						),
 						const SizedBox(height: 8.0),
 						SizedBox(
 							height: 48.0,

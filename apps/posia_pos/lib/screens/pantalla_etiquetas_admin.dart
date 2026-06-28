@@ -72,7 +72,7 @@ class _PantallaEtiquetasAdminState extends ConsumerState<PantallaEtiquetasAdmin>
 			}
 		}
 		final directorio = await getApplicationDocumentsDirectory();
-		final carpeta = Directory('${directorio.path}/POSIA/etiquetas');
+		final carpeta = Directory('${directorio.path}/$CARPETA_DOCUMENTOS_APP/etiquetas');
 		if (!await carpeta.exists()) {
 			await carpeta.create(recursive: true);
 		}
@@ -232,7 +232,7 @@ class _PantallaEtiquetasAdminState extends ConsumerState<PantallaEtiquetasAdmin>
 												child: Text(
 													_carpetaDestino?.isNotEmpty == true
 														? _carpetaDestino!
-														: 'Sin carpeta elegida (se usara Documents/POSIA/etiquetas)',
+														: 'Sin carpeta elegida (se usara Documents/$CARPETA_DOCUMENTOS_APP/etiquetas)',
 													maxLines: 3,
 													overflow: TextOverflow.ellipsis,
 												),

@@ -10,6 +10,7 @@ import 'package:posia_core/posia_core.dart';
 import 'package:posia_sync/posia_sync.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../repositories/almacen_repository.dart';
 import '../repositories/categoria_repository.dart';
 import '../repositories/cliente_repository.dart';
 import '../repositories/tienda_repository.dart';
@@ -40,6 +41,7 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		VarianteRepository? varianteRepository,
 		TiendaRepository? tiendaRepository,
 		UsuarioRepository? usuarioRepository,
+		AlmacenRepository? almacenRepository,
 	}) : _baseDatos = baseDatos,
 	     _productoRepository = productoRepository,
 	     _clienteRepository = clienteRepository,
@@ -49,7 +51,8 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 	     _traspasoRepository = traspasoRepository,
 	     _varianteRepository = varianteRepository,
 	     _tiendaRepository = tiendaRepository,
-	     _usuarioRepository = usuarioRepository;
+	     _usuarioRepository = usuarioRepository,
+	     _almacenRepository = almacenRepository;
 
 	final Database _baseDatos;
 	final ProductoRepository _productoRepository;
@@ -61,26 +64,46 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 	final VarianteRepository? _varianteRepository;
 	final TiendaRepository? _tiendaRepository;
 	final UsuarioRepository? _usuarioRepository;
+	final AlmacenRepository? _almacenRepository;
+
+	@override
+	Future<void> aplicarLote(List<SyncEvent> eventos) async {
+		if (eventos.isEmpty) {
+			return;
+		}
+		await _baseDatos.transaction((tx) async {
+			for (final evento in eventos) {
+				await _aplicarEventoInterno(evento, ejecutor: tx);
+			}
+		});
+	}
 
 	@override
 	Future<void> aplicarEvento(SyncEvent evento) async {
+		await _aplicarEventoInterno(evento);
+	}
+
+	Future<void> _aplicarEventoInterno(
+		SyncEvent evento, {
+		DatabaseExecutor? ejecutor,
+	}) async {
 		switch (evento.tipo) {
 			case TipoSyncEvento.saleCompleted:
-				await _aplicarVentaRemota(evento);
+				await _aplicarVentaRemota(evento, ejecutor: ejecutor);
 			case TipoSyncEvento.productUpserted:
 				await _aplicarProductoRemoto(evento);
 			case TipoSyncEvento.customerUpserted:
 				await _aplicarClienteRemoto(evento);
 			case TipoSyncEvento.stockAdjusted:
-				await _aplicarAjusteStockRemoto(evento);
+				await _aplicarAjusteStockRemoto(evento, ejecutor: ejecutor);
 			case TipoSyncEvento.saleVoided:
-				await _aplicarAnulacionRemota(evento);
+				await _aplicarAnulacionRemota(evento, ejecutor: ejecutor);
 			case TipoSyncEvento.categoryUpserted:
 				await _aplicarCategoriaRemota(evento);
 			case TipoSyncEvento.transferRequested:
-				await _aplicarTraspasoSolicitado(evento);
+				await _aplicarTraspasoSolicitado(evento, ejecutor: ejecutor);
 			case TipoSyncEvento.transferCompleted:
-				await _aplicarTraspasoCompletado(evento);
+				await _aplicarTraspasoCompletado(evento, ejecutor: ejecutor);
 			case TipoSyncEvento.variantUpserted:
 				await _aplicarVarianteRemota(evento);
 			case TipoSyncEvento.salePartialReturn:
@@ -228,7 +251,10 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		);
 	}
 
-	Future<void> _aplicarAnulacionRemota(SyncEvent evento) async {
+	Future<void> _aplicarAnulacionRemota(
+		SyncEvent evento, {
+		DatabaseExecutor? ejecutor,
+	}) async {
 		final ventaId = evento.payload['ventaId'] as String? ?? '';
 		if (ventaId.isEmpty) {
 			return;
@@ -238,7 +264,12 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			return;
 		}
 		for (final linea in venta.lineas) {
-			await _ajustarStock(linea.productoId, venta.tiendaId, linea.cantidad);
+			await _ajustarStock(
+				linea.productoId,
+				venta.tiendaId,
+				linea.cantidad,
+				ejecutor: ejecutor,
+			);
 		}
 		await _ventaRepository.actualizarEstado(ventaId, EstadoVenta.cancelada);
 	}
@@ -263,28 +294,66 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		await repo.guardar(categoria);
 	}
 
-	Future<void> _aplicarTraspasoSolicitado(SyncEvent evento) async {
+	Future<void> _aplicarTraspasoSolicitado(
+		SyncEvent evento, {
+		DatabaseExecutor? ejecutor,
+	}) async {
 		final repo = _traspasoRepository;
 		if (repo == null) {
 			return;
 		}
 		final traspaso = _mapearTraspasoRemoto(evento, EstadoTraspaso.enTransito);
-		await repo.guardar(traspaso);
+		await repo.guardar(traspaso, db: ejecutor);
 	}
 
-	Future<void> _aplicarTraspasoCompletado(SyncEvent evento) async {
+	Future<void> _aplicarTraspasoCompletado(
+		SyncEvent evento, {
+		DatabaseExecutor? ejecutor,
+	}) async {
 		final repo = _traspasoRepository;
 		if (repo == null) {
 			return;
 		}
+		final payload = evento.payload;
 		final traspaso = _mapearTraspasoRemoto(evento, EstadoTraspaso.completado);
-		await repo.guardar(traspaso);
+		await repo.guardar(traspaso, db: ejecutor);
+		final almacenOrigen = payload['almacenOrigenId'] as String? ?? '';
+		final almacenDestino = payload['almacenDestinoId'] as String? ?? '';
 		for (final linea in traspaso.lineas) {
-			await _ajustarStock(
-				linea.productoId,
-				traspaso.tiendaDestinoId,
-				linea.cantidadRecibida ?? linea.cantidadSolicitada,
-			);
+			final cantidad = linea.cantidadRecibida ?? linea.cantidadSolicitada;
+			if (cantidad <= 0) {
+				continue;
+			}
+			if (almacenOrigen.isNotEmpty) {
+				await _ajustarStockAlmacen(
+					linea.productoId,
+					almacenOrigen,
+					-cantidad,
+					ejecutor: ejecutor,
+				);
+			} else if (traspaso.tiendaOrigenId.isNotEmpty) {
+				await _ajustarStock(
+					linea.productoId,
+					traspaso.tiendaOrigenId,
+					-cantidad,
+					ejecutor: ejecutor,
+				);
+			}
+			if (almacenDestino.isNotEmpty) {
+				await _ajustarStockAlmacen(
+					linea.productoId,
+					almacenDestino,
+					cantidad,
+					ejecutor: ejecutor,
+				);
+			} else if (traspaso.tiendaDestinoId.isNotEmpty) {
+				await _ajustarStock(
+					linea.productoId,
+					traspaso.tiendaDestinoId,
+					cantidad,
+					ejecutor: ejecutor,
+				);
+			}
 		}
 	}
 
@@ -316,7 +385,10 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 	/// Inserta venta remota y descuenta stock de su tienda.
 	///
 	/// [evento] Evento saleCompleted de otra caja.
-	Future<void> _aplicarVentaRemota(SyncEvent evento) async {
+	Future<void> _aplicarVentaRemota(
+		SyncEvent evento, {
+		DatabaseExecutor? ejecutor,
+	}) async {
 		final ventaId = evento.payload['ventaId'] as String? ?? '';
 		if (ventaId.isEmpty) {
 			return;
@@ -352,7 +424,12 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		);
 		await _ventaRepository.guardar(venta);
 		for (final linea in lineas) {
-			await _ajustarStock(linea.productoId, evento.tiendaId, -linea.cantidad);
+			await _ajustarStock(
+				linea.productoId,
+				evento.tiendaId,
+				-linea.cantidad,
+				ejecutor: ejecutor,
+			);
 		}
 	}
 
@@ -420,22 +497,47 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 	/// Aplica ajuste manual de stock proveniente de otra caja.
 	///
 	/// [evento] Evento stockAdjusted con delta.
-	Future<void> _aplicarAjusteStockRemoto(SyncEvent evento) async {
+	Future<void> _aplicarAjusteStockRemoto(
+		SyncEvent evento, {
+		DatabaseExecutor? ejecutor,
+	}) async {
 		final productoId = evento.payload['productoId'] as String? ?? '';
 		final delta = (evento.payload['delta'] as num?)?.toDouble() ?? 0.0;
 		if (productoId.isEmpty || delta == 0.0) {
 			return;
 		}
-		await _ajustarStock(productoId, evento.tiendaId, delta);
+		final almacenId = evento.payload['almacenId'] as String? ?? '';
+		if (almacenId.isNotEmpty) {
+			await _ajustarStockAlmacen(
+				productoId,
+				almacenId,
+				delta,
+				ejecutor: ejecutor,
+			);
+			return;
+		}
+		await _ajustarStock(
+			productoId,
+			evento.tiendaId,
+			delta,
+			ejecutor: ejecutor,
+		);
 	}
 
-	/// Suma delta al stock local de producto y tienda.
-	///
-	/// [productoId] Producto afectado.
-	/// [tiendaId] Tienda del movimiento.
-	/// [delta] Variacion; negativo descuenta.
-	Future<void> _ajustarStock(String productoId, String tiendaId, double delta) async {
-		final actual = await _inventarioRepository.obtenerStock(productoId, tiendaId);
+	Future<void> _ajustarStock(
+		String productoId,
+		String tiendaId,
+		double delta, {
+		DatabaseExecutor? ejecutor,
+	}) async {
+		if (tiendaId.isEmpty) {
+			return;
+		}
+		final actual = await _inventarioRepository.obtenerStock(
+			productoId,
+			tiendaId,
+			db: ejecutor,
+		);
 		final cantidadBase = actual?.cantidad ?? 0.0;
 		await _inventarioRepository.guardarStock(
 			StockNivel(
@@ -443,7 +545,33 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 				tiendaId: tiendaId,
 				cantidad: cantidadBase + delta,
 				actualizadoEn: DateTime.now().toUtc(),
+				stockMinimo: actual?.stockMinimo ?? 0.0,
 			),
+			db: ejecutor,
+		);
+	}
+
+	Future<void> _ajustarStockAlmacen(
+		String productoId,
+		String almacenId,
+		double delta, {
+		DatabaseExecutor? ejecutor,
+	}) async {
+		final repo = _almacenRepository;
+		if (repo == null || almacenId.isEmpty) {
+			return;
+		}
+		final actual = await repo.obtenerStock(productoId, almacenId, db: ejecutor);
+		final cantidadBase = actual?.cantidad ?? 0.0;
+		await repo.guardarStock(
+			StockAlmacen(
+				productoId: productoId,
+				almacenId: almacenId,
+				cantidad: cantidadBase + delta,
+				actualizadoEn: DateTime.now().toUtc(),
+				stockMinimo: actual?.stockMinimo ?? 0.0,
+			),
+			db: ejecutor,
 		);
 	}
 

@@ -91,8 +91,12 @@ class PresentacionRepository {
 		return _mapearPresentacion(filas.first);
 	}
 
-	Future<void> guardarPresentacion(PresentacionProducto presentacion) async {
-		await _baseDatos.insert(
+	Future<void> guardarPresentacion(
+		PresentacionProducto presentacion, {
+		DatabaseExecutor? db,
+	}) async {
+		final exec = db ?? _baseDatos;
+		await exec.insert(
 			'presentaciones_producto',
 			{
 				'id': presentacion.id,

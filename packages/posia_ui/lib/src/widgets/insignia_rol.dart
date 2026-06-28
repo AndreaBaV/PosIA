@@ -47,6 +47,8 @@ class InsigniaRol extends StatelessWidget {
 							fontWeight: FontWeight.w600,
 							fontSize: compacto ? 12.0 : 13.0,
 						),
+						maxLines: 1,
+						overflow: TextOverflow.ellipsis,
 					),
 				],
 			),

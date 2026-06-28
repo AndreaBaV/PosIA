@@ -30,30 +30,34 @@ class BarraSesionUsuario extends StatelessWidget {
 	@override
 	Widget build(BuildContext context) {
 		if (compacto) {
-			return Material(
-				color: Theme.of(context).colorScheme.surfaceContainerLow,
-				child: SizedBox(
-					height: 40.0,
-					child: Padding(
-						padding: const EdgeInsets.symmetric(horizontal: 8.0),
-						child: Row(
-							children: [
-								Expanded(
-									child: Text(
-										nombreTienda,
-										style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-											fontWeight: FontWeight.w600,
+			return SafeArea(
+				bottom: false,
+				child: Material(
+					color: Theme.of(context).colorScheme.surfaceContainerLow,
+					child: SizedBox(
+						height: 36.0,
+						child: Padding(
+							padding: const EdgeInsets.symmetric(horizontal: 8.0),
+							child: Row(
+								children: [
+									Expanded(
+										child: Text(
+											nombreTienda,
+											style: Theme.of(context).textTheme.bodySmall?.copyWith(
+												fontWeight: FontWeight.w600,
+											),
+											maxLines: 1,
+											overflow: TextOverflow.ellipsis,
 										),
-										overflow: TextOverflow.ellipsis,
 									),
-								),
-								_PopupMenuSesion(
-									nombreUsuario: nombreUsuario,
-									rol: rol,
-									alAbrirMiCuenta: alAbrirMiCuenta,
-									alCerrarSesion: alCerrarSesion,
-								),
-							],
+									_PopupMenuSesion(
+										nombreUsuario: nombreUsuario,
+										rol: rol,
+										alAbrirMiCuenta: alAbrirMiCuenta,
+										alCerrarSesion: alCerrarSesion,
+									),
+								],
+							),
 						),
 					),
 				),
@@ -83,6 +87,7 @@ class BarraSesionUsuario extends StatelessWidget {
 									Text(
 										nombreUsuario,
 										style: const TextStyle(fontWeight: FontWeight.w600),
+										maxLines: 1,
 										overflow: TextOverflow.ellipsis,
 									),
 									Text(
@@ -152,6 +157,8 @@ class _PopupMenuSesion extends StatelessWidget {
 							Text(
 								nombreUsuario,
 								style: const TextStyle(fontWeight: FontWeight.w600),
+								maxLines: 1,
+								overflow: TextOverflow.ellipsis,
 							),
 							const SizedBox(height: 2.0),
 							InsigniaRol(rol: rol, compacto: true),

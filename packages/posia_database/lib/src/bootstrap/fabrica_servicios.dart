@@ -7,8 +7,7 @@
 library;
 
 import 'package:posia_inventory/posia_inventory.dart';
-import 'package:posia_module_butcher/posia_module_butcher.dart';
-import 'package:posia_module_pharmacy/posia_module_pharmacy.dart';
+import 'package:posia_core/posia_core.dart';
 import 'package:posia_pricing/posia_pricing.dart';
 import 'package:posia_sync/posia_sync.dart';
 
@@ -38,6 +37,7 @@ import '../repositories/vendedor_repository.dart';
 import '../repositories/venta_repository.dart';
 import '../services/servicio_admin.dart';
 import '../services/servicio_caja.dart';
+import '../services/servicio_carniceria.dart';
 import '../services/servicio_corte_caja.dart';
 import '../sync/aplicador_eventos_sqlite.dart';
 import '../repositories/almacen_repository.dart';
@@ -166,6 +166,7 @@ class FabricaServicios {
 			varianteRepository: varianteRepo,
 			tiendaRepository: tiendaRepo,
 			usuarioRepository: usuarioRepo,
+			almacenRepository: almacenRepo,
 		);
 		final clienteHub = await _crearClienteHub(configRepo);
 		final sync = SyncOrchestrator(
@@ -180,6 +181,9 @@ class FabricaServicios {
 		);
 		final servicioCaja = ServicioCaja(
 			productoRepository: productoRepo,
+			inventarioRepository: inventarioRepo,
+			loteFarmaciaRepository: loteRepo,
+			baseDatos: base,
 			varianteRepository: varianteRepo,
 			presentacionRepository: presentacionRepo,
 			clienteRepository: clienteRepo,
@@ -222,6 +226,7 @@ class FabricaServicios {
 			almacenRepository: almacenRepo,
 			presentacionRepository: presentacionRepo,
 			servicioCorteCaja: servicioCorteCaja,
+			baseDatos: base,
 			tenantId: tenantId,
 			tiendaActivaId: tiendaId,
 			cajaId: cajaId,
@@ -229,6 +234,7 @@ class FabricaServicios {
 		final servicioAsistencia = ServicioAsistencia(
 			asistenciaRepository: asistenciaRepo,
 			tiendaRepository: tiendaRepo,
+			baseDatos: base,
 			syncOrchestrator: sync,
 			tenantId: tenantId,
 			tiendaId: tiendaId,
@@ -239,6 +245,7 @@ class FabricaServicios {
 			asistenciaRepository: asistenciaRepo,
 			empleadoPerfilRepository: empleadoPerfilRepo,
 			usuarioRepository: usuarioRepo,
+			baseDatos: base,
 			syncOrchestrator: sync,
 			tenantId: tenantId,
 			tiendaId: tiendaId,
@@ -283,6 +290,7 @@ class FabricaServicios {
 		final varianteRepo = VarianteRepository(baseDatos: base);
 		final tiendaRepo = TiendaRepository(baseDatos: base);
 		final usuarioRepo = UsuarioRepository(baseDatos: base);
+		final almacenRepo = AlmacenRepository(baseDatos: base);
 		final colaSync = SyncEventRepository(baseDatos: base);
 		final estadoSyncRepo = SyncStateRepository(baseDatos: base);
 		final aplicadorRemoto = AplicadorEventosSqlite(
@@ -296,6 +304,7 @@ class FabricaServicios {
 			varianteRepository: varianteRepo,
 			tiendaRepository: tiendaRepo,
 			usuarioRepository: usuarioRepo,
+			almacenRepository: almacenRepo,
 		);
 		return SyncOrchestrator(
 			colaLocal: colaSync,

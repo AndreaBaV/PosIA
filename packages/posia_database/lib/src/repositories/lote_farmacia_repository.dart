@@ -6,7 +6,7 @@
 /// Ultima modificacion: 2026-06-07 20:15:00 (UTC-6)
 library;
 
-import 'package:posia_module_pharmacy/posia_module_pharmacy.dart';
+import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
 /// Implementa persistencia de lotes con caducidad para farmacia.
@@ -33,8 +33,9 @@ class LoteFarmaciaRepository implements RepositorioLoteFarmacia {
 	}
 
 	@override
-	Future<LoteFarmacia?> obtenerPorId(String loteId) async {
-		final filas = await _baseDatos.query(
+	Future<LoteFarmacia?> obtenerPorId(String loteId, {DatabaseExecutor? db}) async {
+		final exec = db ?? _baseDatos;
+		final filas = await exec.query(
 			'pharmacy_lots',
 			where: 'id = ?',
 			whereArgs: [loteId],
@@ -47,13 +48,18 @@ class LoteFarmaciaRepository implements RepositorioLoteFarmacia {
 	}
 
 	@override
-	Future<void> descontarCantidad(String loteId, double cantidad) async {
-		final lote = await obtenerPorId(loteId);
+	Future<void> descontarCantidad(
+		String loteId,
+		double cantidad, {
+		DatabaseExecutor? db,
+	}) async {
+		final lote = await obtenerPorId(loteId, db: db);
 		if (lote == null) {
 			return;
 		}
 		final cantidadNueva = lote.cantidad - cantidad;
-		await _baseDatos.update(
+		final exec = db ?? _baseDatos;
+		await exec.update(
 			'pharmacy_lots',
 			{'cantidad': cantidadNueva < 0.0 ? 0.0 : cantidadNueva},
 			where: 'id = ?',

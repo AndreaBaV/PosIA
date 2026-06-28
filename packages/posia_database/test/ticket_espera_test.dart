@@ -29,6 +29,8 @@ void main() {
 			final inventarioRepo = fixture.inventarioRepository;
 			final servicio = ServicioCaja(
 				productoRepository: productoRepo,
+				inventarioRepository: inventarioRepo,
+				baseDatos: fixture.base,
 				clienteRepository: clienteRepo,
 				ventaRepository: fixture.ventaRepository,
 				motorPrecio: MotorPrecio(

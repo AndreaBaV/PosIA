@@ -7,6 +7,67 @@ Historial consolidado de versiones e implementaciones.
 
 ---
 
+## 2026-06-28 — Integridad transaccional, admin móvil y UX operativa
+
+### Base de datos (`posia_database`)
+- Nueva utilidad `transaccion_sqlite.dart` con `ejecutarEscrituraTransaccional` para reutilizar o abrir transacciones SQLite
+- Repositorios con parámetro opcional `DatabaseExecutor? db` en escrituras (y lecturas de stock cuando aplica): inventario, producto, venta, turno de caja, movimientos, compra, traspaso, precios, presentaciones, almacén, lotes farmacia, variantes, nómina, asistencia
+- Operaciones multi-paso envueltas en transacción atómica (sync queda fuera, patrón outbox):
+  - **Caja:** `ServicioCaja.cobrar` (venta + turno + stock + lotes)
+  - **Admin:** alta/actualización/eliminación de producto, compras, venta a crédito, devoluciones, anulaciones, eliminar venta, traspasos, movimientos de inventario, traspaso almacén→tienda
+  - **Nómina:** `cerrarPeriodo` (periodo + líneas)
+  - **Asistencia:** `generarDesafioPin` (desactivar desafíos previos + crear nuevo)
+- `ServicioCorteCaja`: `registrarVenta`, `registrarDevolucion` y `registrarAnulacion` aceptan ejecutor transaccional
+- `eliminarPreciosPorProducto` en `PrecioRepository` ahora es transaccional (price_list_items + customer_product_prices)
+- Tests actualizados en fixture y servicios de caja; suite `posia_database`: 27 tests OK
+
+### Precios y utilidad (`posia_core`, `posia_ui`)
+- `precio_util.dart`: validación de precio mínimo desde costo, parseo de texto, mensajes de error reutilizables
+- Widget `CampoPrecioVenta` con ayuda de mínimo y validación en vivo
+- Validación en backend (`ServicioAdmin`) al guardar presentaciones, variantes y precios
+- Integración en formulario producto, variantes, listas de precios y diálogo actualizar precio
+- Tests en `precio_util_test.dart`
+
+### Empaque / presentaciones (`posia_pos`, `posia_database`)
+- `PanelEmpaquesProducto`: plantillas rápidas (caja, bulto, kg) y CRUD de presentaciones
+- Pestaña **Empaque** unificada en formulario producto (4 pestañas fijas)
+- Backend: `guardarPresentacionProducto` con update por id; `eliminarPresentacionProducto` (soft delete, no borra unidad base)
+- Campos legacy `piezasPorCaja` / `unidadesPorBulto` derivados con `derivarEmpaqueLegacy()`
+
+### Admin móvil y navegación (`posia_pos`, `posia_ui`)
+- `BarraSesionUsuario`: SafeArea, altura compacta (36 px), texto con ellipsis
+- `PantallaAdmin`: sin AppBar ni tarjeta de bienvenida en móvil compacto; barra de búsqueda de secciones
+- `catalogo_menu_admin.dart`: entradas con palabras clave (ej. “latitud” → Tiendas/Asistencia)
+- `PantallaUsuariosAdmin`: layout nombre + insignia de rol; retroalimentación al guardar (spinner “Guardando…”, formulario bloqueado) y al activar/desactivar usuario
+- `InsigniaRol` y export en barrel `posia_ui`
+
+### Teclado móvil (`posia_ui`, `posia_pos`)
+- `AccesorioTecladoMovil`: barra sobre el teclado con botón **Listo** para ocultarlo
+- Integrado en `MaterialApp.builder` de `main.dart` solo en plataforma móvil nativa
+
+### Tiendas y GPS (`posia_pos`)
+- Dependencias `flutter_map` y `latlong2`
+- `ubicacion_util.dart`: permisos y obtención de ubicación actual
+- `SelectorUbicacionTienda`: mapa OpenStreetMap, pin movible, “Usar mi ubicación”, “Establecer como ubicación de la tienda”
+- `PantallaTiendasAdmin`: campos lat/lng reemplazados por selector en mapa; indicador “GPS configurado” en lista
+- `Info.plist` (iOS): texto de permiso de ubicación actualizado
+- `PantallaAsistenciaMovil` reutiliza `ubicacion_util.dart`
+
+### Archivos nuevos destacados
+- `packages/posia_database/lib/src/utils/transaccion_sqlite.dart`
+- `packages/posia_ui/lib/src/widgets/accesorio_teclado_movil.dart`
+- `packages/posia_ui/lib/src/widgets/campo_precio_venta.dart`
+- `apps/posia_pos/lib/util/catalogo_menu_admin.dart`
+- `apps/posia_pos/lib/util/ubicacion_util.dart`
+- `apps/posia_pos/lib/widgets/panel_empaques_producto.dart`
+- `apps/posia_pos/lib/widgets/selector_ubicacion_tienda.dart`
+
+### Pendiente / fuera de alcance
+- Aplicador de sync remoto (`aplicador_eventos_sqlite.dart`): flujos multi-repo aún sin transacción compartida
+- Eventos de sincronización siguen encolándose después del commit (diseño intencional)
+
+---
+
 ## 2026-06-24 — Paridad móvil caja + documentación
 
 ### Caja móvil

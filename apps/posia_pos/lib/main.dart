@@ -18,6 +18,7 @@ import 'providers/app_providers.dart';
 import 'screens/pantalla_inicio.dart';
 import 'screens/pantalla_instalacion_tecnico.dart';
 import 'providers/admin_providers.dart';
+import 'util/plataforma_util.dart';
 
 /// Inicia runtime Flutter y arranca aplicacion POSIA.
 Future<void> main() async {
@@ -42,9 +43,18 @@ class PosiaApp extends ConsumerWidget {
 			ref.watch(sincronizadorAutomaticoProvider);
 		}
 		return MaterialApp(
-			title: 'POSIA',
+			title: NOMBRE_COMERCIAL_APP,
 			debugShowCheckedModeBanner: false,
 			theme: PosiaTheme.construirTema(),
+			builder: (context, child) {
+				if (child == null) {
+					return const SizedBox.shrink();
+				}
+				return AccesorioTecladoMovil(
+					habilitado: esPlataformaMovilNativa(),
+					child: child,
+				);
+			},
 			home: inicializado.when(
 				data: (_) => sesionRestaurada.when(
 					data: (_) => instalacionAsync.when(
@@ -89,7 +99,7 @@ class _PantallaCarga extends StatelessWidget {
 						const CircularProgressIndicator(color: PosiaColors.cobrar),
 						const SizedBox(height: 16.0),
 						Text(
-							'Iniciando POSIA...',
+							'Iniciando $NOMBRE_COMERCIAL_APP...',
 							style: Theme.of(context).textTheme.titleMedium,
 						),
 						const SizedBox(height: 4.0),
@@ -128,7 +138,7 @@ class _PantallaError extends StatelessWidget {
 										const Icon(Icons.error_outline, size: 64.0, color: PosiaColors.cancelar),
 										const SizedBox(height: 16.0),
 										const Text(
-											'No se pudo iniciar POSIA',
+											'No se pudo iniciar $NOMBRE_COMERCIAL_APP',
 											style: TextStyle(fontSize: 20.0, fontWeight: FontWeight.bold),
 											textAlign: TextAlign.center,
 										),

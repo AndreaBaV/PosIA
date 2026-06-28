@@ -60,7 +60,7 @@ class _PantallaInstalacionTecnicoState extends ConsumerState<PantallaInstalacion
 				data: (hub) {
 					_cargarDatosIniciales(hub);
 					return MarcoAutenticacion(
-						titulo: 'Instalación POSIA',
+						titulo: 'Instalación $NOMBRE_COMERCIAL_APP',
 						subtitulo: widget.reconfiguracion
 							? 'Actualiza la conexión con el hub en la nube'
 							: 'Configuración inicial del dispositivo (solo técnico)',
@@ -322,9 +322,9 @@ class _PantallaInstalacionTecnicoState extends ConsumerState<PantallaInstalacion
 				pinTecnico: widget.reconfiguracion ? '' : _pinTecnico,
 				nombreNegocio: _nombreNegocioController.text,
 				nombreTienda: _nombreTiendaController.text,
-				nombreAdmin: 'Administrador',
-				codigoAdmin: _codigoAdminController.text,
-				pinAdmin: _pinAdminNegocio,
+				nombreAdmin: '',
+				codigoAdmin: _conectarNube ? '' : _codigoAdminController.text,
+				pinAdmin: _conectarNube ? '' : _pinAdminNegocio,
 			);
 			ref.invalidate(servicioAutenticacionProvider);
 			ref.invalidate(instalacionCompletaProvider);

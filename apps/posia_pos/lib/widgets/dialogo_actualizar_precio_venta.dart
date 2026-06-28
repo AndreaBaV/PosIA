@@ -29,15 +29,10 @@ Future<bool> mostrarDialogoActualizarPrecioVenta({
 							Text('Costo actual: ${formatearMoneda(producto.costoUnitario)}'),
 							Text('Precio actual: ${formatearMoneda(producto.precioBase)}'),
 							const SizedBox(height: 12.0),
-							TextField(
+							CampoPrecioVenta(
 								controller: precioController,
-								keyboardType: const TextInputType.numberWithOptions(decimal: true),
-								decoration: const InputDecoration(
-									labelText: 'Nuevo precio de venta (MXN)',
-									border: OutlineInputBorder(),
-									prefixText: '\$ ',
-								),
-								autofocus: true,
+								costoUnitario: producto.costoUnitario,
+								labelText: 'Nuevo precio de venta (MXN)',
 							),
 							const SizedBox(height: 12.0),
 							PanelCalculoUtilidad(
@@ -55,29 +50,20 @@ Future<bool> mostrarDialogoActualizarPrecioVenta({
 				),
 				FilledButton(
 					onPressed: () async {
-						final precio = double.tryParse(
-							precioController.text.replaceAll(',', '.'),
+						final error = errorPrecioVentaDesdeTexto(
+							precioController.text,
+							costoUnitario: producto.costoUnitario,
 						);
-						if (precio == null || precio <= 0) {
-							ScaffoldMessenger.of(ctx).showSnackBar(
-								const SnackBar(
-									content: Text('Ingrese un precio válido'),
-									backgroundColor: PosiaColors.cancelar,
-								),
-							);
-							return;
-						}
-						if (!precioVentaEsValido(precio, producto.costoUnitario)) {
+						if (error != null) {
 							ScaffoldMessenger.of(ctx).showSnackBar(
 								SnackBar(
-									content: Text(
-										mensajePrecioMinimoInvalido(producto.costoUnitario),
-									),
+									content: Text(error),
 									backgroundColor: PosiaColors.cancelar,
 								),
 							);
 							return;
 						}
+						final precio = parsearPrecioTexto(precioController.text)!;
 						try {
 							final servicio = await obtenerServicio();
 							await servicio.actualizarProducto(
@@ -153,17 +139,11 @@ Future<void> mostrarDialogoPreciosPostCompra({
 												'Precio actual: ${formatearMoneda(linea.producto.precioBase)}',
 											),
 											const SizedBox(height: 8.0),
-											TextField(
+											CampoPrecioVenta(
 												controller: ctrl,
-												keyboardType: const TextInputType.numberWithOptions(
-													decimal: true,
-												),
-												decoration: const InputDecoration(
-													labelText: 'Precio de venta (MXN)',
-													border: OutlineInputBorder(),
-													prefixText: '\$ ',
-													isDense: true,
-												),
+												costoUnitario: linea.nuevoCosto,
+												labelText: 'Precio de venta (MXN)',
+												isDense: true,
 											),
 											const SizedBox(height: 8.0),
 											PanelCalculoUtilidad(
@@ -189,20 +169,14 @@ Future<void> mostrarDialogoPreciosPostCompra({
 							final servicio = await obtenerServicio();
 							for (final linea in lineas) {
 								final ctrl = precioControllers[linea.producto.id]!;
-								final precio = double.tryParse(
-									ctrl.text.replaceAll(',', '.'),
+								final error = errorPrecioVentaDesdeTexto(
+									ctrl.text,
+									costoUnitario: linea.nuevoCosto,
 								);
-								if (precio == null || precio <= 0) {
-									throw StateError(
-										'Precio inválido para ${linea.producto.nombre}',
-									);
+								if (error != null) {
+									throw StateError('${linea.producto.nombre}: $error');
 								}
-								if (!precioVentaEsValido(precio, linea.nuevoCosto)) {
-									throw StateError(
-										'${linea.producto.nombre}: '
-										'${mensajePrecioMinimoInvalido(linea.nuevoCosto)}',
-									);
-								}
+								final precio = parsearPrecioTexto(ctrl.text)!;
 								if ((precio - linea.producto.precioBase).abs() < 0.001) {
 									continue;
 								}

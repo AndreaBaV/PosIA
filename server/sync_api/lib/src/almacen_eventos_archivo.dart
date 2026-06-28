@@ -77,7 +77,8 @@ class AlmacenEventosArchivo implements AlmacenEventos {
 		int limite = 500,
 	}) async {
 		return _eventos
-			.where((evento) => evento.tenantId == tenantId)
+			.where((evento) =>
+				tenantId.isEmpty || evento.tenantId == tenantId)
 			.where((evento) => evento.seq > desdeSeq)
 			.where((evento) => excluirDispositivoId == null ||
 				evento.dispositivoId != excluirDispositivoId)

@@ -360,16 +360,10 @@ class _PantallaListasPreciosAdminState extends ConsumerState<PantallaListasPreci
 						mainAxisSize: MainAxisSize.min,
 						crossAxisAlignment: CrossAxisAlignment.stretch,
 						children: [
-							TextField(
+							CampoPrecioVenta(
 								controller: precioController,
-								autofocus: true,
-								keyboardType: const TextInputType.numberWithOptions(decimal: true),
-								decoration: InputDecoration(
-									labelText: 'Precio en esta lista',
-									helperText:
-										'Mínimo: ${formatearMoneda(calcularPrecioMinimoVenta(item.producto.costoUnitario))}',
-									border: const OutlineInputBorder(),
-								),
+								costoUnitario: item.producto.costoUnitario,
+								labelText: 'Precio en esta lista',
 							),
 							PanelCalculoUtilidad(
 								costoUnitario: item.producto.costoUnitario,
@@ -387,9 +381,23 @@ class _PantallaListasPreciosAdminState extends ConsumerState<PantallaListasPreci
 				],
 			),
 		);
-		final precio = double.tryParse(precioController.text.replaceAll(',', '.'));
+		final textoPrecio = precioController.text;
+		final precio = parsearPrecioTexto(textoPrecio);
 		precioController.dispose();
 		if (guardado != true || precio == null) {
+			return;
+		}
+		final error = errorPrecioVentaDesdeTexto(
+			textoPrecio,
+			costoUnitario: item.producto.costoUnitario,
+		);
+		if (error != null) {
+			if (!context.mounted) {
+				return;
+			}
+			ScaffoldMessenger.of(context).showSnackBar(
+				SnackBar(content: Text(error), backgroundColor: PosiaColors.cancelar),
+			);
 			return;
 		}
 		try {
@@ -574,8 +582,18 @@ class _DialogoAgregarProductoListaState extends State<_DialogoAgregarProductoLis
 
 	void _confirmar() {
 		final producto = _productoSeleccionado;
-		final precio = double.tryParse(_precioController.text.replaceAll(',', '.'));
+		final precio = parsearPrecioTexto(_precioController.text);
 		if (producto == null || precio == null) {
+			return;
+		}
+		final error = errorPrecioVentaDesdeTexto(
+			_precioController.text,
+			costoUnitario: producto.costoUnitario,
+		);
+		if (error != null) {
+			ScaffoldMessenger.of(context).showSnackBar(
+				SnackBar(content: Text(error), backgroundColor: PosiaColors.cancelar),
+			);
 			return;
 		}
 		Navigator.pop(
@@ -628,14 +646,21 @@ class _DialogoAgregarProductoListaState extends State<_DialogoAgregarProductoLis
 								}),
 							),
 							const SizedBox(height: 12.0),
-							TextField(
-								controller: _precioController,
-								keyboardType: const TextInputType.numberWithOptions(decimal: true),
-								decoration: const InputDecoration(
+							if (producto != null)
+								CampoPrecioVenta(
+									controller: _precioController,
+									costoUnitario: producto.costoUnitario,
 									labelText: 'Precio en esta lista',
-									border: OutlineInputBorder(),
+								)
+							else
+								TextField(
+									controller: _precioController,
+									keyboardType: const TextInputType.numberWithOptions(decimal: true),
+									decoration: const InputDecoration(
+										labelText: 'Precio en esta lista',
+										border: OutlineInputBorder(),
+									),
 								),
-							),
 							if (producto != null) ...[
 								const SizedBox(height: 8.0),
 								PanelCalculoUtilidad(

@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:posia_core/posia_core.dart';
 import 'package:posia_database/posia_database.dart';
 import 'package:posia_inventory/posia_inventory.dart';
-import 'package:posia_module_butcher/posia_module_butcher.dart';
 import 'package:posia_pricing/posia_pricing.dart';
 import 'package:posia_sync/posia_sync.dart';
 
@@ -18,6 +17,8 @@ Future<ServicioCaja> _crearServicioCaja(FixtureAdmin fixture) async {
 	final inventarioRepo = fixture.inventarioRepository;
 	return ServicioCaja(
 		productoRepository: productoRepo,
+		inventarioRepository: inventarioRepo,
+		baseDatos: base,
 		clienteRepository: clienteRepo,
 		ventaRepository: fixture.ventaRepository,
 		motorPrecio: MotorPrecio(

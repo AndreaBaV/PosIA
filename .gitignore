@@ -46,6 +46,9 @@ logTransporter/*
 # Licencias comerciales por cliente
 **/*.lic
 
+# Config local por tienda (copiar desde clients.example.json)
+clients/
+
 # Logs locales de Flutter
 flutter_*.log
 

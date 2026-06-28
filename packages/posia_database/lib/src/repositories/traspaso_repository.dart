@@ -8,14 +8,16 @@ library;
 import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../utils/transaccion_sqlite.dart';
+
 /// Persiste solicitudes y recepciones de traspaso.
 class TraspasoRepository {
 	TraspasoRepository({required Database baseDatos}) : _baseDatos = baseDatos;
 
 	final Database _baseDatos;
 
-	Future<void> guardar(Traspaso traspaso) async {
-		await _baseDatos.transaction((tx) async {
+	Future<void> guardar(Traspaso traspaso, {DatabaseExecutor? db}) async {
+		await ejecutarEscrituraTransaccional(_baseDatos, db, (tx) async {
 			await tx.insert(
 				'transfers',
 				{

@@ -1,4 +1,4 @@
-/// Acceso a usuarios en Postgres para autenticacion multi-tenant.
+/// Acceso a usuarios en Postgres para autenticacion del hub.
 library;
 
 import 'package:posia_core/posia_core.dart';
@@ -107,23 +107,14 @@ class AlmacenUsuariosPostgres {
 		};
 	}
 
-	/// Tiendas activas del tenant (administradores operan sobre todas).
-	Future<List<Map<String, Object?>>> listarTiendasActivasPorTenant(
-		String tenantId,
-	) async {
-		final limpio = tenantId.trim();
-		if (limpio.isEmpty) {
-			return [];
-		}
-		final filas = await _conexion.execute(
-			Sql.named('''
-				SELECT id, nombre, direccion, activa
-				FROM stores
-				WHERE tenant_id = @tenant AND activa = 1
-				ORDER BY nombre
-			'''),
-			parameters: {'tenant': limpio},
-		);
+	/// Tiendas activas del despliegue (una base = un negocio).
+	Future<List<Map<String, Object?>>> listarTiendasActivas() async {
+		final filas = await _conexion.execute('''
+			SELECT id, nombre, direccion, activa
+			FROM stores
+			WHERE activa = 1
+			ORDER BY nombre
+		''');
 		return filas
 			.map((fila) {
 				final cols = fila.toColumnMap();
@@ -136,5 +127,12 @@ class AlmacenUsuariosPostgres {
 			})
 			.where((t) => (t['id'] as String).isNotEmpty)
 			.toList();
+	}
+
+	@Deprecated('Use listarTiendasActivas; una base Neon por despliegue.')
+	Future<List<Map<String, Object?>>> listarTiendasActivasPorTenant(
+		String tenantId,
+	) async {
+		return listarTiendasActivas();
 	}
 }
