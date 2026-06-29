@@ -32,11 +32,7 @@ final servicioAutenticacionProvider = FutureProvider<ServicioAutenticacion>((ref
 		final clave = await configRepo.obtenerValor(claveConfigHubApiKey);
 		cliente = HubSyncClient(urlBase: hubUrl, claveApi: clave);
 	}
-	final orquestador = await FabricaServicios.crearOrquestadorPreLogin();
-	return ServicioAutenticacion(
-		clienteHub: cliente,
-		orquestadorSync: orquestador,
-	);
+	return ServicioAutenticacion(clienteHub: cliente);
 });
 
 /// Configuracion de hub/caja sin requerir sesion de tenant.

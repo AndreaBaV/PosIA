@@ -8,18 +8,14 @@ import '../database/posia_local_database.dart';
 import '../models/motivo_fallo_auth.dart';
 import '../models/resultado_autenticacion.dart';
 import '../repositories/usuario_repository.dart';
-import '../utils/limpiador_base_local.dart';
 
 /// Valida credenciales contra el hub (fuente de verdad) con respaldo local offline.
 class ServicioAutenticacion {
 	ServicioAutenticacion({
 		HubSyncClient? clienteHub,
-		SyncOrchestrator? orquestadorSync,
-	}) : _clienteHub = clienteHub,
-	     _orquestadorSync = orquestadorSync;
+	}) : _clienteHub = clienteHub;
 
 	final HubSyncClient? _clienteHub;
-	final SyncOrchestrator? _orquestadorSync;
 
 	Future<BusquedaPerfilAuth> buscarPerfilPorCodigo(String codigo) async {
 		final limpio = ValidadorCodigoUsuario.normalizar(codigo);
@@ -27,11 +23,9 @@ class ServicioAutenticacion {
 		if (errorFormato != null || limpio.isEmpty) {
 			return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.usuarioNoEncontrado);
 		}
-		await _sincronizarConHubSiPosible();
 		final hub = _clienteHub;
 		var hubActivo = false;
 		if (hub != null) {
-			// Render free puede tardar ~50 s en despertar; usar timeout largo.
 			hubActivo = await hub.mantenerHubVivo();
 			if (hubActivo) {
 				if (!await hub.tieneAuthHub()) {
@@ -95,20 +89,6 @@ class ServicioAutenticacion {
 			return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.hubNoDisponible);
 		}
 		return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.credencialesInvalidas);
-	}
-
-	Future<void> _sincronizarConHubSiPosible() async {
-		final orquestador = _orquestadorSync;
-		if (orquestador == null || !orquestador.tieneHubConfigurado()) {
-			return;
-		}
-		try {
-			final base = await PosiaLocalDatabase.obtenerInstancia().obtenerBaseDatos();
-			await LimpiadorBaseLocal.eliminarDatosEjemplo(base);
-			await orquestador.sincronizarCompleto();
-		} on Object {
-			// El login puede continuar con copia local si el hub falla.
-		}
 	}
 
 	Future<ResultadoAutenticacion?> _autenticarLocal(String codigo, String pin) async {
