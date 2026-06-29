@@ -22,10 +22,11 @@ Future<void> main() async {
 	final config = await ConfigEntorno.cargar();
 	config.validarProduccion();
 	final almacen = _crearAlmacen(config.urlBaseDatos, config.rutaArchivoEventos);
+	final esPostgres = config.urlBaseDatos != null && config.urlBaseDatos!.isNotEmpty;
 
-	Handler? handlerCompleto;
+	final estado = _EstadoServidor(modoAlmacen: esPostgres ? 'postgres' : 'archivo');
 	final servidor = await shelf_io.serve(
-		(Request solicitud) => _enrutarSolicitud(solicitud, handlerCompleto),
+		(Request solicitud) => _enrutarSolicitud(solicitud, estado),
 		InternetAddress.anyIPv4,
 		config.puerto,
 	);
@@ -44,28 +45,42 @@ Future<void> main() async {
 		usuarios: usuarios,
 		claveApi: config.claveApi,
 	);
-	handlerCompleto = enrutador.construirHandler();
+	estado.handler = enrutador.construirHandler();
+	estado.authDisponible = usuarios != null;
 
-	final modo = config.urlBaseDatos == null ? 'archivo local' : 'Postgres (Neon)';
-	stdout.writeln('POSIA Sync API listo (almacen: $modo)');
+	final modo = esPostgres ? 'Postgres (Neon)' : 'archivo local';
+	stdout.writeln('POSIA Sync API listo (almacen: $modo, auth: ${estado.authDisponible})');
+}
+
+/// Estado compartido entre el arranque y el handler de salud.
+class _EstadoServidor {
+	_EstadoServidor({required this.modoAlmacen});
+
+	final String modoAlmacen;
+	Handler? handler;
+	bool authDisponible = false;
 }
 
 /// Atiende health de inmediato; el resto espera a que Postgres este listo.
 Future<Response> _enrutarSolicitud(
 	Request solicitud,
-	Handler? handlerCompleto,
+	_EstadoServidor estado,
 ) async {
 	final ruta = solicitud.requestedUri.path;
 	final esHealth = ruta == '/v1/health' || ruta.endsWith('/v1/health');
 	if (esHealth) {
-		final listo = handlerCompleto != null;
+		final listo = estado.handler != null;
 		return Response(
 			200,
-			body: jsonEncode({'status': listo ? 'ok' : 'starting'}),
+			body: jsonEncode({
+				'status': listo ? 'ok' : 'starting',
+				'store': estado.modoAlmacen,
+				'auth': estado.authDisponible,
+			}),
 			headers: {'Content-Type': 'application/json'},
 		);
 	}
-	final handler = handlerCompleto;
+	final handler = estado.handler;
 	if (handler == null) {
 		return Response(
 			503,
