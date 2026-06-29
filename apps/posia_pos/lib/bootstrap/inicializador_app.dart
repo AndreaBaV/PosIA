@@ -24,7 +24,29 @@ class InicializadorApp {
 		await PosiaLocalDatabase.inicializarMotor();
 		final gestor = PosiaLocalDatabase.obtenerInstancia();
 		final base = await gestor.obtenerBaseDatosDispositivo();
-		await AprovisionadorDispositivo.asegurar(ConfigRepository(baseDatos: base));
+		final config = ConfigRepository(baseDatos: base);
+		await AprovisionadorDispositivo.asegurar(config);
+		await _limpiarSesionSiDatosInconsistentes(config);
 		_preparado = true;
+	}
+
+	/// Quita sesion persistida si el usuario ya no existe en SQLite local.
+	static Future<void> _limpiarSesionSiDatosInconsistentes(
+		ConfigRepository config,
+	) async {
+		if (!await config.esInstalacionCompleta()) {
+			return;
+		}
+		final usuarioId = await config.obtenerValor(claveConfigUltimoUsuarioId);
+		if (usuarioId == null || usuarioId.trim().isEmpty) {
+			return;
+		}
+		final base = await PosiaLocalDatabase.obtenerInstancia().obtenerBaseDatos();
+		final usuario = await UsuarioRepository(baseDatos: base).obtenerPorId(
+			usuarioId,
+		);
+		if (usuario == null || !usuario.activo) {
+			await config.guardarValor(claveConfigUltimoUsuarioId, '');
+		}
 	}
 }

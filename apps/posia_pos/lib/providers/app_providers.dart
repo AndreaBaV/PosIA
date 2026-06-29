@@ -513,6 +513,10 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 	/// Construye estado inicial desde servicio de caja.
 	Future<EstadoCarrito> _cargarEstadoInicial() async {
 		final servicio = await ref.read(servicioCajaProvider.future);
+		final usuario = ref.read(sesionUsuarioProvider);
+		if (usuario != null) {
+			await servicio.asegurarVendedorDesdeUsuario(usuario);
+		}
 		final contenedor = await ref.read(contenedorServiciosProvider.future);
 		await _asegurarCatalogo();
 		_categoriasCache ??= await servicio.listarCategorias();

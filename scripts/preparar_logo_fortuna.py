@@ -22,7 +22,8 @@ def remove_white_bg(input_path: Path, output_path: Path) -> None:
 def square_icon(input_path: Path, output_path: Path, size: int = 1024) -> None:
     img = Image.open(input_path).convert("RGBA")
     img.thumbnail((size, size), Image.Resampling.LANCZOS)
-    canvas = Image.new("RGBA", (size, size), (255, 255, 255, 0))
+    # iOS App Store (ITMS-90717): el icono 1024x1024 no puede tener canal alpha.
+    canvas = Image.new("RGB", (size, size), (255, 255, 255))
     offset = ((size - img.width) // 2, (size - img.height) // 2)
     canvas.paste(img, offset, img)
     canvas.save(output_path, "PNG")

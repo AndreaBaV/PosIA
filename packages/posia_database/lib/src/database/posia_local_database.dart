@@ -1,6 +1,8 @@
 /// Gestor SQLite: dispositivo (config) + base operativa unica por instalacion.
 library;
 
+import 'dart:io';
+
 import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
@@ -57,6 +59,16 @@ class PosiaLocalDatabase {
 		if (_baseOperativa != null) {
 			await _baseOperativa!.close();
 			_baseOperativa = null;
+		}
+	}
+
+	/// Elimina el archivo SQLite operativo; se recrea vacio en el siguiente acceso.
+	Future<void> reiniciarBaseOperativa() async {
+		await cerrarBaseOperativa();
+		final ruta = await motor_sqlite.resolverRutaBaseDatos(_archivoOperativa);
+		final archivo = File(ruta);
+		if (await archivo.exists()) {
+			await archivo.delete();
 		}
 	}
 
