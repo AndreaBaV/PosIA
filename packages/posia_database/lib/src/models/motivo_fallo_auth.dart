@@ -47,7 +47,8 @@ extension MensajeMotivoFalloAuth on MotivoFalloAuth {
 			case MotivoFalloAuth.hubNoConfigurado:
 				return 'Sin conexión al servidor. Configure el hub en Configuración técnica.';
 			case MotivoFalloAuth.hubNoDisponible:
-				return 'No se pudo contactar el servidor. Verifique internet o intente más tarde.';
+				return 'No se pudo contactar el servidor. Verifique la URL del hub y la API key '
+					'en Configuración técnica, o espere ~1 min si el servidor gratuito estaba dormido.';
 			case MotivoFalloAuth.usuarioNoEncontrado:
 				return 'Usuario no encontrado';
 			case MotivoFalloAuth.credencialesInvalidas:

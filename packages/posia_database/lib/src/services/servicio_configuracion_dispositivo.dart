@@ -2,6 +2,7 @@
 library;
 
 import 'package:posia_core/posia_core.dart';
+import 'package:posia_sync/posia_sync.dart';
 
 import '../bootstrap/aprovisionador_offline.dart';
 import '../repositories/config_repository.dart';
@@ -47,8 +48,18 @@ class ServicioConfiguracionDispositivo {
 				);
 			}
 		} else {
-			await _config.guardarHubUrl(hubUrl);
-			await _config.guardarHubApiKey(hubApiKey);
+			final url = hubUrl.trim().replaceAll(RegExp(r'/+$'), '');
+			final clave = hubApiKey.trim();
+			final cliente = HubSyncClient(urlBase: url, claveApi: clave);
+			final responde = await cliente.mantenerHubVivo();
+			if (!responde) {
+				throw StateError(
+					'No se pudo conectar a $url. Verifique la URL (sin barra final), '
+					'que el servidor esté desplegado y espere ~1 min si usa Render gratuito.',
+				);
+			}
+			await _config.guardarHubUrl(url);
+			await _config.guardarHubApiKey(clave);
 		}
 		final pin = pinTecnico.trim();
 		if (pin.isNotEmpty) {

@@ -30,7 +30,8 @@ class ServicioAutenticacion {
 		await _sincronizarConHubSiPosible();
 		final hub = _clienteHub;
 		if (hub != null) {
-			final salud = await hub.verificarSalud();
+			// Render free puede tardar ~50 s en despertar; usar timeout largo.
+			final salud = await hub.mantenerHubVivo();
 			if (salud) {
 				final perfil = await hub.obtenerPerfilUsuario(limpio);
 				if (perfil != null) {
@@ -60,7 +61,7 @@ class ServicioAutenticacion {
 		await _sincronizarConHubSiPosible();
 		final hub = _clienteHub;
 		if (hub != null) {
-			final salud = await hub.verificarSalud();
+			final salud = await hub.mantenerHubVivo();
 			if (salud) {
 				final remoto = await hub.iniciarSesion(codigo: limpio, pin: pin);
 				if (remoto != null) {
