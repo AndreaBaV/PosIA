@@ -2,6 +2,7 @@
 library;
 
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'receipt_printer.dart';
 
@@ -12,7 +13,10 @@ class ArchivoReceiptPrinter implements ReceiptPrinter {
 	final String directorio;
 
 	@override
-	Future<void> imprimirTicket(String contenido) async {
+	Future<void> imprimirTicket(
+		String contenido, {
+		Uint8List? logoPng,
+	}) async {
 		final carpeta = Directory(directorio);
 		if (!carpeta.existsSync()) {
 			carpeta.createSync(recursive: true);

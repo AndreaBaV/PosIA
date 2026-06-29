@@ -2,7 +2,9 @@
 library;
 
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'escpos_raster.dart';
 import 'receipt_printer.dart';
 
 /// Envia ticket por socket TCP a impresora termica.
@@ -18,13 +20,20 @@ class EscPosNetworkPrinter implements ReceiptPrinter {
 	final Duration timeout;
 
 	@override
-	Future<void> imprimirTicket(String contenido) async {
+	Future<void> imprimirTicket(
+		String contenido, {
+		Uint8List? logoPng,
+	}) async {
 		if (host.trim().isEmpty) {
 			throw StateError('Host de impresora no configurado');
 		}
 		final socket = await Socket.connect(host.trim(), port, timeout: timeout);
 		try {
 			final bytes = <int>[0x1B, 0x40];
+			if (logoPng != null && logoPng.isNotEmpty) {
+				bytes.addAll(pngAEscPosRaster(logoPng));
+				bytes.addAll([0x0A]);
+			}
 			bytes.addAll(_codificarTexto(contenido));
 			bytes.addAll([0x0A, 0x0A, 0x0A]);
 			bytes.addAll([0x1D, 0x56, 0x00]);

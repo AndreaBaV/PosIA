@@ -35,6 +35,7 @@ Future<List<String>> construirTextosPagareCredito({
       etiquetaCopia: 'COPIA ADMINISTRADOR',
       direccionTienda: direccionTienda,
       rfcCliente: args.rfcCliente,
+      conLogoImpreso: true,
     ),
     generarTextoPagareCredito(
       venta: venta,
@@ -45,6 +46,7 @@ Future<List<String>> construirTextosPagareCredito({
       etiquetaCopia: 'COPIA CLIENTE',
       direccionTienda: direccionTienda,
       rfcCliente: args.rfcCliente,
+      conLogoImpreso: true,
     ),
   ];
 }
@@ -64,5 +66,6 @@ Future<String> construirTextoLiquidacionCredito({
     nombreCliente: cliente?.nombre ?? 'Cliente',
     direccionTienda: tienda?.direccion,
     telefonoCliente: cliente?.telefono,
+    conLogoImpreso: true,
   );
 }

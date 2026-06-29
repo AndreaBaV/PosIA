@@ -9,6 +9,7 @@ library;
 export 'src/archivo_receipt_printer.dart';
 export 'src/barcode_scanner.dart';
 export 'src/escpos_network_printer.dart';
+export 'src/escpos_raster.dart';
 export 'src/impresora_configurable.dart';
 export 'src/cash_drawer.dart';
 export 'src/escpos_cash_drawer.dart';

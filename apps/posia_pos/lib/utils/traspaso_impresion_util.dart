@@ -22,6 +22,7 @@ String construirTicketTraspaso({
 		nombreTiendaOrigen: nombreTiendaOrigen,
 		nombreTiendaDestino: nombreTiendaDestino,
 		nombreOperador: nombreOperador,
+		conLogoImpreso: true,
 	);
 }
 

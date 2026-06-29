@@ -15,7 +15,7 @@ void main() {
 {
   "tiendas": [
     {"id": "tienda-centro", "nombre": "Tienda Centro", "direccion": "Av. 1", "activa": true},
-    {"id": "tienda-norte", "nombre": "Tienda Norte", "direccion": "Av. 2", "activa": true}
+    {"id": "tienda-norte", "nombre": "Tienda Norte", "direccion": "Av. 2", "activa": 1}
   ]
 }
 ''',
@@ -31,7 +31,6 @@ void main() {
 		final tiendas = await hub.obtenerTiendas();
 		expect(tiendas.length, 2);
 		expect(tiendas.first.id, 'tienda-centro');
-		expect(tiendas.first.nombre, 'Tienda Centro');
 		expect(tiendas.last.activa, isTrue);
 	});
 

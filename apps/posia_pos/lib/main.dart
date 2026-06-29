@@ -66,6 +66,10 @@ class PosiaApp extends ConsumerWidget {
 							return const PantallaInicioSesion();
 						}
 						if (usuario.rol == RolUsuario.administrador && tiendaConfirmada == null) {
+							final adminListo = ref.watch(sesionAdminListoProvider);
+							if (!adminListo) {
+								return const _PantallaCarga();
+							}
 							return const PantallaAccesoTienda();
 						}
 						return const PantallaInicio();

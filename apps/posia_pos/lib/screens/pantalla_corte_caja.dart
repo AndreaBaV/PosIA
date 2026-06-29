@@ -145,6 +145,7 @@ class _PantallaCorteCajaState extends ConsumerState<PantallaCorteCaja> {
 			final textoCorte = generarTextoCorteCaja(
 				turno: turnoCerrado,
 				nombreTienda: tienda?.nombre ?? 'Tienda',
+				conLogoImpreso: true,
 			);
 			try {
 				await hardware.obtenerImpresora().imprimirTicket(textoCorte);

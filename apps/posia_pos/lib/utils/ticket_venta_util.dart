@@ -31,6 +31,7 @@ Future<String> construirTextoTicketVenta({
     rfcCliente: cliente?.rfc,
     direccionCliente: cliente?.direccion,
     montoRecibido: montoRecibido,
+    conLogoImpreso: true,
   );
 }
 
@@ -74,6 +75,7 @@ String construirTextoCotizacionGuardada({
     notas: cotizacion.notas.isEmpty ? null : cotizacion.notas,
     direccionTienda: direccionTienda,
     vigenciaDias: cotizacion.vigenciaDias,
+    conLogoImpreso: true,
   );
 }
 

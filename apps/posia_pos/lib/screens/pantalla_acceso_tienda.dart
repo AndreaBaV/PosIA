@@ -24,7 +24,7 @@ class _PantallaAccesoTiendaState extends ConsumerState<PantallaAccesoTienda> {
 
 	@override
 	Widget build(BuildContext context) {
-		final tiendasAsync = ref.watch(_tiendasAccesoProvider);
+		final tiendasAsync = ref.watch(tiendasAccesoProvider);
 		final configAsync = ref.watch(configDispositivoProvider);
 		final usuario = ref.watch(sesionUsuarioProvider);
 		return Scaffold(
@@ -202,9 +202,3 @@ class _PantallaAccesoTiendaState extends ConsumerState<PantallaAccesoTienda> {
 	}
 }
 
-final _tiendasAccesoProvider = FutureProvider<List<Tienda>>((ref) async {
-	await ref.watch(estadoInicializacionProvider.future);
-	final contenedor = await ref.watch(contenedorServiciosProvider.future);
-	final usuario = ref.watch(sesionUsuarioProvider);
-	return contenedor.servicioAdmin.obtenerTiendasPermitidas(operador: usuario);
-});

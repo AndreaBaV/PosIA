@@ -16,6 +16,7 @@ import 'package:posia_database/posia_database.dart';
 import 'package:posia_hardware/posia_hardware.dart';
 import 'package:posia_licensing/posia_licensing.dart';
 
+import '../services/impresora_documentos_marca.dart';
 import '../bootstrap/inicializador_app.dart';
 import '../sync/sincronizador_automatico.dart';
 import '../services/gestor_sesion_persistente.dart';
@@ -60,6 +61,28 @@ class SesionTiendaNotifier extends Notifier<String?> {
 
 	void cerrar() => state = null;
 }
+
+/// Admin: false mientras se importan tiendas del hub tras login.
+final sesionAdminListoProvider = NotifierProvider<SesionAdminListoNotifier, bool>(
+	SesionAdminListoNotifier.new,
+);
+
+class SesionAdminListoNotifier extends Notifier<bool> {
+	@override
+	bool build() => true;
+
+	void preparando() => state = false;
+
+	void listo() => state = true;
+}
+
+/// Tiendas disponibles para el administrador tras login.
+final tiendasAccesoProvider = FutureProvider<List<Tienda>>((ref) async {
+	await ref.watch(estadoInicializacionProvider.future);
+	final contenedor = await ref.watch(contenedorServiciosProvider.future);
+	final usuario = ref.watch(sesionUsuarioProvider);
+	return contenedor.servicioAdmin.obtenerTiendasPermitidas(operador: usuario);
+});
 
 /// Contenedor de servicios de dominio (requiere sesion activa).
 final contenedorServiciosProvider = FutureProvider<ContenedorServicios>((ref) async {
@@ -119,7 +142,7 @@ final hardwareRegistryProvider = FutureProvider<HardwareRegistry>((ref) async {
 	}
 	return HardwareRegistry(
 		scanner: TecladoBarcodeScanner(),
-		impresora: ImpresoraConfigurable(
+		impresora: ImpresoraDocumentosMarca.crear(
 			modo: _resolverModoImpresora(configImpresora.modo),
 			hostRed: configImpresora.hostRed,
 			puertoRed: configImpresora.puertoRed,

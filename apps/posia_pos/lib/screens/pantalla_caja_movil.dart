@@ -431,7 +431,7 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 		);
 	}
 
-	Future<bool> _asegurarPermisosVoz() async {
+	Future<bool> _asegurarPermisosVozAndroid() async {
 		var mic = await Permission.microphone.status;
 		if (!mic.isGranted) {
 			mic = await Permission.microphone.request();
@@ -443,7 +443,7 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 			if (mic.isPermanentlyDenied) {
 				await _mostrarDialogoIrAjustes(
 					'Micrófono bloqueado',
-					'Actívalo en Ajustes del sistema.',
+					'Actívalo en Ajustes → Aplicaciones → La Fortuna → Micrófono.',
 				);
 			} else {
 				ScaffoldMessenger.of(context).showSnackBar(
@@ -455,25 +455,20 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 			}
 			return false;
 		}
-		if (Platform.isIOS) {
-			var speech = await Permission.speech.status;
-			if (!speech.isGranted) {
-				speech = await Permission.speech.request();
-			}
-			if (!speech.isGranted) {
-				if (!mounted) {
-					return false;
-				}
-				if (speech.isPermanentlyDenied) {
-					await _mostrarDialogoIrAjustes(
-						'Voz bloqueada',
-						'Actívala en Ajustes del sistema.',
-					);
-				}
-				return false;
-			}
-		}
 		return true;
+	}
+
+	Future<void> _mostrarAyudaPermisosVozIos() async {
+		await _mostrarDialogoIrAjustes(
+			'Micrófono bloqueado',
+			'Para dictar ventas, La Fortuna necesita acceso al micrófono y al '
+			'reconocimiento de voz.\n\n'
+			'1. Toca el botón de voz otra vez y acepta cuando iOS lo pida.\n'
+			'2. Si ya lo rechazaste: Ajustes → La Fortuna → activa Micrófono y '
+			'Reconocimiento de voz.\n'
+			'3. Si esas opciones no aparecen, desinstala la app, reinstálala y '
+			'vuelve a intentar.',
+		);
 	}
 
 	Future<void> _mostrarDialogoIrAjustes(String titulo, String mensaje) async {
@@ -507,19 +502,30 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 			}
 			return;
 		}
-		final permisosOk = await _asegurarPermisosVoz();
-		if (!permisosOk) {
-			return;
+		if (!Platform.isIOS) {
+			final permisosOk = await _asegurarPermisosVozAndroid();
+			if (!permisosOk) {
+				return;
+			}
 		}
 		if (!_vozInicializada) {
 			final ok = await _servicioVoz.inicializar();
 			_vozInicializada = ok;
-			if (!ok && mounted) {
-				ScaffoldMessenger.of(context).showSnackBar(
-					SnackBar(
-						content: Text(_servicioVoz.ultimoError ?? 'Voz no disponible en este dispositivo'),
-					),
-				);
+			if (!ok) {
+				if (!mounted) {
+					return;
+				}
+				if (Platform.isIOS) {
+					await _mostrarAyudaPermisosVozIos();
+				} else {
+					ScaffoldMessenger.of(context).showSnackBar(
+						SnackBar(
+							content: Text(
+								_servicioVoz.ultimoError ?? 'Voz no disponible en este dispositivo',
+							),
+						),
+					);
+				}
 				return;
 			}
 		}

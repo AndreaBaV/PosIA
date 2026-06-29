@@ -44,6 +44,18 @@ void _escribirSiNoVacio(StringBuffer buffer, String etiqueta, String? valor) {
   }
 }
 
+void _escribirEncabezadoMarca(
+  StringBuffer buffer, {
+  required bool conLogoImpreso,
+  String? tituloDocumento,
+}) {
+  if (tituloDocumento != null) {
+    buffer.writeln(tituloDocumento);
+  } else if (!conLogoImpreso) {
+    buffer.writeln('====== ${NOMBRE_COMERCIAL_APP.toUpperCase()} ======');
+  }
+}
+
 /// Formatea venta como ticket legible de 40 columnas.
 String generarTextoTicket({
   required Venta venta,
@@ -57,10 +69,11 @@ String generarTextoTicket({
   String? telefonoCliente,
   String? rfcCliente,
   String? direccionCliente,
+  bool conLogoImpreso = false,
 }) {
-  final buffer = StringBuffer()
-    ..writeln('========== ${NOMBRE_COMERCIAL_APP.toUpperCase()} ==========')
-    ..writeln(nombreTienda);
+  final buffer = StringBuffer();
+  _escribirEncabezadoMarca(buffer, conLogoImpreso: conLogoImpreso);
+  buffer.writeln(nombreTienda);
   if (direccionTienda != null && direccionTienda.trim().isNotEmpty) {
     buffer.writeln(direccionTienda.trim());
   }
@@ -165,11 +178,18 @@ String generarTextoPagareCredito({
   required String etiquetaCopia,
   String? direccionTienda,
   String? rfcCliente,
+  bool conLogoImpreso = false,
 }) {
-  final buffer = StringBuffer()
-    ..writeln('====== PAGARE ${NOMBRE_COMERCIAL_APP.toUpperCase()} ======')
-    ..writeln(etiquetaCopia.toUpperCase())
-    ..writeln(nombreTienda);
+  final buffer = StringBuffer();
+  _escribirEncabezadoMarca(
+    buffer,
+    conLogoImpreso: conLogoImpreso,
+    tituloDocumento: conLogoImpreso
+        ? 'PAGARE'
+        : '====== PAGARE ${NOMBRE_COMERCIAL_APP.toUpperCase()} ======',
+  );
+  buffer.writeln(etiquetaCopia.toUpperCase());
+  buffer.writeln(nombreTienda);
   if (direccionTienda != null && direccionTienda.trim().isNotEmpty) {
     buffer.writeln(direccionTienda.trim());
   }
@@ -237,10 +257,15 @@ String generarTextoCotizacion({
   String? notas,
   String? direccionTienda,
   int vigenciaDias = 7,
+  bool conLogoImpreso = false,
 }) {
-  final buffer = StringBuffer()
-    ..writeln('====== COTIZACION ======')
-    ..writeln(nombreTienda);
+  final buffer = StringBuffer();
+  _escribirEncabezadoMarca(
+    buffer,
+    conLogoImpreso: conLogoImpreso,
+    tituloDocumento: '====== COTIZACION ======',
+  );
+  buffer.writeln(nombreTienda);
   if (direccionTienda != null && direccionTienda.trim().isNotEmpty) {
     buffer.writeln(direccionTienda.trim());
   }
@@ -279,10 +304,15 @@ String generarTextoLiquidacionCredito({
   required String nombreCliente,
   String? direccionTienda,
   String? telefonoCliente,
+  bool conLogoImpreso = false,
 }) {
-  final buffer = StringBuffer()
-    ..writeln('=== LIQUIDACION DE CREDITO ===')
-    ..writeln(nombreTienda);
+  final buffer = StringBuffer();
+  _escribirEncabezadoMarca(
+    buffer,
+    conLogoImpreso: conLogoImpreso,
+    tituloDocumento: '=== LIQUIDACION DE CREDITO ===',
+  );
+  buffer.writeln(nombreTienda);
   if (direccionTienda != null && direccionTienda.trim().isNotEmpty) {
     buffer.writeln(direccionTienda.trim());
   }
@@ -311,9 +341,15 @@ String generarTextoLiquidacionCredito({
 String generarTextoCorteCaja({
   required TurnoCaja turno,
   required String nombreTienda,
+  bool conLogoImpreso = false,
 }) {
-  final buffer = StringBuffer()
-    ..writeln('======== CORTE DE CAJA ========')
+  final buffer = StringBuffer();
+  _escribirEncabezadoMarca(
+    buffer,
+    conLogoImpreso: conLogoImpreso,
+    tituloDocumento: '======== CORTE DE CAJA ========',
+  );
+  buffer
     ..writeln(nombreTienda)
     ..writeln('Turno: ${turno.id.substring(0, 8)}')
     ..writeln('Apertura: ${turno.abiertoEn.toLocal()}')
@@ -348,9 +384,17 @@ String generarTextoTicketTraspaso({
   required String nombreTiendaOrigen,
   required String nombreTiendaDestino,
   String? nombreOperador,
+  bool conLogoImpreso = false,
 }) {
-  final buffer = StringBuffer()
-    ..writeln('====== TRASPASO ${NOMBRE_COMERCIAL_APP.toUpperCase()} ======')
+  final buffer = StringBuffer();
+  _escribirEncabezadoMarca(
+    buffer,
+    conLogoImpreso: conLogoImpreso,
+    tituloDocumento: conLogoImpreso
+        ? 'TRASPASO'
+        : '====== TRASPASO ${NOMBRE_COMERCIAL_APP.toUpperCase()} ======',
+  );
+  buffer
     ..writeln('Folio: ${traspaso.id.substring(0, 8).toUpperCase()}')
     ..writeln('Fecha: ${_formatearFechaHora(traspaso.solicitadoEn)}')
     ..writeln('Origen: $nombreTiendaOrigen')

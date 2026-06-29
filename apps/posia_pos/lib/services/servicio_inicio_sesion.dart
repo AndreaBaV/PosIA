@@ -27,6 +27,9 @@ class ServicioInicioSesion {
 		final configRepo = await ref.read(configDispositivoRepoProvider.future);
 		await GestorSesionPersistente.guardar(configRepo, usuario);
 
+		if (usuario.rol == RolUsuario.administrador) {
+			ref.read(sesionAdminListoProvider.notifier).preparando();
+		}
 		ref.read(sesionUsuarioProvider.notifier).iniciar(usuario);
 		if (usuario.rol == RolUsuario.administrador) {
 			ref.read(sesionTiendaProvider.notifier).cerrar();
@@ -61,6 +64,10 @@ class ServicioInicioSesion {
 				},
 		);
 		ref.invalidate(contenedorServiciosProvider);
+		if (usuario.rol == RolUsuario.administrador) {
+			ref.read(sesionAdminListoProvider.notifier).listo();
+			ref.invalidate(tiendasAccesoProvider);
+		}
 
 		if (usuario.rol != RolUsuario.administrador) {
 			final tiendaId = usuario.tiendaId;

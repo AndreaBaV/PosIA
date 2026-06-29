@@ -1117,6 +1117,18 @@ class ServicioAdmin {
         tiendasIniciales: tiendasDesdeHub,
         obtenerRemotas: obtenerTiendasRemotas,
       );
+      var activas = await _tiendaRepository.listarActivasOperativas();
+      if (activas.isEmpty && obtenerTiendasRemotas != null) {
+        try {
+          final remotas = await obtenerTiendasRemotas();
+          if (remotas.isNotEmpty) {
+            await importarTiendasDesdeHub(remotas);
+            activas = await _tiendaRepository.listarActivasOperativas();
+          }
+        } on Object {
+          // Se intenta reconciliar abajo si hay hub.
+        }
+      }
     }
     final hub = await _configRepository.obtenerHubUrl();
     if (hub != null && hub.isNotEmpty) {

@@ -6,6 +6,8 @@
 /// Ultima modificacion: 2026-06-07 18:30:00 (UTC-6)
 library;
 
+import 'dart:typed_data';
+
 import '../receipt_printer.dart';
 
 /// Guarda tickets impresos para verificacion en pruebas.
@@ -20,7 +22,10 @@ class MockReceiptPrinter implements ReceiptPrinter {
 	}
 
 	@override
-	Future<void> imprimirTicket(String contenido) async {
+	Future<void> imprimirTicket(
+		String contenido, {
+		Uint8List? logoPng,
+	}) async {
 		_ticketsImpresos.add(contenido);
 	}
 }
