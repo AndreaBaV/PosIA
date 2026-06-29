@@ -29,10 +29,11 @@ class ServicioAutenticacion {
 		}
 		await _sincronizarConHubSiPosible();
 		final hub = _clienteHub;
+		var hubActivo = false;
 		if (hub != null) {
 			// Render free puede tardar ~50 s en despertar; usar timeout largo.
-			final salud = await hub.mantenerHubVivo();
-			if (salud) {
+			hubActivo = await hub.mantenerHubVivo();
+			if (hubActivo) {
 				if (!await hub.tieneAuthHub()) {
 					return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.hubSinPostgres);
 				}
@@ -43,7 +44,8 @@ class ServicioAutenticacion {
 					}
 					return BusquedaPerfilAuth.usuario(_mapearPerfilHub(perfil));
 				}
-				return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.usuarioNoEncontrado);
+				// El hub puede no tener aun el usuario (p. ej. tras limpiar Postgres);
+				// se intenta la copia local sincronizada antes de fallar.
 			}
 		}
 		final local = await _buscarPerfilLocal(limpio);
@@ -53,7 +55,10 @@ class ServicioAutenticacion {
 		if (hub == null) {
 			return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.hubNoConfigurado);
 		}
-		return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.hubNoDisponible);
+		if (!hubActivo) {
+			return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.hubNoDisponible);
+		}
+		return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.usuarioNoEncontrado);
 	}
 
 	Future<IntentoAutenticacionAuth> autenticar(String codigo, String pin) async {
@@ -61,11 +66,11 @@ class ServicioAutenticacion {
 		if (limpio.isEmpty || pin.isEmpty) {
 			return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.credencialesInvalidas);
 		}
-		await _sincronizarConHubSiPosible();
 		final hub = _clienteHub;
+		var hubActivo = false;
 		if (hub != null) {
-			final salud = await hub.mantenerHubVivo();
-			if (salud) {
+			hubActivo = await hub.mantenerHubVivo();
+			if (hubActivo) {
 				if (!await hub.tieneAuthHub()) {
 					return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.hubSinPostgres);
 				}
@@ -76,7 +81,7 @@ class ServicioAutenticacion {
 					}
 					return IntentoAutenticacionAuth.exito(_mapearLoginHub(remoto));
 				}
-				return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.credencialesInvalidas);
+				// Credenciales rechazadas en hub o usuario solo en copia local.
 			}
 		}
 		final local = await _autenticarLocal(limpio, pin);
@@ -86,7 +91,10 @@ class ServicioAutenticacion {
 		if (hub == null) {
 			return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.hubNoConfigurado);
 		}
-		return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.hubNoDisponible);
+		if (!hubActivo) {
+			return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.hubNoDisponible);
+		}
+		return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.credencialesInvalidas);
 	}
 
 	Future<void> _sincronizarConHubSiPosible() async {

@@ -7,6 +7,7 @@
 library;
 
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:posia_core/posia_core.dart';
 import 'package:posia_pricing/posia_pricing.dart';
@@ -1100,8 +1101,24 @@ class ServicioAdmin {
   Future<void> activarSesionTrasLogin(
     Usuario usuario, {
     List<Tienda> tiendasDesdeHub = const [],
-    Future<List<Tienda>> Function()? obtenerTiendasRemotas,
   }) async {
+    // #region agent log
+    try {
+      File(r'c:\Users\andyb\ProyectosPersonales2026\POSIA\debug-a72769.log').writeAsStringSync(
+        '${jsonEncode({
+          'sessionId': 'a72769',
+          'timestamp': DateTime.now().millisecondsSinceEpoch,
+          'location': 'servicio_admin.dart:activarSesionTrasLogin:entry',
+          'message': 'Inicio activarSesionTrasLogin',
+          'data': {'rol': usuario.rol.name, 'tiendasHub': tiendasDesdeHub.length},
+          'hypothesisId': 'C',
+          'runId': 'pre-fix',
+        })}\n',
+        mode: FileMode.append,
+        flush: true,
+      );
+    } on Object {}
+    // #endregion
     if (usuario.rol != RolUsuario.administrador) {
       final tiendaId = usuario.tiendaId;
       if (tiendaId == null || tiendaId.isEmpty) {
@@ -1110,30 +1127,31 @@ class ServicioAdmin {
       await cambiarTiendaActiva(tiendaId);
     } else {
       await LimpiadorBaseLocal.eliminarDatosEjemplo(_baseDatos);
-      if (tiendasDesdeHub.isNotEmpty) {
-        await importarTiendasDesdeHub(tiendasDesdeHub);
-      }
-      await _asegurarTiendasAdministrador(
-        tiendasIniciales: tiendasDesdeHub,
-        obtenerRemotas: obtenerTiendasRemotas,
+      await _asegurarTiendasAdministrador(tiendasIniciales: tiendasDesdeHub);
+    }
+    // #region agent log
+    try {
+      final activasPost = usuario.rol == RolUsuario.administrador
+          ? await _tiendaRepository.listarActivasOperativas()
+          : <Tienda>[];
+      File(r'c:\Users\andyb\ProyectosPersonales2026\POSIA\debug-a72769.log').writeAsStringSync(
+        '${jsonEncode({
+          'sessionId': 'a72769',
+          'timestamp': DateTime.now().millisecondsSinceEpoch,
+          'location': 'servicio_admin.dart:activarSesionTrasLogin:exit',
+          'message': 'Fin activarSesionTrasLogin',
+          'data': {
+            'rol': usuario.rol.name,
+            'tiendasActivasLocales': activasPost.length,
+          },
+          'hypothesisId': 'C',
+          'runId': 'post-fix',
+        })}\n',
+        mode: FileMode.append,
+        flush: true,
       );
-      var activas = await _tiendaRepository.listarActivasOperativas();
-      if (activas.isEmpty && obtenerTiendasRemotas != null) {
-        try {
-          final remotas = await obtenerTiendasRemotas();
-          if (remotas.isNotEmpty) {
-            await importarTiendasDesdeHub(remotas);
-            activas = await _tiendaRepository.listarActivasOperativas();
-          }
-        } on Object {
-          // Se intenta reconciliar abajo si hay hub.
-        }
-      }
-    }
-    final hub = await _configRepository.obtenerHubUrl();
-    if (hub != null && hub.isNotEmpty) {
-      await reconciliarConHub();
-    }
+    } on Object {}
+    // #endregion
   }
 
   Future<Usuario?> autenticarUsuarioPorPin(String pin) async {
@@ -1163,6 +1181,11 @@ class ServicioAdmin {
   }
 
   Future<List<Tienda>> obtenerTiendasPermitidas({Usuario? operador}) async {
+    if (operador != null &&
+        PermisosUsuario.puedeGestionarTodasLasTiendas(operador) &&
+        (await _tiendaRepository.listarActivasOperativas()).isEmpty) {
+      await _sincronizarTiendasDesdeHub();
+    }
     final tiendas = await _tiendaRepository.listarActivasOperativas();
     if (operador == null ||
         PermisosUsuario.puedeGestionarTodasLasTiendas(operador)) {
@@ -2357,23 +2380,57 @@ class ServicioAdmin {
 
   Future<void> _asegurarTiendasAdministrador({
     List<Tienda> tiendasIniciales = const [],
-    Future<List<Tienda>> Function()? obtenerRemotas,
   }) async {
-    var remotas = tiendasIniciales;
-    final fetch = obtenerRemotas;
-    if (fetch != null) {
-      try {
-        final desdeHub = await fetch();
-        if (desdeHub.isNotEmpty) {
-          remotas = desdeHub;
-        }
-      } on Object {
-        // Si el hub falla, se conserva la copia local o la del login.
-      }
+    if (tiendasIniciales.isNotEmpty) {
+      await importarTiendasDesdeHub(tiendasIniciales);
     }
-    if (remotas.isNotEmpty) {
-      await importarTiendasDesdeHub(remotas);
+    if ((await _tiendaRepository.listarActivasOperativas()).isEmpty) {
+      await _sincronizarTiendasDesdeHub();
     }
+  }
+
+  /// Descarga tiendas activas del hub e importa en SQLite local.
+  Future<void> _sincronizarTiendasDesdeHub() async {
+    final hubUrl = await _configRepository.obtenerHubUrl();
+    if (hubUrl == null || hubUrl.isEmpty) {
+      return;
+    }
+    final clave = await _configRepository.obtenerValor(claveConfigHubApiKey);
+    final cliente = HubSyncClient(urlBase: hubUrl, claveApi: clave);
+    await cliente.mantenerHubVivo();
+    final remotas = await cliente.obtenerTiendas();
+    // #region agent log
+    try {
+      File(r'c:\Users\andyb\ProyectosPersonales2026\POSIA\debug-a72769.log').writeAsStringSync(
+        '${jsonEncode({
+          'sessionId': 'a72769',
+          'timestamp': DateTime.now().millisecondsSinceEpoch,
+          'location': 'servicio_admin.dart:_sincronizarTiendasDesdeHub',
+          'message': 'Tiendas recibidas del hub',
+          'data': {'remotas': remotas.length, 'hubUrl': hubUrl.isNotEmpty},
+          'hypothesisId': 'F',
+          'runId': 'post-fix',
+        })}\n',
+        mode: FileMode.append,
+        flush: true,
+      );
+    } on Object {}
+    // #endregion
+    if (remotas.isEmpty) {
+      return;
+    }
+    await importarTiendasDesdeHub(
+      remotas
+          .map(
+            (t) => Tienda(
+              id: t.id,
+              nombre: t.nombre,
+              direccion: t.direccion,
+              activa: t.activa,
+            ),
+          )
+          .toList(),
+    );
   }
 
   Future<List<Tienda>> listarTodasLasTiendas() async {

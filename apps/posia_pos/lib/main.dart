@@ -18,6 +18,7 @@ import 'providers/app_providers.dart';
 import 'screens/pantalla_inicio.dart';
 import 'screens/pantalla_instalacion_tecnico.dart';
 import 'providers/admin_providers.dart';
+import 'util/debug_agent_log.dart';
 import 'util/plataforma_util.dart';
 
 /// Inicia runtime Flutter y arranca aplicacion POSIA.
@@ -42,6 +43,16 @@ class PosiaApp extends ConsumerWidget {
 		if (usuario != null) {
 			ref.watch(sincronizadorAutomaticoProvider);
 		}
+		final home = _resolverPantallaInicio(
+			inicializado: inicializado,
+			sesionRestaurada: sesionRestaurada,
+			instalacionAsync: instalacionAsync,
+			usuario: usuario,
+			tiendaConfirmada: tiendaConfirmada,
+			adminListo: usuario?.rol == RolUsuario.administrador && tiendaConfirmada == null
+				? ref.watch(sesionAdminListoProvider)
+				: null,
+		);
 		return MaterialApp(
 			title: NOMBRE_COMERCIAL_APP,
 			debugShowCheckedModeBanner: false,
@@ -55,36 +66,91 @@ class PosiaApp extends ConsumerWidget {
 					child: child,
 				);
 			},
-			home: inicializado.when(
-				data: (_) => sesionRestaurada.when(
-					data: (_) => instalacionAsync.when(
-					data: (instalacionLista) {
-						if (!instalacionLista && usuario == null) {
-							return const PantallaInstalacionTecnico();
-						}
-						if (usuario == null) {
-							return const PantallaInicioSesion();
-						}
-						if (usuario.rol == RolUsuario.administrador && tiendaConfirmada == null) {
-							final adminListo = ref.watch(sesionAdminListoProvider);
-							if (!adminListo) {
-								return const _PantallaCarga();
-							}
-							return const PantallaAccesoTienda();
-						}
-						return const PantallaInicio();
-					},
-					loading: () => const _PantallaCarga(),
-					error: (error, _) => _PantallaError(mensaje: error.toString()),
-				),
-					loading: () => const _PantallaCarga(),
-					error: (error, _) => _PantallaError(mensaje: error.toString()),
-				),
-				loading: () => const _PantallaCarga(),
-				error: (error, _) => _PantallaError(mensaje: error.toString()),
-			),
+			home: home,
 		);
 	}
+}
+
+Widget _resolverPantallaInicio({
+	required AsyncValue<void> inicializado,
+	required AsyncValue<void> sesionRestaurada,
+	required AsyncValue<bool> instalacionAsync,
+	required Usuario? usuario,
+	required String? tiendaConfirmada,
+	required bool? adminListo,
+}) {
+	return inicializado.when(
+		data: (_) => sesionRestaurada.when(
+			data: (_) => instalacionAsync.when(
+				data: (instalacionLista) {
+					if (!instalacionLista && usuario == null) {
+						// #region agent log
+						debugAgentLog('main.dart:route', 'Pantalla instalacion', {}, hypothesisId: 'D');
+						// #endregion
+						return const PantallaInstalacionTecnico();
+					}
+					if (usuario == null) {
+						// #region agent log
+						debugAgentLog('main.dart:route', 'Pantalla login', {}, hypothesisId: 'D');
+						// #endregion
+						return const PantallaInicioSesion();
+					}
+					if (usuario.rol == RolUsuario.administrador && tiendaConfirmada == null) {
+						if (adminListo == false) {
+							// #region agent log
+							debugAgentLog(
+								'main.dart:route',
+								'Pantalla carga (admin no listo)',
+								{'usuarioId': usuario.id},
+								hypothesisId: 'E',
+							);
+							// #endregion
+							return const _PantallaCarga();
+						}
+						// #region agent log
+						debugAgentLog(
+							'main.dart:route',
+							'Pantalla acceso tienda',
+							{'usuarioId': usuario.id},
+							hypothesisId: 'D',
+						);
+						// #endregion
+						return const PantallaAccesoTienda();
+					}
+					// #region agent log
+					debugAgentLog(
+						'main.dart:route',
+						'Pantalla inicio',
+						{'rol': usuario.rol.name, 'tiendaId': tiendaConfirmada},
+						hypothesisId: 'D',
+					);
+					// #endregion
+					return const PantallaInicio();
+				},
+				loading: () {
+					// #region agent log
+					debugAgentLog('main.dart:route', 'Pantalla carga (instalacion loading)', {}, hypothesisId: 'D');
+					// #endregion
+					return const _PantallaCarga();
+				},
+				error: (error, _) => _PantallaError(mensaje: error.toString()),
+			),
+			loading: () {
+				// #region agent log
+				debugAgentLog('main.dart:route', 'Pantalla carga (sesion restaurada loading)', {}, hypothesisId: 'D');
+				// #endregion
+				return const _PantallaCarga();
+			},
+			error: (error, _) => _PantallaError(mensaje: error.toString()),
+		),
+		loading: () {
+			// #region agent log
+			debugAgentLog('main.dart:route', 'Pantalla carga (inicializacion loading)', {}, hypothesisId: 'D');
+			// #endregion
+			return const _PantallaCarga();
+		},
+		error: (error, _) => _PantallaError(mensaje: error.toString()),
+	);
 }
 
 /// Pantalla de carga mientras inicializa SQLite y servicios.
