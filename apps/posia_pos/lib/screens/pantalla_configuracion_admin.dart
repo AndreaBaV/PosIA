@@ -65,24 +65,6 @@ class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguraci
 								'La conexión a la nube se configura solo en la instalación técnica.',
 							),
 							const SizedBox(height: 16.0),
-							configAsync.when(
-								data: (config) {
-									return Card(
-										child: ListTile(
-											leading: const Icon(Icons.badge_outlined),
-											title: const Text('Tenant del negocio'),
-											subtitle: Text(
-												config.tenantId,
-												maxLines: 2,
-												overflow: TextOverflow.ellipsis,
-											),
-										),
-									);
-								},
-								loading: () => const LinearProgressIndicator(),
-								error: (e, _) => Text('$e'),
-							),
-							const SizedBox(height: 12.0),
 							tiendasAsync.when(
 								data: (tiendas) {
 									_tiendaSeleccionadaId ??= configAsync.value?.tiendaId;

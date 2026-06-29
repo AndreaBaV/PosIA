@@ -559,9 +559,8 @@ class ProyectorEventosPostgres {
 	Future<void> _usuario(EventoHub evento) async {
 		final p = evento.payload;
 		final id = p['id'] as String? ?? '';
-		final pinHash = p['pinHash'] as String? ?? '';
-		final pinSalt = p['pinSalt'] as String? ?? '';
-		if (id.isEmpty || pinHash.isEmpty || pinSalt.isEmpty) {
+		final pinCredencial = _extraerPinCredencial(p);
+		if (id.isEmpty || pinCredencial == null) {
 			return;
 		}
 		final actualizadoEn = p['actualizadoEn'] as String? ?? evento.creadoEn.toUtc().toIso8601String();
@@ -580,7 +579,6 @@ class ProyectorEventosPostgres {
 			}
 		}
 		await _liberarCodigoEnConflicto(
-			tenantId: evento.tenantId,
 			codigo: codigo,
 			usuarioId: id,
 			actualizadoEn: actualizadoEn,
@@ -588,43 +586,37 @@ class ProyectorEventosPostgres {
 		await _sesion.execute(
 			Sql.named('''
 				INSERT INTO users (
-					id, tenant_id, nombre, codigo, rol, tienda_id, activo,
-					pin_hash, pin_salt, creado_en, actualizado_en
+					id, nombre, codigo, rol, tienda_id, activo,
+					pin_credencial, creado_en, actualizado_en
 				) VALUES (
-					@id, @tenant, @nombre, @codigo, @rol, @tienda, @activo,
-					@hash, @salt, @creado, @actualizado
+					@id, @nombre, @codigo, @rol, @tienda, @activo,
+					@credencial, @creado, @actualizado
 				)
 				ON CONFLICT (id) DO UPDATE SET
-					tenant_id = EXCLUDED.tenant_id,
 					nombre = EXCLUDED.nombre,
 					codigo = EXCLUDED.codigo,
 					rol = EXCLUDED.rol,
 					tienda_id = EXCLUDED.tienda_id,
 					activo = EXCLUDED.activo,
-					pin_hash = EXCLUDED.pin_hash,
-					pin_salt = EXCLUDED.pin_salt,
+					pin_credencial = EXCLUDED.pin_credencial,
 					creado_en = EXCLUDED.creado_en,
 					actualizado_en = EXCLUDED.actualizado_en
 			'''),
 			parameters: {
 				'id': id,
-				'tenant': evento.tenantId,
 				'nombre': p['nombre'] ?? '',
 				'codigo': codigo,
 				'rol': p['rol'] ?? 'empleado',
 				'tienda': p['tiendaId'],
 				'activo': (p['activo'] as bool? ?? true) ? 1 : 0,
-				'hash': pinHash,
-				'salt': pinSalt,
+				'credencial': pinCredencial,
 				'creado': p['creadoEn'] as String? ?? evento.creadoEn.toUtc().toIso8601String(),
 				'actualizado': actualizadoEn,
 			},
 		);
 	}
 
-	/// Reasigna el codigo de cuentas mas antiguas que chocan en el mismo tenant.
 	Future<void> _liberarCodigoEnConflicto({
-		required String tenantId,
 		required String codigo,
 		required String usuarioId,
 		required String actualizadoEn,
@@ -633,11 +625,10 @@ class ProyectorEventosPostgres {
 			Sql.named('''
 				SELECT id, actualizado_en
 				FROM users
-				WHERE tenant_id = @tenant AND codigo = @codigo AND id <> @id
+				WHERE codigo = @codigo AND id <> @id
 				LIMIT 1
 			'''),
 			parameters: {
-				'tenant': tenantId,
 				'codigo': codigo,
 				'id': usuarioId,
 			},
@@ -744,5 +735,21 @@ class ProyectorEventosPostgres {
 			return valor ? 1 : 0;
 		}
 		return defaultValue ? 1 : 0;
+	}
+
+	String? _extraerPinCredencial(Map<String, Object?> payload) {
+		final credencial = payload['pinCredencial'] as String?;
+		if (credencial != null && credencial.isNotEmpty) {
+			return credencial;
+		}
+		final hash = payload['pinHash'] as String?;
+		final sal = payload['pinSalt'] as String?;
+		if (hash != null &&
+			sal != null &&
+			hash.isNotEmpty &&
+			sal.isNotEmpty) {
+			return HasherPin.empaquetarLegacy(sal, hash);
+		}
+		return null;
 	}
 }

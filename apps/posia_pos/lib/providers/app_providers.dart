@@ -61,18 +61,14 @@ class SesionTiendaNotifier extends Notifier<String?> {
 	void cerrar() => state = null;
 }
 
-/// Contenedor de servicios de dominio (requiere sesion con tenant).
+/// Contenedor de servicios de dominio (requiere sesion activa).
 final contenedorServiciosProvider = FutureProvider<ContenedorServicios>((ref) async {
 	await ref.watch(estadoInicializacionProvider.future);
 	final usuario = ref.watch(sesionUsuarioProvider);
 	if (usuario == null) {
-		throw StateError('Inicie sesión para cargar servicios del tenant');
+		throw StateError('Inicie sesión para cargar servicios');
 	}
-	final tenantId = usuario.tenantId;
-	if (tenantId == null || tenantId.isEmpty) {
-		throw StateError('Usuario sin tenant asignado');
-	}
-	return FabricaServicios.construir(tenantId: tenantId);
+	return FabricaServicios.construir();
 });
 
 /// Sincronizador automatico activo mientras vive la app.
@@ -86,13 +82,10 @@ final sincronizadorAutomaticoProvider = FutureProvider<SincronizadorAutomatico>(
 	return sincronizador;
 });
 
-/// Licencia activa segun tenant configurado en el dispositivo.
+/// Licencia activa del despliegue.
 final licenciaProvider = FutureProvider<Licencia>((ref) async {
-	final contenedor = await ref.watch(contenedorServiciosProvider.future);
-	final config = await contenedor.servicioAdmin.obtenerConfigDispositivo();
-	final tenantId = config.tenantId;
+	await ref.watch(contenedorServiciosProvider.future);
 	return Licencia(
-		tenantId: tenantId,
 		modulos: [
 			ModuloLicencia.core,
 			ModuloLicencia.multiStore,

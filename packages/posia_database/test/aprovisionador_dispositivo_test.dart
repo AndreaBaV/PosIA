@@ -28,7 +28,6 @@ void main() {
 
 			expect(await config.esInstalacionCompleta(), isFalse);
 			final dispositivo = await config.obtenerConfigDispositivo();
-			expect(dispositivo.tenantId, isEmpty);
 			expect(dispositivo.cajaId, isNotEmpty);
 			expect(dispositivo.cajaId.length, greaterThan(20));
 		});

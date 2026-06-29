@@ -36,7 +36,7 @@ class ServicioConfiguracionDispositivo {
 			await _config.guardarHubUrl('');
 			await _config.guardarHubApiKey('');
 			final actual = await _config.obtenerConfigDispositivo();
-			if (actual.tenantId.isEmpty && pinAdmin.trim().length == LONGITUD_PIN_ADMIN) {
+			if (actual.tiendaId.isEmpty && pinAdmin.trim().length == LONGITUD_PIN_ADMIN) {
 				await AprovisionadorOffline.aprovisionar(
 					config: _config,
 					nombreNegocio: nombreNegocio,

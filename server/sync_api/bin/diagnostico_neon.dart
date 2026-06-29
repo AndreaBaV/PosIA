@@ -31,26 +31,26 @@ Future<void> main() async {
 		await EsquemaPosPostgres.crearEsquemaCompleto(conexion);
 		stdout.writeln('=== stores ===');
 		final stores = await conexion.execute(
-			'SELECT id, nombre, activa, tenant_id FROM stores ORDER BY nombre',
+			'SELECT id, nombre, activa FROM stores ORDER BY nombre',
 		);
 		for (final fila in stores) {
-			stdout.writeln('  ${fila[0]} | ${fila[1]} | activa=${fila[2]} | tenant=${fila[3]}');
+			stdout.writeln('  ${fila[0]} | ${fila[1]} | activa=${fila[2]}');
 		}
 		stdout.writeln('\n=== users ===');
 		final users = await conexion.execute(
-			'SELECT codigo, rol, tenant_id, tienda_id, activo FROM users ORDER BY codigo',
+			'SELECT codigo, rol, tienda_id, activo FROM users ORDER BY codigo',
 		);
 		for (final fila in users) {
 			stdout.writeln(
-				'  ${fila[0]} | ${fila[1]} | tenant=${fila[2]} | tienda=${fila[3]} | activo=${fila[4]}',
+				'  ${fila[0]} | ${fila[1]} | tienda=${fila[2]} | activo=${fila[3]}',
 			);
 		}
 		stdout.writeln('\n=== storeUpserted (ultimos 10) ===');
 		final eventos = await conexion.execute(
-			"SELECT seq, tenant_id, store_id, type FROM sync_events WHERE type = 'storeUpserted' ORDER BY seq DESC LIMIT 10",
+			"SELECT seq, store_id, type FROM sync_events WHERE type = 'storeUpserted' ORDER BY seq DESC LIMIT 10",
 		);
 		for (final fila in eventos) {
-			stdout.writeln('  seq=${fila[0]} tenant=${fila[1]} store=${fila[2]}');
+			stdout.writeln('  seq=${fila[0]} store=${fila[1]}');
 		}
 		if (eventos.isEmpty) {
 			stdout.writeln('  (ninguno)');

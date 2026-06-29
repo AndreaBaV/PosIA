@@ -22,7 +22,6 @@ Future<void> main(List<String> args) async {
 			final evento = EventoHub(
 				seq: 0,
 				id: 'ev-smoke-${ahora.millisecondsSinceEpoch}',
-				tenantId: 'tenant-smoke',
 				tiendaId: tiendaId,
 				dispositivoId: 'smoke-script',
 				tipo: 'productUpserted',

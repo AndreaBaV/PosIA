@@ -132,14 +132,12 @@ class PlaceholdersEjemplo {
 			'notas': 'ejemplo',
 			'dias_credito': 0,
 		}, conflictAlgorithm: ConflictAlgorithm.ignore);
-		final sal = HasherPin.generarSal();
-		final hash = HasherPin.hashPin('1234', sal);
+		final credencial = HasherPin.codificar('1234');
 		await base.insert('usuarios', {
 			'id': IdsEjemplo.usuario,
 			'nombre': 'Administrador',
 			'codigo': '9998',
-			'pin_hash': hash,
-			'pin_salt': sal,
+			'pin_credencial': credencial,
 			'rol': RolUsuario.administrador.name,
 			'tienda_id': null,
 			'activo': 1,

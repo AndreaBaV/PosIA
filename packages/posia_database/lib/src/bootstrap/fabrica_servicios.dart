@@ -1,9 +1,4 @@
 /// Contenedor de servicios de aplicacion listos para inyeccion.
-///
-/// Autor: Equipo POSIA
-/// Matricula: POSIA-2026-001
-/// Fecha creacion: 2026-06-07 18:30:00 (UTC-6)
-/// Ultima modificacion: 2026-06-11 15:40:00 (UTC-6)
 library;
 
 import 'package:posia_inventory/posia_inventory.dart';
@@ -48,16 +43,7 @@ import '../repositories/presentacion_repository.dart';
 import '../services/servicio_asistencia.dart';
 import '../services/servicio_nomina.dart';
 
-/// Agrupa servicios construidos sobre SQLite local.
 class ContenedorServicios {
-	/// Crea contenedor con servicios cableados.
-	///
-	/// [servicioCaja] Servicio principal de operaciones de caja.
-	/// [servicioAdmin] Servicio de panel administrativo.
-	/// [servicioCarniceria] Modulo vertical carniceria.
-	/// [servicioFarmacia] Modulo vertical farmacia.
-	/// [syncOrchestrator] Orquestador de sincronizacion.
-	/// [hardwareListo] Indica si dependencias fueron resueltas.
 	ContenedorServicios({
 		required this.servicioCaja,
 		required this.servicioAdmin,
@@ -69,41 +55,18 @@ class ContenedorServicios {
 		this.servicioNomina,
 	});
 
-	/// Servicio de ventas en caja.
 	final ServicioCaja servicioCaja;
-
-	/// Servicio de administracion y reportes.
 	final ServicioAdmin servicioAdmin;
-
-	/// Servicio de venta por peso carniceria.
 	final ServicioCarniceria servicioCarniceria;
-
-	/// Servicio de lotes farmacia.
 	final ServicioFarmacia servicioFarmacia;
-
-	/// Orquestador de eventos sync.
 	final SyncOrchestrator syncOrchestrator;
-
-	/// Servicio de asistencia de empleados.
 	final ServicioAsistencia? servicioAsistencia;
-
-	/// Servicio de nomina.
 	final ServicioNomina? servicioNomina;
-
-	/// Bandera de inicializacion completa.
 	final bool hardwareListo;
 }
 
-/// Fabrica de servicios POSIA para arranque de aplicacion.
 class FabricaServicios {
-	/// Construye contenedor con tenant, tienda y caja indicados.
-	///
-	/// [tenantId] Identificador del tenant licenciado.
-	/// [tiendaId] Tienda activa de la caja.
-	/// [cajaId] Identificador del dispositivo caja.
-	/// Retorna [ContenedorServicios] listo para UI.
 	static Future<ContenedorServicios> construir({
-		String? tenantId,
 		String? tiendaId,
 		String? cajaId,
 	}) async {
@@ -111,11 +74,6 @@ class FabricaServicios {
 		final baseDispositivo = await gestor.obtenerBaseDatosDispositivo();
 		final configRepo = ConfigRepository(baseDatos: baseDispositivo);
 		final configDispositivo = await configRepo.obtenerConfigDispositivo();
-		tenantId ??= configDispositivo.tenantId;
-		if (tenantId.isEmpty) {
-			throw StateError('Sin tenant activo. Inicie sesion primero.');
-		}
-		await gestor.establecerTenant(tenantId);
 		tiendaId ??= configDispositivo.tiendaId;
 		cajaId ??= configDispositivo.cajaId;
 		final base = await gestor.obtenerBaseDatos();
@@ -175,7 +133,6 @@ class FabricaServicios {
 			clienteLan: null,
 			aplicadorRemoto: aplicadorRemoto,
 			almacenCursor: estadoSyncRepo,
-			tenantId: tenantId,
 			tiendaId: tiendaId,
 			dispositivoId: cajaId,
 		);
@@ -198,7 +155,6 @@ class FabricaServicios {
 			cotizacionRepository: cotizacionRepo,
 			ticketEsperaRepository: ticketEsperaRepo,
 			servicioCorteCaja: servicioCorteCaja,
-			tenantId: tenantId,
 			tiendaId: tiendaId,
 			cajaId: cajaId,
 		);
@@ -227,7 +183,6 @@ class FabricaServicios {
 			presentacionRepository: presentacionRepo,
 			servicioCorteCaja: servicioCorteCaja,
 			baseDatos: base,
-			tenantId: tenantId,
 			tiendaActivaId: tiendaId,
 			cajaId: cajaId,
 		);
@@ -236,7 +191,6 @@ class FabricaServicios {
 			tiendaRepository: tiendaRepo,
 			baseDatos: base,
 			syncOrchestrator: sync,
-			tenantId: tenantId,
 			tiendaId: tiendaId,
 			dispositivoId: cajaId,
 		);
@@ -247,7 +201,6 @@ class FabricaServicios {
 			usuarioRepository: usuarioRepo,
 			baseDatos: base,
 			syncOrchestrator: sync,
-			tenantId: tenantId,
 			tiendaId: tiendaId,
 			dispositivoId: cajaId,
 		);
@@ -263,23 +216,15 @@ class FabricaServicios {
 		);
 	}
 
-	/// Orquestador de sync para login (antes de sesion de tenant en UI).
-	///
-	/// Retorna null si no hay tenant ni hub configurados.
 	static Future<SyncOrchestrator?> crearOrquestadorPreLogin() async {
 		final gestor = PosiaLocalDatabase.obtenerInstancia();
 		final baseDispositivo = await gestor.obtenerBaseDatosDispositivo();
 		final configRepo = ConfigRepository(baseDatos: baseDispositivo);
 		final config = await configRepo.obtenerConfigDispositivo();
-		final tenantId = config.tenantId;
-		if (tenantId.isEmpty) {
-			return null;
-		}
 		final clienteHub = await _crearClienteHub(configRepo);
 		if (clienteHub == null) {
 			return null;
 		}
-		await gestor.establecerTenant(tenantId);
 		final base = await gestor.obtenerBaseDatos();
 		final productoRepo = ProductoRepository(baseDatos: base);
 		final clienteRepo = ClienteRepository(baseDatos: base);
@@ -312,16 +257,11 @@ class FabricaServicios {
 			clienteLan: null,
 			aplicadorRemoto: aplicadorRemoto,
 			almacenCursor: estadoSyncRepo,
-			tenantId: tenantId,
 			tiendaId: config.tiendaId,
 			dispositivoId: config.cajaId,
 		);
 	}
 
-	/// Crea cliente hub desde configuracion local.
-	///
-	/// [configRepo] Acceso a app_config.
-	/// Retorna cliente o null si no hay URL configurada.
 	static Future<HubSyncClient?> _crearClienteHub(ConfigRepository configRepo) async {
 		final hubUrl = await configRepo.obtenerHubUrl();
 		if (hubUrl == null) {

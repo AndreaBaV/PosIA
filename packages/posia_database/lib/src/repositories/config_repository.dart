@@ -20,9 +20,6 @@ const String claveConfigHubApiKey = 'hub_api_key';
 /// Clave de configuracion para PIN administrativo.
 const String claveConfigPinAdmin = 'pin_admin';
 
-/// Clave de configuracion para tenant del dispositivo.
-const String claveConfigTenantId = 'tenant_id';
-
 /// Clave de configuracion para tienda activa del dispositivo.
 const String claveConfigTiendaId = 'tienda_id';
 
@@ -140,21 +137,17 @@ class ConfigRepository {
 
 	/// Lee identidad operativa del dispositivo (vacios hasta aprovisionar o sincronizar).
 	Future<ConfigDispositivo> obtenerConfigDispositivo() async {
-		final tenantId = await obtenerValor(claveConfigTenantId);
 		final tiendaId = await obtenerValor(claveConfigTiendaId);
 		final cajaId = await obtenerValor(claveConfigCajaId);
 		final nombreCaja = await obtenerValor(claveConfigCajaNombre);
 		return ConfigDispositivo(
-			tenantId: tenantId ?? '',
 			tiendaId: tiendaId ?? '',
 			cajaId: cajaId ?? '',
 			nombreCaja: nombreCaja,
 		);
 	}
 
-	/// Persiste tenant, tienda y caja del dispositivo.
 	Future<void> guardarConfigDispositivo(ConfigDispositivo config) async {
-		await guardarValor(claveConfigTenantId, config.tenantId);
 		await guardarValor(claveConfigTiendaId, config.tiendaId);
 		await guardarValor(claveConfigCajaId, config.cajaId);
 		if (config.nombreCaja != null && config.nombreCaja!.isNotEmpty) {
@@ -185,7 +178,7 @@ class ConfigRepository {
 		);
 	}
 
-	/// Indica si el tecnico ya configuro tenant y conexion al hub.
+	/// Indica si el tecnico ya configuro conexion al hub.
 	Future<bool> esInstalacionCompleta() async {
 		final valor = await obtenerValor(claveConfigInstalacionCompleta);
 		return valor == '1';

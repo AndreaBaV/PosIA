@@ -139,7 +139,6 @@ class EsquemaPosPostgres {
 			CREATE TABLE IF NOT EXISTS sync_events (
 				seq BIGSERIAL PRIMARY KEY,
 				id TEXT UNIQUE NOT NULL,
-				tenant_id TEXT NOT NULL DEFAULT '',
 				store_id TEXT NOT NULL,
 				device_id TEXT NOT NULL,
 				type TEXT NOT NULL,
@@ -154,14 +153,12 @@ class EsquemaPosPostgres {
 		await conexion.execute('''
 			CREATE TABLE IF NOT EXISTS users (
 				id TEXT PRIMARY KEY,
-				tenant_id TEXT NOT NULL DEFAULT '',
 				nombre TEXT NOT NULL,
 				codigo TEXT NOT NULL,
 				rol TEXT NOT NULL,
 				tienda_id TEXT,
 				activo INTEGER NOT NULL DEFAULT 1,
-				pin_hash TEXT NOT NULL,
-				pin_salt TEXT NOT NULL,
+				pin_credencial TEXT NOT NULL,
 				creado_en TEXT NOT NULL,
 				actualizado_en TEXT NOT NULL
 			)
@@ -207,6 +204,20 @@ class EsquemaPosPostgres {
 		await conexion.execute('DROP INDEX IF EXISTS idx_users_tenant_codigo');
 		await conexion.execute('DROP INDEX IF EXISTS idx_sync_events_tenant_seq');
 		await conexion.execute('ALTER TABLE stores DROP COLUMN IF EXISTS tenant_id');
+		await conexion.execute('ALTER TABLE users DROP COLUMN IF EXISTS tenant_id');
+		await conexion.execute('ALTER TABLE sync_events DROP COLUMN IF EXISTS tenant_id');
+		await conexion.execute('''
+			ALTER TABLE users ADD COLUMN IF NOT EXISTS pin_credencial TEXT
+		''');
+		await conexion.execute('''
+			UPDATE users
+			SET pin_credencial = pin_salt || ':' || pin_hash
+			WHERE (pin_credencial IS NULL OR pin_credencial = '')
+				AND pin_hash IS NOT NULL
+				AND pin_salt IS NOT NULL
+		''');
+		await conexion.execute('ALTER TABLE users DROP COLUMN IF EXISTS pin_hash');
+		await conexion.execute('ALTER TABLE users DROP COLUMN IF EXISTS pin_salt');
 		await conexion.execute('''
 			CREATE UNIQUE INDEX IF NOT EXISTS idx_users_codigo_unico ON users(codigo)
 		''');

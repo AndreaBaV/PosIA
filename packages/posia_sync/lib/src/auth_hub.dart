@@ -1,7 +1,7 @@
 /// Modelos de autenticacion contra el hub central.
 library;
 
-/// Sucursal del tenant devuelta por el hub al iniciar sesion.
+/// Sucursal devuelta por el hub al iniciar sesion.
 class TiendaHub {
 	const TiendaHub({
 		required this.id,
@@ -19,7 +19,6 @@ class TiendaHub {
 /// Perfil publico de usuario (sin credenciales).
 class PerfilUsuarioHub {
 	const PerfilUsuarioHub({
-		required this.tenantId,
 		required this.id,
 		required this.nombre,
 		required this.codigo,
@@ -28,7 +27,6 @@ class PerfilUsuarioHub {
 		required this.activo,
 	});
 
-	final String tenantId;
 	final String id;
 	final String nombre;
 	final String codigo;
@@ -37,20 +35,18 @@ class PerfilUsuarioHub {
 	final bool activo;
 }
 
-/// Resultado de login exitoso con hash de PIN para replica local.
+/// Resultado de login exitoso con credencial PIN para replica local.
 class RespuestaLoginHub {
 	const RespuestaLoginHub({
 		required this.perfil,
-		required this.pinHash,
-		required this.pinSalt,
+		required this.pinCredencial,
 		required this.creadoEn,
 		required this.actualizadoEn,
 		this.tiendas = const [],
 	});
 
 	final PerfilUsuarioHub perfil;
-	final String pinHash;
-	final String pinSalt;
+	final String pinCredencial;
 	final String creadoEn;
 	final String actualizadoEn;
 	final List<TiendaHub> tiendas;

@@ -4,92 +4,60 @@ library;
 import 'package:posia_core/posia_core.dart';
 import 'package:postgres/postgres.dart';
 
-/// Lee cuentas proyectadas desde eventos userUpserted.
 class AlmacenUsuariosPostgres {
 	AlmacenUsuariosPostgres(this._conexion);
 
 	final Connection _conexion;
 
-	/// Perfil publico por codigo (sin PIN), opcionalmente acotado al tenant.
-	Future<Map<String, Object?>?> obtenerPerfilPorCodigo(
-		String codigo, {
-		String? tenantId,
-	}) async {
+	Future<Map<String, Object?>?> obtenerPerfilPorCodigo(String codigo) async {
 		final limpio = ValidadorCodigoUsuario.normalizar(codigo);
 		if (limpio.isEmpty) {
 			return null;
 		}
-		final tenantLimpio = tenantId?.trim() ?? '';
-		final filas = tenantLimpio.isNotEmpty
-			? await _conexion.execute(
-				Sql.named('''
-					SELECT id, tenant_id, nombre, codigo, rol, tienda_id, activo
-					FROM users
-					WHERE codigo = @codigo AND tenant_id = @tenant AND activo = 1
-					LIMIT 1
-				'''),
-				parameters: {'codigo': limpio, 'tenant': tenantLimpio},
-			)
-			: await _conexion.execute(
-				Sql.named('''
-					SELECT id, tenant_id, nombre, codigo, rol, tienda_id, activo
-					FROM users
-					WHERE codigo = @codigo AND activo = 1
-					LIMIT 1
-				'''),
-				parameters: {'codigo': limpio},
-			);
+		final filas = await _conexion.execute(
+			Sql.named('''
+				SELECT id, nombre, codigo, rol, tienda_id, activo
+				FROM users
+				WHERE codigo = @codigo AND activo = 1
+				LIMIT 1
+			'''),
+			parameters: {'codigo': limpio},
+		);
 		if (filas.isEmpty) {
 			return null;
 		}
 		return _mapearPerfil(filas.first.toColumnMap());
 	}
 
-	/// Valida PIN y devuelve perfil con credenciales para replica local.
 	Future<Map<String, Object?>?> autenticar({
 		required String codigo,
 		required String pin,
-		String? tenantId,
 	}) async {
 		final limpio = ValidadorCodigoUsuario.normalizar(codigo);
 		if (limpio.isEmpty || pin.isEmpty) {
 			return null;
 		}
-		final tenantLimpio = tenantId?.trim() ?? '';
-		final filas = tenantLimpio.isNotEmpty
-			? await _conexion.execute(
-				Sql.named('''
-					SELECT id, tenant_id, nombre, codigo, rol, tienda_id, activo,
-						pin_hash, pin_salt, creado_en, actualizado_en
-					FROM users
-					WHERE codigo = @codigo AND tenant_id = @tenant AND activo = 1
-					LIMIT 1
-				'''),
-				parameters: {'codigo': limpio, 'tenant': tenantLimpio},
-			)
-			: await _conexion.execute(
-				Sql.named('''
-					SELECT id, tenant_id, nombre, codigo, rol, tienda_id, activo,
-						pin_hash, pin_salt, creado_en, actualizado_en
-					FROM users
-					WHERE codigo = @codigo AND activo = 1
-					LIMIT 1
-				'''),
-				parameters: {'codigo': limpio},
-			);
+		final filas = await _conexion.execute(
+			Sql.named('''
+				SELECT id, nombre, codigo, rol, tienda_id, activo,
+					pin_credencial, creado_en, actualizado_en
+				FROM users
+				WHERE codigo = @codigo AND activo = 1
+				LIMIT 1
+			'''),
+			parameters: {'codigo': limpio},
+		);
 		if (filas.isEmpty) {
 			return null;
 		}
 		final cols = filas.first.toColumnMap();
-		final hash = cols['pin_hash'] as String? ?? '';
-		final sal = cols['pin_salt'] as String? ?? '';
-		if (!HasherPin.verificar(pin, sal, hash)) {
+		final credencial = cols['pin_credencial'] as String? ?? '';
+		if (!HasherPin.verificar(pin, credencial)) {
 			return null;
 		}
 		return {
 			..._mapearPerfil(cols),
-			'pinHash': hash,
-			'pinSalt': sal,
+			'pinCredencial': credencial,
 			'creadoEn': cols['creado_en'] as String? ?? '',
 			'actualizadoEn': cols['actualizado_en'] as String? ?? '',
 		};
@@ -98,7 +66,6 @@ class AlmacenUsuariosPostgres {
 	Map<String, Object?> _mapearPerfil(Map<String, Object?> cols) {
 		return {
 			'id': cols['id'] as String? ?? '',
-			'tenantId': cols['tenant_id'] as String? ?? '',
 			'nombre': cols['nombre'] as String? ?? '',
 			'codigo': cols['codigo'] as String? ?? '',
 			'rol': cols['rol'] as String? ?? 'empleado',
@@ -107,7 +74,6 @@ class AlmacenUsuariosPostgres {
 		};
 	}
 
-	/// Tiendas activas del despliegue (una base = un negocio).
 	Future<List<Map<String, Object?>>> listarTiendasActivas() async {
 		final filas = await _conexion.execute('''
 			SELECT id, nombre, direccion, activa
@@ -127,12 +93,5 @@ class AlmacenUsuariosPostgres {
 			})
 			.where((t) => (t['id'] as String).isNotEmpty)
 			.toList();
-	}
-
-	@Deprecated('Use listarTiendasActivas; una base Neon por despliegue.')
-	Future<List<Map<String, Object?>>> listarTiendasActivasPorTenant(
-		String tenantId,
-	) async {
-		return listarTiendasActivas();
 	}
 }

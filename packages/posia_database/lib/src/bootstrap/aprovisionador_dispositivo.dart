@@ -26,7 +26,6 @@ class AprovisionadorDispositivo {
 
 		await config.guardarConfigDispositivo(
 			ConfigDispositivo(
-				tenantId: actual.tenantId,
 				tiendaId: actual.tiendaId,
 				cajaId: cajaId,
 				nombreCaja: nombreCaja,

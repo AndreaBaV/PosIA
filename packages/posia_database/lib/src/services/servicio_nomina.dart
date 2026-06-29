@@ -20,7 +20,6 @@ class ServicioNomina {
 		required UsuarioRepository usuarioRepository,
 		required Database baseDatos,
 		SyncOrchestrator? syncOrchestrator,
-		required String tenantId,
 		required String tiendaId,
 		required String dispositivoId,
 	}) : _nominaRepository = nominaRepository,
@@ -29,7 +28,6 @@ class ServicioNomina {
        _usuarioRepository = usuarioRepository,
        _baseDatos = baseDatos,
        _syncOrchestrator = syncOrchestrator,
-       _tenantId = tenantId,
        _tiendaId = tiendaId,
        _dispositivoId = dispositivoId;
 
@@ -39,7 +37,6 @@ class ServicioNomina {
 	final UsuarioRepository _usuarioRepository;
 	final Database _baseDatos;
 	final SyncOrchestrator? _syncOrchestrator;
-	final String _tenantId;
 	final String _tiendaId;
 	final String _dispositivoId;
 	final Uuid _generadorId = const Uuid();
@@ -57,7 +54,6 @@ class ServicioNomina {
 			await sync.registrarEvento(
 				SyncEvent(
 					id: _generadorId.v4(),
-					tenantId: _tenantId,
 					tiendaId: _tiendaId,
 					dispositivoId: _dispositivoId,
 					tipo: TipoSyncEvento.employeeProfileUpserted,
@@ -155,7 +151,6 @@ class ServicioNomina {
 			await sync.registrarEvento(
 				SyncEvent(
 					id: _generadorId.v4(),
-					tenantId: _tenantId,
 					tiendaId: _tiendaId,
 					dispositivoId: _dispositivoId,
 					tipo: TipoSyncEvento.payrollPeriodClosed,

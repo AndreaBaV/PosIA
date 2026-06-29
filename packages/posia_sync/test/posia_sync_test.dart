@@ -80,7 +80,6 @@ class CursorMemoria implements AlmacenCursorSync {
 SyncEvent crearEvento(String id) {
 	return SyncEvent(
 		id: id,
-		tenantId: 'tenant-1',
 		tiendaId: 'tienda-1',
 		dispositivoId: 'caja-1',
 		tipo: TipoSyncEvento.saleCompleted,
@@ -96,7 +95,6 @@ void main() {
 			colaLocal: ColaEventosMemoria(),
 			clienteHub: null,
 			clienteLan: null,
-			tenantId: 'tenant-1',
 			tiendaId: 'tienda-1',
 			dispositivoId: 'caja-1',
 		);
@@ -111,7 +109,6 @@ void main() {
 			colaLocal: ColaEventosMemoria(),
 			clienteHub: null,
 			clienteLan: null,
-			tenantId: 'tenant-1',
 			tiendaId: 'tienda-1',
 			dispositivoId: 'caja-1',
 		);
@@ -124,7 +121,6 @@ void main() {
 			colaLocal: cola,
 			clienteHub: null,
 			clienteLan: null,
-			tenantId: 'tenant-1',
 			tiendaId: 'tienda-1',
 			dispositivoId: 'caja-1',
 		);

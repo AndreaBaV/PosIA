@@ -11,7 +11,6 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 const tiendaOrigenPruebaId = 'tienda-origen';
 const tiendaDestinoPruebaId = 'tienda-destino';
 const categoriaPruebaId = 'cat-general';
-const tenantPruebaId = 'tenant-prueba';
 const cajaPruebaId = 'caja-prueba';
 
 /// Entorno de prueba con base en memoria y servicios admin.
@@ -42,7 +41,6 @@ class FixtureAdmin {
 			colaLocal: colaSync,
 			clienteHub: null,
 			clienteLan: null,
-			tenantId: tenantPruebaId,
 			tiendaId: tiendaId,
 			dispositivoId: cajaPruebaId,
 		);
@@ -66,7 +64,6 @@ class FixtureAdmin {
 			traspasoRepository: TraspasoRepository(baseDatos: base),
 			varianteRepository: VarianteRepository(baseDatos: base),
 			baseDatos: base,
-			tenantId: tenantPruebaId,
 			tiendaActivaId: tiendaId,
 			cajaId: cajaPruebaId,
 		);
@@ -89,11 +86,9 @@ class FixtureAdmin {
 				colaLocal: SyncEventRepository(baseDatos: base),
 				clienteHub: null,
 				clienteLan: null,
-				tenantId: tenantPruebaId,
 				tiendaId: tiendaId,
 				dispositivoId: cajaPruebaId,
 			),
-			tenantId: tenantPruebaId,
 			tiendaId: tiendaId,
 			cajaId: cajaPruebaId,
 		);

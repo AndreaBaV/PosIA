@@ -94,14 +94,14 @@ Future<Connection> _abrir(String urlConexion) async {
 
 Future<void> _listarUsuarios(Connection conexion) async {
 	final filas = await conexion.execute('''
-		SELECT id, tenant_id, nombre, codigo, rol, activo
+		SELECT id, nombre, codigo, rol, activo
 		FROM users
-		ORDER BY tenant_id, codigo
+		ORDER BY codigo
 	''');
 	stdout.writeln('=== users (${filas.length}) ===');
 	for (final fila in filas) {
 		stdout.writeln(
-			'  ${fila[2]} | ${fila[3]} | ${fila[4]} | tenant=${fila[1]} | activo=${fila[5]}',
+			'  ${fila[1]} | ${fila[2]} | ${fila[3]} | activo=${fila[4]}',
 		);
 	}
 }

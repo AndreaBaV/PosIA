@@ -11,11 +11,9 @@ import '../providers/app_providers.dart';
 import 'gestor_acceso_biometrico.dart';
 import 'gestor_sesion_persistente.dart';
 
-/// Aplica el resultado de autenticacion y activa servicios del tenant.
 class ServicioInicioSesion {
 	ServicioInicioSesion._();
 
-	/// Completa login tras validar PIN (manual o biometrico).
 	static Future<Usuario> completar(
 		WidgetRef ref,
 		ResultadoAutenticacion resultado, {
@@ -23,22 +21,10 @@ class ServicioInicioSesion {
 		bool registrarBiometria = false,
 	}) async {
 		final usuario = resultado.usuario;
-		final tenantId = resultado.tenantId;
-
-		await PosiaLocalDatabase.obtenerInstancia().establecerTenant(tenantId);
-		final configRepo = await ref.read(configDispositivoRepoProvider.future);
-		final config = await configRepo.obtenerConfigDispositivo();
-		await configRepo.guardarConfigDispositivo(
-			ConfigDispositivo(
-				tenantId: tenantId,
-				tiendaId: config.tiendaId,
-				cajaId: config.cajaId,
-				nombreCaja: config.nombreCaja,
-			),
-		);
 
 		final auth = await ref.read(servicioAutenticacionProvider.future);
 		await auth.guardarUsuarioRemoto(resultado);
+		final configRepo = await ref.read(configDispositivoRepoProvider.future);
 		await GestorSesionPersistente.guardar(configRepo, usuario);
 
 		ref.read(sesionUsuarioProvider.notifier).iniciar(usuario);
@@ -57,12 +43,11 @@ class ServicioInicioSesion {
 		}
 		await servicio.activarSesionTrasLogin(
 			usuario,
-			tenantId,
 			tiendasDesdeHub: resultado.tiendas,
 			obtenerTiendasRemotas: clienteHub == null
 				? null
-				: (id) async {
-					final remotas = await clienteHub!.obtenerTiendasPorTenant(id);
+				: () async {
+					final remotas = await clienteHub!.obtenerTiendas();
 					return remotas
 						.map(
 							(t) => Tienda(
@@ -98,7 +83,6 @@ class ServicioInicioSesion {
 						codigo: usuario.codigo,
 						pin: pinPlano,
 						nombre: usuario.nombre,
-						tenantId: tenantId,
 					),
 				);
 			}

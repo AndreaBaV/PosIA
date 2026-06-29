@@ -108,8 +108,7 @@ void main() {
 				rol: RolUsuario.empleado,
 				tiendaId: 't-1',
 				activo: true,
-				pinHash: snapshot!.pinHash,
-				pinSalt: snapshot.pinSalt,
+				pinCredencial: snapshot!.pinCredencial,
 				creadoEn: snapshot.creadoEn,
 				actualizadoEn: snapshot.actualizadoEn,
 			);
@@ -124,8 +123,7 @@ void main() {
 				rol: RolUsuario.empleado,
 				tiendaId: 't-1',
 				activo: true,
-				pinHash: snapshot.pinHash,
-				pinSalt: snapshot.pinSalt,
+				pinCredencial: snapshot.pinCredencial,
 				creadoEn: '2020-01-01T00:00:00.000Z',
 				actualizadoEn: '2020-01-01T00:00:00.000Z',
 			);

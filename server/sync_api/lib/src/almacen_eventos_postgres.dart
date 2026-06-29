@@ -1,9 +1,4 @@
-/// Almacen de eventos sobre Postgres para produccion multi-tenant.
-///
-/// Autor: Equipo POSIA
-/// Matricula: POSIA-2026-001
-/// Fecha creacion: 2026-06-11 15:10:00 (UTC-6)
-/// Ultima modificacion: 2026-06-11 15:10:00 (UTC-6)
+/// Almacen de eventos sobre Postgres para produccion.
 library;
 
 import 'dart:convert';
@@ -17,11 +12,7 @@ import 'evento_hub.dart';
 import 'proyector_eventos_postgres.dart';
 import 'almacen_usuarios_postgres.dart';
 
-/// Implementa [AlmacenEventos] con tabla sync_events en Postgres.
 class AlmacenEventosPostgres implements AlmacenEventos {
-	/// Crea almacen con URL de conexion Postgres.
-	///
-	/// [urlConexion] URL estilo postgres://usuario:clave@host:puerto/base.
 	AlmacenEventosPostgres({required String urlConexion})
 		: _urlConexion = urlConexion;
 
@@ -44,14 +35,13 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 					final resultado = await tx.execute(
 						Sql.named('''
 							INSERT INTO sync_events
-								(id, tenant_id, store_id, device_id, type, payload, created_at)
+								(id, store_id, device_id, type, payload, created_at)
 							VALUES
-								(@id, @tenantId, @storeId, @deviceId, @type, @payload, @createdAt)
+								(@id, @storeId, @deviceId, @type, @payload, @createdAt)
 							ON CONFLICT (id) DO NOTHING
 						'''),
 						parameters: {
 							'id': evento.id,
-							'tenantId': evento.tenantId,
 							'storeId': evento.tiendaId,
 							'deviceId': evento.dispositivoId,
 							'type': evento.tipo,
@@ -77,26 +67,21 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 
 	@override
 	Future<List<EventoHub>> obtenerDesde({
-		required String tenantId,
 		required int desdeSeq,
 		String? excluirDispositivoId,
 		int limite = 500,
 	}) async {
 		final conexion = await _abrirConexion();
-		final filtrarTenant = tenantId.trim().isNotEmpty;
 		final resultado = await conexion.execute(
 			Sql.named('''
-				SELECT seq, id, tenant_id, store_id, device_id, type, payload, created_at
+				SELECT seq, id, store_id, device_id, type, payload, created_at
 				FROM sync_events
 				WHERE seq > @desdeSeq
-					AND (@filtrarTenant = FALSE OR tenant_id = @tenantId)
 					AND (@deviceId::TEXT IS NULL OR device_id <> @deviceId)
 				ORDER BY seq ASC
 				LIMIT @limite
 			'''),
 			parameters: {
-				'tenantId': tenantId,
-				'filtrarTenant': filtrarTenant,
 				'desdeSeq': desdeSeq,
 				'deviceId': excluirDispositivoId,
 				'limite': limite,
@@ -111,14 +96,10 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 		_conexion = null;
 	}
 
-	/// Acceso a usuarios para endpoints de autenticacion.
 	Future<AlmacenUsuariosPostgres> obtenerAlmacenUsuarios() async {
 		return AlmacenUsuariosPostgres(await _abrirConexion());
 	}
 
-	/// Abre o reutiliza conexion activa a Postgres.
-	///
-	/// Retorna conexion lista para consultas.
 	Future<Connection> _abrirConexion() async {
 		final existente = _conexion;
 		if (existente != null && existente.isOpen) {
@@ -140,7 +121,6 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 		return conexion;
 	}
 
-	/// Determina modo SSL segun host (Neon requiere TLS).
 	SslMode _resolverSsl(Uri uri) {
 		final sslParam = uri.queryParameters['sslmode'];
 		if (uri.host.contains('neon.tech') ||
@@ -151,10 +131,6 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 		return SslMode.disable;
 	}
 
-	/// Convierte fila SQL en [EventoHub].
-	///
-	/// [fila] Fila retornada por la consulta.
-	/// Retorna evento del hub.
 	EventoHub _mapearFila(ResultRow fila) {
 		final columnas = fila.toColumnMap();
 		final payloadCrudo = columnas['payload'];
@@ -164,7 +140,6 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 		return EventoHub(
 			seq: columnas['seq'] as int,
 			id: columnas['id'] as String,
-			tenantId: columnas['tenant_id'] as String,
 			tiendaId: columnas['store_id'] as String,
 			dispositivoId: columnas['device_id'] as String,
 			tipo: columnas['type'] as String,

@@ -129,7 +129,8 @@ class MigracionesEsquema {
 			return;
 		}
 		final tieneHash = info.any((fila) => fila['name'] == 'pin_hash');
-		if (tieneHash) {
+		final tieneCredencial = info.any((fila) => fila['name'] == 'pin_credencial');
+		if (tieneCredencial || !tieneHash) {
 			return;
 		}
 
@@ -138,8 +139,7 @@ class MigracionesEsquema {
 				id TEXT PRIMARY KEY,
 				nombre TEXT NOT NULL,
 				codigo TEXT NOT NULL COLLATE NOCASE,
-				pin_hash TEXT NOT NULL,
-				pin_salt TEXT NOT NULL,
+				pin_credencial TEXT NOT NULL,
 				rol TEXT NOT NULL CHECK (rol IN ('administrador', 'supervisor', 'empleado')),
 				tienda_id TEXT,
 				activo INTEGER NOT NULL DEFAULT 1 CHECK (activo IN (0, 1)),
@@ -153,14 +153,12 @@ class MigracionesEsquema {
 		final ahora = DateTime.now().toUtc().toIso8601String();
 		for (final fila in filas) {
 			final pinPlano = fila['pin'] as String? ?? '';
-			final sal = HasherPin.generarSal();
-			final hash = HasherPin.hashPin(pinPlano, sal);
+			final credencial = HasherPin.codificar(pinPlano);
 			await base.insert('usuarios_seguro', {
 				'id': fila['id'],
 				'nombre': fila['nombre'],
 				'codigo': (fila['codigo'] as String).trim(),
-				'pin_hash': hash,
-				'pin_salt': sal,
+				'pin_credencial': credencial,
 				'rol': fila['rol'],
 				'tienda_id': fila['tienda_id'],
 				'activo': fila['activo'],
@@ -185,8 +183,7 @@ class MigracionesEsquema {
 				id TEXT PRIMARY KEY,
 				nombre TEXT NOT NULL,
 				codigo TEXT NOT NULL COLLATE NOCASE,
-				pin_hash TEXT NOT NULL,
-				pin_salt TEXT NOT NULL,
+				pin_credencial TEXT NOT NULL,
 				rol TEXT NOT NULL CHECK (rol IN ('administrador', 'supervisor', 'empleado')),
 				tienda_id TEXT,
 				activo INTEGER NOT NULL DEFAULT 1 CHECK (activo IN (0, 1)),
@@ -278,8 +275,7 @@ class MigracionesEsquema {
 				id TEXT PRIMARY KEY,
 				nombre TEXT NOT NULL,
 				codigo TEXT NOT NULL COLLATE NOCASE,
-				pin_hash TEXT NOT NULL,
-				pin_salt TEXT NOT NULL,
+				pin_credencial TEXT NOT NULL,
 				rol TEXT NOT NULL CHECK (rol IN ('administrador', 'supervisor', 'empleado')),
 				tienda_id TEXT,
 				activo INTEGER NOT NULL DEFAULT 1 CHECK (activo IN (0, 1)),
@@ -562,7 +558,6 @@ class MigracionesEsquema {
 		await base.execute('''
 			CREATE TABLE sync_event_queue (
 				id TEXT PRIMARY KEY,
-				tenant_id TEXT NOT NULL,
 				tienda_id TEXT NOT NULL,
 				dispositivo_id TEXT NOT NULL,
 				tipo TEXT NOT NULL,
@@ -947,5 +942,87 @@ class MigracionesEsquema {
 				monto_neto REAL NOT NULL
 			)
 		''');
+	}
+
+	/// Elimina columna obsoleta tenant_id de la cola de sync (v20 → v21).
+	static Future<void> migrarVersion20A21(Database base) async {
+		final info = await base.rawQuery('PRAGMA table_info(sync_event_queue)');
+		final tieneTenant = info.any((fila) => fila['name'] == 'tenant_id');
+		if (!tieneTenant) {
+			return;
+		}
+		await base.execute('''
+			CREATE TABLE sync_event_queue_nueva (
+				id TEXT PRIMARY KEY,
+				tienda_id TEXT NOT NULL,
+				dispositivo_id TEXT NOT NULL,
+				tipo TEXT NOT NULL,
+				payload TEXT NOT NULL,
+				creado_en TEXT NOT NULL,
+				estado TEXT NOT NULL
+			)
+		''');
+		await base.execute('''
+			INSERT INTO sync_event_queue_nueva (
+				id, tienda_id, dispositivo_id, tipo, payload, creado_en, estado
+			)
+			SELECT id, tienda_id, dispositivo_id, tipo, payload, creado_en, estado
+			FROM sync_event_queue
+		''');
+		await base.execute('DROP TABLE sync_event_queue');
+		await base.execute(
+			'ALTER TABLE sync_event_queue_nueva RENAME TO sync_event_queue',
+		);
+	}
+
+	/// Una columna pin_credencial compacta (v21 → v22).
+	static Future<void> migrarVersion21A22(Database base) async {
+		final info = await base.rawQuery('PRAGMA table_info(usuarios)');
+		final tieneCredencial = info.any((fila) => fila['name'] == 'pin_credencial');
+		if (tieneCredencial) {
+			return;
+		}
+		await base.execute('''
+			CREATE TABLE usuarios_compactos (
+				id TEXT PRIMARY KEY,
+				nombre TEXT NOT NULL,
+				codigo TEXT NOT NULL COLLATE NOCASE,
+				pin_credencial TEXT NOT NULL,
+				rol TEXT NOT NULL CHECK (rol IN ('administrador', 'supervisor', 'empleado')),
+				tienda_id TEXT,
+				activo INTEGER NOT NULL DEFAULT 1 CHECK (activo IN (0, 1)),
+				creado_en TEXT NOT NULL,
+				actualizado_en TEXT NOT NULL,
+				UNIQUE (codigo)
+			)
+		''');
+		await base.execute('''
+			INSERT INTO usuarios_compactos (
+				id, nombre, codigo, pin_credencial, rol, tienda_id, activo, creado_en, actualizado_en
+			)
+			SELECT
+				id,
+				nombre,
+				codigo,
+				CASE
+					WHEN pin_salt IS NOT NULL AND pin_salt != ''
+						THEN pin_salt || ':' || pin_hash
+					ELSE pin_hash
+				END,
+				rol,
+				tienda_id,
+				activo,
+				creado_en,
+				actualizado_en
+			FROM usuarios
+		''');
+		await base.execute('DROP TABLE usuarios');
+		await base.execute('ALTER TABLE usuarios_compactos RENAME TO usuarios');
+		await base.execute(
+			'CREATE INDEX IF NOT EXISTS idx_usuarios_tienda ON usuarios(tienda_id)',
+		);
+		await base.execute(
+			'CREATE INDEX IF NOT EXISTS idx_usuarios_activo ON usuarios(activo)',
+		);
 	}
 }

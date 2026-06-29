@@ -13,7 +13,6 @@ import '../seed/placeholders_ejemplo.dart';
 import '../utils/diagnostico_base_local.dart';
 import '../utils/limpiador_base_local.dart';
 
-/// Orquesta limpieza local y descarga desde la nube cuando corresponde.
 class ServicioReconciliacionHub {
 	ServicioReconciliacionHub({
 		required Database baseDatos,
@@ -21,22 +20,18 @@ class ServicioReconciliacionHub {
 		required SyncOrchestrator syncOrchestrator,
 		required SyncStateRepository syncStateRepository,
 		required TiendaRepository tiendaRepository,
-		required String tenantId,
 	}) : _baseDatos = baseDatos,
 	     _configRepository = configRepository,
 	     _syncOrchestrator = syncOrchestrator,
 	     _syncStateRepository = syncStateRepository,
-	     _tiendaRepository = tiendaRepository,
-	     _tenantId = tenantId;
+	     _tiendaRepository = tiendaRepository;
 
 	final Database _baseDatos;
 	final ConfigRepository _configRepository;
 	final SyncOrchestrator _syncOrchestrator;
 	final SyncStateRepository _syncStateRepository;
 	final TiendaRepository _tiendaRepository;
-	final String _tenantId;
 
-	/// Limpia placeholders, compara con la nube y sincroniza.
 	Future<ResultadoReconciliacionHub> reconciliar() async {
 		if (!_syncOrchestrator.tieneHubConfigurado()) {
 			return const ResultadoReconciliacionHub(
@@ -63,7 +58,7 @@ class ServicioReconciliacionHub {
 			_baseDatos,
 		);
 		var diagnostico = await DiagnosticoBaseLocal.evaluar(_baseDatos);
-		final tiendasRemotas = await clienteHub.obtenerTiendasPorTenant(_tenantId);
+		final tiendasRemotas = await clienteHub.obtenerTiendas();
 		final tiendasLocales = await _tiendaRepository.listarTodas();
 		final tiendasCoinciden = _tiendasCoinciden(tiendasRemotas, tiendasLocales);
 		final hubTieneDatos = tiendasRemotas.isNotEmpty ||
@@ -128,10 +123,7 @@ class ServicioReconciliacionHub {
 	}
 
 	Future<bool> _hubTieneEventos(HubSyncClient clienteHub) async {
-		final resultado = await clienteHub.obtenerEventos(
-			tenantId: _tenantId,
-			desdeSeq: 0,
-		);
+		final resultado = await clienteHub.obtenerEventos(desdeSeq: 0);
 		return resultado.exitoso &&
 			(resultado.eventos.isNotEmpty || resultado.ultimoSeq > 0);
 	}

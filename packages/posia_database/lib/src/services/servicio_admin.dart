@@ -28,7 +28,6 @@ import '../models/resumen_vendedor.dart';
 import '../models/resumen_ventas_dia.dart';
 import '../models/stock_por_tienda.dart';
 import '../models/stock_por_almacen.dart';
-import '../database/posia_local_database.dart';
 import '../repositories/categoria_repository.dart';
 import '../repositories/cliente_repository.dart';
 import '../repositories/compra_repository.dart';
@@ -68,7 +67,6 @@ class ServicioAdmin {
   /// [syncEventRepository] Cola de eventos sync.
   /// [syncOrchestrator] Orquestador de sincronizacion.
   /// [configRepository] Configuracion local del dispositivo.
-  /// [tenantId] Tenant activo en licencia.
   /// [tiendaActivaId] Tienda local del dispositivo.
   /// [cajaId] Identificador del dispositivo caja.
   ServicioAdmin({
@@ -96,7 +94,6 @@ class ServicioAdmin {
     PresentacionRepository? presentacionRepository,
     ServicioCorteCaja? servicioCorteCaja,
     required Database baseDatos,
-    required String tenantId,
     required String tiendaActivaId,
     required String cajaId,
   }) : _tiendaRepository = tiendaRepository,
@@ -123,7 +120,6 @@ class ServicioAdmin {
        _presentacionRepository = presentacionRepository,
        _servicioCorteCaja = servicioCorteCaja,
        _baseDatos = baseDatos,
-       _tenantId = tenantId,
        _tiendaActivaId = tiendaActivaId,
        _cajaId = cajaId;
 
@@ -151,7 +147,6 @@ class ServicioAdmin {
   final PresentacionRepository? _presentacionRepository;
   final ServicioCorteCaja? _servicioCorteCaja;
   final Database _baseDatos;
-  final String _tenantId;
   final String _tiendaActivaId;
   final String _cajaId;
   final Uuid _generadorId = const Uuid();
@@ -604,7 +599,6 @@ class ServicioAdmin {
       syncOrchestrator: _syncOrchestrator,
       syncStateRepository: SyncStateRepository(baseDatos: _baseDatos),
       tiendaRepository: _tiendaRepository,
-      tenantId: _tenantId,
     );
     return servicio.reconciliar();
   }
@@ -1102,29 +1096,12 @@ class ServicioAdmin {
     return _usuarioRepository?.obtenerPorCodigo(codigo.trim());
   }
 
-  /// Aplica tenant resuelto en login, tienda del usuario y sync inicial.
+  /// Aplica tienda del usuario y sync inicial tras login.
   Future<void> activarSesionTrasLogin(
-    Usuario usuario,
-    String tenantId, {
+    Usuario usuario, {
     List<Tienda> tiendasDesdeHub = const [],
-    Future<List<Tienda>> Function(String tenantId)? obtenerTiendasRemotas,
+    Future<List<Tienda>> Function()? obtenerTiendasRemotas,
   }) async {
-    final tenantLimpio = tenantId.trim();
-    if (tenantLimpio.isEmpty) {
-      throw StateError('Tenant invalido');
-    }
-    await PosiaLocalDatabase.obtenerInstancia().establecerTenant(tenantLimpio);
-    final config = await _configRepository.obtenerConfigDispositivo();
-    if (config.tenantId != tenantLimpio) {
-      await _configRepository.guardarConfigDispositivo(
-        ConfigDispositivo(
-          tenantId: tenantLimpio,
-          tiendaId: config.tiendaId,
-          cajaId: config.cajaId,
-          nombreCaja: config.nombreCaja,
-        ),
-      );
-    }
     if (usuario.rol != RolUsuario.administrador) {
       final tiendaId = usuario.tiendaId;
       if (tiendaId == null || tiendaId.isEmpty) {
@@ -1137,7 +1114,6 @@ class ServicioAdmin {
         await importarTiendasDesdeHub(tiendasDesdeHub);
       }
       await _asegurarTiendasAdministrador(
-        tenantId: tenantLimpio,
         tiendasIniciales: tiendasDesdeHub,
         obtenerRemotas: obtenerTiendasRemotas,
       );
@@ -1227,7 +1203,7 @@ class ServicioAdmin {
     }
     final codigo = await _resolverCodigoUsuarioDisponible(repo, rol);
     final usuario = Usuario(
-      id: _generadorId.v4(),
+      id: IdPosia.usuario(codigo),
       nombre: nombreLimpio,
       codigo: codigo,
       pin: pin.trim(),
@@ -2171,12 +2147,10 @@ class ServicioAdmin {
   Future<void> guardarConfigDispositivo({
     required String tiendaId,
     String? nombreCaja,
-    String? tenantId,
   }) async {
     final actual = await _configRepository.obtenerConfigDispositivo();
     await _configRepository.guardarConfigDispositivo(
       ConfigDispositivo(
-        tenantId: tenantId ?? actual.tenantId,
         tiendaId: tiendaId,
         cajaId: actual.cajaId,
         nombreCaja: nombreCaja ?? actual.nombreCaja,
@@ -2370,15 +2344,14 @@ class ServicioAdmin {
   }
 
   Future<void> _asegurarTiendasAdministrador({
-    required String tenantId,
     List<Tienda> tiendasIniciales = const [],
-    Future<List<Tienda>> Function(String tenantId)? obtenerRemotas,
+    Future<List<Tienda>> Function()? obtenerRemotas,
   }) async {
     var remotas = tiendasIniciales;
     final fetch = obtenerRemotas;
     if (fetch != null) {
       try {
-        final desdeHub = await fetch(tenantId);
+        final desdeHub = await fetch();
         if (desdeHub.isNotEmpty) {
           remotas = desdeHub;
         }
@@ -2501,7 +2474,6 @@ class ServicioAdmin {
     final config = await _configRepository.obtenerConfigDispositivo();
     await _configRepository.guardarConfigDispositivo(
       ConfigDispositivo(
-        tenantId: config.tenantId,
         tiendaId: tiendaId,
         cajaId: config.cajaId,
         nombreCaja: config.nombreCaja,
@@ -3169,7 +3141,6 @@ class ServicioAdmin {
   Future<void> _registrarEventoCategoria(Categoria categoria) async {
     final evento = SyncEvent(
       id: _generadorId.v4(),
-      tenantId: _tenantId,
       tiendaId: _tiendaActivaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.categoryUpserted,
@@ -3190,7 +3161,6 @@ class ServicioAdmin {
   Future<void> _registrarEventoCliente(Cliente cliente) async {
     final evento = SyncEvent(
       id: _generadorId.v4(),
-      tenantId: _tenantId,
       tiendaId: _tiendaActivaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.customerUpserted,
@@ -3216,7 +3186,6 @@ class ServicioAdmin {
   Future<void> _registrarEventoVentaCompletada(Venta venta) async {
     final evento = SyncEvent(
       id: _generadorId.v4(),
-      tenantId: _tenantId,
       tiendaId: _tiendaActivaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.saleCompleted,
@@ -3250,7 +3219,6 @@ class ServicioAdmin {
   Future<void> _registrarEventoAnulacion(Venta venta) async {
     final evento = SyncEvent(
       id: _generadorId.v4(),
-      tenantId: _tenantId,
       tiendaId: _tiendaActivaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.saleVoided,
@@ -3273,7 +3241,6 @@ class ServicioAdmin {
   }) async {
     final evento = SyncEvent(
       id: _generadorId.v4(),
-      tenantId: _tenantId,
       tiendaId: _tiendaActivaId,
       dispositivoId: _cajaId,
       tipo: tipo,
@@ -3339,7 +3306,6 @@ class ServicioAdmin {
   Future<void> _registrarEventoVariante(VarianteProducto variante) async {
     final evento = SyncEvent(
       id: _generadorId.v4(),
-      tenantId: _tenantId,
       tiendaId: _tiendaActivaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.variantUpserted,
@@ -3366,7 +3332,6 @@ class ServicioAdmin {
   }) async {
     final evento = SyncEvent(
       id: _generadorId.v4(),
-      tenantId: _tenantId,
       tiendaId: tiendaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.stockAdjusted,
@@ -3384,7 +3349,6 @@ class ServicioAdmin {
   ) async {
     final evento = SyncEvent(
       id: _generadorId.v4(),
-      tenantId: _tenantId,
       tiendaId: _tiendaActivaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.salePartialReturn,
@@ -3402,7 +3366,6 @@ class ServicioAdmin {
   Future<void> _registrarEventoTienda(Tienda tienda) async {
     final evento = SyncEvent(
       id: _generadorId.v4(),
-      tenantId: _tenantId,
       tiendaId: _tiendaActivaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.storeUpserted,
@@ -3473,7 +3436,6 @@ class ServicioAdmin {
     }
     final evento = SyncEvent(
       id: _generadorId.v4(),
-      tenantId: _tenantId,
       tiendaId: _tiendaActivaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.userUpserted,
@@ -3484,8 +3446,7 @@ class ServicioAdmin {
         'rol': usuario.rol.name,
         'tiendaId': usuario.tiendaId,
         'activo': usuario.activo,
-        'pinHash': snapshot.pinHash,
-        'pinSalt': snapshot.pinSalt,
+        'pinCredencial': snapshot.pinCredencial,
         'creadoEn': snapshot.creadoEn,
         'actualizadoEn': snapshot.actualizadoEn,
       },
@@ -3501,7 +3462,6 @@ class ServicioAdmin {
   Future<void> _registrarEventoProducto(Producto producto) async {
     final evento = SyncEvent(
       id: _generadorId.v4(),
-      tenantId: _tenantId,
       tiendaId: _tiendaActivaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.productUpserted,
@@ -3893,7 +3853,6 @@ class ServicioAdmin {
     await _syncOrchestrator.registrarEvento(
       SyncEvent(
         id: _generadorId.v4(),
-        tenantId: _tenantId,
         tiendaId: _tiendaActivaId,
         dispositivoId: _cajaId,
         tipo: TipoSyncEvento.warehouseUpserted,

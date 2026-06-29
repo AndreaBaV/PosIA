@@ -72,6 +72,7 @@ export 'src/utils/etiquetas_descuento_cliente.dart';
 export 'src/utils/geolocalizacion_util.dart';
 export 'src/utils/generador_ticket.dart';
 export 'src/utils/hasher_pin.dart';
+export 'src/utils/id_posia.dart';
 export 'src/utils/permisos_usuario.dart';
 export 'src/utils/validador_codigo_usuario.dart';
 export 'src/utils/moneda_util.dart';

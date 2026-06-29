@@ -71,14 +71,11 @@ class AlmacenEventosArchivo implements AlmacenEventos {
 
 	@override
 	Future<List<EventoHub>> obtenerDesde({
-		required String tenantId,
 		required int desdeSeq,
 		String? excluirDispositivoId,
 		int limite = 500,
 	}) async {
 		return _eventos
-			.where((evento) =>
-				tenantId.isEmpty || evento.tenantId == tenantId)
 			.where((evento) => evento.seq > desdeSeq)
 			.where((evento) => excluirDispositivoId == null ||
 				evento.dispositivoId != excluirDispositivoId)
@@ -97,7 +94,6 @@ class AlmacenEventosArchivo implements AlmacenEventos {
 		return EventoHub(
 			seq: json['seq'] as int? ?? 0,
 			id: json['id'] as String? ?? '',
-			tenantId: json['tenantId'] as String? ?? '',
 			tiendaId: json['storeId'] as String? ?? '',
 			dispositivoId: json['deviceId'] as String? ?? '',
 			tipo: json['type'] as String? ?? '',

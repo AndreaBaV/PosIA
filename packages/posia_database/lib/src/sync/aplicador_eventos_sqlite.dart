@@ -155,9 +155,8 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		}
 		final payload = evento.payload;
 		final id = payload['id'] as String? ?? '';
-		final pinHash = payload['pinHash'] as String?;
-		final pinSalt = payload['pinSalt'] as String?;
-		if (id.isEmpty || pinHash == null || pinSalt == null) {
+		final pinCredencial = extraerPinCredencialSync(payload);
+		if (id.isEmpty || pinCredencial == null) {
 			return;
 		}
 		final rolNombre = payload['rol'] as String? ?? RolUsuario.empleado.name;
@@ -172,8 +171,7 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			rol: rol,
 			tiendaId: payload['tiendaId'] as String?,
 			activo: payload['activo'] as bool? ?? true,
-			pinHash: pinHash,
-			pinSalt: pinSalt,
+			pinCredencial: pinCredencial,
 			creadoEn: payload['creadoEn'] as String? ?? evento.creadoEn.toIso8601String(),
 			actualizadoEn:
 				payload['actualizadoEn'] as String? ?? evento.creadoEn.toIso8601String(),
@@ -594,4 +592,20 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			etiquetaLote: cruda['etiquetaLote'] as String?,
 		);
 	}
+}
+
+String? extraerPinCredencialSync(Map<String, Object?> payload) {
+	final credencial = payload['pinCredencial'] as String?;
+	if (credencial != null && credencial.isNotEmpty) {
+		return credencial;
+	}
+	final hash = payload['pinHash'] as String?;
+	final sal = payload['pinSalt'] as String?;
+	if (hash != null &&
+		sal != null &&
+		hash.isNotEmpty &&
+		sal.isNotEmpty) {
+		return HasherPin.empaquetarLegacy(sal, hash);
+	}
+	return null;
 }

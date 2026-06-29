@@ -41,12 +41,10 @@ void main() {
 					colaLocal: SyncEventRepository(baseDatos: fixture.base),
 					clienteHub: null,
 					clienteLan: null,
-					tenantId: tenantPruebaId,
 					tiendaId: fixture.tiendaOrigenId,
 					dispositivoId: cajaPruebaId,
 				),
 				ticketEsperaRepository: ticketRepo,
-				tenantId: tenantPruebaId,
 				tiendaId: fixture.tiendaOrigenId,
 				cajaId: cajaPruebaId,
 			);

@@ -23,7 +23,7 @@ final configDispositivoRepoProvider = FutureProvider<ConfigRepository>((ref) asy
 	return ConfigRepository(baseDatos: base);
 });
 
-/// Servicio de autenticacion multi-tenant (hub + copia local).
+/// Servicio de autenticacion (hub + copia local offline).
 final servicioAutenticacionProvider = FutureProvider<ServicioAutenticacion>((ref) async {
 	final configRepo = await ref.watch(configDispositivoRepoProvider.future);
 	final hubUrl = await configRepo.obtenerHubUrl();
@@ -34,7 +34,6 @@ final servicioAutenticacionProvider = FutureProvider<ServicioAutenticacion>((ref
 	}
 	final orquestador = await FabricaServicios.crearOrquestadorPreLogin();
 	return ServicioAutenticacion(
-		configDispositivo: configRepo,
 		clienteHub: cliente,
 		orquestadorSync: orquestador,
 	);

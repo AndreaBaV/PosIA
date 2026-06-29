@@ -37,7 +37,6 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 	bool _biometriaDisponible = false;
 	String _etiquetaBiometria = 'Biometría';
 	List<PerfilAccesoBiometrico> _perfilesBiometricos = [];
-	String? _tenantId;
 	bool _intentoBiometricoAutomatico = false;
 
 	@override
@@ -59,13 +58,9 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 			return;
 		}
 		final configRepo = await ref.read(configDispositivoRepoProvider.future);
-		final config = await configRepo.obtenerConfigDispositivo();
-		final tenantId = config.tenantId;
-		if (tenantId.isEmpty) {
-			return;
-		}
+		await configRepo.obtenerConfigDispositivo();
 		final disponible = await _gestorBiometria.estaDisponible();
-		final perfiles = await _gestorBiometria.listarPerfiles(tenantId);
+		final perfiles = await _gestorBiometria.listarPerfiles();
 		final etiqueta = await _gestorBiometria.etiquetaBiometria();
 		if (!mounted) {
 			return;
@@ -73,7 +68,6 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 		setState(() {
 			_biometriaDisponible = disponible;
 			_perfilesBiometricos = perfiles;
-			_tenantId = tenantId;
 			_etiquetaBiometria = etiqueta;
 		});
 		if (disponible && perfiles.length == 1 && !_intentoBiometricoAutomatico) {
@@ -317,17 +311,12 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 	}
 
 	Future<void> _iniciarConBiometria(String usuarioId) async {
-		final tenantId = _tenantId;
-		if (tenantId == null || tenantId.isEmpty) {
-			return;
-		}
 		setState(() {
 			_validando = true;
 			_mensajeError = null;
 		});
 		try {
 			final perfil = await _gestorBiometria.autenticarYRecuperar(
-				tenantId: tenantId,
 				usuarioId: usuarioId,
 			);
 			if (perfil == null) {

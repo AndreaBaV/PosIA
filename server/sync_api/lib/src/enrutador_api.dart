@@ -67,11 +67,7 @@ class EnrutadorApi {
 		if (codigo.trim().isEmpty) {
 			return _respuestaJson({'error': 'codigo es obligatorio'}, codigo: 400);
 		}
-		final tenantId = solicitud.url.queryParameters['tenantId'];
-		final perfil = await almacen.obtenerPerfilPorCodigo(
-			codigo,
-			tenantId: tenantId,
-		);
+		final perfil = await almacen.obtenerPerfilPorCodigo(codigo);
 		if (perfil == null) {
 			return _respuestaJson({'error': 'Usuario no encontrado'}, codigo: 404);
 		}
@@ -91,14 +87,12 @@ class EnrutadorApi {
 		}
 		final codigo = cuerpo['codigo'] as String? ?? '';
 		final pin = cuerpo['pin'] as String? ?? '';
-		final tenantSolicitado = cuerpo['tenantId'] as String?;
 		if (codigo.trim().isEmpty || pin.isEmpty) {
 			return _respuestaJson({'error': 'codigo y pin son obligatorios'}, codigo: 400);
 		}
 		final resultado = await almacen.autenticar(
 			codigo: codigo,
 			pin: pin,
-			tenantId: tenantSolicitado,
 		);
 		if (resultado == null) {
 			return _respuestaJson({'error': 'Credenciales invalidas'}, codigo: 401);
@@ -112,10 +106,7 @@ class EnrutadorApi {
 		if (almacen == null) {
 			return _respuestaJson({'error': 'Auth no disponible sin Postgres'}, codigo: 503);
 		}
-		final tenantId = solicitud.url.queryParameters['tenantId'] ?? '';
-		final tiendas = tenantId.isEmpty
-			? await almacen.listarTiendasActivas()
-			: await almacen.listarTiendasActivasPorTenant(tenantId);
+		final tiendas = await almacen.listarTiendasActivas();
 		return _respuestaJson({'tiendas': tiendas});
 	}
 
@@ -130,7 +121,6 @@ class EnrutadorApi {
 		} on FormatException {
 			return _respuestaJson({'error': 'JSON invalido'}, codigo: 400);
 		}
-		final tenantId = cuerpo['tenantId'] as String? ?? '';
 		final dispositivoId = cuerpo['deviceId'] as String? ?? '';
 		final tiendaId = cuerpo['storeId'] as String? ?? '';
 		final eventosCrudos = cuerpo['events'] as List<Object?>? ?? [];
@@ -145,7 +135,6 @@ class EnrutadorApi {
 			.map(
 				(json) => EventoHub.desdeJsonLote(
 					json,
-					tenantId: tenantId,
 					tiendaId: tiendaId,
 					dispositivoId: dispositivoId,
 				),
@@ -159,17 +148,15 @@ class EnrutadorApi {
 		});
 	}
 
-	/// Entrega eventos posteriores a un cursor para un tenant.
+	/// Entrega eventos posteriores a un cursor.
 	///
-	/// [solicitud] Solicitud con tenantId, since y excludeDevice.
+	/// [solicitud] Solicitud con since y excludeDevice.
 	/// Retorna eventos ordenados y ultimo seq del lote.
 	Future<Response> _manejarConsultaEventos(Request solicitud) async {
 		final parametros = solicitud.url.queryParameters;
-		final tenantId = parametros['tenantId'] ?? '';
 		final desdeSeq = int.tryParse(parametros['since'] ?? '0') ?? 0;
 		final excluirDispositivo = parametros['excludeDevice'];
 		final eventos = await _almacen.obtenerDesde(
-			tenantId: tenantId,
 			desdeSeq: desdeSeq,
 			excluirDispositivoId: excluirDispositivo,
 		);

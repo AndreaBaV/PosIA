@@ -1,4 +1,4 @@
-/// Autenticacion multi-tenant: resuelve tenant al iniciar sesion.
+/// Autenticacion contra el hub con respaldo local offline.
 library;
 
 import 'package:posia_core/posia_core.dart';
@@ -7,47 +7,32 @@ import 'package:posia_sync/posia_sync.dart';
 import '../database/posia_local_database.dart';
 import '../models/motivo_fallo_auth.dart';
 import '../models/resultado_autenticacion.dart';
-import '../repositories/config_repository.dart';
 import '../repositories/usuario_repository.dart';
 import '../utils/limpiador_base_local.dart';
 
 /// Valida credenciales contra el hub (fuente de verdad) con respaldo local offline.
 class ServicioAutenticacion {
 	ServicioAutenticacion({
-		required ConfigRepository configDispositivo,
 		HubSyncClient? clienteHub,
 		SyncOrchestrator? orquestadorSync,
-	}) : _configDispositivo = configDispositivo,
-	     _clienteHub = clienteHub,
+	}) : _clienteHub = clienteHub,
 	     _orquestadorSync = orquestadorSync;
 
-	final ConfigRepository _configDispositivo;
 	final HubSyncClient? _clienteHub;
 	final SyncOrchestrator? _orquestadorSync;
 
-	/// Busca perfil publico por codigo (sin validar PIN).
-	///
-	/// Sincroniza con el hub antes de consultar para que cuentas creadas en
-	/// este u otro dispositivo esten actualizadas.
 	Future<BusquedaPerfilAuth> buscarPerfilPorCodigo(String codigo) async {
 		final limpio = ValidadorCodigoUsuario.normalizar(codigo);
 		final errorFormato = ValidadorCodigoUsuario.validar(limpio);
-		if (errorFormato != null) {
-			return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.usuarioNoEncontrado);
-		}
-		if (limpio.isEmpty) {
+		if (errorFormato != null || limpio.isEmpty) {
 			return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.usuarioNoEncontrado);
 		}
 		await _sincronizarConHubSiPosible();
-		final tenantId = await _tenantIdConfigurado();
 		final hub = _clienteHub;
 		if (hub != null) {
 			final salud = await hub.verificarSalud();
 			if (salud) {
-				final perfil = await hub.obtenerPerfilUsuario(
-					limpio,
-					tenantId: tenantId,
-				);
+				final perfil = await hub.obtenerPerfilUsuario(limpio);
 				if (perfil != null) {
 					if (!perfil.activo) {
 						return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.usuarioInactivo);
@@ -62,32 +47,22 @@ class ServicioAutenticacion {
 			return BusquedaPerfilAuth.usuario(local);
 		}
 		if (hub == null) {
-			final tenant = await _tenantIdConfigurado();
-			if (tenant == null || tenant.isEmpty) {
-				return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.hubNoConfigurado);
-			}
-			return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.usuarioNoEncontrado);
+			return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.hubNoConfigurado);
 		}
 		return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.hubNoDisponible);
 	}
 
-	/// Autentica y devuelve el tenant al que pertenece la cuenta.
 	Future<IntentoAutenticacionAuth> autenticar(String codigo, String pin) async {
 		final limpio = ValidadorCodigoUsuario.normalizar(codigo);
 		if (limpio.isEmpty || pin.isEmpty) {
 			return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.credencialesInvalidas);
 		}
 		await _sincronizarConHubSiPosible();
-		final tenantId = await _tenantIdConfigurado();
 		final hub = _clienteHub;
 		if (hub != null) {
 			final salud = await hub.verificarSalud();
 			if (salud) {
-				final remoto = await hub.iniciarSesion(
-					codigo: limpio,
-					pin: pin,
-					tenantId: tenantId,
-				);
+				final remoto = await hub.iniciarSesion(codigo: limpio, pin: pin);
 				if (remoto != null) {
 					if (!remoto.perfil.activo) {
 						return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.usuarioInactivo);
@@ -104,9 +79,6 @@ class ServicioAutenticacion {
 		if (hub == null) {
 			return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.hubNoConfigurado);
 		}
-		if (tenantId != null && tenantId.isNotEmpty) {
-			return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.credencialesInvalidas);
-		}
 		return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.hubNoDisponible);
 	}
 
@@ -116,57 +88,32 @@ class ServicioAutenticacion {
 			return;
 		}
 		try {
-			final tenantId = await _tenantIdConfigurado();
-			if (tenantId != null && tenantId.isNotEmpty) {
-				await PosiaLocalDatabase.obtenerInstancia().establecerTenant(tenantId);
-				final base = await PosiaLocalDatabase.obtenerInstancia().obtenerBaseDatos();
-				await LimpiadorBaseLocal.eliminarDatosEjemplo(base);
-			}
+			final base = await PosiaLocalDatabase.obtenerInstancia().obtenerBaseDatos();
+			await LimpiadorBaseLocal.eliminarDatosEjemplo(base);
 			await orquestador.sincronizarCompleto();
 		} on Object {
 			// El login puede continuar con copia local si el hub falla.
 		}
 	}
 
-	Future<String?> _tenantIdConfigurado() async {
-		return _configDispositivo.obtenerValor(claveConfigTenantId);
-	}
-
 	Future<ResultadoAutenticacion?> _autenticarLocal(String codigo, String pin) async {
-		final tenantId = await _tenantIdConfigurado();
-		if (tenantId == null || tenantId.isEmpty) {
-			return null;
-		}
-		await PosiaLocalDatabase.obtenerInstancia().establecerTenant(tenantId);
 		final base = await PosiaLocalDatabase.obtenerInstancia().obtenerBaseDatos();
 		final usuario = await UsuarioRepository(baseDatos: base).autenticar(codigo, pin);
 		if (usuario == null) {
 			return null;
 		}
-		return ResultadoAutenticacion(
-			usuario: usuario.copiarCon(tenantId: tenantId),
-			tenantId: tenantId,
-		);
+		return ResultadoAutenticacion(usuario: usuario);
 	}
 
 	Future<Usuario?> _buscarPerfilLocal(String codigo) async {
-		final tenantId = await _tenantIdConfigurado();
-		if (tenantId == null || tenantId.isEmpty) {
-			return null;
-		}
-		await PosiaLocalDatabase.obtenerInstancia().establecerTenant(tenantId);
 		final base = await PosiaLocalDatabase.obtenerInstancia().obtenerBaseDatos();
 		final usuario = await UsuarioRepository(baseDatos: base).obtenerPorCodigo(codigo);
-		if (usuario == null) {
+		if (usuario == null || !usuario.activo) {
 			return null;
 		}
-		if (!usuario.activo) {
-			return null;
-		}
-		return usuario.copiarCon(tenantId: tenantId);
+		return usuario;
 	}
 
-	/// Persiste en SQLite local la cuenta recibida del hub.
 	Future<void> guardarUsuarioRemoto(ResultadoAutenticacion resultado) async {
 		if (!resultado.desdeHub) {
 			return;
@@ -181,8 +128,7 @@ class ServicioAutenticacion {
 			rol: u.rol,
 			tiendaId: u.tiendaId,
 			activo: u.activo,
-			pinHash: resultado.pinHash!,
-			pinSalt: resultado.pinSalt!,
+			pinCredencial: resultado.pinCredencial!,
 			creadoEn: resultado.creadoEn!,
 			actualizadoEn: resultado.actualizadoEn!,
 		);
@@ -196,16 +142,13 @@ class ServicioAutenticacion {
 			rol: RolUsuario.values.byName(perfil.rol),
 			tiendaId: perfil.tiendaId,
 			activo: perfil.activo,
-			tenantId: perfil.tenantId,
 		);
 	}
 
 	ResultadoAutenticacion _mapearLoginHub(RespuestaLoginHub login) {
 		return ResultadoAutenticacion(
 			usuario: _mapearPerfilHub(login.perfil),
-			tenantId: login.perfil.tenantId,
-			pinHash: login.pinHash,
-			pinSalt: login.pinSalt,
+			pinCredencial: login.pinCredencial,
 			creadoEn: login.creadoEn,
 			actualizadoEn: login.actualizadoEn,
 			tiendas: login.tiendas

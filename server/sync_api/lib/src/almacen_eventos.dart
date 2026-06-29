@@ -19,15 +19,13 @@ abstract class AlmacenEventos {
 	/// Retorna cantidad de eventos nuevos aceptados.
 	Future<int> guardarLote(List<EventoHub> eventos);
 
-	/// Obtiene eventos de un tenant posteriores a un cursor.
+	/// Obtiene eventos posteriores a un cursor.
 	///
-	/// [tenantId] Tenant a consultar.
 	/// [desdeSeq] Cursor exclusivo; 0 trae desde el inicio.
 	/// [excluirDispositivoId] Omite eventos emitidos por este dispositivo.
 	/// [limite] Maximo de eventos por respuesta.
 	/// Retorna eventos ordenados por seq ascendente.
 	Future<List<EventoHub>> obtenerDesde({
-		required String tenantId,
 		required int desdeSeq,
 		String? excluirDispositivoId,
 		int limite = 500,

@@ -36,7 +36,7 @@ Future<void> main() async {
 	try {
 		final proyector = ProyectorEventosPostgres(conexion);
 		final filas = await conexion.execute('''
-			SELECT id, tenant_id, store_id, device_id, type, payload, created_at
+			SELECT id, store_id, device_id, type, payload, created_at
 			FROM sync_events
 			ORDER BY seq ASC
 		''');
@@ -53,7 +53,6 @@ Future<void> main() async {
 			final evento = EventoHub(
 				seq: 0,
 				id: cols['id'] as String,
-				tenantId: cols['tenant_id'] as String,
 				tiendaId: cols['store_id'] as String,
 				dispositivoId: cols['device_id'] as String,
 				tipo: cols['type'] as String,

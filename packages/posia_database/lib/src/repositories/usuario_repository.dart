@@ -191,18 +191,15 @@ class UsuarioRepository {
 			limit: 1,
 		);
 		final ahora = DateTime.now().toUtc().toIso8601String();
-		late final String pinHash;
-		late final String pinSalt;
+		late final String pinCredencial;
 		final creadoEn = filaExistente.isEmpty
 			? ahora
 			: filaExistente.first['creado_en'] as String? ?? ahora;
 
 		if (usuario.pin != null && usuario.pin!.isNotEmpty) {
-			pinSalt = HasherPin.generarSal();
-			pinHash = HasherPin.hashPin(usuario.pin!, pinSalt);
+			pinCredencial = HasherPin.codificar(usuario.pin!);
 		} else if (filaExistente.isNotEmpty) {
-			pinHash = filaExistente.first['pin_hash'] as String;
-			pinSalt = filaExistente.first['pin_salt'] as String;
+			pinCredencial = filaExistente.first['pin_credencial'] as String;
 		} else {
 			throw StateError('El PIN es obligatorio para usuarios nuevos');
 		}
@@ -214,8 +211,7 @@ class UsuarioRepository {
 					'id': usuario.id,
 					'nombre': usuario.nombre.trim(),
 					'codigo': codigoLimpio,
-					'pin_hash': pinHash,
-					'pin_salt': pinSalt,
+					'pin_credencial': pinCredencial,
 					'rol': usuario.rol.name,
 					'tienda_id': usuario.tiendaId,
 					'activo': usuario.activo ? 1 : 0,
@@ -242,8 +238,7 @@ class UsuarioRepository {
 		required RolUsuario rol,
 		String? tiendaId,
 		required bool activo,
-		required String pinHash,
-		required String pinSalt,
+		required String pinCredencial,
 		required String creadoEn,
 		required String actualizadoEn,
 	}) async {
@@ -282,8 +277,7 @@ class UsuarioRepository {
 				'id': id,
 				'nombre': nombre.trim(),
 				'codigo': codigoLimpio,
-				'pin_hash': pinHash,
-				'pin_salt': pinSalt,
+				'pin_credencial': pinCredencial,
 				'rol': rol.name,
 				'tienda_id': tiendaId,
 				'activo': activo ? 1 : 0,
@@ -333,14 +327,12 @@ class UsuarioRepository {
 			return null;
 		}
 		final fila = filas.first;
-		final hash = fila['pin_hash'] as String?;
-		final sal = fila['pin_salt'] as String?;
-		if (hash == null || sal == null) {
+		final credencial = fila['pin_credencial'] as String?;
+		if (credencial == null || credencial.isEmpty) {
 			return null;
 		}
 		return UsuarioSnapshotSync(
-			pinHash: hash,
-			pinSalt: sal,
+			pinCredencial: credencial,
 			creadoEn: fila['creado_en'] as String? ?? DateTime.now().toUtc().toIso8601String(),
 			actualizadoEn:
 				fila['actualizado_en'] as String? ?? DateTime.now().toUtc().toIso8601String(),
@@ -348,12 +340,11 @@ class UsuarioRepository {
 	}
 
 	bool _verificarFila(Map<String, Object?> fila, String pin) {
-		final hash = fila['pin_hash'] as String?;
-		final sal = fila['pin_salt'] as String?;
-		if (hash == null || sal == null) {
+		final credencial = fila['pin_credencial'] as String?;
+		if (credencial == null || credencial.isEmpty) {
 			return false;
 		}
-		return HasherPin.verificar(pin, sal, hash);
+		return HasherPin.verificar(pin, credencial);
 	}
 
 	Usuario _mapear(Map<String, Object?> fila) {
@@ -371,14 +362,12 @@ class UsuarioRepository {
 /// Datos de usuario necesarios para eventos de sincronizacion.
 class UsuarioSnapshotSync {
 	const UsuarioSnapshotSync({
-		required this.pinHash,
-		required this.pinSalt,
+		required this.pinCredencial,
 		required this.creadoEn,
 		required this.actualizadoEn,
 	});
 
-	final String pinHash;
-	final String pinSalt;
+	final String pinCredencial;
 	final String creadoEn;
 	final String actualizadoEn;
 }

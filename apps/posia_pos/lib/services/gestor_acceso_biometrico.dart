@@ -9,28 +9,24 @@ import 'package:local_auth/local_auth.dart';
 const String _claveAlmacenPerfiles = 'posia_perfiles_biometricos';
 const int _maxPerfilesPorDispositivo = 8;
 
-/// Perfil de usuario vinculado a biometria en este dispositivo.
 class PerfilAccesoBiometrico {
 	const PerfilAccesoBiometrico({
 		required this.usuarioId,
 		required this.codigo,
 		required this.pin,
 		required this.nombre,
-		required this.tenantId,
 	});
 
 	final String usuarioId;
 	final String codigo;
 	final String pin;
 	final String nombre;
-	final String tenantId;
 
 	Map<String, dynamic> toJson() => {
 		'usuarioId': usuarioId,
 		'codigo': codigo,
 		'pin': pin,
 		'nombre': nombre,
-		'tenantId': tenantId,
 	};
 
 	factory PerfilAccesoBiometrico.fromJson(Map<String, dynamic> json) {
@@ -39,12 +35,10 @@ class PerfilAccesoBiometrico {
 			codigo: json['codigo'] as String,
 			pin: json['pin'] as String,
 			nombre: json['nombre'] as String,
-			tenantId: json['tenantId'] as String,
 		);
 	}
 }
 
-/// Administra perfiles biometricos por tenant en almacenamiento seguro.
 class GestorAccesoBiometrico {
 	GestorAccesoBiometrico({
 		LocalAuthentication? autenticacionLocal,
@@ -58,7 +52,6 @@ class GestorAccesoBiometrico {
 	final LocalAuthentication _auth;
 	final FlutterSecureStorage _almacen;
 
-	/// Indica si el dispositivo puede usar biometria.
 	Future<bool> estaDisponible() async {
 		try {
 			final compatible = await _auth.isDeviceSupported();
@@ -71,7 +64,6 @@ class GestorAccesoBiometrico {
 		}
 	}
 
-	/// Etiqueta amigable segun el hardware (Face ID, huella, etc.).
 	Future<String> etiquetaBiometria() async {
 		try {
 			final tipos = await _auth.getAvailableBiometrics();
@@ -90,45 +82,28 @@ class GestorAccesoBiometrico {
 		return 'Biometría';
 	}
 
-	/// Perfiles registrados para un tenant.
-	Future<List<PerfilAccesoBiometrico>> listarPerfiles(String tenantId) async {
+	Future<List<PerfilAccesoBiometrico>> listarPerfiles() async {
 		final todos = await _leerTodos();
-		return todos.where((p) => p.tenantId == tenantId).toList()
-		  ..sort((a, b) => a.nombre.compareTo(b.nombre));
+		return todos..sort((a, b) => a.nombre.compareTo(b.nombre));
 	}
 
-	/// Guarda o actualiza el perfil del usuario tras un login exitoso con PIN.
 	Future<void> registrarPerfil(PerfilAccesoBiometrico perfil) async {
 		final todos = await _leerTodos();
 		final filtrados = todos.where((p) => p.usuarioId != perfil.usuarioId).toList();
 		filtrados.add(perfil);
-		final porTenant = filtrados.where((p) => p.tenantId == perfil.tenantId).length;
-		if (porTenant > _maxPerfilesPorDispositivo) {
-			final antiguos = filtrados
-				.where((p) => p.tenantId == perfil.tenantId && p.usuarioId != perfil.usuarioId)
-				.toList();
-			if (antiguos.isNotEmpty) {
-				filtrados.remove(antiguos.first);
-			}
+		if (filtrados.length > _maxPerfilesPorDispositivo) {
+			filtrados.removeAt(0);
 		}
 		await _guardarTodos(filtrados);
 	}
 
-	/// Elimina el perfil biometrico de un usuario.
 	Future<void> eliminarPerfil(String usuarioId) async {
 		final todos = await _leerTodos();
 		await _guardarTodos(todos.where((p) => p.usuarioId != usuarioId).toList());
 	}
 
-	/// Solicita biometria y devuelve credenciales del usuario indicado.
-	///
-	/// Si [usuarioId] es null y hay un solo perfil en el tenant, usa ese.
-	/// Si hay varios perfiles, [usuarioId] es obligatorio.
-	Future<PerfilAccesoBiometrico?> autenticarYRecuperar({
-		required String tenantId,
-		String? usuarioId,
-	}) async {
-		final perfiles = await listarPerfiles(tenantId);
+	Future<PerfilAccesoBiometrico?> autenticarYRecuperar({String? usuarioId}) async {
+		final perfiles = await listarPerfiles();
 		if (perfiles.isEmpty) {
 			return null;
 		}

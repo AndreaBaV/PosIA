@@ -45,7 +45,6 @@ void main() {
 			Uri.parse('$urlBase/v1/events'),
 			headers: {'Content-Type': 'application/json'},
 			body: jsonEncode({
-				'tenantId': 'tenant-1',
 				'deviceId': 'caja-1',
 				'storeId': 'tienda-1',
 				'events': eventos,
@@ -71,7 +70,7 @@ void main() {
 		expect(resultadoPush['accepted'], 1);
 
 		final respuestaPull = await http.get(
-			Uri.parse('$urlBase/v1/events?tenantId=tenant-1&since=0'),
+			Uri.parse('$urlBase/v1/events?since=0'),
 		);
 		final cuerpoPull = jsonDecode(respuestaPull.body) as Map<String, Object?>;
 		final eventos = cuerpoPull['events'] as List<Object?>;
@@ -102,7 +101,7 @@ void main() {
 			},
 		]);
 		final respuesta = await http.get(
-			Uri.parse('$urlBase/v1/events?tenantId=tenant-1&since=0&excludeDevice=caja-1'),
+			Uri.parse('$urlBase/v1/events?since=0&excludeDevice=caja-1'),
 		);
 		final cuerpo = jsonDecode(respuesta.body) as Map<String, Object?>;
 		expect((cuerpo['events'] as List<Object?>).isEmpty, isTrue);
@@ -117,7 +116,7 @@ void main() {
 		expect(respuesta.statusCode, 400);
 	});
 
-	test('pull sin tenantId devuelve todos los eventos', () async {
+	test('pull devuelve todos los eventos del despliegue', () async {
 		await enviarLote([
 			{
 				'id': 'ev-sin-tenant',

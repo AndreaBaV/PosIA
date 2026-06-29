@@ -29,14 +29,12 @@ class ServicioAsistencia {
 		required TiendaRepository tiendaRepository,
 		required Database baseDatos,
 		SyncOrchestrator? syncOrchestrator,
-		required String tenantId,
 		required String tiendaId,
 		required String dispositivoId,
 	}) : _asistenciaRepository = asistenciaRepository,
        _tiendaRepository = tiendaRepository,
        _baseDatos = baseDatos,
        _syncOrchestrator = syncOrchestrator,
-       _tenantId = tenantId,
        _tiendaId = tiendaId,
        _dispositivoId = dispositivoId;
 
@@ -44,7 +42,6 @@ class ServicioAsistencia {
 	final TiendaRepository _tiendaRepository;
 	final Database _baseDatos;
 	final SyncOrchestrator? _syncOrchestrator;
-	final String _tenantId;
 	final String _tiendaId;
 	final String _dispositivoId;
 	final Uuid _generadorId = const Uuid();
@@ -62,12 +59,11 @@ class ServicioAsistencia {
 			);
 		}
 		final pin = (_random.nextInt(9000) + 1000).toString();
-		final sal = HasherPin.generarSal();
-		final pinHash = HasherPin.hashPin(pin, sal);
+		final credencial = HasherPin.codificar(pin);
 		final desafio = DesafioAsistencia(
 			id: _generadorId.v4(),
 			tiendaId: _tiendaId,
-			pinHash: '$sal:$pinHash',
+			pinHash: credencial,
 			expiraEn: DateTime.now().toUtc().add(const Duration(minutes: 5)),
 			creadoPor: creadoPor,
 			latitud: tienda.latitud,
@@ -200,12 +196,8 @@ class ServicioAsistencia {
 		return _asistenciaRepository.obtenerEntradaAbierta(usuarioId);
 	}
 
-	bool _verificarPin(String pin, String pinHashAlmacenado) {
-		final partes = pinHashAlmacenado.split(':');
-		if (partes.length != 2) {
-			return false;
-		}
-		return HasherPin.verificar(pin, partes[0], partes[1]);
+	bool _verificarPin(String pin, String pinCredencial) {
+		return HasherPin.verificar(pin, pinCredencial);
 	}
 
 	void _validarUbicacion({
@@ -273,7 +265,6 @@ class ServicioAsistencia {
 		await sync.registrarEvento(
 			SyncEvent(
 				id: _generadorId.v4(),
-				tenantId: _tenantId,
 				tiendaId: _tiendaId,
 				dispositivoId: _dispositivoId,
 				tipo: tipo,

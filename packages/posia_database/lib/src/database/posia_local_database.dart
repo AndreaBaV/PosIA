@@ -9,30 +9,26 @@ import '../seed/placeholders_ejemplo.dart';
 import 'motor_sqlite_nativo.dart'
 	if (dart.library.js_interop) 'motor_sqlite_web.dart' as motor_sqlite;
 
-/// Abre la base del dispositivo y bases aisladas por tenant.
+/// Abre la base del dispositivo y la base operativa unica.
 class PosiaLocalDatabase {
 	PosiaLocalDatabase._();
 
 	static PosiaLocalDatabase? _instancia;
 	static Database? _baseDispositivo;
-	static Database? _baseTenant;
-	static String? _tenantActivo;
+	static Database? _baseOperativa;
 
 	static const String _archivoDispositivo = 'posia_dispositivo.db';
 	static const String _archivoOperativa = 'posia_operativa.db';
 
-	/// Obtiene instancia singleton del gestor de base de datos.
 	static PosiaLocalDatabase obtenerInstancia() {
 		_instancia ??= PosiaLocalDatabase._();
 		return _instancia!;
 	}
 
-	/// Inicializa motor SQLite segun plataforma.
 	static Future<void> inicializarMotor() async {
 		await motor_sqlite.inicializarMotorSqlite();
 	}
 
-	/// Base con `app_config` (caja, hub, ultimo tenant).
 	Future<Database> obtenerBaseDatosDispositivo() async {
 		final existente = _baseDispositivo;
 		if (existente != null) {
@@ -53,45 +49,19 @@ class PosiaLocalDatabase {
 		return base;
 	}
 
-	/// Base operativa (catalogo, ventas, usuarios locales).
 	Future<Database> obtenerBaseDatos() async {
-		if (_tenantActivo == null || _tenantActivo!.isEmpty) {
-			throw StateError('No hay sesion activa. Inicie sesion primero.');
-		}
 		return _abrirBaseOperativa();
 	}
 
-	/// Tenant actualmente cargado en memoria.
-	String? get tenantActivo => _tenantActivo;
-
-	/// Marca sesion activa y abre la base operativa unica.
-	Future<void> establecerTenant(String tenantId) async {
-		final limpio = tenantId.trim();
-		if (limpio.isEmpty) {
-			throw StateError('Tenant ID invalido');
+	Future<void> cerrarBaseOperativa() async {
+		if (_baseOperativa != null) {
+			await _baseOperativa!.close();
+			_baseOperativa = null;
 		}
-		if (_tenantActivo == limpio && _baseTenant != null) {
-			return;
-		}
-		if (_baseTenant != null) {
-			await _baseTenant!.close();
-			_baseTenant = null;
-		}
-		_tenantActivo = limpio;
-		await _abrirBaseOperativa();
-	}
-
-	/// Cierra la base del tenant (p. ej. al cerrar sesion).
-	Future<void> liberarTenant() async {
-		if (_baseTenant != null) {
-			await _baseTenant!.close();
-			_baseTenant = null;
-		}
-		_tenantActivo = null;
 	}
 
 	Future<Database> _abrirBaseOperativa() async {
-		final existente = _baseTenant;
+		final existente = _baseOperativa;
 		if (existente != null) {
 			return existente;
 		}
@@ -102,7 +72,7 @@ class PosiaLocalDatabase {
 			onCreate: _crearEsquemaTenant,
 			onUpgrade: _migrarEsquemaTenant,
 		);
-		_baseTenant = base;
+		_baseOperativa = base;
 		return base;
 	}
 
@@ -174,6 +144,12 @@ class PosiaLocalDatabase {
 		}
 		if (versionAnterior < 20 && versionNueva >= 20) {
 			await MigracionesEsquema.migrarVersion19A20(base);
+		}
+		if (versionAnterior < 21 && versionNueva >= 21) {
+			await MigracionesEsquema.migrarVersion20A21(base);
+		}
+		if (versionAnterior < 22 && versionNueva >= 22) {
+			await MigracionesEsquema.migrarVersion21A22(base);
 		}
 	}
 }

@@ -42,7 +42,6 @@ class ServicioCaja {
   /// [syncOrchestrator] Cola de sincronizacion.
   /// [servicioCarniceria] Modulo vertical carniceria opcional.
   /// [servicioFarmacia] Modulo vertical farmacia opcional.
-  /// [tenantId] Tenant activo en licencia.
   /// [tiendaId] Tienda de la caja.
   /// [cajaId] Identificador de caja registradora.
   ServicioCaja({
@@ -64,7 +63,6 @@ class ServicioCaja {
     CotizacionRepository? cotizacionRepository,
     TicketEsperaRepository? ticketEsperaRepository,
     ServicioCorteCaja? servicioCorteCaja,
-    required String tenantId,
     required String tiendaId,
     required String cajaId,
   }) : _productoRepository = productoRepository,
@@ -85,7 +83,6 @@ class ServicioCaja {
        _cotizacionRepository = cotizacionRepository,
        _ticketEsperaRepository = ticketEsperaRepository,
        _servicioCorteCaja = servicioCorteCaja,
-       _tenantId = tenantId,
        _tiendaId = tiendaId,
        _cajaId = cajaId;
 
@@ -107,7 +104,6 @@ class ServicioCaja {
   final CotizacionRepository? _cotizacionRepository;
   final TicketEsperaRepository? _ticketEsperaRepository;
   final ServicioCorteCaja? _servicioCorteCaja;
-  final String _tenantId;
   final String _tiendaId;
   final String _cajaId;
 
@@ -909,7 +905,6 @@ class ServicioCaja {
   Future<void> _registrarEventoVenta(Venta venta) async {
     final evento = SyncEvent(
       id: _generadorId.v4(),
-      tenantId: _tenantId,
       tiendaId: _tiendaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.saleCompleted,

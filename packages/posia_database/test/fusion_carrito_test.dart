@@ -29,12 +29,10 @@ Future<ServicioCaja> _crearServicioCaja(FixtureAdmin fixture) async {
 			colaLocal: SyncEventRepository(baseDatos: base),
 			clienteHub: null,
 			clienteLan: null,
-			tenantId: tenantPruebaId,
 			tiendaId: fixture.tiendaOrigenId,
 			dispositivoId: cajaPruebaId,
 		),
 		servicioCarniceria: ServicioCarniceria(),
-		tenantId: tenantPruebaId,
 		tiendaId: fixture.tiendaOrigenId,
 		cajaId: cajaPruebaId,
 	);
