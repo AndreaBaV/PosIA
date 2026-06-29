@@ -1,7 +1,7 @@
 name: posia_pos
 description: Aplicacion de caja POSIA para Windows, iOS y Android.
 publish_to: none
-version: 1.0.0+14
+version: 1.0.0+15
 
 environment:
   sdk: ^3.11.0
@@ -55,6 +55,12 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
+  windows:
+    generate: true
+    image_path: "assets/branding/app_icon.png"
+  macos:
+    generate: true
+    image_path: "assets/branding/app_icon.png"
   image_path: assets/branding/app_icon.png
   adaptive_icon_background: "#2E7D32"
   adaptive_icon_foreground: assets/branding/app_icon.png
