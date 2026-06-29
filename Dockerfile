@@ -14,7 +14,7 @@ COPY server/sync_api/ ./
 RUN dart compile exe bin/server.dart -o /app/server/sync_api/server
 
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=construir /app/server/sync_api/server /app/server
 ENV PORT=8080
