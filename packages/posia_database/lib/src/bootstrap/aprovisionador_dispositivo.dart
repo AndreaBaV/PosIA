@@ -15,6 +15,9 @@ class AprovisionadorDispositivo {
 
 	/// Ejecuta una sola vez por instalacion antes de mostrar la UI.
 	static Future<void> asegurar(ConfigRepository config) async {
+		// Refresca el hub desde el build/env aunque ya este instalado,
+		// para que cambiar de servidor (Render -> 24/7) surta efecto.
+		await _refrescarHubDesdeConfig(config);
 		if (await config.esInstalacionCompleta()) {
 			return;
 		}
@@ -37,6 +40,22 @@ class AprovisionadorDispositivo {
 			await config.guardarHubApiKey(ConfiguracionDespliegue.hubApiKey);
 			await config.marcarInstalacionCompleta();
 		}
+	}
+
+	/// Sincroniza la URL/clave del hub guardadas con la config de build/env.
+	///
+	/// Solo requiere URL: soporta servidores con o sin API key.
+	static Future<void> _refrescarHubDesdeConfig(ConfigRepository config) async {
+		final urlBuild =
+			ConfiguracionDespliegue.hubUrl.trim().replaceAll(RegExp(r'/+$'), '');
+		if (urlBuild.isEmpty) {
+			return;
+		}
+		final urlActual = await config.obtenerHubUrl();
+		if (urlActual != urlBuild) {
+			await config.guardarHubUrl(urlBuild);
+		}
+		await config.guardarHubApiKey(ConfiguracionDespliegue.hubApiKey);
 	}
 
 	/// Genera UUID de caja si aun no hay identidad unica del dispositivo.

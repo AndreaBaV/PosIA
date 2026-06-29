@@ -46,10 +46,10 @@ const int INTERVALO_SYNC_PERIODICO_SEGUNDOS = 60;
 const int INTERVALO_MANTENER_HUB_VIVO_SEGUNDOS = 600;
 
 /// Timeout HTTP normal de sync (falla rapido y reintenta en el siguiente ciclo).
-const int TIMEOUT_HUB_SYNC_SEGUNDOS = 25;
+const int TIMEOUT_HUB_SYNC_SEGUNDOS = 15;
 
-/// Timeout del ping de despertar (Render free puede tardar ~50 s).
-const int TIMEOUT_HUB_DESPERTAR_SEGUNDOS = 90;
+/// Timeout del health check del hub (servidor 24/7, sin arranque en frio).
+const int TIMEOUT_HUB_DESPERTAR_SEGUNDOS = 15;
 
 /// Nombre del servicio mDNS para descubrimiento LAN.
 const String MDNS_SERVICIO_SYNC = 'posia-sync';

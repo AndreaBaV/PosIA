@@ -9,7 +9,6 @@ import 'package:posia_database/posia_database.dart';
 
 import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
-import '../util/debug_agent_log.dart';
 import 'gestor_acceso_biometrico.dart';
 import 'gestor_sesion_persistente.dart';
 
@@ -26,14 +25,6 @@ class ServicioInicioSesion {
 		final container = ref.container;
 		final usuario = resultado.usuario;
 		final esAdmin = usuario.rol == RolUsuario.administrador;
-		// #region agent log
-		debugAgentLog(
-			'servicio_inicio_sesion.dart:completar:entry',
-			'Inicio completar sesion',
-			{'rol': usuario.rol.name, 'esAdmin': esAdmin, 'tiendasHub': resultado.tiendas.length},
-			hypothesisId: 'A',
-		);
-		// #endregion
 
 		if (esAdmin) {
 			container.read(sesionAdminListoProvider.notifier).preparando();
@@ -49,48 +40,16 @@ class ServicioInicioSesion {
 			if (esAdmin) {
 				container.read(sesionTiendaProvider.notifier).cerrar();
 			}
-			// #region agent log
-			debugAgentLog(
-				'servicio_inicio_sesion.dart:completar:pre-contenedor',
-				'Usuario en sesion, cargando contenedor',
-				{'usuarioId': usuario.id},
-				hypothesisId: 'B',
-			);
-			// #endregion
 			container.invalidate(contenedorServiciosProvider);
 			await container.read(contenedorServiciosProvider.future);
-			// #region agent log
-			debugAgentLog(
-				'servicio_inicio_sesion.dart:completar:post-contenedor',
-				'Contenedor servicios listo',
-				{},
-				hypothesisId: 'B',
-			);
-			// #endregion
 
 			final servicio = await container.read(servicioAdminProvider.future);
-			// #region agent log
-			debugAgentLog(
-				'servicio_inicio_sesion.dart:completar:pre-activar',
-				'Llamando activarSesionTrasLogin',
-				{'tiendasDesdeHub': resultado.tiendas.length},
-				hypothesisId: 'C',
-			);
-			// #endregion
 			await servicio
 				.activarSesionTrasLogin(
 					usuario,
 					tiendasDesdeHub: resultado.tiendas,
 				)
-				.timeout(const Duration(seconds: TIMEOUT_HUB_DESPERTAR_SEGUNDOS + TIMEOUT_HUB_SYNC_SEGUNDOS + 10));
-			// #region agent log
-			debugAgentLog(
-				'servicio_inicio_sesion.dart:completar:post-activar',
-				'activarSesionTrasLogin completado',
-				{},
-				hypothesisId: 'C',
-			);
-			// #endregion
+				.timeout(const Duration(seconds: TIMEOUT_HUB_SYNC_SEGUNDOS + 10));
 			container.invalidate(contenedorServiciosProvider);
 
 			if (!esAdmin) {
@@ -119,39 +78,11 @@ class ServicioInicioSesion {
 				}
 			}
 
-			// #region agent log
-			debugAgentLog(
-				'servicio_inicio_sesion.dart:completar:exit-ok',
-				'Completar sesion exitoso',
-				{'esAdmin': esAdmin},
-				hypothesisId: 'A',
-				runId: 'post-fix',
-			);
-			// #endregion
 			return usuario;
-		} catch (error, stack) {
-			// #region agent log
-			debugAgentLog(
-				'servicio_inicio_sesion.dart:completar:error',
-				'Error en completar sesion',
-				{'error': error.toString(), 'stack': stack.toString().split('\n').take(3).join(' | ')},
-				hypothesisId: 'A',
-			);
-			// #endregion
-			rethrow;
 		} finally {
 			if (esAdmin) {
 				container.read(sesionAdminListoProvider.notifier).listo();
 				container.invalidate(tiendasAccesoProvider);
-				// #region agent log
-				debugAgentLog(
-					'servicio_inicio_sesion.dart:completar:finally',
-					'Admin marcado listo',
-					{'adminListo': container.read(sesionAdminListoProvider)},
-					hypothesisId: 'E',
-					runId: 'post-fix',
-				);
-				// #endregion
 			}
 		}
 	}

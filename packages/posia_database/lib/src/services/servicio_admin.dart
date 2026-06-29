@@ -7,7 +7,6 @@
 library;
 
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:posia_core/posia_core.dart';
 import 'package:posia_pricing/posia_pricing.dart';
@@ -1102,23 +1101,6 @@ class ServicioAdmin {
     Usuario usuario, {
     List<Tienda> tiendasDesdeHub = const [],
   }) async {
-    // #region agent log
-    try {
-      File(r'c:\Users\andyb\ProyectosPersonales2026\POSIA\debug-a72769.log').writeAsStringSync(
-        '${jsonEncode({
-          'sessionId': 'a72769',
-          'timestamp': DateTime.now().millisecondsSinceEpoch,
-          'location': 'servicio_admin.dart:activarSesionTrasLogin:entry',
-          'message': 'Inicio activarSesionTrasLogin',
-          'data': {'rol': usuario.rol.name, 'tiendasHub': tiendasDesdeHub.length},
-          'hypothesisId': 'C',
-          'runId': 'pre-fix',
-        })}\n',
-        mode: FileMode.append,
-        flush: true,
-      );
-    } on Object {}
-    // #endregion
     if (usuario.rol != RolUsuario.administrador) {
       final tiendaId = usuario.tiendaId;
       if (tiendaId == null || tiendaId.isEmpty) {
@@ -1129,29 +1111,6 @@ class ServicioAdmin {
       await LimpiadorBaseLocal.eliminarDatosEjemplo(_baseDatos);
       await _asegurarTiendasAdministrador(tiendasIniciales: tiendasDesdeHub);
     }
-    // #region agent log
-    try {
-      final activasPost = usuario.rol == RolUsuario.administrador
-          ? await _tiendaRepository.listarActivasOperativas()
-          : <Tienda>[];
-      File(r'c:\Users\andyb\ProyectosPersonales2026\POSIA\debug-a72769.log').writeAsStringSync(
-        '${jsonEncode({
-          'sessionId': 'a72769',
-          'timestamp': DateTime.now().millisecondsSinceEpoch,
-          'location': 'servicio_admin.dart:activarSesionTrasLogin:exit',
-          'message': 'Fin activarSesionTrasLogin',
-          'data': {
-            'rol': usuario.rol.name,
-            'tiendasActivasLocales': activasPost.length,
-          },
-          'hypothesisId': 'C',
-          'runId': 'post-fix',
-        })}\n',
-        mode: FileMode.append,
-        flush: true,
-      );
-    } on Object {}
-    // #endregion
   }
 
   Future<Usuario?> autenticarUsuarioPorPin(String pin) async {
@@ -2397,25 +2356,7 @@ class ServicioAdmin {
     }
     final clave = await _configRepository.obtenerValor(claveConfigHubApiKey);
     final cliente = HubSyncClient(urlBase: hubUrl, claveApi: clave);
-    await cliente.mantenerHubVivo();
     final remotas = await cliente.obtenerTiendas();
-    // #region agent log
-    try {
-      File(r'c:\Users\andyb\ProyectosPersonales2026\POSIA\debug-a72769.log').writeAsStringSync(
-        '${jsonEncode({
-          'sessionId': 'a72769',
-          'timestamp': DateTime.now().millisecondsSinceEpoch,
-          'location': 'servicio_admin.dart:_sincronizarTiendasDesdeHub',
-          'message': 'Tiendas recibidas del hub',
-          'data': {'remotas': remotas.length, 'hubUrl': hubUrl.isNotEmpty},
-          'hypothesisId': 'F',
-          'runId': 'post-fix',
-        })}\n',
-        mode: FileMode.append,
-        flush: true,
-      );
-    } on Object {}
-    // #endregion
     if (remotas.isEmpty) {
       return;
     }

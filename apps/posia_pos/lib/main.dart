@@ -18,7 +18,6 @@ import 'providers/app_providers.dart';
 import 'screens/pantalla_inicio.dart';
 import 'screens/pantalla_instalacion_tecnico.dart';
 import 'providers/admin_providers.dart';
-import 'util/debug_agent_log.dart';
 import 'util/plataforma_util.dart';
 
 /// Inicia runtime Flutter y arranca aplicacion POSIA.
@@ -84,71 +83,26 @@ Widget _resolverPantallaInicio({
 			data: (_) => instalacionAsync.when(
 				data: (instalacionLista) {
 					if (!instalacionLista && usuario == null) {
-						// #region agent log
-						debugAgentLog('main.dart:route', 'Pantalla instalacion', {}, hypothesisId: 'D');
-						// #endregion
 						return const PantallaInstalacionTecnico();
 					}
 					if (usuario == null) {
-						// #region agent log
-						debugAgentLog('main.dart:route', 'Pantalla login', {}, hypothesisId: 'D');
-						// #endregion
 						return const PantallaInicioSesion();
 					}
 					if (usuario.rol == RolUsuario.administrador && tiendaConfirmada == null) {
 						if (adminListo == false) {
-							// #region agent log
-							debugAgentLog(
-								'main.dart:route',
-								'Pantalla carga (admin no listo)',
-								{'usuarioId': usuario.id},
-								hypothesisId: 'E',
-							);
-							// #endregion
 							return const _PantallaCarga();
 						}
-						// #region agent log
-						debugAgentLog(
-							'main.dart:route',
-							'Pantalla acceso tienda',
-							{'usuarioId': usuario.id},
-							hypothesisId: 'D',
-						);
-						// #endregion
 						return const PantallaAccesoTienda();
 					}
-					// #region agent log
-					debugAgentLog(
-						'main.dart:route',
-						'Pantalla inicio',
-						{'rol': usuario.rol.name, 'tiendaId': tiendaConfirmada},
-						hypothesisId: 'D',
-					);
-					// #endregion
 					return const PantallaInicio();
 				},
-				loading: () {
-					// #region agent log
-					debugAgentLog('main.dart:route', 'Pantalla carga (instalacion loading)', {}, hypothesisId: 'D');
-					// #endregion
-					return const _PantallaCarga();
-				},
+				loading: () => const _PantallaCarga(),
 				error: (error, _) => _PantallaError(mensaje: error.toString()),
 			),
-			loading: () {
-				// #region agent log
-				debugAgentLog('main.dart:route', 'Pantalla carga (sesion restaurada loading)', {}, hypothesisId: 'D');
-				// #endregion
-				return const _PantallaCarga();
-			},
+			loading: () => const _PantallaCarga(),
 			error: (error, _) => _PantallaError(mensaje: error.toString()),
 		),
-		loading: () {
-			// #region agent log
-			debugAgentLog('main.dart:route', 'Pantalla carga (inicializacion loading)', {}, hypothesisId: 'D');
-			// #endregion
-			return const _PantallaCarga();
-		},
+		loading: () => const _PantallaCarga(),
 		error: (error, _) => _PantallaError(mensaje: error.toString()),
 	);
 }
