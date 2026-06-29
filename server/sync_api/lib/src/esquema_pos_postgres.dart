@@ -187,37 +187,10 @@ class EsquemaPosPostgres {
 				PRIMARY KEY (producto_id, almacen_id)
 			)
 		''');
-		await _migrarLegacy(conexion);
+		await _asegurarIndices(conexion);
 	}
 
-	/// Elimina tablas/columnas de despliegues multi-tenant anteriores.
-	static Future<void> _migrarLegacy(Connection conexion) async {
-		for (final tabla in [
-			'vendedores',
-			'proveedores',
-			'pharmacy_lots',
-			'tipos_presentacion',
-		]) {
-			await conexion.execute('DROP TABLE IF EXISTS $tabla');
-		}
-		await conexion.execute('DROP INDEX IF EXISTS idx_stores_tenant');
-		await conexion.execute('DROP INDEX IF EXISTS idx_users_tenant_codigo');
-		await conexion.execute('DROP INDEX IF EXISTS idx_sync_events_tenant_seq');
-		await conexion.execute('ALTER TABLE stores DROP COLUMN IF EXISTS tenant_id');
-		await conexion.execute('ALTER TABLE users DROP COLUMN IF EXISTS tenant_id');
-		await conexion.execute('ALTER TABLE sync_events DROP COLUMN IF EXISTS tenant_id');
-		await conexion.execute('''
-			ALTER TABLE users ADD COLUMN IF NOT EXISTS pin_credencial TEXT
-		''');
-		await conexion.execute('''
-			UPDATE users
-			SET pin_credencial = pin_salt || ':' || pin_hash
-			WHERE (pin_credencial IS NULL OR pin_credencial = '')
-				AND pin_hash IS NOT NULL
-				AND pin_salt IS NOT NULL
-		''');
-		await conexion.execute('ALTER TABLE users DROP COLUMN IF EXISTS pin_hash');
-		await conexion.execute('ALTER TABLE users DROP COLUMN IF EXISTS pin_salt');
+	static Future<void> _asegurarIndices(Connection conexion) async {
 		await conexion.execute('''
 			CREATE UNIQUE INDEX IF NOT EXISTS idx_users_codigo_unico ON users(codigo)
 		''');

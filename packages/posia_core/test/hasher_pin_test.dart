@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:posia_core/posia_core.dart';
 import 'package:test/test.dart';
 
@@ -19,12 +17,8 @@ void main() {
 			expect(HasherPin.verificar('1234', credencial), isFalse);
 		});
 
-		test('empaqueta y verifica formato legacy', () {
-			final sal = base64UrlEncode(List<int>.generate(16, (i) => i + 1));
-			// Simula hash legacy preexistente empaquetado.
-			final credencial = HasherPin.empaquetarLegacy(sal, 'hashLegacyEjemplo');
-			expect(credencial.contains(':'), isTrue);
-			expect(credencial.startsWith(sal), isTrue);
+		test('rechaza formato con separador legacy', () {
+			expect(HasherPin.verificar('1234', 'sal:hash'), isFalse);
 		});
 	});
 }

@@ -596,16 +596,8 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 
 String? extraerPinCredencialSync(Map<String, Object?> payload) {
 	final credencial = payload['pinCredencial'] as String?;
-	if (credencial != null && credencial.isNotEmpty) {
-		return credencial;
+	if (credencial == null || credencial.isEmpty) {
+		return null;
 	}
-	final hash = payload['pinHash'] as String?;
-	final sal = payload['pinSalt'] as String?;
-	if (hash != null &&
-		sal != null &&
-		hash.isNotEmpty &&
-		sal.isNotEmpty) {
-		return HasherPin.empaquetarLegacy(sal, hash);
-	}
-	return null;
+	return credencial;
 }

@@ -975,54 +975,14 @@ class MigracionesEsquema {
 		);
 	}
 
-	/// Una columna pin_credencial compacta (v21 → v22).
+	/// Recrea usuarios con pin_credencial; credenciales viejas se obtienen del hub.
 	static Future<void> migrarVersion21A22(Database base) async {
 		final info = await base.rawQuery('PRAGMA table_info(usuarios)');
 		final tieneCredencial = info.any((fila) => fila['name'] == 'pin_credencial');
 		if (tieneCredencial) {
 			return;
 		}
-		await base.execute('''
-			CREATE TABLE usuarios_compactos (
-				id TEXT PRIMARY KEY,
-				nombre TEXT NOT NULL,
-				codigo TEXT NOT NULL COLLATE NOCASE,
-				pin_credencial TEXT NOT NULL,
-				rol TEXT NOT NULL CHECK (rol IN ('administrador', 'supervisor', 'empleado')),
-				tienda_id TEXT,
-				activo INTEGER NOT NULL DEFAULT 1 CHECK (activo IN (0, 1)),
-				creado_en TEXT NOT NULL,
-				actualizado_en TEXT NOT NULL,
-				UNIQUE (codigo)
-			)
-		''');
-		await base.execute('''
-			INSERT INTO usuarios_compactos (
-				id, nombre, codigo, pin_credencial, rol, tienda_id, activo, creado_en, actualizado_en
-			)
-			SELECT
-				id,
-				nombre,
-				codigo,
-				CASE
-					WHEN pin_salt IS NOT NULL AND pin_salt != ''
-						THEN pin_salt || ':' || pin_hash
-					ELSE pin_hash
-				END,
-				rol,
-				tienda_id,
-				activo,
-				creado_en,
-				actualizado_en
-			FROM usuarios
-		''');
-		await base.execute('DROP TABLE usuarios');
-		await base.execute('ALTER TABLE usuarios_compactos RENAME TO usuarios');
-		await base.execute(
-			'CREATE INDEX IF NOT EXISTS idx_usuarios_tienda ON usuarios(tienda_id)',
-		);
-		await base.execute(
-			'CREATE INDEX IF NOT EXISTS idx_usuarios_activo ON usuarios(activo)',
-		);
+		await base.execute('DROP TABLE IF EXISTS usuarios');
+		await _crearTablaUsuariosSegura(base);
 	}
 }

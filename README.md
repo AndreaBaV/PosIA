@@ -30,8 +30,6 @@ POSIA/
 │   ├── posia_hardware/     # Contratos de hardware
 │   └── posia_ui/           # Componentes visuales de caja
 ├── docs/                   # Documentación técnica
-├── platform/               # Registro maestro de tenants + CLI aprovisionamiento
-│   └── tenant_registry/    # SQLite local → publica en Neon
 └── server/                 # Hub de sync (API + Postgres)
 ```
 

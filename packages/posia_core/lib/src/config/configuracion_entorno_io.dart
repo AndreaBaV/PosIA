@@ -13,14 +13,10 @@ List<String> rutasEnvMonorepo({String? subcarpeta}) {
 		'$base${Platform.pathSeparator}.env',
 		'$cwd${Platform.pathSeparator}.env',
 		'$cwd${Platform.pathSeparator}apps${Platform.pathSeparator}posia_pos${Platform.pathSeparator}.env',
-		'$cwd${Platform.pathSeparator}platform${Platform.pathSeparator}.env',
 		'$cwd${Platform.pathSeparator}server${Platform.pathSeparator}sync_api${Platform.pathSeparator}.env',
 	];
 	var dir = Directory(cwd);
 	for (var i = 0; i < 6; i++) {
-		rutas.add(
-			'${dir.path}${Platform.pathSeparator}platform${Platform.pathSeparator}.env',
-		);
 		rutas.add(
 			'${dir.path}${Platform.pathSeparator}server${Platform.pathSeparator}sync_api${Platform.pathSeparator}.env',
 		);

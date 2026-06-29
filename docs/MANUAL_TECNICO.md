@@ -120,7 +120,6 @@ POSIA/
 │   ├── posia_voice/          # Comandos de voz (móvil)
 │   ├── posia_module_butcher/ # Carnicería
 │   └── posia_module_pharmacy/# Farmacia
-├── platform/tenant_registry/ # CLI aprovisionamiento tenants
 └── server/sync_api/          # Hub sync (Dart + Postgres)
 ```
 
@@ -631,4 +630,3 @@ POSIA es un punto de venta para comercios. Los datos se almacenan **principalmen
 | CI móvil | `.github/workflows/mobile-release.yml` |
 | iOS export | `apps/posia_pos/ios/ExportOptions.plist` |
 | API hub | `server/sync_api/README.md` |
-| Tenants | `platform/README.md` |
