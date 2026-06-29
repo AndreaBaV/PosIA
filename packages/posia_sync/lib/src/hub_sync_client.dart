@@ -81,13 +81,20 @@ class HubSyncClient {
 		if (respuesta.statusCode < 200 || respuesta.statusCode >= 300) {
 			return const ResultadoPullHub(eventos: [], ultimoSeq: 0, exitoso: false);
 		}
-		final json = jsonDecode(respuesta.body) as Map<String, Object?>;
-		final lista = json['events'] as List<Object?>? ?? [];
-		final eventos = lista
-			.whereType<Map<String, Object?>>()
-			.map(_deserializarEvento)
-			.whereType<SyncEvent>()
-			.toList();
+		final json = jsonDecode(respuesta.body) as Map<String, dynamic>;
+		final lista = json['events'];
+		final eventos = <SyncEvent>[];
+		if (lista is List) {
+			for (final item in lista) {
+				if (item is! Map) {
+					continue;
+				}
+				final evento = _deserializarEvento(Map<String, dynamic>.from(item));
+				if (evento != null) {
+					eventos.add(evento);
+				}
+			}
+		}
 		return ResultadoPullHub(
 			eventos: eventos,
 			ultimoSeq: json['lastSeq'] as int? ?? desdeSeq,
@@ -189,24 +196,25 @@ class HubSyncClient {
 	}
 
 	List<TiendaHub> _mapearTiendas(Object? crudo) {
-		if (crudo is! List<Object?>) {
+		if (crudo is! List) {
 			return const [];
 		}
 		final tiendas = <TiendaHub>[];
 		for (final item in crudo) {
-			if (item is! Map<String, Object?>) {
+			if (item is! Map) {
 				continue;
 			}
-			final id = item['id'] as String? ?? '';
+			final map = Map<String, dynamic>.from(item);
+			final id = map['id'] as String? ?? '';
 			if (id.isEmpty) {
 				continue;
 			}
 			tiendas.add(
 				TiendaHub(
 					id: id,
-					nombre: item['nombre'] as String? ?? '',
-					direccion: item['direccion'] as String? ?? '',
-					activa: item['activa'] as bool? ?? true,
+					nombre: map['nombre'] as String? ?? '',
+					direccion: map['direccion'] as String? ?? '',
+					activa: map['activa'] as bool? ?? true,
 				),
 			);
 		}
@@ -270,7 +278,7 @@ class HubSyncClient {
 		};
 	}
 
-	SyncEvent? _deserializarEvento(Map<String, Object?> json) {
+	SyncEvent? _deserializarEvento(Map<String, dynamic> json) {
 		final tipoNombre = json['type'] as String? ?? '';
 		final TipoSyncEvento tipo;
 		try {
