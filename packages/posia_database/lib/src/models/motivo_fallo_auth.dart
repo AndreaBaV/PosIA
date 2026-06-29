@@ -35,6 +35,7 @@ class IntentoAutenticacionAuth {
 enum MotivoFalloAuth {
 	hubNoConfigurado,
 	hubNoDisponible,
+	hubSinPostgres,
 	usuarioNoEncontrado,
 	credencialesInvalidas,
 	usuarioInactivo,
@@ -49,6 +50,9 @@ extension MensajeMotivoFalloAuth on MotivoFalloAuth {
 			case MotivoFalloAuth.hubNoDisponible:
 				return 'No se pudo contactar el servidor. Verifique la URL del hub y la API key '
 					'en Configuración técnica, o espere ~1 min si el servidor gratuito estaba dormido.';
+			case MotivoFalloAuth.hubSinPostgres:
+				return 'El servidor hub no tiene base de datos configurada. '
+					'Defina DATABASE_URL (Neon) en el despliegue del backend.';
 			case MotivoFalloAuth.usuarioNoEncontrado:
 				return 'Usuario no encontrado';
 			case MotivoFalloAuth.credencialesInvalidas:

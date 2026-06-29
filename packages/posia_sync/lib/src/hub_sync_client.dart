@@ -95,6 +95,21 @@ class HubSyncClient {
 		);
 	}
 
+	/// Indica si el hub tiene Postgres y puede autenticar usuarios.
+	Future<bool> tieneAuthHub() async {
+		final uri = Uri.parse('$_urlBase/v1/auth/preview').replace(
+			queryParameters: {'codigo': '__posia_probe__'},
+		);
+		try {
+			final respuesta = await _clienteHttp
+				.get(uri, headers: _construirCabeceras())
+				.timeout(const Duration(seconds: TIMEOUT_HUB_SYNC_SEGUNDOS));
+			return respuesta.statusCode != 503;
+		} on Object {
+			return false;
+		}
+	}
+
 	Future<PerfilUsuarioHub?> obtenerPerfilUsuario(String codigo) async {
 		final limpio = codigo.trim();
 		if (limpio.isEmpty) {

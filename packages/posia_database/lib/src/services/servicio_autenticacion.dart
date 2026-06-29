@@ -33,6 +33,9 @@ class ServicioAutenticacion {
 			// Render free puede tardar ~50 s en despertar; usar timeout largo.
 			final salud = await hub.mantenerHubVivo();
 			if (salud) {
+				if (!await hub.tieneAuthHub()) {
+					return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.hubSinPostgres);
+				}
 				final perfil = await hub.obtenerPerfilUsuario(limpio);
 				if (perfil != null) {
 					if (!perfil.activo) {
@@ -63,6 +66,9 @@ class ServicioAutenticacion {
 		if (hub != null) {
 			final salud = await hub.mantenerHubVivo();
 			if (salud) {
+				if (!await hub.tieneAuthHub()) {
+					return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.hubSinPostgres);
+				}
 				final remoto = await hub.iniciarSesion(codigo: limpio, pin: pin);
 				if (remoto != null) {
 					if (!remoto.perfil.activo) {
