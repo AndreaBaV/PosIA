@@ -71,11 +71,14 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		if (eventos.isEmpty) {
 			return;
 		}
-		await _baseDatos.transaction((tx) async {
-			for (final evento in eventos) {
-				await _aplicarEventoInterno(evento, ejecutor: tx);
-			}
-		});
+		// Sin transaccion envolvente: los handlers usan los repositorios sobre
+		// la base externa; anidarlos en una transaccion provoca deadlock en
+		// sqflite (la consulta sobre la base espera a la transaccion y viceversa).
+		// Los upserts son idempotentes y el cursor solo avanza tras el lote,
+		// por lo que un reintento parcial es seguro.
+		for (final evento in eventos) {
+			await _aplicarEventoInterno(evento);
+		}
 	}
 
 	@override
