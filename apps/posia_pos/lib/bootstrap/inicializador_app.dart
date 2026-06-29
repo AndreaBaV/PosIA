@@ -45,7 +45,9 @@ class InicializadorApp {
 		final usuario = await UsuarioRepository(baseDatos: base).obtenerPorId(
 			usuarioId,
 		);
-		if (usuario == null || !usuario.activo) {
+		if (usuario == null ||
+			!usuario.activo ||
+			usuario.rol == RolUsuario.administrador) {
 			await config.guardarValor(claveConfigUltimoUsuarioId, '');
 		}
 	}

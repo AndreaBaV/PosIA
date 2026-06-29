@@ -1,6 +1,8 @@
 /// Seleccion de tienda solo para administradores tras iniciar sesion.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:posia_core/posia_core.dart';
@@ -37,10 +39,26 @@ class _PantallaAccesoTiendaState extends ConsumerState<PantallaAccesoTienda> {
 				contenido: tiendasAsync.when(
 					data: (tiendas) {
 						if (tiendas.isEmpty) {
-							return const Card(
+							return Card(
 								child: Padding(
-									padding: EdgeInsets.all(24.0),
-									child: Text('Sin tiendas activas'),
+									padding: const EdgeInsets.all(24.0),
+									child: Column(
+										crossAxisAlignment: CrossAxisAlignment.stretch,
+										children: [
+											const Text(
+												'Sin tiendas activas',
+												textAlign: TextAlign.center,
+											),
+											const SizedBox(height: 16.0),
+											OutlinedButton.icon(
+												onPressed: _ingresando
+													? null
+													: () => ref.invalidate(tiendasAccesoProvider),
+												icon: const Icon(Icons.refresh),
+												label: const Text('Reintentar'),
+											),
+										],
+									),
 								),
 							);
 						}
@@ -194,6 +212,16 @@ class _PantallaAccesoTiendaState extends ConsumerState<PantallaAccesoTienda> {
 			ref.invalidate(contenedorServiciosProvider);
 			await ref.read(contenedorServiciosProvider.future);
 			ref.read(sesionTiendaProvider.notifier).confirmar(tiendaId);
+			final contenedorSync = await ref.read(contenedorServiciosProvider.future);
+			unawaited(
+				Future(() async {
+					try {
+						await contenedorSync.servicioAdmin.reconciliarConHub();
+					} on Object {
+						// La reconciliacion completa no debe bloquear el acceso a caja.
+					}
+				}),
+			);
 		} finally {
 			if (mounted) {
 				setState(() => _ingresando = false);

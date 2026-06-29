@@ -1,6 +1,8 @@
 /// Logica compartida para completar el inicio de sesion POSIA.
 library;
 
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:posia_core/posia_core.dart';
 import 'package:posia_database/posia_database.dart';
@@ -21,80 +23,87 @@ class ServicioInicioSesion {
 		bool registrarBiometria = false,
 	}) async {
 		final usuario = resultado.usuario;
+		final esAdmin = usuario.rol == RolUsuario.administrador;
 
-		final auth = await ref.read(servicioAutenticacionProvider.future);
-		await auth.guardarUsuarioRemoto(resultado);
-		final configRepo = await ref.read(configDispositivoRepoProvider.future);
-		await GestorSesionPersistente.guardar(configRepo, usuario);
-
-		if (usuario.rol == RolUsuario.administrador) {
+		if (esAdmin) {
 			ref.read(sesionAdminListoProvider.notifier).preparando();
 		}
-		ref.read(sesionUsuarioProvider.notifier).iniciar(usuario);
-		if (usuario.rol == RolUsuario.administrador) {
-			ref.read(sesionTiendaProvider.notifier).cerrar();
-		}
-		ref.invalidate(contenedorServiciosProvider);
-		await ref.read(contenedorServiciosProvider.future);
 
-		final servicio = await ref.read(servicioAdminProvider.future);
-		final hubUrl = await configRepo.obtenerHubUrl();
-		final hubApiKey = await configRepo.obtenerValor(claveConfigHubApiKey);
-		HubSyncClient? clienteHub;
-		if (hubUrl != null && hubUrl.isNotEmpty) {
-			clienteHub = HubSyncClient(urlBase: hubUrl, claveApi: hubApiKey);
-		}
-		await servicio.activarSesionTrasLogin(
-			usuario,
-			tiendasDesdeHub: resultado.tiendas,
-			obtenerTiendasRemotas: clienteHub == null
-				? null
-				: () async {
-					final remotas = await clienteHub!.obtenerTiendas();
-					return remotas
-						.map(
-							(t) => Tienda(
-								id: t.id,
-								nombre: t.nombre,
-								direccion: t.direccion,
-								activa: t.activa,
-							),
-						)
-						.toList();
-				},
-		);
-		ref.invalidate(contenedorServiciosProvider);
-		if (usuario.rol == RolUsuario.administrador) {
-			ref.read(sesionAdminListoProvider.notifier).listo();
-			ref.invalidate(tiendasAccesoProvider);
-		}
+		try {
+			final auth = await ref.read(servicioAutenticacionProvider.future);
+			await auth.guardarUsuarioRemoto(resultado);
+			final configRepo = await ref.read(configDispositivoRepoProvider.future);
+			await GestorSesionPersistente.guardar(configRepo, usuario);
 
-		if (usuario.rol != RolUsuario.administrador) {
-			final tiendaId = usuario.tiendaId;
-			if (tiendaId == null) {
-				throw StateError('Usuario sin tienda asignada');
+			ref.read(sesionUsuarioProvider.notifier).iniciar(usuario);
+			if (esAdmin) {
+				ref.read(sesionTiendaProvider.notifier).cerrar();
 			}
-			ref.read(sesionTiendaProvider.notifier).confirmar(tiendaId);
-		}
+			ref.invalidate(contenedorServiciosProvider);
+			await ref.read(contenedorServiciosProvider.future);
 
-		ref.read(sesionUsuarioProvider.notifier).iniciar(usuario);
-		final servicioCaja = await ref.read(servicioCajaProvider.future);
-		await servicioCaja.asegurarVendedorDesdeUsuario(usuario);
+			final servicio = await ref.read(servicioAdminProvider.future);
+			final hubUrl = await configRepo.obtenerHubUrl();
+			final hubApiKey = await configRepo.obtenerValor(claveConfigHubApiKey);
+			HubSyncClient? clienteHub;
+			if (hubUrl != null && hubUrl.isNotEmpty) {
+				clienteHub = HubSyncClient(urlBase: hubUrl, claveApi: hubApiKey);
+			}
+			await servicio
+				.activarSesionTrasLogin(
+					usuario,
+					tiendasDesdeHub: resultado.tiendas,
+					obtenerTiendasRemotas: clienteHub == null
+						? null
+						: () async {
+							final remotas = await clienteHub!.obtenerTiendas();
+							return remotas
+								.map(
+									(t) => Tienda(
+										id: t.id,
+										nombre: t.nombre,
+										direccion: t.direccion,
+										activa: t.activa,
+									),
+								)
+								.toList();
+						},
+				)
+				.timeout(const Duration(seconds: 30));
+			ref.invalidate(contenedorServiciosProvider);
 
-		if (registrarBiometria && pinPlano != null && pinPlano.isNotEmpty) {
-			final gestor = GestorAccesoBiometrico();
-			if (await gestor.estaDisponible()) {
-				await gestor.registrarPerfil(
-					PerfilAccesoBiometrico(
-						usuarioId: usuario.id,
-						codigo: usuario.codigo,
-						pin: pinPlano,
-						nombre: usuario.nombre,
-					),
-				);
+			if (!esAdmin) {
+				final tiendaId = usuario.tiendaId;
+				if (tiendaId == null) {
+					throw StateError('Usuario sin tienda asignada');
+				}
+				ref.read(sesionTiendaProvider.notifier).confirmar(tiendaId);
+				final servicioCaja = await ref.read(servicioCajaProvider.future);
+				await servicioCaja.asegurarVendedorDesdeUsuario(usuario);
+			}
+
+			ref.read(sesionUsuarioProvider.notifier).iniciar(usuario);
+
+			if (registrarBiometria && pinPlano != null && pinPlano.isNotEmpty) {
+				final gestor = GestorAccesoBiometrico();
+				if (await gestor.estaDisponible()) {
+					await gestor.registrarPerfil(
+						PerfilAccesoBiometrico(
+							usuarioId: usuario.id,
+							codigo: usuario.codigo,
+							pin: pinPlano,
+							nombre: usuario.nombre,
+						),
+					);
+				}
+			}
+
+			return usuario;
+		} finally {
+			if (esAdmin) {
+				ref.read(sesionAdminListoProvider.notifier).listo();
+				ref.invalidate(tiendasAccesoProvider);
 			}
 		}
-
-		return usuario;
 	}
 }

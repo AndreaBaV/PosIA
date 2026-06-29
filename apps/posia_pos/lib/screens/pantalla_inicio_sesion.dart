@@ -159,7 +159,6 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 							],
 							decoration: InputDecoration(
 								labelText: 'Usuario',
-								hintText: 'ADM001',
 								prefixIcon: const Icon(Icons.person_outline),
 								suffixIcon: _codigoFocus.hasFocus
 									? IconButton(

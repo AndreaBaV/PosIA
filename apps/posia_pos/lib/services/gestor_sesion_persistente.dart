@@ -49,25 +49,25 @@ class GestorSesionPersistente {
 			final usuario = await UsuarioRepository(baseDatos: base).obtenerPorId(
 				usuarioId,
 			);
-			if (usuario == null || !usuario.activo) {
+			if (usuario == null ||
+				!usuario.activo ||
+				usuario.rol == RolUsuario.administrador) {
 				await config.guardarValor(claveConfigUltimoUsuarioId, '');
 				return;
 			}
 			ref.read(sesionUsuarioProvider.notifier).iniciar(usuario);
 
-			if (usuario.rol != RolUsuario.administrador) {
-				final tiendaId = usuario.tiendaId;
-				if (tiendaId != null && tiendaId.isNotEmpty) {
-					ref.read(sesionTiendaProvider.notifier).confirmar(tiendaId);
-					final configDispositivo = await config.obtenerConfigDispositivo();
-					await config.guardarConfigDispositivo(
-						ConfigDispositivo(
-							tiendaId: tiendaId,
-							cajaId: configDispositivo.cajaId,
-							nombreCaja: configDispositivo.nombreCaja,
-						),
-					);
-				}
+			final tiendaId = usuario.tiendaId;
+			if (tiendaId != null && tiendaId.isNotEmpty) {
+				ref.read(sesionTiendaProvider.notifier).confirmar(tiendaId);
+				final configDispositivo = await config.obtenerConfigDispositivo();
+				await config.guardarConfigDispositivo(
+					ConfigDispositivo(
+						tiendaId: tiendaId,
+						cajaId: configDispositivo.cajaId,
+						nombreCaja: configDispositivo.nombreCaja,
+					),
+				);
 			}
 		} on Object {
 			await _abortarRestauracion(ref);
