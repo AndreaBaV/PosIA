@@ -14,11 +14,27 @@ class TurnoCajaRepository {
 
 	final Database _baseDatos;
 
-	Future<TurnoCaja?> obtenerTurnoAbierto(String tiendaId, String cajaId) async {
-		final filas = await _baseDatos.query(
+	Future<TurnoCaja?> obtenerPorId(String id, {DatabaseExecutor? db}) async {
+		final exec = db ?? _baseDatos;
+		final filas = await exec.query(
 			'cash_shifts',
-			where: 'tienda_id = ? AND caja_id = ? AND estado = ?',
-			whereArgs: [tiendaId, cajaId, EstadoTurnoCaja.abierto.name],
+			where: 'id = ?',
+			whereArgs: [id],
+			limit: 1,
+		);
+		if (filas.isEmpty) {
+			return null;
+		}
+		return _mapear(filas.first);
+	}
+
+	/// Turno abierto de la tienda (compartido entre dispositivos de la sucursal).
+	Future<TurnoCaja?> obtenerTurnoAbierto(String tiendaId, {DatabaseExecutor? db}) async {
+		final exec = db ?? _baseDatos;
+		final filas = await exec.query(
+			'cash_shifts',
+			where: 'tienda_id = ? AND estado = ?',
+			whereArgs: [tiendaId, EstadoTurnoCaja.abierto.name],
 			orderBy: 'abierto_en DESC',
 			limit: 1,
 		);
@@ -30,6 +46,21 @@ class TurnoCajaRepository {
 
 	Future<void> guardar(TurnoCaja turno, {DatabaseExecutor? db}) async {
 		final exec = db ?? _baseDatos;
+		if (turno.estado == EstadoTurnoCaja.abierto) {
+			await exec.update(
+				'cash_shifts',
+				{
+					'estado': EstadoTurnoCaja.cerrado.name,
+					'cerrado_en': DateTime.now().toUtc().toIso8601String(),
+				},
+				where: 'tienda_id = ? AND estado = ? AND id <> ?',
+				whereArgs: [
+					turno.tiendaId,
+					EstadoTurnoCaja.abierto.name,
+					turno.id,
+				],
+			);
+		}
 		await exec.insert(
 			'cash_shifts',
 			_mapearMapa(turno),

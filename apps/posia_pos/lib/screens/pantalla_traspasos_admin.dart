@@ -378,8 +378,8 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 				return true;
 			}
 			final q = _filtroHistorial.toLowerCase();
-			final origen = datos.nombresTienda[t.tiendaOrigenId] ?? '';
-			final destino = datos.nombresTienda[t.tiendaDestinoId] ?? '';
+			final origen = datos.nombreUbicacion(t.tiendaOrigenId);
+			final destino = datos.nombreUbicacion(t.tiendaDestinoId);
 			for (final linea in t.lineas) {
 				if (linea.nombreProducto.toLowerCase().contains(q)) {
 					return true;
@@ -404,8 +404,8 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 							itemCount: filtrados.length,
 							itemBuilder: (_, i) {
 								final t = filtrados[i];
-								final origen = datos.nombresTienda[t.tiendaOrigenId] ?? '?';
-								final destino = datos.nombresTienda[t.tiendaDestinoId] ?? '?';
+								final origen = datos.nombreUbicacion(t.tiendaOrigenId);
+								final destino = datos.nombreUbicacion(t.tiendaDestinoId);
 								final resumen = t.lineas.length == 1
 									? '${t.lineas.first.nombreProducto} '
 										'${_formatearCantidad(t.lineas.first.cantidadSolicitada)} u.'
@@ -564,8 +564,8 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 						onPressed: () async {
 							final texto = construirTicketTraspaso(
 								traspaso: traspaso,
-								nombreTiendaOrigen: datos.nombresTienda[traspaso.tiendaOrigenId] ?? '?',
-								nombreTiendaDestino: datos.nombresTienda[traspaso.tiendaDestinoId] ?? '?',
+								nombreTiendaOrigen: datos.nombreUbicacion(traspaso.tiendaOrigenId),
+								nombreTiendaDestino: datos.nombreUbicacion(traspaso.tiendaDestinoId),
 								nombreOperador: nombreOperador,
 							);
 							await compartirTextoWhatsAppConAviso(ctx, texto: texto);
@@ -622,8 +622,8 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 	}
 
 	void _mostrarDetalleTraspaso(Traspaso traspaso, _DatosTraspasos datos) {
-		final origen = datos.nombresTienda[traspaso.tiendaOrigenId] ?? '?';
-		final destino = datos.nombresTienda[traspaso.tiendaDestinoId] ?? '?';
+		final origen = datos.nombreUbicacion(traspaso.tiendaOrigenId);
+		final destino = datos.nombreUbicacion(traspaso.tiendaDestinoId);
 		showModalBottomSheet<void>(
 			context: context,
 			isScrollControlled: true,
@@ -731,8 +731,8 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 			final hardware = await ref.read(hardwareRegistryProvider.future);
 			final texto = construirTicketTraspaso(
 				traspaso: traspaso,
-				nombreTiendaOrigen: datos.nombresTienda[traspaso.tiendaOrigenId] ?? '?',
-				nombreTiendaDestino: datos.nombresTienda[traspaso.tiendaDestinoId] ?? '?',
+				nombreTiendaOrigen: datos.nombreUbicacion(traspaso.tiendaOrigenId),
+				nombreTiendaDestino: datos.nombreUbicacion(traspaso.tiendaDestinoId),
 				nombreOperador: nombreOperador,
 			);
 			await imprimirDocumentoTraspaso(
@@ -767,8 +767,8 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 			final hardware = await ref.read(hardwareRegistryProvider.future);
 			final texto = construirComprobanteTraspaso(
 				traspaso: traspaso,
-				nombreTiendaOrigen: datos.nombresTienda[traspaso.tiendaOrigenId] ?? '?',
-				nombreTiendaDestino: datos.nombresTienda[traspaso.tiendaDestinoId] ?? '?',
+				nombreTiendaOrigen: datos.nombreUbicacion(traspaso.tiendaOrigenId),
+				nombreTiendaDestino: datos.nombreUbicacion(traspaso.tiendaDestinoId),
 				nombreOperadorEnvio: nombreOperador,
 			);
 			await imprimirDocumentoTraspaso(
@@ -830,6 +830,14 @@ class _DatosTraspasos {
 	final Map<String, List<({Producto producto, double cantidad})>> productosPorAlmacen;
 	final Map<String, String> nombresTienda;
 	final Map<String, String> nombresAlmacen;
+
+	String nombreUbicacion(String ubicacionId) {
+		final almacenId = decodificarAlmacenEnTraspaso(ubicacionId);
+		if (almacenId != null) {
+			return nombresAlmacen[almacenId] ?? 'Almacén';
+		}
+		return nombresTienda[ubicacionId] ?? '?';
+	}
 }
 
 final _traspasosDatosProvider = FutureProvider<_DatosTraspasos>((ref) async {

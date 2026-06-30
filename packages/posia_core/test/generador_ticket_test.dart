@@ -268,4 +268,27 @@ void main() {
 		expect(texto, anyOf(contains('CREDITO LIQUIDADO'), contains('CRÉDITO LIQUIDADO')));
 		expect(texto, contains('500'));
 	});
+
+	test('formatearLeyendaCompartirTicketDigital es breve y sin emojis', () {
+		final contenido = construirTicketDigitalVenta(
+			venta: Venta(
+				id: 'venta-test-003',
+				tiendaId: 'tienda-test',
+				cajaId: 'caja-1',
+				clienteId: null,
+				total: 100.0,
+				metodoPago: MetodoPago.efectivo,
+				estado: EstadoVenta.completada,
+				creadaEn: DateTime.utc(2026, 6, 11),
+				lineas: const [],
+			),
+			nombreTienda: 'Tienda Centro',
+		);
+		final leyenda = formatearLeyendaCompartirTicketDigital(contenido);
+		expect(leyenda, contains('La Fortuna'));
+		expect(leyenda, contains('TICKET DE VENTA'));
+		expect(leyenda, contains('Folio VENTA-TE'));
+		expect(leyenda, isNot(contains('🛒')));
+		expect(leyenda, isNot(contains('Producto demo')));
+	});
 }

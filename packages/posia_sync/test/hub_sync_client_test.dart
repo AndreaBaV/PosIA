@@ -66,4 +66,40 @@ void main() {
 		expect(login!.tiendas.length, 1);
 		expect(login.tiendas.first.id, 'tienda-sur');
 	});
+
+	test('obtenerUsuarios decodifica lista JSON del hub', () async {
+		final cliente = MockClient((request) async {
+			expect(request.url.path, '/v1/users');
+			return http.Response(
+				'''
+{
+  "usuarios": [
+    {
+      "id": "usr-2",
+      "nombre": "Maria",
+      "codigo": "EMP001",
+      "rol": "empleado",
+      "tiendaId": "tienda-sur",
+      "activo": true,
+      "pinCredencial": "hash123",
+      "creadoEn": "2026-01-01T00:00:00Z",
+      "actualizadoEn": "2026-01-02T00:00:00Z"
+    }
+  ]
+}
+''',
+				200,
+				headers: {'Content-Type': 'application/json'},
+			);
+		});
+		final hub = HubSyncClient(
+			urlBase: 'https://hub.test',
+			claveApi: 'clave-test',
+			clienteHttp: cliente,
+		);
+		final usuarios = await hub.obtenerUsuarios();
+		expect(usuarios.length, 1);
+		expect(usuarios.first.codigo, 'EMP001');
+		expect(usuarios.first.pinCredencial, 'hash123');
+	});
 }

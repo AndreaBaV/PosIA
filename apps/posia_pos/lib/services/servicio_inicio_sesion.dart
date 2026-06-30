@@ -41,16 +41,21 @@ class ServicioInicioSesion {
 				container.read(sesionTiendaProvider.notifier).cerrar();
 			}
 			container.invalidate(contenedorServiciosProvider);
-			await container.read(contenedorServiciosProvider.future);
-
-			final servicio = await container.read(servicioAdminProvider.future);
-			await servicio
+			final contenedor = await container.read(contenedorServiciosProvider.future);
+			await contenedor.servicioAdmin
 				.activarSesionTrasLogin(
 					usuario,
 					tiendasDesdeHub: resultado.tiendas,
 				)
 				.timeout(const Duration(seconds: TIMEOUT_HUB_SYNC_SEGUNDOS + 10));
 			container.invalidate(contenedorServiciosProvider);
+			final contenedorActivo = await container.read(contenedorServiciosProvider.future);
+			try {
+				await contenedorActivo.syncOrchestrator.sincronizarCompleto();
+			} on Object {
+				// La caja opera localmente aunque el hub no responda al instante.
+			}
+			container.invalidate(carritoNotifierProvider);
 
 			if (!esAdmin) {
 				final tiendaId = usuario.tiendaId;

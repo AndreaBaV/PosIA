@@ -1,4 +1,4 @@
-/// Construccion y formateo de tickets digitales para WhatsApp y texto.
+/// Construccion y formateo de tickets digitales para PDF, PNG e impresion.
 library;
 
 import '../constants/posia_constants.dart';
@@ -308,64 +308,19 @@ TicketDigitalContenido construirTicketDigitalLiquidacionCredito({
 	);
 }
 
-/// Texto enriquecido para WhatsApp (complementa la imagen del ticket).
+/// Leyenda breve para acompanar imagen o PDF al compartir (sin emojis).
+String formatearLeyendaCompartirTicketDigital(TicketDigitalContenido contenido) {
+	final partes = <String>[
+		NOMBRE_COMERCIAL_APP,
+		contenido.tituloDocumento,
+		'Folio ${contenido.folio}',
+	];
+	return partes.join(' · ');
+}
+
+/// Alias de [formatearLeyendaCompartirTicketDigital] para compatibilidad.
 String formatearTicketDigitalWhatsApp(TicketDigitalContenido contenido) {
-	final icono = switch (contenido.tipo) {
-		TipoDocumentoTicketDigital.pagare => '📄',
-		TipoDocumentoTicketDigital.liquidacionCredito => '✅',
-		TipoDocumentoTicketDigital.cotizacion => '📋',
-		_ => '🛒',
-	};
-	final buffer = StringBuffer()
-		..writeln('$icono *${NOMBRE_COMERCIAL_APP}*')
-		..writeln('*${contenido.tituloDocumento}*');
-	if (contenido.etiquetaSecundaria != null) {
-		buffer.writeln('_${contenido.etiquetaSecundaria}_');
-	}
-	buffer.writeln('🏪 ${contenido.nombreTienda}');
-	if (contenido.direccionTienda != null &&
-		contenido.direccionTienda!.trim().isNotEmpty) {
-		buffer.writeln('📍 ${contenido.direccionTienda!.trim()}');
-	}
-	buffer
-		..writeln('────────────────────')
-		..writeln('🧾 Folio: *${contenido.folio}*')
-		..writeln('📅 ${_formatearFechaTicket(contenido.fecha)}');
-	if (contenido.nombreCliente != null) {
-		buffer.writeln('👤 ${contenido.nombreCliente}');
-	}
-	for (final entry in contenido.campos.entries) {
-		buffer.writeln('${entry.key}: ${entry.value}');
-	}
-	buffer.writeln('────────────────────');
-	for (final linea in contenido.lineas) {
-		buffer.writeln('• *${linea.descripcion}*');
-		buffer.writeln(
-			'  ${_formatearCantidadLinea(linea.cantidad)} × '
-			'${formatearMoneda(linea.precioUnitario)} = '
-			'*${formatearMoneda(linea.subtotal)}*',
-		);
-		if (linea.descuentoLinea > 0) {
-			buffer.writeln('  Desc. ${formatearMoneda(linea.descuentoLinea)}');
-		}
-	}
-	buffer.writeln('────────────────────');
-	if (contenido.descuentoTicket > 0) {
-		buffer.writeln(
-			'Descuento: -${formatearMoneda(contenido.descuentoTicket)}',
-		);
-	}
-	buffer.writeln('💰 *${contenido.etiquetaTotal}: ${formatearMoneda(contenido.total)}*');
-	if (contenido.montoRecibido != null) {
-		buffer.writeln('Recibido: ${formatearMoneda(contenido.montoRecibido!)}');
-	}
-	if (contenido.cambio != null) {
-		buffer.writeln('Cambio: ${formatearMoneda(contenido.cambio!)}');
-	}
-	for (final nota in contenido.notasPie) {
-		buffer.writeln(nota);
-	}
-	return buffer.toString().trim();
+	return formatearLeyendaCompartirTicketDigital(contenido);
 }
 
 /// Texto plano alineado para impresora termica (sin emojis).

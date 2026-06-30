@@ -51,3 +51,28 @@ class RespuestaLoginHub {
 	final String actualizadoEn;
 	final List<TiendaHub> tiendas;
 }
+
+/// Usuario completo del hub (incluye hash PIN para replica local).
+class UsuarioHub {
+	const UsuarioHub({
+		required this.id,
+		required this.nombre,
+		required this.codigo,
+		required this.rol,
+		this.tiendaId,
+		required this.activo,
+		required this.pinCredencial,
+		required this.creadoEn,
+		required this.actualizadoEn,
+	});
+
+	final String id;
+	final String nombre;
+	final String codigo;
+	final String rol;
+	final String? tiendaId;
+	final bool activo;
+	final String pinCredencial;
+	final String creadoEn;
+	final String actualizadoEn;
+}

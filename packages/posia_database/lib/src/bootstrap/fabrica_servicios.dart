@@ -104,11 +104,6 @@ class FabricaServicios {
 		final asistenciaRepo = AsistenciaRepository(baseDatos: base);
 		final empleadoPerfilRepo = EmpleadoPerfilRepository(baseDatos: base);
 		final nominaRepo = NominaRepository(baseDatos: base);
-		final servicioCorteCaja = ServicioCorteCaja(
-			turnoRepository: turnoRepo,
-			tiendaId: tiendaId,
-			cajaId: cajaId,
-		);
 		final motorPrecio = MotorPrecio(repositorioPrecio: precioRepo);
 		final gestorInventario = GestorInventario(repositorioInventario: inventarioRepo);
 		final servicioCarniceria = ServicioCarniceria();
@@ -125,6 +120,7 @@ class FabricaServicios {
 			tiendaRepository: tiendaRepo,
 			usuarioRepository: usuarioRepo,
 			almacenRepository: almacenRepo,
+			turnoCajaRepository: turnoRepo,
 		);
 		final clienteHub = await _crearClienteHub(configRepo);
 		final sync = SyncOrchestrator(
@@ -135,6 +131,12 @@ class FabricaServicios {
 			almacenCursor: estadoSyncRepo,
 			tiendaId: tiendaId,
 			dispositivoId: cajaId,
+		);
+		final servicioCorteCaja = ServicioCorteCaja(
+			turnoRepository: turnoRepo,
+			tiendaId: tiendaId,
+			cajaId: cajaId,
+			syncOrchestrator: sync,
 		);
 		final servicioCaja = ServicioCaja(
 			productoRepository: productoRepo,

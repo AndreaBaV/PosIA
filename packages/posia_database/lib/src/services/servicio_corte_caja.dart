@@ -5,7 +5,10 @@
 /// Fecha creacion: 2026-06-11 22:00:00 (UTC-6)
 library;
 
+import 'dart:async';
+
 import 'package:posia_core/posia_core.dart';
+import 'package:posia_sync/posia_sync.dart';
 import 'package:uuid/uuid.dart';
 import 'package:sqflite/sqflite.dart';
 
@@ -17,18 +20,21 @@ class ServicioCorteCaja {
 		required TurnoCajaRepository turnoRepository,
 		required String tiendaId,
 		required String cajaId,
+		SyncOrchestrator? syncOrchestrator,
 	}) : _turnoRepository = turnoRepository,
 	     _tiendaId = tiendaId,
-	     _cajaId = cajaId;
+	     _cajaId = cajaId,
+	     _syncOrchestrator = syncOrchestrator;
 
 	final TurnoCajaRepository _turnoRepository;
 	final String _tiendaId;
 	final String _cajaId;
+	final SyncOrchestrator? _syncOrchestrator;
 	final Uuid _generadorId = const Uuid();
 
-	/// Obtiene turno abierto actual o null.
-	Future<TurnoCaja?> obtenerTurnoAbierto() async {
-		return _turnoRepository.obtenerTurnoAbierto(_tiendaId, _cajaId);
+	/// Obtiene turno abierto actual de la tienda o null.
+	Future<TurnoCaja?> obtenerTurnoAbierto({DatabaseExecutor? db}) async {
+		return _turnoRepository.obtenerTurnoAbierto(_tiendaId, db: db);
 	}
 
 	/// Indica si hay turno abierto para cobrar.
@@ -65,13 +71,15 @@ class ServicioCorteCaja {
 			estado: EstadoTurnoCaja.abierto,
 		);
 		await _turnoRepository.guardar(turno);
+		await _publicarTurno(turno);
 		return turno;
 	}
 
 	/// Acumula venta en turno abierto.
 	///
 	/// [venta] Venta completada.
-	Future<void> registrarVenta(
+	/// Retorna el turno actualizado (sync hub debe invocarse fuera de transacciones).
+	Future<TurnoCaja> registrarVenta(
 		TurnoCaja turno,
 		Venta venta, {
 		DatabaseExecutor? db,
@@ -110,21 +118,30 @@ class ServicioCorteCaja {
 			estado: EstadoTurnoCaja.abierto,
 		);
 		await _turnoRepository.guardar(actualizado, db: db);
+		if (db == null) {
+			await _publicarTurno(actualizado);
+		}
+		return actualizado;
+	}
+
+	/// Encola turno en hub; llamar solo tras commit de transacciones SQLite.
+	Future<void> notificarTurnoActualizado(TurnoCaja turno) async {
+		await _publicarTurno(turno);
 	}
 
 	/// Resta monto devuelto parcialmente del turno abierto.
-	Future<void> registrarDevolucion(
+	Future<TurnoCaja?> registrarDevolucion(
 		Venta venta,
 		double montoDevuelto, {
 		DatabaseExecutor? db,
 	}) async {
 		final turnoId = venta.turnoCajaId;
 		if (turnoId == null || montoDevuelto <= 0.0) {
-			return;
+			return null;
 		}
-		final turnoAbierto = await obtenerTurnoAbierto();
-		if (turnoAbierto == null || turnoAbierto.id != turnoId) {
-			return;
+		final turnoAbierto = await _turnoRepository.obtenerPorId(turnoId, db: db);
+		if (turnoAbierto == null || turnoAbierto.estado != EstadoTurnoCaja.abierto) {
+			return null;
 		}
 		var totalEfectivo = turnoAbierto.totalEfectivo;
 		if (venta.metodoPago == MetodoPago.efectivo) {
@@ -150,19 +167,23 @@ class ServicioCorteCaja {
 			estado: EstadoTurnoCaja.abierto,
 		);
 		await _turnoRepository.guardar(actualizado, db: db);
+		if (db == null) {
+			await _publicarTurno(actualizado);
+		}
+		return actualizado;
 	}
 
 	/// Resta venta anulada del turno abierto asociado.
 	///
 	/// [venta] Venta anulada con turno_caja_id.
-	Future<void> registrarAnulacion(Venta venta, {DatabaseExecutor? db}) async {
+	Future<TurnoCaja?> registrarAnulacion(Venta venta, {DatabaseExecutor? db}) async {
 		final turnoId = venta.turnoCajaId;
 		if (turnoId == null) {
-			return;
+			return null;
 		}
-		final turnoAbierto = await obtenerTurnoAbierto();
-		if (turnoAbierto == null || turnoAbierto.id != turnoId) {
-			return;
+		final turnoAbierto = await _turnoRepository.obtenerPorId(turnoId, db: db);
+		if (turnoAbierto == null || turnoAbierto.estado != EstadoTurnoCaja.abierto) {
+			return null;
 		}
 		var totalEfectivo = turnoAbierto.totalEfectivo;
 		if (venta.metodoPago == MetodoPago.efectivo) {
@@ -190,6 +211,10 @@ class ServicioCorteCaja {
 			estado: EstadoTurnoCaja.abierto,
 		);
 		await _turnoRepository.guardar(actualizado, db: db);
+		if (db == null) {
+			await _publicarTurno(actualizado);
+		}
+		return actualizado;
 	}
 
 	/// Cierra turno abierto.
@@ -214,11 +239,48 @@ class ServicioCorteCaja {
 			estado: EstadoTurnoCaja.cerrado,
 		);
 		await _turnoRepository.guardar(cerrado);
+		await _publicarTurno(cerrado);
 		return cerrado;
 	}
 
 	/// Lista turnos recientes de la tienda.
 	Future<List<TurnoCaja>> listarTurnosRecientes({int limite = 10}) async {
 		return _turnoRepository.listarPorTienda(_tiendaId, limite: limite);
+	}
+
+	Future<void> _publicarTurno(TurnoCaja turno) async {
+		final sync = _syncOrchestrator;
+		if (sync == null || !sync.tieneHubConfigurado()) {
+			return;
+		}
+		final evento = SyncEvent(
+			id: _generadorId.v4(),
+			tiendaId: turno.tiendaId,
+			dispositivoId: _cajaId,
+			tipo: TipoSyncEvento.cashShiftUpserted,
+			payload: _payloadTurno(turno),
+			creadoEn: DateTime.now().toUtc(),
+			estado: EstadoSyncEvento.pendiente,
+		);
+		await sync.registrarEvento(evento);
+		unawaited(sync.sincronizarPendientes());
+	}
+
+	Map<String, Object?> _payloadTurno(TurnoCaja turno) {
+		return {
+			'id': turno.id,
+			'tiendaId': turno.tiendaId,
+			'cajaId': turno.cajaId,
+			'vendedorId': turno.vendedorId,
+			'fondoInicial': turno.fondoInicial,
+			'totalEfectivo': turno.totalEfectivo,
+			'totalTarjeta': turno.totalTarjeta,
+			'totalTransferencia': turno.totalTransferencia,
+			'totalVentas': turno.totalVentas,
+			'cantidadVentas': turno.cantidadVentas,
+			'abiertoEn': turno.abiertoEn.toIso8601String(),
+			'cerradoEn': turno.cerradoEn?.toIso8601String(),
+			'estado': turno.estado.name,
+		};
 	}
 }

@@ -67,4 +67,7 @@ enum TipoSyncEvento {
 
 	/// Cuenta de usuario creada o actualizada (PIN solo como hash).
 	userUpserted,
+
+	/// Turno de caja abierto, actualizado o cerrado.
+	cashShiftUpserted,
 }

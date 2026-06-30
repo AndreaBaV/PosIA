@@ -18,6 +18,7 @@ import '../repositories/traspaso_repository.dart';
 import '../repositories/inventario_repository.dart';
 import '../repositories/producto_repository.dart';
 import '../repositories/usuario_repository.dart';
+import '../repositories/turno_caja_repository.dart';
 import '../repositories/variante_repository.dart';
 import '../repositories/venta_repository.dart';
 
@@ -42,6 +43,7 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		TiendaRepository? tiendaRepository,
 		UsuarioRepository? usuarioRepository,
 		AlmacenRepository? almacenRepository,
+		TurnoCajaRepository? turnoCajaRepository,
 	}) : _baseDatos = baseDatos,
 	     _productoRepository = productoRepository,
 	     _clienteRepository = clienteRepository,
@@ -52,7 +54,8 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 	     _varianteRepository = varianteRepository,
 	     _tiendaRepository = tiendaRepository,
 	     _usuarioRepository = usuarioRepository,
-	     _almacenRepository = almacenRepository;
+	     _almacenRepository = almacenRepository,
+	     _turnoCajaRepository = turnoCajaRepository;
 
 	final Database _baseDatos;
 	final ProductoRepository _productoRepository;
@@ -65,6 +68,7 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 	final TiendaRepository? _tiendaRepository;
 	final UsuarioRepository? _usuarioRepository;
 	final AlmacenRepository? _almacenRepository;
+	final TurnoCajaRepository? _turnoCajaRepository;
 
 	@override
 	Future<void> aplicarLote(List<SyncEvent> eventos) async {
@@ -115,6 +119,8 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 				await _aplicarTiendaRemota(evento);
 			case TipoSyncEvento.userUpserted:
 				await _aplicarUsuarioRemoto(evento);
+			case TipoSyncEvento.cashShiftUpserted:
+				await _aplicarTurnoRemoto(evento);
 			case TipoSyncEvento.warehouseUpserted:
 			case TipoSyncEvento.presentationTypeUpserted:
 			case TipoSyncEvento.productPresentationUpserted:
@@ -125,6 +131,40 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			case TipoSyncEvento.payrollPeriodClosed:
 				break;
 		}
+	}
+
+	Future<void> _aplicarTurnoRemoto(SyncEvent evento) async {
+		final repo = _turnoCajaRepository;
+		if (repo == null) {
+			return;
+		}
+		final payload = evento.payload;
+		final id = payload['id'] as String? ?? '';
+		if (id.isEmpty) {
+			return;
+		}
+		final cerradoCrudo = payload['cerradoEn'] as String?;
+		final turno = TurnoCaja(
+			id: id,
+			tiendaId: payload['tiendaId'] as String? ?? evento.tiendaId,
+			cajaId: payload['cajaId'] as String? ?? '',
+			vendedorId: payload['vendedorId'] as String?,
+			fondoInicial: (payload['fondoInicial'] as num?)?.toDouble() ?? 0.0,
+			totalEfectivo: (payload['totalEfectivo'] as num?)?.toDouble() ?? 0.0,
+			totalTarjeta: (payload['totalTarjeta'] as num?)?.toDouble() ?? 0.0,
+			totalTransferencia:
+				(payload['totalTransferencia'] as num?)?.toDouble() ?? 0.0,
+			totalVentas: (payload['totalVentas'] as num?)?.toDouble() ?? 0.0,
+			cantidadVentas: payload['cantidadVentas'] as int? ?? 0,
+			abiertoEn: DateTime.parse(
+				payload['abiertoEn'] as String? ?? evento.creadoEn.toIso8601String(),
+			),
+			cerradoEn: cerradoCrudo == null ? null : DateTime.parse(cerradoCrudo),
+			estado: EstadoTurnoCaja.values.byName(
+				payload['estado'] as String? ?? EstadoTurnoCaja.abierto.name,
+			),
+		);
+		await repo.guardar(turno);
 	}
 
 	Future<void> _aplicarTiendaRemota(SyncEvent evento) async {
@@ -359,7 +399,8 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 	}
 
 	Traspaso _mapearTraspasoRemoto(SyncEvent evento, EstadoTraspaso estado) {
-		final lineasCrudas = evento.payload['lineas'] as List<Object?>? ?? [];
+		final payload = evento.payload;
+		final lineasCrudas = payload['lineas'] as List<Object?>? ?? [];
 		final lineas = lineasCrudas
 			.whereType<Map<Object?, Object?>>()
 			.map(
@@ -371,10 +412,24 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 				),
 			)
 			.toList();
+		final tiendaOrigenCruda = payload['tiendaOrigenId'] as String? ?? '';
+		final tiendaDestinoCruda = payload['tiendaDestinoId'] as String? ?? '';
+		final almacenOrigen = payload['almacenOrigenId'] as String? ?? '';
+		final almacenDestino = payload['almacenDestinoId'] as String? ?? '';
+		final tiendaOrigenId = tiendaOrigenCruda.isNotEmpty
+			? tiendaOrigenCruda
+			: (almacenOrigen.isNotEmpty
+				? codificarAlmacenEnTraspaso(almacenOrigen)
+				: '');
+		final tiendaDestinoId = tiendaDestinoCruda.isNotEmpty
+			? tiendaDestinoCruda
+			: (almacenDestino.isNotEmpty
+				? codificarAlmacenEnTraspaso(almacenDestino)
+				: '');
 		return Traspaso(
-			id: evento.payload['traspasoId'] as String? ?? evento.id,
-			tiendaOrigenId: evento.payload['tiendaOrigenId'] as String? ?? '',
-			tiendaDestinoId: evento.payload['tiendaDestinoId'] as String? ?? '',
+			id: payload['traspasoId'] as String? ?? evento.id,
+			tiendaOrigenId: tiendaOrigenId,
+			tiendaDestinoId: tiendaDestinoId,
 			estado: estado,
 			solicitadoEn: evento.creadoEn,
 			completadoEn: estado == EstadoTraspaso.completado ? evento.creadoEn : null,

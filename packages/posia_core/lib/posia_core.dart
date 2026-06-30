@@ -78,6 +78,7 @@ export 'src/utils/id_posia.dart';
 export 'src/utils/permisos_usuario.dart';
 export 'src/utils/validador_codigo_usuario.dart';
 export 'src/utils/moneda_util.dart';
+export 'src/utils/traspaso_util.dart';
 export 'src/utils/precio_util.dart';
 export 'src/repositories/repositorio_lote_farmacia.dart';
 export 'src/vertical/servicio_farmacia.dart';

@@ -18,16 +18,31 @@ class ProductoRepository {
 
 	final Database _baseDatos;
 
-	/// Lista productos activos de una tienda.
+	static const _sqlProductosVendiblesEnTienda = '''
+		SELECT DISTINCT p.*
+		FROM products p
+		LEFT JOIN stock_levels s
+			ON s.producto_id = p.id AND s.tienda_id = ?
+		WHERE p.activo = 1
+			AND (p.tienda_id = ? OR COALESCE(s.cantidad, 0) > 0)
+	''';
+
+	static const _sqlCatalogoGestionTienda = '''
+		SELECT DISTINCT p.*
+		FROM products p
+		LEFT JOIN stock_levels s
+			ON s.producto_id = p.id AND s.tienda_id = ?
+		WHERE p.tienda_id = ? OR COALESCE(s.cantidad, 0) > 0
+	''';
+
+	/// Lista productos activos vendibles en una tienda.
 	///
-	/// [tiendaId] Tienda propietaria del catalogo.
-	/// Retorna productos activos ordenados por nombre.
+	/// Incluye el catalogo local y productos con existencia en la tienda
+	/// (p. ej. recibidos por traspaso desde almacen u otra sucursal).
 	Future<List<Producto>> listarActivosPorTienda(String tiendaId) async {
-		final filas = await _baseDatos.query(
-			'products',
-			where: 'tienda_id = ? AND activo = 1',
-			whereArgs: [tiendaId],
-			orderBy: 'nombre ASC',
+		final filas = await _baseDatos.rawQuery(
+			'$_sqlProductosVendiblesEnTienda ORDER BY p.nombre ASC',
+			[tiendaId, tiendaId],
 		);
 		return filas.map(_mapearProducto).toList();
 	}
@@ -40,11 +55,13 @@ class ProductoRepository {
 		String tiendaId,
 		String categoriaId,
 	) async {
-		final filas = await _baseDatos.query(
-			'products',
-			where: 'tienda_id = ? AND activo = 1 AND categoria_id = ?',
-			whereArgs: [tiendaId, categoriaId],
-			orderBy: 'nombre ASC',
+		final filas = await _baseDatos.rawQuery(
+			'''
+			$_sqlProductosVendiblesEnTienda
+				AND p.categoria_id = ?
+			ORDER BY p.nombre ASC
+			''',
+			[tiendaId, tiendaId, categoriaId],
 		);
 		return filas.map(_mapearProducto).toList();
 	}
@@ -63,13 +80,11 @@ class ProductoRepository {
 		return _mapearProducto(filas.first);
 	}
 
-	/// Lista todos los productos de tienda incluyendo inactivos (admin).
+	/// Lista catalogo de gestion: propios de la tienda y con existencia local.
 	Future<List<Producto>> listarTodosPorTienda(String tiendaId) async {
-		final filas = await _baseDatos.query(
-			'products',
-			where: 'tienda_id = ?',
-			whereArgs: [tiendaId],
-			orderBy: 'nombre ASC',
+		final filas = await _baseDatos.rawQuery(
+			'$_sqlCatalogoGestionTienda ORDER BY p.nombre ASC',
+			[tiendaId, tiendaId],
 		);
 		return filas.map(_mapearProducto).toList();
 	}
@@ -108,16 +123,25 @@ class ProductoRepository {
 		if (codigo.isEmpty) {
 			return null;
 		}
-		final where = StringBuffer('codigo_barras = ? AND activo = 1');
-		final args = <Object?>[codigo];
 		if (tiendaId != null) {
-			where.write(' AND tienda_id = ?');
-			args.add(tiendaId);
+			final filas = await _baseDatos.rawQuery(
+				'''
+				$_sqlProductosVendiblesEnTienda
+					AND p.codigo_barras = ?
+				ORDER BY p.id ASC
+				LIMIT 1
+				''',
+				[tiendaId, tiendaId, codigo],
+			);
+			if (filas.isEmpty) {
+				return null;
+			}
+			return _mapearProducto(filas.first);
 		}
 		final filas = await _baseDatos.query(
 			'products',
-			where: where.toString(),
-			whereArgs: args,
+			where: 'codigo_barras = ? AND activo = 1',
+			whereArgs: [codigo],
 			orderBy: 'id ASC',
 			limit: 1,
 		);

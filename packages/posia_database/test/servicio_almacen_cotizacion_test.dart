@@ -90,6 +90,17 @@ void main() {
 				cantidad: 2.0,
 			);
 
+			final traspasos = await servicio.listarTraspasos();
+			expect(traspasos, hasLength(1));
+			expect(
+				traspasos.first.tiendaOrigenId,
+				codificarAlmacenEnTraspaso(almacen.id),
+			);
+			expect(traspasos.first.tiendaDestinoId, fixture.tiendaOrigenId);
+			expect(traspasos.first.estado, EstadoTraspaso.completado);
+			expect(traspasos.first.lineas, hasLength(1));
+			expect(traspasos.first.lineas.first.nombreProducto, 'Arena');
+
 			final agrupado = await servicio.obtenerInventarioAgrupado(
 				tiendaReferenciaId: fixture.tiendaOrigenId,
 			);

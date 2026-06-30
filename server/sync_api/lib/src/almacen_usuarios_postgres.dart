@@ -94,4 +94,23 @@ class AlmacenUsuariosPostgres {
 			.where((t) => (t['id'] as String).isNotEmpty)
 			.toList();
 	}
+
+	/// Lista todas las cuentas del tenant para replicar en dispositivos POS.
+	Future<List<Map<String, Object?>>> listarUsuarios() async {
+		final filas = await _conexion.execute('''
+			SELECT id, nombre, codigo, rol, tienda_id, activo,
+				pin_credencial, creado_en, actualizado_en
+			FROM users
+			ORDER BY nombre
+		''');
+		return filas.map((fila) {
+			final cols = fila.toColumnMap();
+			return {
+				..._mapearPerfil(cols),
+				'pinCredencial': cols['pin_credencial'] as String? ?? '',
+				'creadoEn': cols['creado_en'] as String? ?? '',
+				'actualizadoEn': cols['actualizado_en'] as String? ?? '',
+			};
+		}).where((u) => (u['id'] as String).isNotEmpty).toList();
+	}
 }

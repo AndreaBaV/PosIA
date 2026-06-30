@@ -654,15 +654,23 @@ class ServicioCaja {
       creditoDias: creditoDias,
       creditoVenceEn: creditoVenceEn,
     );
+    TurnoCaja? turnoActualizado;
     await _baseDatos.transaction((tx) async {
       await _ventaRepository.guardar(venta, db: tx);
       if (turno != null && _servicioCorteCaja != null) {
-        await _servicioCorteCaja.registrarVenta(turno, venta, db: tx);
+        turnoActualizado = await _servicioCorteCaja.registrarVenta(
+          turno,
+          venta,
+          db: tx,
+        );
       }
       final lineasInventario = List<LineaCarrito>.from(_lineasCarrito);
       await _aplicarInventarioVentaTransaccional(tx, lineasInventario);
       await _aplicarDescuentosLoteTransaccional(tx, venta);
     });
+    if (turnoActualizado != null) {
+      await _servicioCorteCaja?.notificarTurnoActualizado(turnoActualizado!);
+    }
     await _registrarEventoVenta(venta);
     vaciarCarrito();
     return venta;

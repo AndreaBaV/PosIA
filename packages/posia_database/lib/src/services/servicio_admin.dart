@@ -619,6 +619,7 @@ class ServicioAdmin {
 
   /// Empuja cambios locales y descarga usuarios del hub (reparacion).
   Future<ResultadoSync> repararSincronizacionUsuarios() async {
+    await importarUsuariosDesdeHub();
     final repo = _usuarioRepository;
     if (repo != null) {
       final activos = await repo.listarTodos();
@@ -627,6 +628,48 @@ class ServicioAdmin {
       }
     }
     return sincronizarManual();
+  }
+
+  /// Descarga cuentas del hub Postgres e importa en SQLite local.
+  Future<int> importarUsuariosDesdeHub() async {
+    final repo = _usuarioRepository;
+    if (repo == null) {
+      return 0;
+    }
+    final cliente = await _clienteHubOpcional();
+    if (cliente == null || !await cliente.tieneAuthHub()) {
+      return 0;
+    }
+    final remotos = await cliente.obtenerUsuarios();
+    if (remotos.isEmpty) {
+      return 0;
+    }
+    var importados = 0;
+    final ahora = DateTime.now().toUtc().toIso8601String();
+    for (final remoto in remotos) {
+      RolUsuario rol;
+      try {
+        rol = RolUsuario.values.byName(remoto.rol);
+      } on ArgumentError {
+        rol = RolUsuario.empleado;
+      }
+      final aplicado = await repo.guardarRemoto(
+        id: remoto.id,
+        nombre: remoto.nombre,
+        codigo: remoto.codigo,
+        rol: rol,
+        tiendaId: remoto.tiendaId,
+        activo: remoto.activo,
+        pinCredencial: remoto.pinCredencial,
+        creadoEn: remoto.creadoEn.isNotEmpty ? remoto.creadoEn : ahora,
+        actualizadoEn:
+            remoto.actualizadoEn.isNotEmpty ? remoto.actualizadoEn : ahora,
+      );
+      if (aplicado) {
+        importados++;
+      }
+    }
+    return importados;
   }
 
   /// Obtiene URL del hub configurada en el dispositivo.
@@ -1124,6 +1167,7 @@ class ServicioAdmin {
     } else {
       await LimpiadorBaseLocal.eliminarDatosEjemplo(_baseDatos);
       await _asegurarTiendasAdministrador(tiendasIniciales: tiendasDesdeHub);
+      await importarUsuariosDesdeHub();
     }
   }
 
@@ -2101,6 +2145,7 @@ class ServicioAdmin {
       creditoVenceEn: creditoVenceEn,
     );
 
+    TurnoCaja? turnoActualizado;
     await _enTransaccion((tx) async {
       await _ventaRepository.guardar(venta, db: tx);
       final ahora = DateTime.now().toUtc();
@@ -2122,9 +2167,16 @@ class ServicioAdmin {
         );
       }
       if (turno != null && _servicioCorteCaja != null) {
-        await _servicioCorteCaja.registrarVenta(turno, venta, db: tx);
+        turnoActualizado = await _servicioCorteCaja.registrarVenta(
+          turno,
+          venta,
+          db: tx,
+        );
       }
     });
+    if (turnoActualizado != null) {
+      await _servicioCorteCaja?.notificarTurnoActualizado(turnoActualizado!);
+    }
     await _registrarEventoVentaCompletada(venta);
     return venta;
   }
@@ -2258,6 +2310,7 @@ class ServicioAdmin {
           ? EstadoVenta.devuelta
           : EstadoVenta.completada,
     );
+    TurnoCaja? turnoActualizado;
     await _enTransaccion((tx) async {
       for (final linea in venta.lineas) {
         final devolver = cantidadesPorProducto[linea.productoId] ?? 0.0;
@@ -2281,12 +2334,15 @@ class ServicioAdmin {
         );
       }
       await _ventaRepository.actualizarVenta(ventaActualizada, db: tx);
-      await _servicioCorteCaja?.registrarDevolucion(
+      turnoActualizado = await _servicioCorteCaja?.registrarDevolucion(
         venta,
         montoDevuelto,
         db: tx,
       );
     });
+    if (turnoActualizado != null) {
+      await _servicioCorteCaja?.notificarTurnoActualizado(turnoActualizado!);
+    }
     await _registrarEventoDevolucionParcial(
       venta,
       lineasDevueltas,
@@ -2301,6 +2357,7 @@ class ServicioAdmin {
       return false;
     }
     final ahora = DateTime.now().toUtc();
+    TurnoCaja? turnoActualizado;
     await _enTransaccion((tx) async {
       for (final linea in venta.lineas) {
         final stock = await _inventarioRepository.obtenerStock(
@@ -2325,8 +2382,11 @@ class ServicioAdmin {
         EstadoVenta.cancelada,
         db: tx,
       );
-      await _servicioCorteCaja?.registrarAnulacion(venta, db: tx);
+      turnoActualizado = await _servicioCorteCaja?.registrarAnulacion(venta, db: tx);
     });
+    if (turnoActualizado != null) {
+      await _servicioCorteCaja?.notificarTurnoActualizado(turnoActualizado!);
+    }
     await _registrarEventoAnulacion(venta);
     return true;
   }
@@ -2334,7 +2394,39 @@ class ServicioAdmin {
   // --- Traspasos ---
 
   Future<List<Traspaso>> listarTraspasos() async {
-    return _traspasoRepository?.listarTodos() ?? [];
+    final traspasos = await _traspasoRepository?.listarTodos() ?? [];
+    final enriquecidos = <Traspaso>[];
+    for (final traspaso in traspasos) {
+      final lineas = <LineaTraspaso>[];
+      for (final linea in traspaso.lineas) {
+        if (linea.nombreProducto.isNotEmpty) {
+          lineas.add(linea);
+          continue;
+        }
+        final producto = await _productoRepository.obtenerPorId(linea.productoId);
+        lineas.add(
+          LineaTraspaso(
+            productoId: linea.productoId,
+            nombreProducto: producto?.nombre ?? linea.productoId,
+            cantidadSolicitada: linea.cantidadSolicitada,
+            cantidadRecibida: linea.cantidadRecibida,
+          ),
+        );
+      }
+      enriquecidos.add(
+        Traspaso(
+          id: traspaso.id,
+          tiendaOrigenId: traspaso.tiendaOrigenId,
+          tiendaDestinoId: traspaso.tiendaDestinoId,
+          estado: traspaso.estado,
+          solicitadoEn: traspaso.solicitadoEn,
+          completadoEn: traspaso.completadoEn,
+          notas: traspaso.notas,
+          lineas: lineas,
+        ),
+      );
+    }
+    return enriquecidos;
   }
 
   Future<List<Tienda>> listarTiendasActivas() async {
@@ -2467,6 +2559,7 @@ class ServicioAdmin {
     }
     if (venta.estado == EstadoVenta.completada) {
       final ahora = DateTime.now().toUtc();
+      TurnoCaja? turnoActualizado;
       await _enTransaccion((tx) async {
         for (final linea in venta.lineas) {
           final stock = await _inventarioRepository.obtenerStock(
@@ -2485,9 +2578,12 @@ class ServicioAdmin {
             db: tx,
           );
         }
-        await _servicioCorteCaja?.registrarAnulacion(venta, db: tx);
+        turnoActualizado = await _servicioCorteCaja?.registrarAnulacion(venta, db: tx);
         await _ventaRepository.eliminar(ventaId, db: tx);
       });
+      if (turnoActualizado != null) {
+        await _servicioCorteCaja?.notificarTurnoActualizado(turnoActualizado!);
+      }
     } else {
       await _ventaRepository.eliminar(ventaId);
     }
@@ -3327,25 +3423,43 @@ class ServicioAdmin {
     String? tiendaDestinoId,
     required List<LineaTraspasoSolicitud> lineas,
   }) async {
+    final lineasTraspaso = <LineaTraspaso>[];
+    for (final linea in lineas) {
+      if (linea.cantidad <= 0) {
+        continue;
+      }
+      final producto = await _productoRepository.obtenerPorId(linea.productoId);
+      lineasTraspaso.add(
+        LineaTraspaso(
+          productoId: linea.productoId,
+          nombreProducto: producto?.nombre ?? linea.productoId,
+          cantidadSolicitada: linea.cantidad,
+          cantidadRecibida: linea.cantidad,
+        ),
+      );
+    }
+    if (lineasTraspaso.isEmpty) {
+      return;
+    }
+    final destinoId = tiendaDestinoId != null && tiendaDestinoId.isNotEmpty
+        ? tiendaDestinoId
+        : (almacenDestinoId != null && almacenDestinoId.isNotEmpty
+            ? codificarAlmacenEnTraspaso(almacenDestinoId)
+            : '');
     final traspaso = Traspaso(
       id: movimientoId,
-      tiendaOrigenId: '',
-      tiendaDestinoId: tiendaDestinoId ?? '',
+      tiendaOrigenId: codificarAlmacenEnTraspaso(almacenOrigenId),
+      tiendaDestinoId: destinoId,
       estado: EstadoTraspaso.completado,
       solicitadoEn: DateTime.now().toUtc(),
       completadoEn: DateTime.now().toUtc(),
-      notas: 'Movimiento de almacén',
-      lineas: lineas
-          .map(
-            (l) => LineaTraspaso(
-              productoId: l.productoId,
-              nombreProducto: '',
-              cantidadSolicitada: l.cantidad,
-              cantidadRecibida: l.cantidad,
-            ),
-          )
-          .toList(),
+      notas: 'Abastecimiento desde almacén',
+      lineas: lineasTraspaso,
     );
+    final repo = _traspasoRepository;
+    if (repo != null) {
+      await repo.guardar(traspaso);
+    }
     await _registrarEventoTraspaso(
       traspaso,
       TipoSyncEvento.transferCompleted,
@@ -3602,6 +3716,7 @@ class ServicioAdmin {
     if (anterior < cantidad) {
       throw StateError('Stock insuficiente en almacén');
     }
+    final movimientoId = _generadorId.v4();
     final ahora = DateTime.now().toUtc();
     await _enTransaccion((tx) async {
       final stockAlmacen = await almacenRepo.obtenerStock(
@@ -3636,6 +3751,14 @@ class ServicioAdmin {
         db: tx,
       );
     });
+    await _registrarEventoTraspasoAlmacen(
+      movimientoId: movimientoId,
+      almacenOrigenId: almacenId,
+      tiendaDestinoId: tiendaDestinoId,
+      lineas: [
+        LineaTraspasoSolicitud(productoId: productoId, cantidad: cantidad),
+      ],
+    );
   }
 
   /// Resumen de existencias por almacén activo.

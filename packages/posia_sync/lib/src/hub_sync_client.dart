@@ -249,6 +249,54 @@ class HubSyncClient {
     }
   }
 
+  Future<List<UsuarioHub>> obtenerUsuarios() async {
+    final uri = Uri.parse('$_urlBase/v1/users');
+    try {
+      final respuesta = await _clienteHttp
+          .get(uri, headers: _construirCabeceras())
+          .timeout(const Duration(seconds: TIMEOUT_HUB_SYNC_SEGUNDOS));
+      if (respuesta.statusCode != 200) {
+        return const [];
+      }
+      final json = jsonDecode(respuesta.body) as Map<String, dynamic>;
+      return _mapearUsuarios(json['usuarios']);
+    } on Object {
+      return const [];
+    }
+  }
+
+  List<UsuarioHub> _mapearUsuarios(Object? crudo) {
+    if (crudo is! List) {
+      return const [];
+    }
+    final usuarios = <UsuarioHub>[];
+    for (final item in crudo) {
+      if (item is! Map) {
+        continue;
+      }
+      final map = Map<String, dynamic>.from(item);
+      final id = map['id'] as String? ?? '';
+      final pinCredencial = map['pinCredencial'] as String? ?? '';
+      if (id.isEmpty || pinCredencial.isEmpty) {
+        continue;
+      }
+      usuarios.add(
+        UsuarioHub(
+          id: id,
+          nombre: map['nombre'] as String? ?? '',
+          codigo: map['codigo'] as String? ?? '',
+          rol: map['rol'] as String? ?? 'empleado',
+          tiendaId: map['tiendaId'] as String?,
+          activo: _leerActiva(map['activo']),
+          pinCredencial: pinCredencial,
+          creadoEn: map['creadoEn'] as String? ?? '',
+          actualizadoEn: map['actualizadoEn'] as String? ?? '',
+        ),
+      );
+    }
+    return usuarios;
+  }
+
   Future<bool> mantenerHubVivo() async {
     final uri = Uri.parse('$_urlBase/v1/health');
     try {
