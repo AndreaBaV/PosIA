@@ -456,6 +456,7 @@ class ServicioCaja {
     }
     final producto = await _productoRepository.buscarPorCodigoBarras(
       codigoBarras,
+      tiendaId: _tiendaId,
     );
     if (producto == null) {
       return false;

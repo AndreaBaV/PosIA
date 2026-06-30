@@ -51,6 +51,11 @@ class EsquemaPosPostgres {
 			CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(codigo_barras)
 		''');
 		await conexion.execute('''
+			CREATE UNIQUE INDEX IF NOT EXISTS idx_products_barcode_tienda_activo
+			ON products(tienda_id, codigo_barras)
+			WHERE activo = 1 AND codigo_barras <> ''
+		''');
+		await conexion.execute('''
 			CREATE TABLE IF NOT EXISTS customers (
 				id TEXT PRIMARY KEY,
 				nombre TEXT NOT NULL,
@@ -193,6 +198,11 @@ class EsquemaPosPostgres {
 	static Future<void> _asegurarIndices(Connection conexion) async {
 		await conexion.execute('''
 			CREATE UNIQUE INDEX IF NOT EXISTS idx_users_codigo_unico ON users(codigo)
+		''');
+		await conexion.execute('''
+			CREATE UNIQUE INDEX IF NOT EXISTS idx_products_barcode_tienda_activo
+			ON products(tienda_id, codigo_barras)
+			WHERE activo = 1 AND codigo_barras <> ''
 		''');
 	}
 }

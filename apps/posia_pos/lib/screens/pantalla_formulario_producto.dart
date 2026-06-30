@@ -636,6 +636,51 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 				final minimo = double.tryParse(_minimoController.text) ?? 0.0;
 				await servicio.configurarStockMinimo(actualizado.id, minimo);
 			} else {
+				final codigo = _codigoController.text.trim();
+				if (codigo.isNotEmpty) {
+					final existente = await servicio.buscarProductoPorCodigoBarras(codigo);
+					if (existente != null && mounted) {
+						final editar = await showDialog<bool>(
+							context: context,
+							builder: (ctx) => AlertDialog(
+								title: const Text('Producto ya registrado'),
+								content: Text(
+									'El codigo de barras "$codigo" ya pertenece a '
+									'"${existente.nombre}" '
+									'(${formatearMoneda(existente.precioBase)}).\n\n'
+									'Para cambiar el precio, edite ese producto. '
+									'No cree un producto nuevo con el mismo codigo.',
+								),
+								actions: [
+									TextButton(
+										onPressed: () => Navigator.pop(ctx, false),
+										child: const Text('Cancelar'),
+									),
+									FilledButton(
+										onPressed: () => Navigator.pop(ctx, true),
+										child: const Text('Editar producto'),
+									),
+								],
+							),
+						);
+						if (!mounted) {
+							return;
+						}
+						if (editar == true) {
+							Navigator.pop(context);
+							await Navigator.push<bool>(
+								context,
+								MaterialPageRoute<bool>(
+									builder: (_) => PantallaFormularioProducto(
+										productoExistente: existente,
+									),
+								),
+							);
+							return;
+						}
+						return;
+					}
+				}
 				final escalasNuevas = _escalas
 					.map((e) {
 						final cant = parsearPrecioTexto(e.cantidadController.text) ?? 0.0;

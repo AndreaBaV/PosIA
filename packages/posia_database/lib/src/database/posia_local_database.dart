@@ -163,5 +163,8 @@ class PosiaLocalDatabase {
 		if (versionAnterior < 22 && versionNueva >= 22) {
 			await MigracionesEsquema.migrarVersion21A22(base);
 		}
+		if (versionAnterior < 23 && versionNueva >= 23) {
+			await MigracionesEsquema.migrarVersion22A23(base);
+		}
 	}
 }

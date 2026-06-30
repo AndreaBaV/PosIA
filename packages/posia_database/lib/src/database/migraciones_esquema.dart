@@ -448,6 +448,11 @@ class MigracionesEsquema {
 			CREATE INDEX idx_products_barcode ON products(codigo_barras)
 		''');
 		await base.execute('''
+			CREATE UNIQUE INDEX idx_products_barcode_tienda_activo
+			ON products(tienda_id, codigo_barras)
+			WHERE activo = 1 AND codigo_barras != ''
+		''');
+		await base.execute('''
 			CREATE TABLE customers (
 				id TEXT PRIMARY KEY,
 				nombre TEXT NOT NULL,
@@ -984,5 +989,106 @@ class MigracionesEsquema {
 		}
 		await base.execute('DROP TABLE IF EXISTS usuarios');
 		await _crearTablaUsuariosSegura(base);
+	}
+
+	/// v6.23: codigo de barras unico por tienda entre productos activos.
+	static Future<void> migrarVersion22A23(Database base) async {
+		await _resolverDuplicadosCodigoBarras(base);
+		await base.execute('''
+			CREATE UNIQUE INDEX IF NOT EXISTS idx_products_barcode_tienda_activo
+			ON products(tienda_id, codigo_barras)
+			WHERE activo = 1 AND codigo_barras != ''
+		''');
+	}
+
+	static Future<void> _resolverDuplicadosCodigoBarras(Database base) async {
+		final grupos = await base.rawQuery('''
+			SELECT tienda_id, codigo_barras, COUNT(*) AS total
+			FROM products
+			WHERE activo = 1 AND codigo_barras != ''
+			GROUP BY tienda_id, codigo_barras
+			HAVING total > 1
+		''');
+		for (final grupo in grupos) {
+			final tiendaId = grupo['tienda_id'] as String;
+			final codigoBarras = grupo['codigo_barras'] as String;
+			final productos = await base.query(
+				'products',
+				where: 'tienda_id = ? AND codigo_barras = ? AND activo = 1',
+				whereArgs: [tiendaId, codigoBarras],
+				orderBy: 'id ASC',
+			);
+			if (productos.length < 2) {
+				continue;
+			}
+			var conservarId = productos.first['id'] as String;
+			var maxStock = -1.0;
+			for (final producto in productos) {
+				final productoId = producto['id'] as String;
+				final stockFilas = await base.rawQuery(
+					'''
+					SELECT COALESCE(SUM(cantidad), 0) AS total
+					FROM stock_levels
+					WHERE producto_id = ? AND tienda_id = ?
+					''',
+					[productoId, tiendaId],
+				);
+				final stock = (stockFilas.first['total'] as num?)?.toDouble() ?? 0.0;
+				if (stock > maxStock ||
+					(stock == maxStock && productoId.compareTo(conservarId) < 0)) {
+					maxStock = stock;
+					conservarId = productoId;
+				}
+			}
+			for (final producto in productos) {
+				final productoId = producto['id'] as String;
+				if (productoId == conservarId) {
+					continue;
+				}
+				final stocks = await base.query(
+					'stock_levels',
+					where: 'producto_id = ?',
+					whereArgs: [productoId],
+				);
+				for (final stock in stocks) {
+					final stockTiendaId = stock['tienda_id'] as String;
+					final cantidad = (stock['cantidad'] as num).toDouble();
+					final existente = await base.query(
+						'stock_levels',
+						where: 'producto_id = ? AND tienda_id = ?',
+						whereArgs: [conservarId, stockTiendaId],
+						limit: 1,
+					);
+					if (existente.isEmpty) {
+						await base.insert('stock_levels', {
+							'producto_id': conservarId,
+							'tienda_id': stockTiendaId,
+							'cantidad': cantidad,
+							'actualizado_en': stock['actualizado_en'],
+							'stock_minimo': stock['stock_minimo'] ?? 0,
+						});
+					} else {
+						final actual = (existente.first['cantidad'] as num).toDouble();
+						await base.update(
+							'stock_levels',
+							{'cantidad': actual + cantidad},
+							where: 'producto_id = ? AND tienda_id = ?',
+							whereArgs: [conservarId, stockTiendaId],
+						);
+					}
+				}
+				await base.delete(
+					'stock_levels',
+					where: 'producto_id = ?',
+					whereArgs: [productoId],
+				);
+				await base.update(
+					'products',
+					{'activo': 0},
+					where: 'id = ?',
+					whereArgs: [productoId],
+				);
+			}
+		}
 	}
 }

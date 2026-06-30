@@ -95,21 +95,68 @@ class ProductoRepository {
 		);
 	}
 
-	/// Busca producto por codigo de barras.
+	/// Busca producto activo por codigo de barras en una tienda.
 	///
 	/// [codigoBarras] Codigo escaneado.
+	/// [tiendaId] Tienda donde buscar; si es null, busca en cualquier tienda.
 	/// Retorna producto encontrado o null.
-	Future<Producto?> buscarPorCodigoBarras(String codigoBarras) async {
+	Future<Producto?> buscarPorCodigoBarras(
+		String codigoBarras, {
+		String? tiendaId,
+	}) async {
+		final codigo = codigoBarras.trim();
+		if (codigo.isEmpty) {
+			return null;
+		}
+		final where = StringBuffer('codigo_barras = ? AND activo = 1');
+		final args = <Object?>[codigo];
+		if (tiendaId != null) {
+			where.write(' AND tienda_id = ?');
+			args.add(tiendaId);
+		}
 		final filas = await _baseDatos.query(
 			'products',
-			where: 'codigo_barras = ? AND activo = 1',
-			whereArgs: [codigoBarras],
+			where: where.toString(),
+			whereArgs: args,
+			orderBy: 'id ASC',
 			limit: 1,
 		);
 		if (filas.isEmpty) {
 			return null;
 		}
 		return _mapearProducto(filas.first);
+	}
+
+	/// Indica si ya existe un producto activo con el mismo codigo de barras.
+	///
+	/// [tiendaId] Tienda del catalogo.
+	/// [codigoBarras] Codigo a validar.
+	/// [excluirProductoId] Producto a ignorar (edicion).
+	Future<bool> existeCodigoBarrasActivoEnTienda(
+		String tiendaId,
+		String codigoBarras, {
+		String? excluirProductoId,
+	}) async {
+		final codigo = codigoBarras.trim();
+		if (codigo.isEmpty) {
+			return false;
+		}
+		final where = StringBuffer(
+			'tienda_id = ? AND codigo_barras = ? AND activo = 1',
+		);
+		final args = <Object?>[tiendaId, codigo];
+		if (excluirProductoId != null) {
+			where.write(' AND id != ?');
+			args.add(excluirProductoId);
+		}
+		final filas = await _baseDatos.query(
+			'products',
+			columns: ['id'],
+			where: where.toString(),
+			whereArgs: args,
+			limit: 1,
+		);
+		return filas.isNotEmpty;
 	}
 
 	/// Inserta o reemplaza producto en catalogo local.

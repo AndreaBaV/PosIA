@@ -411,5 +411,64 @@ void main() {
 			expect(await servicio.listarClientesPorLista(lista.id), isEmpty);
 			await fixture.cerrar();
 		});
+
+		test('registrarProductoCompleto rechaza codigo de barras duplicado', () async {
+			final fixture = await FixtureAdmin.abrir();
+			final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
+			await servicio.registrarProductoCompleto(
+				AltaProductoRequest(
+					nombre: 'Original',
+					codigoBarras: 'dup-001',
+					precioBase: 10.0,
+					categoriaId: fixture.categoriaId,
+				),
+			);
+			await expectLater(
+				servicio.registrarProductoCompleto(
+					AltaProductoRequest(
+						nombre: 'Duplicado',
+						codigoBarras: 'dup-001',
+						precioBase: 15.0,
+						categoriaId: fixture.categoriaId,
+					),
+				),
+				throwsA(
+					isA<StateError>().having(
+						(s) => s.message,
+						'message',
+						contains('Ya existe un producto activo'),
+					),
+				),
+			);
+			await fixture.cerrar();
+		});
+
+		test('actualizarProducto rechaza codigo de barras de otro producto', () async {
+			final fixture = await FixtureAdmin.abrir();
+			final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
+			await servicio.registrarProductoCompleto(
+				AltaProductoRequest(
+					nombre: 'Producto A',
+					codigoBarras: 'aaa-111',
+					precioBase: 10.0,
+					categoriaId: fixture.categoriaId,
+				),
+			);
+			final productoB = await servicio.registrarProductoCompleto(
+				AltaProductoRequest(
+					nombre: 'Producto B',
+					codigoBarras: 'bbb-222',
+					precioBase: 20.0,
+					categoriaId: fixture.categoriaId,
+				),
+			);
+			await expectLater(
+				servicio.actualizarProducto(
+					productoB.copiarCon(codigoBarras: 'aaa-111'),
+				),
+				throwsA(isA<StateError>()),
+			);
+			await fixture.cerrar();
+		});
 	});
 }

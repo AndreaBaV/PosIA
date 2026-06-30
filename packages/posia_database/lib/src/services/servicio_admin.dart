@@ -254,6 +254,7 @@ class ServicioAdmin {
     if (req.categoriaId.isEmpty) {
       throw StateError('La categoria es obligatoria');
     }
+    await _validarCodigoBarrasUnico(req.codigoBarras);
     _validarPrecioVenta(req.precioBase, req.costoUnitario);
     for (final escala in req.escalasMayoreo) {
       _validarPrecioVenta(escala.precioUnitario, req.costoUnitario);
@@ -319,6 +320,10 @@ class ServicioAdmin {
     if (producto.categoriaId == null || producto.categoriaId!.isEmpty) {
       throw StateError('La categoria es obligatoria');
     }
+    await _validarCodigoBarrasUnico(
+      producto.codigoBarras,
+      excluirProductoId: producto.id,
+    );
     _validarPrecioVenta(producto.precioBase, producto.costoUnitario);
     if (escalasMayoreo != null) {
       for (final escala in escalasMayoreo) {
@@ -416,6 +421,14 @@ class ServicioAdmin {
     return _productoRepository.listarPorProveedor(_tiendaActivaId, proveedorId);
   }
 
+  /// Busca producto activo por codigo de barras en la tienda actual.
+  Future<Producto?> buscarProductoPorCodigoBarras(String codigoBarras) {
+    return _productoRepository.buscarPorCodigoBarras(
+      codigoBarras,
+      tiendaId: _tiendaActivaId,
+    );
+  }
+
   /// Registra producto nuevo en catalogo local (legacy simple).
   ///
   /// [nombre] Nombre comercial del articulo.
@@ -427,6 +440,7 @@ class ServicioAdmin {
     required String codigoBarras,
     required double precioBase,
   }) async {
+    await _validarCodigoBarrasUnico(codigoBarras);
     final producto = Producto(
       id: _generadorId.v4(),
       nombre: nombre,
@@ -3106,6 +3120,33 @@ class ServicioAdmin {
   void _validarPrecioVenta(double precioUnitario, double costoUnitario) {
     if (!precioVentaEsValido(precioUnitario, costoUnitario)) {
       throw StateError(mensajePrecioMinimoInvalido(costoUnitario));
+    }
+  }
+
+  Future<void> _validarCodigoBarrasUnico(
+    String codigoBarras, {
+    String? excluirProductoId,
+  }) async {
+    final codigo = codigoBarras.trim();
+    if (codigo.isEmpty) {
+      return;
+    }
+    final duplicado = await _productoRepository.existeCodigoBarrasActivoEnTienda(
+      _tiendaActivaId,
+      codigo,
+      excluirProductoId: excluirProductoId,
+    );
+    if (duplicado) {
+      final existente = await _productoRepository.buscarPorCodigoBarras(
+        codigo,
+        tiendaId: _tiendaActivaId,
+      );
+      final nombre = existente?.nombre ?? 'otro producto';
+      throw StateError(
+        'Ya existe un producto activo con el codigo de barras "$codigo" '
+        '($nombre). Para cambiar el precio, edite ese producto o use '
+        '"Actualizar precio" en el catalogo.',
+      );
     }
   }
 
