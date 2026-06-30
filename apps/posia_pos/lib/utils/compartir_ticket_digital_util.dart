@@ -71,7 +71,7 @@ Future<void> compartirTicketDigitalWhatsApp(
 		if (!context.mounted) {
 			return;
 		}
-		if (resultado.status == ShareResultStatus.unavailable && telefono != null) {
+		if (resultado.status == ShareResultStatus.unavailable) {
 			await compartirTextoWhatsAppConAviso(
 				context,
 				texto: leyenda,
@@ -103,7 +103,7 @@ Future<void> compartirTicketDigitalWhatsApp(
 			if (!context.mounted) {
 				return;
 			}
-			if (resultado.status == ShareResultStatus.unavailable && telefono != null) {
+			if (resultado.status == ShareResultStatus.unavailable) {
 				await compartirTextoWhatsAppConAviso(
 					context,
 					texto: leyenda,

@@ -28,6 +28,10 @@
 		<false/>
 		<key>LSRequiresIPhoneOS</key>
 		<true/>
+		<key>LSApplicationQueriesSchemes</key>
+		<array>
+			<string>whatsapp</string>
+		</array>
 		<key>NSMicrophoneUsageDescription</key>
 		<string>La Fortuna usa el micrófono para registrar ventas por voz en caja.</string>
 		<key>NSLocationWhenInUseUsageDescription</key>

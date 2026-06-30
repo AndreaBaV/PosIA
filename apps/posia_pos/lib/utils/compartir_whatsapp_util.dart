@@ -1,6 +1,9 @@
 /// Utilidades para compartir texto por WhatsApp.
 library;
 
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -16,24 +19,87 @@ String normalizarTelefonoWhatsApp(String telefono) {
 	return soloDigitos;
 }
 
-/// Abre WhatsApp con texto prellenado.
+Uri _uriWhatsAppNativo(String telefonoLimpio, String textoCodificado) {
+	if (telefonoLimpio.isNotEmpty) {
+		return Uri.parse(
+			'whatsapp://send?phone=$telefonoLimpio&text=$textoCodificado',
+		);
+	}
+	return Uri.parse('whatsapp://send?text=$textoCodificado');
+}
+
+Uri _uriWaMe(String telefonoLimpio, String textoCodificado) {
+	if (telefonoLimpio.isNotEmpty) {
+		return Uri.parse('https://wa.me/$telefonoLimpio?text=$textoCodificado');
+	}
+	return Uri.parse('https://wa.me/?text=$textoCodificado');
+}
+
+Uri _uriWhatsAppWeb(String telefonoLimpio, String textoCodificado) {
+	if (telefonoLimpio.isNotEmpty) {
+		return Uri.parse(
+			'https://web.whatsapp.com/send?phone=$telefonoLimpio&text=$textoCodificado',
+		);
+	}
+	return Uri.parse('https://web.whatsapp.com/send?text=$textoCodificado');
+}
+
+bool _esMovilNativo() {
+	if (kIsWeb) {
+		return false;
+	}
+	return Platform.isAndroid || Platform.isIOS;
+}
+
+Future<bool> _intentarLanzar(Uri uri, LaunchMode mode) async {
+	try {
+		if (await canLaunchUrl(uri)) {
+			return await launchUrl(uri, mode: mode);
+		}
+		return await launchUrl(uri, mode: mode);
+	} on Object {
+		return false;
+	}
+}
+
+/// Abre WhatsApp (app) o WhatsApp Web si la app no esta instalada.
 Future<bool> compartirTextoWhatsApp({
 	required String texto,
 	String? telefono,
 }) async {
-	final telefonoLimpio = telefono != null ? normalizarTelefonoWhatsApp(telefono) : '';
-	final uri = telefonoLimpio.isNotEmpty
-		? Uri.parse(
-			'https://wa.me/$telefonoLimpio?text=${Uri.encodeComponent(texto)}',
-		)
-		: Uri.parse('https://wa.me/?text=${Uri.encodeComponent(texto)}');
-	if (await canLaunchUrl(uri)) {
-		return launchUrl(uri, mode: LaunchMode.externalApplication);
+	final telefonoLimpio =
+		telefono != null ? normalizarTelefonoWhatsApp(telefono) : '';
+	final textoCodificado = Uri.encodeComponent(texto);
+
+	if (_esMovilNativo()) {
+		if (await _intentarLanzar(
+			_uriWhatsAppNativo(telefonoLimpio, textoCodificado),
+			LaunchMode.externalApplication,
+		)) {
+			return true;
+		}
+		if (await _intentarLanzar(
+			_uriWaMe(telefonoLimpio, textoCodificado),
+			LaunchMode.externalApplication,
+		)) {
+			return true;
+		}
+	} else {
+		if (await _intentarLanzar(
+			_uriWaMe(telefonoLimpio, textoCodificado),
+			LaunchMode.externalApplication,
+		)) {
+			return true;
+		}
 	}
-	return false;
+
+	return _intentarLanzar(
+		_uriWhatsAppWeb(telefonoLimpio, textoCodificado),
+		LaunchMode.externalApplication,
+	);
 }
 
-/// Comparte por WhatsApp y muestra SnackBar si no se pudo abrir la app.
+/// Comparte por WhatsApp y muestra SnackBar si no se pudo abrir.
 Future<void> compartirTextoWhatsAppConAviso(
 	BuildContext context, {
 	required String texto,
@@ -45,7 +111,9 @@ Future<void> compartirTextoWhatsAppConAviso(
 	}
 	if (!ok) {
 		ScaffoldMessenger.of(context).showSnackBar(
-			const SnackBar(content: Text('No se pudo abrir WhatsApp')),
+			const SnackBar(
+				content: Text('No se pudo abrir WhatsApp ni WhatsApp Web'),
+			),
 		);
 	}
 }
