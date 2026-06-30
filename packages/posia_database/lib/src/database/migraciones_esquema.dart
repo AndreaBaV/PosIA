@@ -350,6 +350,8 @@ class MigracionesEsquema {
 				id TEXT PRIMARY KEY,
 				tienda_origen_id TEXT NOT NULL,
 				tienda_destino_id TEXT NOT NULL,
+				almacen_origen_id TEXT NOT NULL DEFAULT '',
+				almacen_destino_id TEXT NOT NULL DEFAULT '',
 				estado TEXT NOT NULL,
 				solicitado_en TEXT NOT NULL,
 				completado_en TEXT,
@@ -992,6 +994,22 @@ class MigracionesEsquema {
 	}
 
 	/// v6.23: codigo de barras unico por tienda entre productos activos.
+	/// v6.24: traspasos desde/hacia almacén en historial local.
+	static Future<void> migrarVersion23A24(Database base) async {
+		await _agregarColumnaSiNoExiste(
+			base,
+			'transfers',
+			'almacen_origen_id',
+			'TEXT NOT NULL DEFAULT ""',
+		);
+		await _agregarColumnaSiNoExiste(
+			base,
+			'transfers',
+			'almacen_destino_id',
+			'TEXT NOT NULL DEFAULT ""',
+		);
+	}
+
 	static Future<void> migrarVersion22A23(Database base) async {
 		await _resolverDuplicadosCodigoBarras(base);
 		await base.execute('''

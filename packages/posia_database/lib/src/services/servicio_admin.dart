@@ -2334,7 +2334,45 @@ class ServicioAdmin {
   // --- Traspasos ---
 
   Future<List<Traspaso>> listarTraspasos() async {
-    return _traspasoRepository?.listarTodos() ?? [];
+    final repo = _traspasoRepository;
+    if (repo == null) {
+      return [];
+    }
+    final traspasos = await repo.listarTodos();
+    final resultado = <Traspaso>[];
+    for (final traspaso in traspasos) {
+      final lineas = <LineaTraspaso>[];
+      for (final linea in traspaso.lineas) {
+        if (linea.nombreProducto.isNotEmpty) {
+          lineas.add(linea);
+          continue;
+        }
+        final producto = await _productoRepository.obtenerPorId(linea.productoId);
+        lineas.add(
+          LineaTraspaso(
+            productoId: linea.productoId,
+            nombreProducto: producto?.nombre ?? linea.productoId,
+            cantidadSolicitada: linea.cantidadSolicitada,
+            cantidadRecibida: linea.cantidadRecibida,
+          ),
+        );
+      }
+      resultado.add(
+        Traspaso(
+          id: traspaso.id,
+          tiendaOrigenId: traspaso.tiendaOrigenId,
+          tiendaDestinoId: traspaso.tiendaDestinoId,
+          almacenOrigenId: traspaso.almacenOrigenId,
+          almacenDestinoId: traspaso.almacenDestinoId,
+          estado: traspaso.estado,
+          solicitadoEn: traspaso.solicitadoEn,
+          completadoEn: traspaso.completadoEn,
+          notas: traspaso.notas,
+          lineas: lineas,
+        ),
+      );
+    }
+    return resultado;
   }
 
   Future<List<Tienda>> listarTiendasActivas() async {
@@ -3299,10 +3337,10 @@ class ServicioAdmin {
         'traspasoId': traspaso.id,
         'tiendaOrigenId': traspaso.tiendaOrigenId,
         'tiendaDestinoId': traspaso.tiendaDestinoId,
-        if (almacenOrigenId != null && almacenOrigenId.isNotEmpty)
-          'almacenOrigenId': almacenOrigenId,
-        if (almacenDestinoId != null && almacenDestinoId.isNotEmpty)
-          'almacenDestinoId': almacenDestinoId,
+        if ((almacenOrigenId ?? traspaso.almacenOrigenId).isNotEmpty)
+          'almacenOrigenId': almacenOrigenId ?? traspaso.almacenOrigenId,
+        if ((almacenDestinoId ?? traspaso.almacenDestinoId).isNotEmpty)
+          'almacenDestinoId': almacenDestinoId ?? traspaso.almacenDestinoId,
         'estado': traspaso.estado.name,
         'lineas': traspaso.lineas
             .map(
@@ -3318,40 +3356,6 @@ class ServicioAdmin {
       estado: EstadoSyncEvento.pendiente,
     );
     await _syncOrchestrator.registrarEvento(evento);
-  }
-
-  Future<void> _registrarEventoTraspasoAlmacen({
-    required String movimientoId,
-    required String almacenOrigenId,
-    String? almacenDestinoId,
-    String? tiendaDestinoId,
-    required List<LineaTraspasoSolicitud> lineas,
-  }) async {
-    final traspaso = Traspaso(
-      id: movimientoId,
-      tiendaOrigenId: '',
-      tiendaDestinoId: tiendaDestinoId ?? '',
-      estado: EstadoTraspaso.completado,
-      solicitadoEn: DateTime.now().toUtc(),
-      completadoEn: DateTime.now().toUtc(),
-      notas: 'Movimiento de almacén',
-      lineas: lineas
-          .map(
-            (l) => LineaTraspaso(
-              productoId: l.productoId,
-              nombreProducto: '',
-              cantidadSolicitada: l.cantidad,
-              cantidadRecibida: l.cantidad,
-            ),
-          )
-          .toList(),
-    );
-    await _registrarEventoTraspaso(
-      traspaso,
-      TipoSyncEvento.transferCompleted,
-      almacenOrigenId: almacenOrigenId,
-      almacenDestinoId: almacenDestinoId,
-    );
   }
 
   Future<void> _registrarEventoVariante(VarianteProducto variante) async {
@@ -3592,50 +3596,14 @@ class ServicioAdmin {
     required String tiendaDestinoId,
     required String productoId,
     required double cantidad,
-  }) async {
-    final almacenRepo = _almacenRepository;
-    if (almacenRepo == null) {
-      throw StateError('Almacenes no disponibles');
-    }
-    final stock = await almacenRepo.obtenerStock(productoId, almacenId);
-    final anterior = stock?.cantidad ?? 0.0;
-    if (anterior < cantidad) {
-      throw StateError('Stock insuficiente en almacén');
-    }
-    final ahora = DateTime.now().toUtc();
-    await _enTransaccion((tx) async {
-      final stockAlmacen = await almacenRepo.obtenerStock(
-        productoId,
-        almacenId,
-        db: tx,
-      );
-      final anteriorAlmacen = stockAlmacen?.cantidad ?? anterior;
-      await almacenRepo.guardarStock(
-        StockAlmacen(
-          productoId: productoId,
-          almacenId: almacenId,
-          cantidad: anteriorAlmacen - cantidad,
-          actualizadoEn: ahora,
-          stockMinimo: stockAlmacen?.stockMinimo ?? stock?.stockMinimo ?? 0,
-        ),
-        db: tx,
-      );
-      final stockTienda = await _inventarioRepository.obtenerStock(
-        productoId,
-        tiendaDestinoId,
-        db: tx,
-      );
-      await _inventarioRepository.guardarStock(
-        StockNivel(
-          productoId: productoId,
-          tiendaId: tiendaDestinoId,
-          cantidad: (stockTienda?.cantidad ?? 0) + cantidad,
-          actualizadoEn: ahora,
-          stockMinimo: stockTienda?.stockMinimo ?? 0,
-        ),
-        db: tx,
-      );
-    });
+  }) {
+    return traspasarAlmacenATiendaMultiple(
+      almacenId: almacenId,
+      tiendaDestinoId: tiendaDestinoId,
+      lineas: [
+        LineaTraspasoSolicitud(productoId: productoId, cantidad: cantidad),
+      ],
+    );
   }
 
   /// Resumen de existencias por almacén activo.
@@ -3781,59 +3749,131 @@ class ServicioAdmin {
     required String almacenId,
     required String tiendaDestinoId,
     required List<LineaTraspasoSolicitud> lineas,
+    String notas = '',
+    Usuario? operador,
   }) async {
-    final movimientoId = _generadorId.v4();
+    final repo = _traspasoRepository;
+    if (repo == null) {
+      throw StateError('Repositorio de traspasos no configurado');
+    }
+    final almacenRepo = _almacenRepository;
+    if (almacenRepo == null) {
+      throw StateError('Almacenes no disponibles');
+    }
+    if (lineas.isEmpty) {
+      throw StateError('Seleccione al menos un producto');
+    }
+
+    final lineasTraspaso = <LineaTraspaso>[];
+    final ahora = DateTime.now().toUtc();
+    final lineasPendientes = <
+        ({
+          String productoId,
+          double cantidad,
+          double anteriorDestino,
+        })>[];
+
+    for (final solicitud in lineas) {
+      if (solicitud.cantidad <= 0) {
+        throw StateError('La cantidad debe ser mayor a cero');
+      }
+      final producto = await _productoRepository.obtenerPorId(solicitud.productoId);
+      if (producto == null) {
+        throw StateError('Producto no encontrado: ${solicitud.productoId}');
+      }
+      final stock = await almacenRepo.obtenerStock(
+        solicitud.productoId,
+        almacenId,
+      );
+      final anteriorAlmacen = stock?.cantidad ?? 0.0;
+      if (anteriorAlmacen < solicitud.cantidad) {
+        throw StateError('Stock insuficiente de ${producto.nombre} en almacén');
+      }
+      final stockDestino = await _inventarioRepository.obtenerStock(
+        solicitud.productoId,
+        tiendaDestinoId,
+      );
+      lineasPendientes.add((
+        productoId: solicitud.productoId,
+        cantidad: solicitud.cantidad,
+        anteriorDestino: stockDestino?.cantidad ?? 0.0,
+      ));
+      lineasTraspaso.add(
+        LineaTraspaso(
+          productoId: solicitud.productoId,
+          nombreProducto: producto.nombre,
+          cantidadSolicitada: solicitud.cantidad,
+          cantidadRecibida: solicitud.cantidad,
+        ),
+      );
+    }
+
+    final traspaso = Traspaso(
+      id: _generadorId.v4(),
+      tiendaOrigenId: '',
+      tiendaDestinoId: tiendaDestinoId,
+      almacenOrigenId: almacenId,
+      estado: EstadoTraspaso.completado,
+      solicitadoEn: ahora,
+      completadoEn: ahora,
+      notas: notas.isEmpty ? 'Abastecimiento desde almacén' : notas,
+      lineas: lineasTraspaso,
+    );
+
     await _enTransaccion((tx) async {
-      for (final linea in lineas) {
-        if (linea.cantidad <= 0) {
-          continue;
-        }
-        final almacenRepo = _almacenRepository;
-        if (almacenRepo == null) {
-          throw StateError('Almacenes no disponibles');
-        }
+      for (final linea in lineasPendientes) {
         final stock = await almacenRepo.obtenerStock(
           linea.productoId,
           almacenId,
           db: tx,
         );
-        final anterior = stock?.cantidad ?? 0.0;
-        if (anterior < linea.cantidad) {
-          throw StateError('Stock insuficiente en almacén');
-        }
-        final ahora = DateTime.now().toUtc();
+        final anteriorAlmacen = stock?.cantidad ?? 0.0;
         await almacenRepo.guardarStock(
           StockAlmacen(
             productoId: linea.productoId,
             almacenId: almacenId,
-            cantidad: anterior - linea.cantidad,
+            cantidad: anteriorAlmacen - linea.cantidad,
             actualizadoEn: ahora,
             stockMinimo: stock?.stockMinimo ?? 0,
           ),
           db: tx,
         );
-        final stockTienda = await _inventarioRepository.obtenerStock(
+        final stockDestino = await _inventarioRepository.obtenerStock(
           linea.productoId,
           tiendaDestinoId,
           db: tx,
         );
+        final anteriorDestino = stockDestino?.cantidad ?? 0.0;
+        final nuevoDestino = anteriorDestino + linea.cantidad;
         await _inventarioRepository.guardarStock(
           StockNivel(
             productoId: linea.productoId,
             tiendaId: tiendaDestinoId,
-            cantidad: (stockTienda?.cantidad ?? 0) + linea.cantidad,
+            cantidad: nuevoDestino,
             actualizadoEn: ahora,
-            stockMinimo: stockTienda?.stockMinimo ?? 0,
+            stockMinimo: stockDestino?.stockMinimo ?? 0,
           ),
           db: tx,
         );
+        await _registrarAuditoriaInventario(
+          productoId: linea.productoId,
+          tiendaId: tiendaDestinoId,
+          tipo: TipoMovimientoInventario.traspasoEntrada,
+          cantidad: linea.cantidad,
+          cantidadAnterior: anteriorDestino,
+          cantidadNueva: nuevoDestino,
+          motivo: 'Abastecimiento desde almacén',
+          operadorId: operador?.id,
+          creadoEn: ahora,
+          db: tx,
+        );
       }
+      await repo.guardar(traspaso, db: tx);
     });
-    await _registrarEventoTraspasoAlmacen(
-      movimientoId: movimientoId,
+    await _registrarEventoTraspaso(
+      traspaso,
+      TipoSyncEvento.transferCompleted,
       almacenOrigenId: almacenId,
-      tiendaDestinoId: tiendaDestinoId,
-      lineas: lineas,
     );
   }
 
@@ -3841,30 +3881,73 @@ class ServicioAdmin {
     required String almacenOrigenId,
     required String almacenDestinoId,
     required List<LineaTraspasoSolicitud> lineas,
+    String notas = '',
   }) async {
     if (almacenOrigenId == almacenDestinoId) {
       throw StateError('El almacén origen y destino deben ser distintos');
     }
-    final movimientoId = _generadorId.v4();
-    await _enTransaccion((tx) async {
-      final almacenRepo = _almacenRepository;
-      if (almacenRepo == null) {
-        throw StateError('Almacenes no disponibles');
+    final repo = _traspasoRepository;
+    if (repo == null) {
+      throw StateError('Repositorio de traspasos no configurado');
+    }
+    final almacenRepo = _almacenRepository;
+    if (almacenRepo == null) {
+      throw StateError('Almacenes no disponibles');
+    }
+    if (lineas.isEmpty) {
+      throw StateError('Seleccione al menos un producto');
+    }
+
+    final lineasTraspaso = <LineaTraspaso>[];
+    final ahora = DateTime.now().toUtc();
+
+    for (final solicitud in lineas) {
+      if (solicitud.cantidad <= 0) {
+        throw StateError('La cantidad debe ser mayor a cero');
       }
+      final producto = await _productoRepository.obtenerPorId(solicitud.productoId);
+      if (producto == null) {
+        throw StateError('Producto no encontrado: ${solicitud.productoId}');
+      }
+      final stockOrigen = await almacenRepo.obtenerStock(
+        solicitud.productoId,
+        almacenOrigenId,
+      );
+      final anteriorOrigen = stockOrigen?.cantidad ?? 0.0;
+      if (anteriorOrigen < solicitud.cantidad) {
+        throw StateError('Stock insuficiente de ${producto.nombre} en almacén origen');
+      }
+      lineasTraspaso.add(
+        LineaTraspaso(
+          productoId: solicitud.productoId,
+          nombreProducto: producto.nombre,
+          cantidadSolicitada: solicitud.cantidad,
+          cantidadRecibida: solicitud.cantidad,
+        ),
+      );
+    }
+
+    final traspaso = Traspaso(
+      id: _generadorId.v4(),
+      tiendaOrigenId: '',
+      tiendaDestinoId: '',
+      almacenOrigenId: almacenOrigenId,
+      almacenDestinoId: almacenDestinoId,
+      estado: EstadoTraspaso.completado,
+      solicitadoEn: ahora,
+      completadoEn: ahora,
+      notas: notas.isEmpty ? 'Traspaso entre almacenes' : notas,
+      lineas: lineasTraspaso,
+    );
+
+    await _enTransaccion((tx) async {
       for (final linea in lineas) {
-        if (linea.cantidad <= 0) {
-          continue;
-        }
         final stockOrigen = await almacenRepo.obtenerStock(
           linea.productoId,
           almacenOrigenId,
           db: tx,
         );
         final anteriorOrigen = stockOrigen?.cantidad ?? 0.0;
-        if (anteriorOrigen < linea.cantidad) {
-          throw StateError('Stock insuficiente en almacén origen');
-        }
-        final ahora = DateTime.now().toUtc();
         await almacenRepo.guardarStock(
           StockAlmacen(
             productoId: linea.productoId,
@@ -3891,12 +3974,13 @@ class ServicioAdmin {
           db: tx,
         );
       }
+      await repo.guardar(traspaso, db: tx);
     });
-    await _registrarEventoTraspasoAlmacen(
-      movimientoId: movimientoId,
+    await _registrarEventoTraspaso(
+      traspaso,
+      TipoSyncEvento.transferCompleted,
       almacenOrigenId: almacenOrigenId,
       almacenDestinoId: almacenDestinoId,
-      lineas: lineas,
     );
   }
 

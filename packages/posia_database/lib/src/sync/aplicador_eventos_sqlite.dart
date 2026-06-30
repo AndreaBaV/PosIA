@@ -375,6 +375,8 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			id: evento.payload['traspasoId'] as String? ?? evento.id,
 			tiendaOrigenId: evento.payload['tiendaOrigenId'] as String? ?? '',
 			tiendaDestinoId: evento.payload['tiendaDestinoId'] as String? ?? '',
+			almacenOrigenId: evento.payload['almacenOrigenId'] as String? ?? '',
+			almacenDestinoId: evento.payload['almacenDestinoId'] as String? ?? '',
 			estado: estado,
 			solicitadoEn: evento.creadoEn,
 			completadoEn: estado == EstadoTraspaso.completado ? evento.creadoEn : null,

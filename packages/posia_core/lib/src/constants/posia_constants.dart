@@ -7,7 +7,7 @@
 library;
 
 /// Version actual del esquema local SQLite.
-const int SCHEMA_VERSION = 23;
+const int SCHEMA_VERSION = 24;
 
 /// Identificador de categoria virtual "Todos" en caja.
 const String CATEGORIA_TODOS_ID = '__todos__';

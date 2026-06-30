@@ -372,14 +372,31 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 		);
 	}
 
+	String _nombreOrigenTraspaso(Traspaso traspaso, _DatosTraspasos datos) {
+		if (traspaso.almacenOrigenId.isNotEmpty) {
+			return datos.nombresAlmacen[traspaso.almacenOrigenId] ?? 'Almacén';
+		}
+		return datos.nombresTienda[traspaso.tiendaOrigenId] ?? '?';
+	}
+
+	String _nombreDestinoTraspaso(Traspaso traspaso, _DatosTraspasos datos) {
+		if (traspaso.almacenDestinoId.isNotEmpty) {
+			return datos.nombresAlmacen[traspaso.almacenDestinoId] ?? 'Almacén';
+		}
+		if (traspaso.tiendaDestinoId.isNotEmpty) {
+			return datos.nombresTienda[traspaso.tiendaDestinoId] ?? '?';
+		}
+		return '?';
+	}
+
 	Widget _buildHistorial(_DatosTraspasos datos) {
 		final filtrados = datos.traspasos.where((t) {
 			if (_filtroHistorial.isEmpty) {
 				return true;
 			}
 			final q = _filtroHistorial.toLowerCase();
-			final origen = datos.nombresTienda[t.tiendaOrigenId] ?? '';
-			final destino = datos.nombresTienda[t.tiendaDestinoId] ?? '';
+			final origen = _nombreOrigenTraspaso(t, datos);
+			final destino = _nombreDestinoTraspaso(t, datos);
 			for (final linea in t.lineas) {
 				if (linea.nombreProducto.toLowerCase().contains(q)) {
 					return true;
@@ -404,8 +421,8 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 							itemCount: filtrados.length,
 							itemBuilder: (_, i) {
 								final t = filtrados[i];
-								final origen = datos.nombresTienda[t.tiendaOrigenId] ?? '?';
-								final destino = datos.nombresTienda[t.tiendaDestinoId] ?? '?';
+								final origen = _nombreOrigenTraspaso(t, datos);
+								final destino = _nombreDestinoTraspaso(t, datos);
 								final resumen = t.lineas.length == 1
 									? '${t.lineas.first.nombreProducto} '
 										'${_formatearCantidad(t.lineas.first.cantidadSolicitada)} u.'
@@ -564,8 +581,8 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 						onPressed: () async {
 							final texto = construirTicketTraspaso(
 								traspaso: traspaso,
-								nombreTiendaOrigen: datos.nombresTienda[traspaso.tiendaOrigenId] ?? '?',
-								nombreTiendaDestino: datos.nombresTienda[traspaso.tiendaDestinoId] ?? '?',
+								nombreTiendaOrigen: _nombreOrigenTraspaso(traspaso, datos),
+								nombreTiendaDestino: _nombreDestinoTraspaso(traspaso, datos),
 								nombreOperador: nombreOperador,
 							);
 							await compartirTextoWhatsAppConAviso(ctx, texto: texto);
@@ -622,8 +639,8 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 	}
 
 	void _mostrarDetalleTraspaso(Traspaso traspaso, _DatosTraspasos datos) {
-		final origen = datos.nombresTienda[traspaso.tiendaOrigenId] ?? '?';
-		final destino = datos.nombresTienda[traspaso.tiendaDestinoId] ?? '?';
+		final origen = _nombreOrigenTraspaso(traspaso, datos);
+		final destino = _nombreDestinoTraspaso(traspaso, datos);
 		showModalBottomSheet<void>(
 			context: context,
 			isScrollControlled: true,
@@ -731,8 +748,8 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 			final hardware = await ref.read(hardwareRegistryProvider.future);
 			final texto = construirTicketTraspaso(
 				traspaso: traspaso,
-				nombreTiendaOrigen: datos.nombresTienda[traspaso.tiendaOrigenId] ?? '?',
-				nombreTiendaDestino: datos.nombresTienda[traspaso.tiendaDestinoId] ?? '?',
+				nombreTiendaOrigen: _nombreOrigenTraspaso(traspaso, datos),
+				nombreTiendaDestino: _nombreDestinoTraspaso(traspaso, datos),
 				nombreOperador: nombreOperador,
 			);
 			await imprimirDocumentoTraspaso(
@@ -767,8 +784,8 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 			final hardware = await ref.read(hardwareRegistryProvider.future);
 			final texto = construirComprobanteTraspaso(
 				traspaso: traspaso,
-				nombreTiendaOrigen: datos.nombresTienda[traspaso.tiendaOrigenId] ?? '?',
-				nombreTiendaDestino: datos.nombresTienda[traspaso.tiendaDestinoId] ?? '?',
+				nombreTiendaOrigen: _nombreOrigenTraspaso(traspaso, datos),
+				nombreTiendaDestino: _nombreDestinoTraspaso(traspaso, datos),
 				nombreOperadorEnvio: nombreOperador,
 			);
 			await imprimirDocumentoTraspaso(

@@ -23,11 +23,42 @@ class ProductoRepository {
 	/// [tiendaId] Tienda propietaria del catalogo.
 	/// Retorna productos activos ordenados por nombre.
 	Future<List<Producto>> listarActivosPorTienda(String tiendaId) async {
-		final filas = await _baseDatos.query(
-			'products',
-			where: 'tienda_id = ? AND activo = 1',
-			whereArgs: [tiendaId],
-			orderBy: 'nombre ASC',
+		return _listarPorTiendaConStock(
+			tiendaId: tiendaId,
+			soloActivos: true,
+		);
+	}
+
+	/// Lista catalogo de tienda incluyendo productos con existencia local aunque
+	/// pertenezcan a otra sucursal (p. ej. tras abastecimiento desde almacen).
+	Future<List<Producto>> listarCatalogoPorTienda(String tiendaId) async {
+		return _listarPorTiendaConStock(
+			tiendaId: tiendaId,
+			soloActivos: false,
+		);
+	}
+
+	Future<List<Producto>> _listarPorTiendaConStock({
+		required String tiendaId,
+		required bool soloActivos,
+	}) async {
+		final activoFiltro = soloActivos ? 'AND p.activo = 1' : '';
+		final filas = await _baseDatos.rawQuery(
+			'''
+			SELECT DISTINCT p.*
+			FROM products p
+			WHERE (
+				p.tienda_id = ?
+				OR p.id IN (
+					SELECT producto_id
+					FROM stock_levels
+					WHERE tienda_id = ? AND cantidad > 0
+				)
+			)
+			$activoFiltro
+			ORDER BY p.nombre ASC
+			''',
+			[tiendaId, tiendaId],
 		);
 		return filas.map(_mapearProducto).toList();
 	}
@@ -65,13 +96,7 @@ class ProductoRepository {
 
 	/// Lista todos los productos de tienda incluyendo inactivos (admin).
 	Future<List<Producto>> listarTodosPorTienda(String tiendaId) async {
-		final filas = await _baseDatos.query(
-			'products',
-			where: 'tienda_id = ?',
-			whereArgs: [tiendaId],
-			orderBy: 'nombre ASC',
-		);
-		return filas.map(_mapearProducto).toList();
+		return listarCatalogoPorTienda(tiendaId);
 	}
 
 	/// Lista productos activos vinculados a un proveedor.
@@ -111,7 +136,16 @@ class ProductoRepository {
 		final where = StringBuffer('codigo_barras = ? AND activo = 1');
 		final args = <Object?>[codigo];
 		if (tiendaId != null) {
-			where.write(' AND tienda_id = ?');
+			where.write('''
+			 AND (
+				tienda_id = ?
+				OR id IN (
+					SELECT producto_id
+					FROM stock_levels
+					WHERE tienda_id = ? AND cantidad > 0
+				)
+			)''');
+			args.add(tiendaId);
 			args.add(tiendaId);
 		}
 		final filas = await _baseDatos.query(
