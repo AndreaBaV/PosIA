@@ -8,6 +8,8 @@ import 'package:posia_database/posia_database.dart';
 import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
+import '../utils/documento_ticket_util.dart';
+import '../widgets/acciones_documento_ticket.dart';
 
 class PantallaPedidosAdmin extends ConsumerStatefulWidget {
 	const PantallaPedidosAdmin({super.key});
@@ -533,6 +535,22 @@ class _PantallaPedidosAdminState extends ConsumerState<PantallaPedidosAdmin>
 									),
 									trailing: Text(formatearMoneda(l.subtotal)),
 								),
+							),
+							const SizedBox(height: 12.0),
+							AccionesDocumentoTicket(
+								onWhatsApp: () async {
+									final servicio = await ref.read(servicioAdminProvider.future);
+									final texto = await construirTextoPedido(
+										pedido: pedido,
+										servicio: servicio,
+									);
+									await compartirDocumentoWhatsApp(
+										context,
+										texto: texto,
+										telefono: pedido.telefonoEntrega,
+									);
+								},
+								onCerrar: () => Navigator.pop(ctx),
 							),
 						],
 					),

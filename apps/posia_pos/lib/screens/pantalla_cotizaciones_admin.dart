@@ -8,7 +8,7 @@ import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
-import '../utils/compartir_whatsapp_util.dart';
+import '../utils/compartir_ticket_digital_util.dart';
 import '../utils/ticket_venta_util.dart';
 import 'pantalla_registrar_cotizacion.dart';
 
@@ -234,19 +234,14 @@ class _PantallaCotizacionesAdminState extends ConsumerState<PantallaCotizaciones
   Future<void> _compartirWhatsApp(String cotizacionId) async {
     try {
       final servicio = await ref.read(servicioAdminProvider.future);
-      final texto = await construirTextoCotizacionPorId(
+      final digital = await obtenerTicketDigitalCotizacionPorId(
         cotizacionId: cotizacionId,
         servicioAdmin: servicio,
       );
-      final ok = await compartirTextoWhatsApp(texto: texto);
       if (!mounted) {
         return;
       }
-      if (!ok) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No se pudo abrir WhatsApp')),
-        );
-      }
+      await compartirTicketDigitalWhatsApp(context, contenido: digital);
     } catch (error) {
       if (!mounted) {
         return;

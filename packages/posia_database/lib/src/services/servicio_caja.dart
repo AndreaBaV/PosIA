@@ -237,6 +237,21 @@ class ServicioCaja {
     return _clienteRepository.listarActivos();
   }
 
+  /// Resuelve precio comercial para producto y cantidad sin modificar carrito.
+  Future<ResultadoPrecio> resolverPrecioVenta(
+    Producto producto,
+    double cantidad,
+  ) async {
+    final contexto = ContextoPrecio(
+      producto: producto,
+      cantidad: cantidad,
+      tiendaId: _tiendaId,
+      cliente: _clienteActivo,
+      canal: _canalVentaProducto(producto),
+    );
+    return _motorPrecio.resolverPrecio(contexto);
+  }
+
   /// Agrega producto general al carrito con cantidad en piezas.
   ///
   /// [producto] Producto seleccionado.
@@ -269,19 +284,24 @@ class ServicioCaja {
     Producto producto,
     double pesoKg,
   ) async {
+    var pesoValidado = pesoKg;
     final servicioCarniceria = _servicioCarniceria;
-    if (servicioCarniceria == null) {
-      return 'Modulo carniceria no activo';
-    }
-    final resultado = servicioCarniceria.validarPesoParaVenta(pesoKg);
-    if (!resultado.valido) {
-      return resultado.mensajeError;
+    if (servicioCarniceria != null) {
+      final resultado = servicioCarniceria.validarPesoParaVenta(pesoKg);
+      if (!resultado.valido) {
+        return resultado.mensajeError;
+      }
+      pesoValidado = resultado.pesoKg;
+    } else if (pesoKg <= 0.0) {
+      return 'El peso debe ser mayor a cero';
+    } else if (!validarPesoMinimoKg(pesoKg)) {
+      return 'Peso minimo: ${formatearPesoKg(convertirGramosAKilogramos(PESO_MINIMO_GRAMOS_CARNICERIA))}';
     }
     await _agregarLineaCarrito(
       producto: producto,
-      cantidad: resultado.pesoKg,
+      cantidad: pesoValidado,
       loteId: null,
-      etiquetaLote: formatearPesoKg(resultado.pesoKg),
+      etiquetaLote: formatearPesoKg(pesoValidado),
       permitirFusion: true,
     );
     return '';
@@ -358,7 +378,8 @@ class ServicioCaja {
       id: presentacion.id,
       nombre: '${padre.nombre} - ${presentacion.nombre}',
       codigoBarras: presentacion.codigoBarras,
-      precioBase: presentacion.precio ?? padre.precioBase,
+      precioBase: presentacion.precio ??
+          redondearMonto(padre.precioBase * presentacion.factorABase),
     );
     final errorStock = await _validarStockParaAgregar(
       productoVenta,
@@ -437,9 +458,6 @@ class ServicioCaja {
       codigoBarras,
     );
     if (producto == null) {
-      return false;
-    }
-    if (await productoTienePresentaciones(producto.id)) {
       return false;
     }
     if (await productoTieneVariantes(producto.id)) {

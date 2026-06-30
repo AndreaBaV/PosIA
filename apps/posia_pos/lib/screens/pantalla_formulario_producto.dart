@@ -94,7 +94,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 				_escalas.add(
 					_EscalaEditable(
 						cantidadController: TextEditingController(
-							text: e.cantidadMinima.toStringAsFixed(0),
+							text: _formatearCantidadEscala(e.cantidadMinima),
 						),
 						precioController: TextEditingController(
 							text: e.precioUnitario.toStringAsFixed(2),
@@ -119,6 +119,153 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 			e.dispose();
 		}
 		super.dispose();
+	}
+
+	bool get _vendePorPeso => _unidad == UnidadMedida.kilogramo;
+
+	String _formatearCantidadEscala(double cantidad) {
+		if (cantidad == cantidad.roundToDouble()) {
+			return cantidad.toStringAsFixed(0);
+		}
+		return cantidad
+			.toStringAsFixed(3)
+			.replaceAll(RegExp(r'0+$'), '')
+			.replaceAll(RegExp(r'\.$'), '');
+	}
+
+	Widget _buildSeccionEscalas(double costo) {
+		final titulo = _vendePorPeso
+			? 'Precios por peso vendido'
+			: 'Escalas de mayoreo';
+		final etiquetaCantidad = _vendePorPeso ? 'Desde (kg)' : 'Cant. mínima';
+		final etiquetaPrecio = _vendePorPeso ? 'Precio por kg' : 'Precio unit.';
+		return Column(
+			crossAxisAlignment: CrossAxisAlignment.start,
+			children: [
+				Row(
+					mainAxisAlignment: MainAxisAlignment.spaceBetween,
+					children: [
+						Text(titulo, style: const TextStyle(fontWeight: FontWeight.bold)),
+						TextButton.icon(
+							onPressed: () => setState(
+								() => _escalas.add(_EscalaEditable.vacia()),
+							),
+							icon: const Icon(Icons.add),
+							label: const Text('Agregar'),
+						),
+					],
+				),
+				if (_vendePorPeso) ...[
+					Text(
+						'Defina tramos por kilogramo. Ejemplo: desde 0 kg a \$80/kg '
+						'(medio kilo = \$40) y desde 1 kg a \$70/kg el kilo completo.',
+						style: TextStyle(color: Colors.grey.shade700, fontSize: 13.0),
+					),
+					const SizedBox(height: 8.0),
+					Wrap(
+						spacing: 8.0,
+						runSpacing: 8.0,
+						children: [
+							ActionChip(
+								label: const Text('Tramo fracción (0 kg)'),
+								onPressed: () => setState(() {
+									_escalas.add(
+										_EscalaEditable(
+											cantidadController: TextEditingController(text: '0'),
+											precioController: TextEditingController(),
+										),
+									);
+								}),
+							),
+							ActionChip(
+								label: const Text('Tramo 1 kg o más'),
+								onPressed: () => setState(() {
+									_escalas.add(
+										_EscalaEditable(
+											cantidadController: TextEditingController(text: '1'),
+											precioController: TextEditingController(
+												text: _precioController.text.trim(),
+											),
+										),
+									);
+								}),
+							),
+						],
+					),
+					const SizedBox(height: 8.0),
+				],
+				..._escalas.asMap().entries.map((entry) {
+					final i = entry.key;
+					final escala = entry.value;
+					final cantidad = parsearPrecioTexto(escala.cantidadController.text) ?? -1.0;
+					final precioE = parsearPrecioTexto(escala.precioController.text) ?? 0.0;
+					return Card(
+						child: Padding(
+							padding: const EdgeInsets.all(8.0),
+							child: Column(
+								crossAxisAlignment: CrossAxisAlignment.start,
+								children: [
+									Row(
+										children: [
+											Expanded(
+												child: TextField(
+													controller: escala.cantidadController,
+													keyboardType: const TextInputType.numberWithOptions(
+														decimal: true,
+													),
+													decoration: InputDecoration(
+														labelText: etiquetaCantidad,
+														isDense: true,
+														helperText: _vendePorPeso
+															? '0 = ventas menores a 1 kg'
+															: null,
+													),
+													onChanged: (_) => setState(() {}),
+												),
+											),
+											const SizedBox(width: 8.0),
+											Expanded(
+												child: CampoPrecioVenta(
+													controller: escala.precioController,
+													costoUnitario: costo,
+													labelText: etiquetaPrecio,
+													isDense: true,
+													prefixText: r'$ ',
+													obligatorio: false,
+													onChanged: (_) => setState(() {}),
+												),
+											),
+											IconButton(
+												icon: const Icon(Icons.delete, color: PosiaColors.cancelar),
+												onPressed: () => setState(() {
+													escala.dispose();
+													_escalas.removeAt(i);
+												}),
+											),
+										],
+									),
+									if (cantidad >= 0.0 && precioE > 0.0)
+										Padding(
+											padding: const EdgeInsets.only(left: 4.0, top: 4.0),
+											child: Text(
+												describirTramoPrecio(
+													cantidadMinima: cantidad,
+													precioUnitario: precioE,
+													unidadMedida: _unidad,
+												),
+												style: TextStyle(
+													color: Colors.grey.shade600,
+													fontSize: 12.0,
+												),
+											),
+										),
+								],
+							),
+						),
+					);
+				}),
+			],
+		);
 	}
 
 	@override
@@ -276,9 +423,19 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 				CampoPrecioVenta(
 					controller: _precioController,
 					costoUnitario: costo,
-					labelText: 'Precio menudeo (MXN) *',
+					labelText: _vendePorPeso
+						? 'Precio base por kg (MXN) *'
+						: 'Precio menudeo (MXN) *',
 					onChanged: (_) => setState(() {}),
 				),
+				if (_vendePorPeso)
+					Padding(
+						padding: const EdgeInsets.only(top: 4.0),
+						child: Text(
+							'Precio por kilo cuando el peso no califica en ningún tramo.',
+							style: TextStyle(color: Colors.grey.shade600, fontSize: 12.0),
+						),
+					),
 				const SizedBox(height: 12.0),
 				PanelCalculoUtilidad(
 					costoUnitario: costo,
@@ -286,60 +443,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 					alCambiarPrecio: () => setState(() {}),
 				),
 				const SizedBox(height: 16.0),
-				Row(
-					mainAxisAlignment: MainAxisAlignment.spaceBetween,
-					children: [
-						const Text('Escalas de mayoreo', style: TextStyle(fontWeight: FontWeight.bold)),
-						TextButton.icon(
-							onPressed: () => setState(
-								() => _escalas.add(_EscalaEditable.vacia()),
-							),
-							icon: const Icon(Icons.add),
-							label: const Text('Agregar'),
-						),
-					],
-				),
-				..._escalas.asMap().entries.map((entry) {
-					final i = entry.key;
-					final escala = entry.value;
-					return Card(
-						child: Padding(
-							padding: const EdgeInsets.all(8.0),
-							child: Row(
-								children: [
-									Expanded(
-										child: TextField(
-											controller: escala.cantidadController,
-											keyboardType: TextInputType.number,
-											decoration: const InputDecoration(
-												labelText: 'Cant. mínima',
-												isDense: true,
-											),
-										),
-									),
-									const SizedBox(width: 8.0),
-									Expanded(
-										child: CampoPrecioVenta(
-											controller: escala.precioController,
-											costoUnitario: costo,
-											labelText: 'Precio unit.',
-											isDense: true,
-											prefixText: r'$ ',
-											obligatorio: false,
-										),
-									),
-									IconButton(
-										icon: const Icon(Icons.delete, color: PosiaColors.cancelar),
-										onPressed: () => setState(() {
-											escala.dispose();
-											_escalas.removeAt(i);
-										}),
-									),
-								],
-							),
-						),
-					);
-				}),
+				_buildSeccionEscalas(costo),
 			],
 		);
 	}
@@ -356,10 +460,22 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 			costoUnitario: costo,
 			precioMenudeo: precio,
 			unidadMedida: _unidad,
+			escalasMayoreo: _escalasMayoreoActuales(),
 			empaquesPendientes: _empaquesPendientes,
 			alCambiarEmpaquesPendientes: (lista) =>
 				setState(() => _empaquesPendientes = lista),
 		);
+	}
+
+	List<EscalaMayoreoRef> _escalasMayoreoActuales() {
+		return _escalas
+			.map((e) {
+				final cant = parsearPrecioTexto(e.cantidadController.text) ?? 0.0;
+				final precioE = parsearPrecioTexto(e.precioController.text) ?? 0.0;
+				return (cantidadMinima: cant, precioUnitario: precioE);
+			})
+			.where((e) => e.cantidadMinima >= 0.0 && e.precioUnitario > 0.0)
+			.toList();
 	}
 
 	Widget _pestanaInventario() {
@@ -412,7 +528,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 					precioUnitario: precio,
 				);
 			})
-			.where((e) => e.cantidadMinima > 0.0 && e.precioUnitario > 0.0)
+			.where((e) => e.cantidadMinima >= 0.0 && e.precioUnitario > 0.0)
 			.toList();
 	}
 
@@ -530,7 +646,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 							precioUnitario: precioE,
 						);
 					})
-					.where((e) => e.cantidadMinima > 0.0 && e.precioUnitario > 0.0)
+					.where((e) => e.cantidadMinima >= 0.0 && e.precioUnitario > 0.0)
 					.toList();
 				final legacyAlta = _empaquesPendientes.isNotEmpty
 					? (piezasPorCaja: null, unidadesPorBulto: null)

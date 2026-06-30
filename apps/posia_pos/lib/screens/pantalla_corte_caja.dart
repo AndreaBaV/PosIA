@@ -8,6 +8,7 @@ import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
+import '../utils/compartir_whatsapp_util.dart';
 
 class PantallaCorteCaja extends ConsumerStatefulWidget {
 	const PantallaCorteCaja({super.key});
@@ -155,6 +156,34 @@ class _PantallaCorteCajaState extends ConsumerState<PantallaCorteCaja> {
 						const SnackBar(content: Text('Corte cerrado; no se pudo imprimir ticket')),
 					);
 				}
+			}
+			if (mounted) {
+				await showDialog<void>(
+					context: context,
+					builder: (dialogContext) => AlertDialog(
+						title: const Text('Corte de caja cerrado'),
+						content: const Text('¿Desea enviar el resumen por WhatsApp?'),
+						actions: [
+							TextButton(
+								onPressed: () => Navigator.pop(dialogContext),
+								child: const Text('Cerrar'),
+							),
+							FilledButton.icon(
+								onPressed: () async {
+									await compartirTextoWhatsAppConAviso(
+										dialogContext,
+										texto: textoCorte,
+									);
+									if (dialogContext.mounted) {
+										Navigator.pop(dialogContext);
+									}
+								},
+								icon: const Icon(Icons.chat),
+								label: const Text('WhatsApp'),
+							),
+						],
+					),
+				);
 			}
 		}
 		ref.invalidate(_turnoProvider);

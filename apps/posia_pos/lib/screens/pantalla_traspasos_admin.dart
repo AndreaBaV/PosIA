@@ -9,6 +9,7 @@ import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
+import '../utils/compartir_whatsapp_util.dart';
 import '../utils/traspaso_impresion_util.dart';
 
 class PantallaTraspasosAdmin extends ConsumerStatefulWidget {
@@ -104,9 +105,9 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 		final origenId = _origenEsAlmacen
 			? _almacenOrigenId ?? datos.almacenes.firstOrNull?.id
 			: _resolverOrigenId(datos, operador);
-		final destinosTienda = datos.tiendas
-			.where((t) => !_origenEsAlmacen && t.id != origenId)
-			.toList();
+		final destinosTienda = _origenEsAlmacen
+			? datos.tiendas
+			: datos.tiendas.where((t) => t.id != origenId).toList();
 		final destinosAlmacen = datos.almacenes
 			.where((a) => _origenEsAlmacen && a.id != origenId)
 			.toList();
@@ -561,6 +562,18 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 					),
 					TextButton(
 						onPressed: () async {
+							final texto = construirTicketTraspaso(
+								traspaso: traspaso,
+								nombreTiendaOrigen: datos.nombresTienda[traspaso.tiendaOrigenId] ?? '?',
+								nombreTiendaDestino: datos.nombresTienda[traspaso.tiendaDestinoId] ?? '?',
+								nombreOperador: nombreOperador,
+							);
+							await compartirTextoWhatsAppConAviso(ctx, texto: texto);
+						},
+						child: const Text('WhatsApp ticket'),
+					),
+					TextButton(
+						onPressed: () async {
 							await _imprimirTicket(
 								traspaso: traspaso,
 								datos: datos,
@@ -667,6 +680,18 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 							),
 							Row(
 								children: [
+									TextButton.icon(
+										onPressed: () async {
+											final texto = construirTicketTraspaso(
+												traspaso: traspaso,
+												nombreTiendaOrigen: origen,
+												nombreTiendaDestino: destino,
+											);
+											await compartirTextoWhatsAppConAviso(context, texto: texto);
+										},
+										icon: const Icon(Icons.chat),
+										label: const Text('WhatsApp'),
+									),
 									TextButton.icon(
 										onPressed: () => _imprimirTicket(
 											traspaso: traspaso,

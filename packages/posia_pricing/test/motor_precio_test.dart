@@ -107,5 +107,56 @@ void main() {
 			expect(resultado.precioUnitario, 15.00);
 			expect(resultado.reglaAplicada, ReglaPrecio.precioBase);
 		});
+
+		test('aplica tramo de peso para fracciones menores a 1 kg', () async {
+			final repositorio = RepositorioPrecioMemoria();
+			repositorio.registrarEscala(
+				const EscalaMayoreo(
+					productoId: 'prod-kg',
+					cantidadMinima: 0.0,
+					precioUnitario: 80.00,
+				),
+			);
+			repositorio.registrarEscala(
+				const EscalaMayoreo(
+					productoId: 'prod-kg',
+					cantidadMinima: 1.0,
+					precioUnitario: 70.00,
+				),
+			);
+			final motor = MotorPrecio(repositorioPrecio: repositorio);
+			const producto = Producto(
+				id: 'prod-kg',
+				nombre: 'Producto por kg',
+				codigoBarras: '789',
+				precioBase: 70.00,
+				unidadMedida: UnidadMedida.kilogramo,
+				rutaImagen: '',
+				activo: true,
+				tiendaId: 'tienda-test',
+			);
+			final medioKilo = await motor.resolverPrecio(
+				const ContextoPrecio(
+					producto: producto,
+					cantidad: 0.5,
+					tiendaId: 'tienda-test',
+					cliente: null,
+					canal: CanalVenta.mostrador,
+				),
+			);
+			expect(medioKilo.precioUnitario, 80.00);
+			expect(medioKilo.reglaAplicada, ReglaPrecio.escalaMayoreo);
+
+			final unKilo = await motor.resolverPrecio(
+				const ContextoPrecio(
+					producto: producto,
+					cantidad: 1.0,
+					tiendaId: 'tienda-test',
+					cliente: null,
+					canal: CanalVenta.mostrador,
+				),
+			);
+			expect(unKilo.precioUnitario, 70.00);
+		});
 	});
 }

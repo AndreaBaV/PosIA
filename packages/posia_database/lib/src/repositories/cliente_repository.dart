@@ -34,6 +34,31 @@ class ClienteRepository {
 		return filas.map(_mapearCliente).toList();
 	}
 
+	/// Clientes asignados a una lista de precios (activos e inactivos).
+	Future<List<Cliente>> listarPorLista(String listaPreciosId) async {
+		final filas = await _baseDatos.query(
+			'customers',
+			where: 'lista_precios_id = ?',
+			whereArgs: [listaPreciosId],
+			orderBy: 'nombre ASC',
+		);
+		return filas.map(_mapearCliente).toList();
+	}
+
+	/// Quita la asignacion de lista de precios de todos los clientes.
+	Future<void> desvincularListaPrecios(
+		String listaPreciosId, {
+		DatabaseExecutor? db,
+	}) async {
+		final exec = db ?? _baseDatos;
+		await exec.update(
+			'customers',
+			{'lista_precios_id': null},
+			where: 'lista_precios_id = ?',
+			whereArgs: [listaPreciosId],
+		);
+	}
+
 	Future<Cliente?> obtenerPorId(String clienteId) async {
 		final filas = await _baseDatos.query(
 			'customers',

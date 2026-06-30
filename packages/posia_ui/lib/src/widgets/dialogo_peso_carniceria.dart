@@ -23,17 +23,28 @@ enum _UnidadCapturaPeso { kilogramos, gramos }
 
 /// Muestra dialogo para capturar peso en kg o gramos.
 class DialogoPesoCarniceria extends StatefulWidget {
-	const DialogoPesoCarniceria({required this.producto, super.key});
+	const DialogoPesoCarniceria({
+		required this.producto,
+		this.resolverPrecio,
+		super.key,
+	});
 
 	final Producto producto;
 
+	/// Resuelve precio por kg segun peso capturado (escalas, cliente, etc.).
+	final Future<ResultadoPrecio> Function(double pesoKg)? resolverPrecio;
+
 	static Future<ResultadoDialogoPeso> mostrar(
 		BuildContext context,
-		Producto producto,
-	) async {
+		Producto producto, {
+		Future<ResultadoPrecio> Function(double pesoKg)? resolverPrecio,
+	}) async {
 		final resultado = await showDialog<ResultadoDialogoPeso>(
 			context: context,
-			builder: (_) => DialogoPesoCarniceria(producto: producto),
+			builder: (_) => DialogoPesoCarniceria(
+				producto: producto,
+				resolverPrecio: resolverPrecio,
+			),
 		);
 		return resultado ?? const ResultadoDialogoPeso(confirmado: false, pesoKg: 0.0);
 	}
@@ -48,6 +59,8 @@ class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
 	String _valorPeso = '';
 	_UnidadCapturaPeso _unidad = _UnidadCapturaPeso.kilogramos;
 	var _cerrado = false;
+	ResultadoPrecio? _precioResuelto;
+	var _resolviendoPrecio = false;
 
 	@override
 	void initState() {
@@ -57,6 +70,7 @@ class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
 			if (mounted && _pesoFocus.canRequestFocus) {
 				_pesoFocus.requestFocus();
 			}
+			_actualizarPrecioResuelto();
 		});
 	}
 
@@ -81,6 +95,98 @@ class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
 			return KeyEventResult.handled;
 		}
 		return KeyEventResult.ignored;
+	}
+
+	double? _pesoKgCapturado() {
+		final cantidad = double.tryParse(_valorPeso.isEmpty ? '0' : _valorPeso) ?? 0.0;
+		if (cantidad <= 0.0) {
+			return null;
+		}
+		return _unidad == _UnidadCapturaPeso.gramos
+			? cantidad / 1000.0
+			: cantidad;
+	}
+
+	Future<void> _actualizarPrecioResuelto() async {
+		final pesoKg = _pesoKgCapturado();
+		final resolver = widget.resolverPrecio;
+		if (pesoKg == null || resolver == null) {
+			if (!mounted) {
+				return;
+			}
+			setState(() {
+				_precioResuelto = null;
+				_resolviendoPrecio = false;
+			});
+			return;
+		}
+		setState(() => _resolviendoPrecio = true);
+		try {
+			final resultado = await resolver(pesoKg);
+			if (!mounted) {
+				return;
+			}
+			setState(() {
+				_precioResuelto = resultado;
+				_resolviendoPrecio = false;
+			});
+		} catch (_) {
+			if (!mounted) {
+				return;
+			}
+			setState(() {
+				_precioResuelto = null;
+				_resolviendoPrecio = false;
+			});
+		}
+	}
+
+	Widget _buildResumenPrecio() {
+		final pesoKg = _pesoKgCapturado();
+		if (pesoKg == null) {
+			return Text(
+				'${formatearMoneda(widget.producto.precioBase)} / kg',
+				style: Theme.of(context).textTheme.titleMedium?.copyWith(
+					color: PosiaColors.cobrar,
+					fontWeight: FontWeight.w600,
+				),
+			);
+		}
+		if (_resolviendoPrecio) {
+			return const SizedBox(
+				height: 24.0,
+				width: 24.0,
+				child: CircularProgressIndicator(strokeWidth: 2.0),
+			);
+		}
+		final precioKg = _precioResuelto?.precioUnitario ?? widget.producto.precioBase;
+		final total = redondearMonto(precioKg * pesoKg);
+		final regla = _precioResuelto?.reglaAplicada;
+		return Column(
+			children: [
+				Text(
+					'${formatearMoneda(precioKg)} / kg',
+					style: Theme.of(context).textTheme.titleMedium?.copyWith(
+						color: PosiaColors.cobrar,
+						fontWeight: FontWeight.w600,
+					),
+				),
+				const SizedBox(height: 4.0),
+				Text(
+					'${formatearPesoKg(pesoKg)} · Total ${formatearMoneda(total)}',
+					style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+						fontWeight: FontWeight.w600,
+					),
+				),
+				if (regla == ReglaPrecio.escalaMayoreo) ...[
+					const SizedBox(height: 4.0),
+					Text(
+						'Precio según tramo de peso',
+						style: TextStyle(color: Colors.grey.shade600, fontSize: 12.0),
+					),
+				],
+			],
+		);
 	}
 
 	@override
@@ -117,6 +223,8 @@ class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
 							}),
 						),
 						const SizedBox(height: 12.0),
+						_buildResumenPrecio(),
+						const SizedBox(height: 12.0),
 						TextField(
 							controller: _pesoController,
 							focusNode: _pesoFocus,
@@ -130,15 +238,23 @@ class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
 								border: const OutlineInputBorder(),
 								helperText: 'Enter agrega · Esc cancela',
 							),
-							onChanged: (texto) =>
-								_establecerValor(_normalizarEntradaPeso(texto)),
+							onChanged: (texto) {
+								_establecerValor(_normalizarEntradaPeso(texto));
+								_actualizarPrecioResuelto();
+							},
 						),
 						const SizedBox(height: 8.0),
 						TecladoNumericoSimple(
 							valorActual: _valorPeso,
 							mostrarValor: false,
-							alPresionarTecla: _agregarTecla,
-							alBorrar: _borrarTecla,
+							alPresionarTecla: (tecla) {
+								_agregarTecla(tecla);
+								_actualizarPrecioResuelto();
+							},
+							alBorrar: () {
+								_borrarTecla();
+								_actualizarPrecioResuelto();
+							},
 						),
 					],
 				),
@@ -210,16 +326,13 @@ class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
 		if (_cerrado || !mounted) {
 			return;
 		}
-		final cantidad = double.tryParse(_valorPeso.isEmpty ? '0' : _valorPeso) ?? 0.0;
-		if (cantidad <= 0.0) {
+		final pesoKg = _pesoKgCapturado();
+		if (pesoKg == null) {
 			ScaffoldMessenger.of(context).showSnackBar(
 				const SnackBar(content: Text('Indique un peso mayor a cero')),
 			);
 			return;
 		}
-		final pesoKg = _unidad == _UnidadCapturaPeso.gramos
-			? cantidad / 1000.0
-			: cantidad;
 		_cerrado = true;
 		Navigator.of(context).pop(
 			ResultadoDialogoPeso(confirmado: true, pesoKg: pesoKg),

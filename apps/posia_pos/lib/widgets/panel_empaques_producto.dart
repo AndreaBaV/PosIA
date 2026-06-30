@@ -124,6 +124,7 @@ class PanelEmpaquesProducto extends ConsumerStatefulWidget {
 		required this.costoUnitario,
 		required this.precioMenudeo,
 		required this.unidadMedida,
+		this.escalasMayoreo = const [],
 		this.empaquesPendientes = const [],
 		this.alCambiarEmpaquesPendientes,
 		super.key,
@@ -133,6 +134,7 @@ class PanelEmpaquesProducto extends ConsumerStatefulWidget {
 	final double costoUnitario;
 	final double precioMenudeo;
 	final UnidadMedida unidadMedida;
+	final List<EscalaMayoreoRef> escalasMayoreo;
 	final List<EmpaqueProductoDraft> empaquesPendientes;
 	final ValueChanged<List<EmpaqueProductoDraft>>? alCambiarEmpaquesPendientes;
 
@@ -227,10 +229,11 @@ class _PanelEmpaquesProductoState extends ConsumerState<PanelEmpaquesProducto> {
 	}
 
 	double? _precioSugerido(double factor) {
-		if (widget.precioMenudeo <= 0) {
-			return null;
-		}
-		return redondearMonto(widget.precioMenudeo * factor);
+		return calcularPrecioSugeridoPresentacion(
+			factorABase: factor,
+			precioMenudeo: widget.precioMenudeo,
+			escalasMayoreo: widget.escalasMayoreo,
+		);
 	}
 
 	String _etiquetaUnidadBase() {
@@ -241,14 +244,25 @@ class _PanelEmpaquesProductoState extends ConsumerState<PanelEmpaquesProducto> {
 		};
 	}
 
+	String _etiquetaUnidadBaseCorta() {
+		return switch (widget.unidadMedida) {
+			UnidadMedida.kilogramo => 'kg',
+			UnidadMedida.litro => 'L',
+			_ => 'piezas',
+		};
+	}
+
 	String _descripcionFactor(PresentacionProducto p) {
-		final tipo = _tipos.where((t) => t.id == p.tipoPresentacionId).firstOrNull;
-		final unidad = tipo?.unidad ?? widget.unidadMedida.name;
 		final factor = _formatearFactor(p.factorABase);
-		if (unidad == 'kilogramo') {
-			return '$factor kg = 1 ${widget.unidadMedida.name} base';
+		final unidadBase = _etiquetaUnidadBaseCorta();
+		if (p.esPresentacionBase || p.factorABase == 1.0) {
+			return '1 $unidadBase = 1 unidad base';
 		}
-		return '$factor $unidad = 1 unidad base';
+		final empaque = p.nombre.isNotEmpty
+			? p.nombre
+			: (_tipos.where((t) => t.id == p.tipoPresentacionId).firstOrNull?.nombre ??
+				'empaque');
+		return '1 $empaque = $factor $unidadBase';
 	}
 
 	String _descripcionFactorDraft(EmpaqueProductoDraft e) {
@@ -355,7 +369,18 @@ class _PanelEmpaquesProductoState extends ConsumerState<PanelEmpaquesProducto> {
 												? 'Ej. 25 = bulto de 25 kg'
 												: 'Ej. 12 = caja de 12 piezas',
 										),
-										onChanged: (_) => setLocal(() {}),
+										onChanged: (_) {
+											final f =
+												parsearPrecioTexto(factorController.text) ?? 0.0;
+											if (f > 0 && precioController.text.trim().isEmpty) {
+												final sugerido = _precioSugerido(f);
+												if (sugerido != null) {
+													precioController.text =
+														sugerido.toStringAsFixed(2);
+												}
+											}
+											setLocal(() {});
+										},
 									),
 									const SizedBox(height: 12.0),
 									if (_tipos.isNotEmpty)

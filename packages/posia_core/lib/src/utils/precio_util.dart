@@ -3,6 +3,7 @@ library;
 
 import '../constants/posia_constants.dart';
 import '../enums/modo_calculo_utilidad.dart';
+import '../enums/unidad_medida.dart';
 import 'moneda_util.dart';
 
 /// Calcula el precio minimo permitido segun costo y margen minimo.
@@ -171,6 +172,89 @@ double calcularPrecioVentaDesdeUtilidad({
 			}
 			return redondearMonto(costoUnitario / (1.0 - porcentajeUtilidad / 100.0));
 	}
+}
+
+/// Referencia de escala mayoreo para sugerir precio de presentacion.
+typedef EscalaMayoreoRef = ({double cantidadMinima, double precioUnitario});
+
+/// Precio total sugerido de una presentacion segun menudeo o escala mayoreo.
+///
+/// Si [factorABase] coincide con [cantidadMinima] de una escala, usa
+/// `factor * precioUnitario` de esa escala; si no, `factor * precioMenudeo`.
+double? calcularPrecioSugeridoPresentacion({
+	required double factorABase,
+	required double precioMenudeo,
+	Iterable<EscalaMayoreoRef> escalasMayoreo = const [],
+}) {
+	if (factorABase <= 0.0) {
+		return null;
+	}
+	for (final escala in escalasMayoreo) {
+		final coincide = (escala.cantidadMinima - factorABase).abs() < 0.001;
+		if (coincide && escala.precioUnitario > 0.0) {
+			return redondearMonto(escala.precioUnitario * factorABase);
+		}
+	}
+	if (precioMenudeo <= 0.0) {
+		return null;
+	}
+	return redondearMonto(precioMenudeo * factorABase);
+}
+
+/// Selecciona la escala con mayor [cantidadMinima] que califica para [cantidad].
+///
+/// Sirve para mayoreo por piezas y para precios por peso (kg): por ejemplo,
+/// desde 0 kg a \$80/kg y desde 1 kg a \$70/kg.
+EscalaMayoreoRef? seleccionarEscalaMayoreoPorCantidad(
+	Iterable<EscalaMayoreoRef> escalas,
+	double cantidad,
+) {
+	EscalaMayoreoRef? mejorEscala;
+	for (final escala in escalas) {
+		if (cantidad < escala.cantidadMinima) {
+			continue;
+		}
+		if (mejorEscala == null ||
+			escala.cantidadMinima > mejorEscala.cantidadMinima) {
+			mejorEscala = escala;
+		}
+	}
+	return mejorEscala;
+}
+
+/// Resuelve precio unitario aplicando escalas por cantidad o [precioBase].
+double resolverPrecioConEscalas({
+	required double precioBase,
+	required double cantidad,
+	Iterable<EscalaMayoreoRef> escalas = const [],
+}) {
+	final escala = seleccionarEscalaMayoreoPorCantidad(escalas, cantidad);
+	if (escala != null) {
+		return redondearMonto(escala.precioUnitario);
+	}
+	return redondearMonto(precioBase);
+}
+
+/// Etiqueta legible de un tramo de precio por peso o cantidad.
+String describirTramoPrecio({
+	required double cantidadMinima,
+	required double precioUnitario,
+	required UnidadMedida unidadMedida,
+}) {
+	final precio = formatearMoneda(precioUnitario);
+	if (unidadMedida == UnidadMedida.kilogramo) {
+		final desde = _formatearCantidadTramo(cantidadMinima);
+		return 'Desde $desde kg: $precio/kg';
+	}
+	final desde = _formatearCantidadTramo(cantidadMinima);
+	return 'Desde $desde u.: $precio c/u';
+}
+
+String _formatearCantidadTramo(double cantidad) {
+	if (cantidad == cantidad.roundToDouble()) {
+		return cantidad.toStringAsFixed(0);
+	}
+	return cantidad.toStringAsFixed(3).replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
 }
 
 /// Porcentaje de utilidad implicito entre costo y precio de venta.

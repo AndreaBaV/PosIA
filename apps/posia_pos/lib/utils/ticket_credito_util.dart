@@ -51,6 +51,31 @@ Future<List<String>> construirTextosPagareCredito({
   ];
 }
 
+/// Pagaré digital (copia cliente) para WhatsApp.
+Future<TicketDigitalContenido> obtenerTicketDigitalPagareCliente({
+  required Venta venta,
+  required ServicioAdmin servicioAdmin,
+}) async {
+  if (venta.clienteId == null) {
+    throw StateError('La venta a crédito requiere cliente');
+  }
+  final cliente = await servicioAdmin.obtenerCliente(venta.clienteId!);
+  if (cliente == null) {
+    throw StateError('Cliente no encontrado');
+  }
+  final tienda = await servicioAdmin.obtenerTiendaActiva();
+  return construirTicketDigitalPagare(
+    venta: venta,
+    nombreTienda: tienda?.nombre ?? 'Tienda',
+    nombreCliente: cliente.nombre,
+    telefonoCliente: cliente.telefono,
+    direccionCliente: cliente.direccion,
+    etiquetaCopia: 'COPIA CLIENTE',
+    direccionTienda: tienda?.direccion,
+    rfcCliente: cliente.rfc,
+  );
+}
+
 /// Comprobante al liquidar un credito pendiente.
 Future<String> construirTextoLiquidacionCredito({
   required Venta venta,
@@ -67,5 +92,23 @@ Future<String> construirTextoLiquidacionCredito({
     direccionTienda: tienda?.direccion,
     telefonoCliente: cliente?.telefono,
     conLogoImpreso: true,
+  );
+}
+
+/// Comprobante digital de liquidación para WhatsApp.
+Future<TicketDigitalContenido> obtenerTicketDigitalLiquidacionCredito({
+  required Venta venta,
+  required ServicioAdmin servicioAdmin,
+}) async {
+  final tienda = await servicioAdmin.obtenerTiendaActiva();
+  final cliente = venta.clienteId != null
+      ? await servicioAdmin.obtenerCliente(venta.clienteId!)
+      : null;
+  return construirTicketDigitalLiquidacionCredito(
+    venta: venta,
+    nombreTienda: tienda?.nombre ?? 'Tienda',
+    nombreCliente: cliente?.nombre ?? 'Cliente',
+    direccionTienda: tienda?.direccion,
+    telefonoCliente: cliente?.telefono,
   );
 }

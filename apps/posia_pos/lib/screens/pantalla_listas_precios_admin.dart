@@ -29,23 +29,46 @@ class _PantallaListasPreciosAdminState extends ConsumerState<PantallaListasPreci
 		super.dispose();
 	}
 
+	Future<void> _refrescar() async {
+		invalidarListasPrecios(ref);
+		await ref.read(listasPreciosAdminProvider.future);
+	}
+
 	@override
 	Widget build(BuildContext context) {
-		final listasAsync = ref.watch(_listasProvider);
+		final listasAsync = ref.watch(listasPreciosAdminProvider);
 
 		return Scaffold(
-			appBar: AppBar(title: const Text('Listas de precios')),
-			body: listasAsync.when(
-				data: (listas) {
-					final listaId = _listaId ?? (listas.isNotEmpty ? listas.first.id : null);
-					return _contenido(context, listas, listaId);
-				},
-				loading: () => const Center(child: CircularProgressIndicator()),
-				error: (e, _) => Center(child: Text('$e')),
+			appBar: AppBar(
+				title: const Text('Listas de precios'),
+				actions: [
+					IconButton(
+						icon: const Icon(Icons.refresh),
+						tooltip: 'Actualizar',
+						onPressed: _refrescar,
+					),
+				],
+			),
+			body: RefreshIndicator(
+				onRefresh: _refrescar,
+				child: listasAsync.when(
+					data: (listas) {
+						final ids = listas.map((l) => l.id).toSet();
+						final listaId = _listaId != null && ids.contains(_listaId)
+							? _listaId
+							: (listas.isNotEmpty ? listas.first.id : null);
+						return _contenido(context, listas, listaId);
+					},
+					loading: () => const Center(child: CircularProgressIndicator()),
+					error: (e, _) => Center(child: Text('$e')),
+				),
 			),
 			floatingActionButton: listasAsync.maybeWhen(
 				data: (listas) {
-					final listaId = _listaId ?? (listas.isNotEmpty ? listas.first.id : null);
+					final ids = listas.map((l) => l.id).toSet();
+					final listaId = _listaId != null && ids.contains(_listaId)
+						? _listaId
+						: (listas.isNotEmpty ? listas.first.id : null);
 					if (listaId == null) {
 						return null;
 					}
@@ -62,8 +85,8 @@ class _PantallaListasPreciosAdminState extends ConsumerState<PantallaListasPreci
 
 	Widget _contenido(BuildContext context, List<ListaPrecios> listas, String? listaId) {
 		final detalleAsync = listaId == null
-			? const AsyncValue<_DetalleLista?>.data(null)
-			: ref.watch(_detalleListaProvider(listaId));
+			? const AsyncValue<DetalleListaPrecios?>.data(null)
+			: ref.watch(detalleListaPreciosProvider(listaId));
 
 		return Column(
 			crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -76,7 +99,7 @@ class _PantallaListasPreciosAdminState extends ConsumerState<PantallaListasPreci
 								child: listas.isEmpty
 									? const Text('Sin listas. Cree una para comenzar.')
 									: DropdownButtonFormField<String>(
-										initialValue: listaId,
+										value: listaId,
 										isExpanded: true,
 										decoration: const InputDecoration(
 											labelText: 'Lista de precios',
@@ -141,7 +164,11 @@ class _PantallaListasPreciosAdminState extends ConsumerState<PantallaListasPreci
 		);
 	}
 
-	Widget _vistaLista(BuildContext context, _DetalleLista detalle, String listaId) {
+	Widget _vistaLista(
+		BuildContext context,
+		DetalleListaPrecios detalle,
+		String listaId,
+	) {
 		final filtrados = detalle.items.where((item) {
 			if (_filtro.isEmpty) {
 				return true;
@@ -160,13 +187,13 @@ class _PantallaListasPreciosAdminState extends ConsumerState<PantallaListasPreci
 						crossAxisAlignment: CrossAxisAlignment.start,
 						children: [
 							Text(
-								'Clientes con esta lista',
+								'Clientes con esta lista (${detalle.clientes.length})',
 								style: Theme.of(context).textTheme.titleSmall,
 							),
 							const SizedBox(height: 6.0),
 							if (detalle.clientes.isEmpty)
 								Text(
-									'Ningun cliente asignado. Asigne la lista en la ficha del cliente.',
+									'Ningún cliente asignado. Asigne la lista en la ficha del cliente.',
 									style: Theme.of(context).textTheme.bodySmall?.copyWith(
 										color: Colors.grey.shade700,
 									),
@@ -178,8 +205,14 @@ class _PantallaListasPreciosAdminState extends ConsumerState<PantallaListasPreci
 									children: detalle.clientes
 										.map(
 											(c) => Chip(
-												avatar: const Icon(Icons.person, size: 16.0),
-												label: Text(c.nombre),
+												avatar: Icon(
+													Icons.person,
+													size: 16.0,
+													color: c.activo ? null : Colors.grey,
+												),
+												label: Text(
+													c.activo ? c.nombre : '${c.nombre} (inactivo)',
+												),
 												visualDensity: VisualDensity.compact,
 											),
 										)
@@ -191,10 +224,23 @@ class _PantallaListasPreciosAdminState extends ConsumerState<PantallaListasPreci
 				const SizedBox(height: 12.0),
 				Padding(
 					padding: const EdgeInsets.symmetric(horizontal: 16.0),
-					child: CampoBusqueda(
-						controlador: _busquedaController,
-						sugerencia: 'Buscar en esta lista...',
-						alCambiar: (v) => setState(() => _filtro = v.trim()),
+					child: TextField(
+						controller: _busquedaController,
+						decoration: InputDecoration(
+							labelText: 'Buscar producto en esta lista',
+							prefixIcon: const Icon(Icons.search),
+							border: const OutlineInputBorder(),
+							suffixIcon: _filtro.isNotEmpty
+								? IconButton(
+									icon: const Icon(Icons.clear),
+									onPressed: () {
+										_busquedaController.clear();
+										setState(() => _filtro = '');
+									},
+								)
+								: null,
+						),
+						onChanged: (v) => setState(() => _filtro = v.trim()),
 					),
 				),
 				Padding(
@@ -206,14 +252,21 @@ class _PantallaListasPreciosAdminState extends ConsumerState<PantallaListasPreci
 				),
 				Expanded(
 					child: filtrados.isEmpty
-						? Center(
-							child: Text(
-								detalle.items.isEmpty
-									? 'Esta lista no tiene productos.\nUse "Agregar producto".'
-									: 'Sin coincidencias para la busqueda.',
-								textAlign: TextAlign.center,
-								style: const TextStyle(color: Colors.grey),
-							),
+						? ListView(
+							children: [
+								SizedBox(
+									height: MediaQuery.sizeOf(context).height * 0.2,
+								),
+								Center(
+									child: Text(
+										detalle.items.isEmpty
+											? 'Esta lista no tiene productos.\nUse "Agregar producto".'
+											: 'Sin coincidencias para la búsqueda.',
+										textAlign: TextAlign.center,
+										style: const TextStyle(color: Colors.grey),
+									),
+								),
+							],
 						)
 						: ListView.separated(
 							padding: const EdgeInsets.fromLTRB(8.0, 0.0, 8.0, 88.0),
@@ -224,7 +277,8 @@ class _PantallaListasPreciosAdminState extends ConsumerState<PantallaListasPreci
 								return _FilaProductoLista(
 									item: item,
 									onEditarPrecio: () => _editarPrecio(context, listaId, item),
-									onEditarProducto: () => _editarProducto(context, listaId, item.producto),
+									onEditarProducto: () =>
+										_editarProducto(context, listaId, item.producto),
 									onQuitar: () => _quitarProducto(context, listaId, item),
 								);
 							},
@@ -263,7 +317,7 @@ class _PantallaListasPreciosAdminState extends ConsumerState<PantallaListasPreci
 		}
 		final servicio = await ref.read(servicioAdminProvider.future);
 		final lista = await servicio.registrarListaPrecios(nombre);
-		ref.invalidate(_listasProvider);
+		invalidarListasPrecios(ref);
 		setState(() => _listaId = lista.id);
 	}
 
@@ -273,12 +327,12 @@ class _PantallaListasPreciosAdminState extends ConsumerState<PantallaListasPreci
 			builder: (ctx) => AlertDialog(
 				title: const Text('Eliminar lista'),
 				content: Text(
-					'Eliminar "${lista.nombre}" y todos sus precios?\n'
-					'Los clientes quedaran sin lista asignada.',
+					'¿Eliminar "${lista.nombre}" y todos sus precios?\n'
+					'Los clientes quedarán sin lista asignada.',
 				),
 				actions: [
 					TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No')),
-					FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Si')),
+					FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sí')),
 				],
 			),
 		);
@@ -287,7 +341,7 @@ class _PantallaListasPreciosAdminState extends ConsumerState<PantallaListasPreci
 		}
 		final servicio = await ref.read(servicioAdminProvider.future);
 		await servicio.eliminarListaPrecios(lista.id);
-		ref.invalidate(_listasProvider);
+		invalidarListasPrecios(ref);
 		if (_listaId == lista.id) {
 			setState(() => _listaId = null);
 		}
@@ -326,7 +380,7 @@ class _PantallaListasPreciosAdminState extends ConsumerState<PantallaListasPreci
 				resultado.productoId,
 				resultado.precio,
 			);
-			ref.invalidate(_detalleListaProvider(listaId));
+			ref.invalidate(detalleListaPreciosProvider(listaId));
 			if (!context.mounted) {
 				return;
 			}
@@ -403,7 +457,7 @@ class _PantallaListasPreciosAdminState extends ConsumerState<PantallaListasPreci
 		try {
 			final servicio = await ref.read(servicioAdminProvider.future);
 			await servicio.guardarPrecioLista(listaId, item.producto.id, precio);
-			ref.invalidate(_detalleListaProvider(listaId));
+			ref.invalidate(detalleListaPreciosProvider(listaId));
 			if (!context.mounted) {
 				return;
 			}
@@ -432,7 +486,7 @@ class _PantallaListasPreciosAdminState extends ConsumerState<PantallaListasPreci
 			),
 		);
 		if (ok == true) {
-			ref.invalidate(_detalleListaProvider(listaId));
+			ref.invalidate(detalleListaPreciosProvider(listaId));
 		}
 	}
 
@@ -446,7 +500,7 @@ class _PantallaListasPreciosAdminState extends ConsumerState<PantallaListasPreci
 			builder: (ctx) => AlertDialog(
 				title: const Text('Quitar de la lista'),
 				content: Text(
-					'Quitar "${item.producto.nombre}" de esta lista?\n'
+					'¿Quitar "${item.producto.nombre}" de esta lista?\n'
 					'El producto seguirá en el catálogo.',
 				),
 				actions: [
@@ -460,7 +514,7 @@ class _PantallaListasPreciosAdminState extends ConsumerState<PantallaListasPreci
 		}
 		final servicio = await ref.read(servicioAdminProvider.future);
 		await servicio.eliminarProductoDeLista(listaId, item.producto.id);
-		ref.invalidate(_detalleListaProvider(listaId));
+		ref.invalidate(detalleListaPreciosProvider(listaId));
 		if (!context.mounted) {
 			return;
 		}
@@ -489,7 +543,7 @@ class _FilaProductoLista extends StatelessWidget {
 		return ListTile(
 			title: Text(p.nombre),
 			subtitle: Text(
-				'Generico ${formatearMoneda(p.precioBase)} · Costo ${formatearMoneda(p.costoUnitario)}',
+				'Genérico ${formatearMoneda(p.precioBase)} · Costo ${formatearMoneda(p.costoUnitario)}',
 			),
 			trailing: Row(
 				mainAxisSize: MainAxisSize.min,
@@ -580,10 +634,34 @@ class _DialogoAgregarProductoListaState extends State<_DialogoAgregarProductoLis
 			.toList();
 	}
 
+	void _seleccionarProducto(Producto producto) {
+		setState(() {
+			_productoId = producto.id;
+			if (_precioController.text.trim().isEmpty) {
+				_precioController.text = producto.precioBase.toStringAsFixed(2);
+			}
+		});
+	}
+
 	void _confirmar() {
 		final producto = _productoSeleccionado;
 		final precio = parsearPrecioTexto(_precioController.text);
-		if (producto == null || precio == null) {
+		if (producto == null) {
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(
+					content: Text('Seleccione un producto de la lista'),
+					backgroundColor: PosiaColors.cancelar,
+				),
+			);
+			return;
+		}
+		if (precio == null) {
+			ScaffoldMessenger.of(context).showSnackBar(
+				const SnackBar(
+					content: Text('Ingrese un precio válido'),
+					backgroundColor: PosiaColors.cancelar,
+				),
+			);
 			return;
 		}
 		final error = errorPrecioVentaDesdeTexto(
@@ -610,66 +688,81 @@ class _DialogoAgregarProductoListaState extends State<_DialogoAgregarProductoLis
 		return AlertDialog(
 			title: const Text('Agregar producto'),
 			content: SizedBox(
-				width: 420.0,
-				child: SingleChildScrollView(
-					child: Column(
-						mainAxisSize: MainAxisSize.min,
-						crossAxisAlignment: CrossAxisAlignment.stretch,
-						children: [
-							CampoBusqueda(
-								controlador: _busquedaController,
-								sugerencia: 'Buscar producto...',
-								alCambiar: (v) => setState(() => _filtro = v.trim()),
+				width: 480.0,
+				height: 520.0,
+				child: Column(
+					crossAxisAlignment: CrossAxisAlignment.stretch,
+					children: [
+						TextField(
+							controller: _busquedaController,
+							autofocus: true,
+							decoration: InputDecoration(
+								labelText: 'Buscar por nombre o código',
+								prefixIcon: const Icon(Icons.search),
+								border: const OutlineInputBorder(),
+								suffixIcon: _filtro.isNotEmpty
+									? IconButton(
+										icon: const Icon(Icons.clear),
+										onPressed: () {
+											_busquedaController.clear();
+											setState(() => _filtro = '');
+										},
+									)
+									: null,
+							),
+							onChanged: (v) => setState(() => _filtro = v.trim()),
+						),
+						const SizedBox(height: 8.0),
+						Text(
+							producto == null
+								? 'Toque un producto para seleccionarlo'
+								: 'Seleccionado: ${producto.nombre}',
+							style: Theme.of(context).textTheme.bodySmall,
+						),
+						const SizedBox(height: 8.0),
+						Expanded(
+							child: filtrados.isEmpty
+								? const Center(child: Text('Sin coincidencias'))
+								: ListView.separated(
+									itemCount: filtrados.length,
+									separatorBuilder: (_, _) => const Divider(height: 1.0),
+									itemBuilder: (_, i) {
+										final p = filtrados[i];
+										final seleccionado = p.id == _productoId;
+										return ListTile(
+											selected: seleccionado,
+											title: Text(p.nombre),
+											subtitle: Text(
+												p.codigoBarras.isNotEmpty
+													? '${formatearMoneda(p.precioBase)} · ${p.codigoBarras}'
+													: formatearMoneda(p.precioBase),
+											),
+											trailing: seleccionado
+												? const Icon(Icons.check_circle, color: PosiaColors.cobrar)
+												: null,
+											onTap: () => _seleccionarProducto(p),
+										);
+									},
+								),
+						),
+						const Divider(height: 24.0),
+						if (producto != null) ...[
+							CampoPrecioVenta(
+								controller: _precioController,
+								costoUnitario: producto.costoUnitario,
+								labelText: 'Precio en esta lista',
 							),
 							const SizedBox(height: 8.0),
-							DropdownButtonFormField<String>(
-								initialValue: filtrados.any((p) => p.id == _productoId) ? _productoId : null,
-								isExpanded: true,
-								decoration: const InputDecoration(
-									labelText: 'Producto',
-									border: OutlineInputBorder(),
-								),
-								items: filtrados
-									.map(
-										(p) => DropdownMenuItem(
-											value: p.id,
-											child: Text(p.nombre),
-										),
-									)
-									.toList(),
-								onChanged: (v) => setState(() {
-									_productoId = v;
-									final sel = _productoSeleccionado;
-									if (sel != null && _precioController.text.isEmpty) {
-										_precioController.text = sel.precioBase.toStringAsFixed(2);
-									}
-								}),
+							PanelCalculoUtilidad(
+								costoUnitario: producto.costoUnitario,
+								precioController: _precioController,
 							),
-							const SizedBox(height: 12.0),
-							if (producto != null)
-								CampoPrecioVenta(
-									controller: _precioController,
-									costoUnitario: producto.costoUnitario,
-									labelText: 'Precio en esta lista',
-								)
-							else
-								TextField(
-									controller: _precioController,
-									keyboardType: const TextInputType.numberWithOptions(decimal: true),
-									decoration: const InputDecoration(
-										labelText: 'Precio en esta lista',
-										border: OutlineInputBorder(),
-									),
-								),
-							if (producto != null) ...[
-								const SizedBox(height: 8.0),
-								PanelCalculoUtilidad(
-									costoUnitario: producto.costoUnitario,
-									precioController: _precioController,
-								),
-							],
-						],
-					),
+						] else
+							const Text(
+								'El precio se captura después de elegir el producto.',
+								style: TextStyle(color: Colors.grey, fontSize: 13.0),
+							),
+					],
 				),
 			),
 			actions: [
@@ -679,22 +772,3 @@ class _DialogoAgregarProductoListaState extends State<_DialogoAgregarProductoLis
 		);
 	}
 }
-
-class _DetalleLista {
-	const _DetalleLista({required this.clientes, required this.items});
-
-	final List<Cliente> clientes;
-	final List<ItemListaPrecios> items;
-}
-
-final _listasProvider = FutureProvider<List<ListaPrecios>>((ref) async {
-	final servicio = await ref.watch(servicioAdminProvider.future);
-	return servicio.listarListasPrecios();
-});
-
-final _detalleListaProvider = FutureProvider.family<_DetalleLista, String>((ref, listaId) async {
-	final servicio = await ref.watch(servicioAdminProvider.future);
-	final clientes = await servicio.listarClientesPorLista(listaId);
-	final items = await servicio.listarItemsListaPrecios(listaId);
-	return _DetalleLista(clientes: clientes, items: items);
-});

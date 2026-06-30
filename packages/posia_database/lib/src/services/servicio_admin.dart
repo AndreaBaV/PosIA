@@ -3114,7 +3114,7 @@ class ServicioAdmin {
   }
 
   Future<List<Cliente>> listarClientesPorLista(String listaId) async {
-    return _clienteRepository?.listarActivosPorLista(listaId) ?? [];
+    return _clienteRepository?.listarPorLista(listaId) ?? [];
   }
 
   Future<List<ItemListaPrecios>> listarItemsListaPrecios(String listaId) async {

@@ -382,5 +382,34 @@ void main() {
 			expect(pendientes.any((v) => v.id == venta.id), isTrue);
 			await fixture.cerrar();
 		});
+
+		test('listarClientesPorLista devuelve clientes asignados', () async {
+			final fixture = await FixtureAdmin.abrir();
+			final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
+			final lista = await servicio.registrarListaPrecios('Mayoreo');
+			final cliente = await servicio.registrarCliente(nombre: 'Tienda Juan');
+			await servicio.actualizarCliente(
+				cliente.copiarCon(listaPreciosId: lista.id),
+			);
+			final asignados = await servicio.listarClientesPorLista(lista.id);
+			expect(asignados, hasLength(1));
+			expect(asignados.first.nombre, 'Tienda Juan');
+			await fixture.cerrar();
+		});
+
+		test('eliminarListaPrecios desvincula clientes', () async {
+			final fixture = await FixtureAdmin.abrir();
+			final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
+			final lista = await servicio.registrarListaPrecios('Temporal');
+			final cliente = await servicio.registrarCliente(nombre: 'Cliente lista');
+			await servicio.actualizarCliente(
+				cliente.copiarCon(listaPreciosId: lista.id),
+			);
+			await servicio.eliminarListaPrecios(lista.id);
+			final actualizado = await servicio.obtenerCliente(cliente.id);
+			expect(actualizado?.listaPreciosId, isNull);
+			expect(await servicio.listarClientesPorLista(lista.id), isEmpty);
+			await fixture.cerrar();
+		});
 	});
 }

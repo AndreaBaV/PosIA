@@ -35,6 +35,36 @@ Future<String> construirTextoTicketVenta({
   );
 }
 
+/// Ticket digital de venta para WhatsApp (imagen con logo).
+Future<TicketDigitalContenido> obtenerTicketDigitalVenta({
+  required Venta venta,
+  required ServicioAdmin servicioAdmin,
+  ConfigDispositivo? config,
+  double? montoRecibido,
+}) async {
+  final tienda = await servicioAdmin.obtenerTiendaActiva();
+  final cliente = venta.clienteId != null
+      ? await servicioAdmin.obtenerCliente(venta.clienteId!)
+      : null;
+  final vendedor = venta.vendedorId != null
+      ? await servicioAdmin.obtenerVendedor(venta.vendedorId!)
+      : null;
+  final etiquetaCaja = _etiquetaCaja(config);
+  return construirTicketDigitalVenta(
+    venta: venta,
+    nombreTienda: tienda?.nombre ?? 'Tienda',
+    direccionTienda: tienda?.direccion,
+    etiquetaCaja: etiquetaCaja,
+    nombreVendedor: vendedor?.nombre,
+    codigoVendedor: vendedor?.codigo,
+    nombreCliente: cliente?.nombre,
+    telefonoCliente: cliente?.telefono,
+    rfcCliente: cliente?.rfc,
+    direccionCliente: cliente?.direccion,
+    montoRecibido: montoRecibido,
+  );
+}
+
 String? _etiquetaCaja(ConfigDispositivo? config) {
   if (config == null) {
     return null;
@@ -79,20 +109,44 @@ String construirTextoCotizacionGuardada({
   );
 }
 
-/// Persiste cotizacion desde carrito y devuelve entidad con texto imprimible.
-Future<({Cotizacion cotizacion, String texto})> registrarCotizacionDesdeCarrito({
+/// Persiste cotizacion desde carrito con texto e imagen digital.
+Future<({Cotizacion cotizacion, String texto, TicketDigitalContenido digital})>
+    registrarCotizacionDesdeCarrito({
   required ServicioCaja servicioCaja,
   required ServicioAdmin servicioAdmin,
   String? notas,
 }) async {
   final cotizacion = await servicioCaja.registrarCotizacionCarrito(notas: notas);
   final tienda = await servicioAdmin.obtenerTiendaActiva();
+  final nombreTienda = tienda?.nombre ?? 'Tienda';
+  final digital = construirTicketDigitalDesdeCotizacion(
+    cotizacion: cotizacion,
+    nombreTienda: nombreTienda,
+    direccionTienda: tienda?.direccion,
+  );
   final texto = construirTextoCotizacionGuardada(
+    cotizacion: cotizacion,
+    nombreTienda: nombreTienda,
+    direccionTienda: tienda?.direccion,
+  );
+  return (cotizacion: cotizacion, texto: texto, digital: digital);
+}
+
+/// Ticket digital de cotización por id.
+Future<TicketDigitalContenido> obtenerTicketDigitalCotizacionPorId({
+  required String cotizacionId,
+  required ServicioAdmin servicioAdmin,
+}) async {
+  final cotizacion = await servicioAdmin.obtenerCotizacion(cotizacionId);
+  if (cotizacion == null) {
+    throw StateError('Cotización no encontrada');
+  }
+  final tienda = await servicioAdmin.obtenerTiendaActiva();
+  return construirTicketDigitalDesdeCotizacion(
     cotizacion: cotizacion,
     nombreTienda: tienda?.nombre ?? 'Tienda',
     direccionTienda: tienda?.direccion,
   );
-  return (cotizacion: cotizacion, texto: texto);
 }
 
 /// Texto imprimible de cotizacion guardada por id.

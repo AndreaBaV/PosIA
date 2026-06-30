@@ -142,6 +142,8 @@ final empleadosAsignacionProvider = FutureProvider<List<Usuario>>((ref) async {
 Future<void> refrescarDatosMaestros(WidgetRef ref) async {
 	ref.invalidate(contenedorServiciosProvider);
 	ref.invalidate(empleadosAsignacionProvider);
+	ref.invalidate(listasPreciosAdminProvider);
+	ref.invalidate(detalleListaPreciosProvider);
 	await ref.read(contenedorServiciosProvider.future);
 	final carrito = ref.read(carritoNotifierProvider.notifier);
 	if (ref.read(carritoNotifierProvider).hasValue) {
@@ -150,6 +152,50 @@ Future<void> refrescarDatosMaestros(WidgetRef ref) async {
 		ref.invalidate(carritoNotifierProvider);
 	}
 }
+
+/// Detalle de una lista de precios: clientes asignados y productos con precio.
+class DetalleListaPrecios {
+	const DetalleListaPrecios({
+		required this.clientes,
+		required this.items,
+	});
+
+	final List<Cliente> clientes;
+	final List<ItemListaPrecios> items;
+}
+
+/// Catalogo de listas de precios para administracion.
+final listasPreciosAdminProvider = FutureProvider<List<ListaPrecios>>((ref) async {
+	final servicio = await ref.watch(servicioAdminProvider.future);
+	return servicio.listarListasPrecios();
+});
+
+/// Clientes y productos de una lista de precios.
+final detalleListaPreciosProvider =
+	FutureProvider.family<DetalleListaPrecios, String>((ref, listaId) async {
+		final servicio = await ref.watch(servicioAdminProvider.future);
+		final clientes = await servicio.listarClientesPorLista(listaId);
+		final items = await servicio.listarItemsListaPrecios(listaId);
+		return DetalleListaPrecios(clientes: clientes, items: items);
+	});
+
+/// Invalida cache de listas de precios tras cambios en listas o asignacion de clientes.
+void invalidarListasPrecios(WidgetRef ref) {
+	ref.invalidate(listasPreciosAdminProvider);
+	ref.invalidate(detalleListaPreciosProvider);
+}
+
+/// Clientes para administracion.
+final clientesAdminProvider = FutureProvider<List<Cliente>>((ref) async {
+	final servicio = await ref.watch(servicioAdminProvider.future);
+	return servicio.listarClientes();
+});
+
+/// Proveedores para administracion.
+final proveedoresAdminProvider = FutureProvider<List<Proveedor>>((ref) async {
+	final servicio = await ref.watch(servicioAdminProvider.future);
+	return servicio.listarProveedores();
+});
 
 /// Indica si el tecnico completo la instalacion inicial (hub + caja).
 final instalacionCompletaProvider = FutureProvider<bool>((ref) async {

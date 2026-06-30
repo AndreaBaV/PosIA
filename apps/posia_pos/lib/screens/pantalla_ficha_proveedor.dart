@@ -219,6 +219,7 @@ class _PantallaFichaProveedorState extends ConsumerState<PantallaFichaProveedor>
 				activo: true,
 			),
 		);
+		ref.invalidate(proveedoresAdminProvider);
 		if (!mounted) {
 			return;
 		}

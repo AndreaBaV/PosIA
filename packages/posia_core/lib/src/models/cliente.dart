@@ -5,6 +5,8 @@ import '../constants/posia_constants.dart';
 
 /// Representa un cliente con posible lista de precios preferencial.
 class Cliente {
+	static const Object _sinCambio = Object();
+
 	const Cliente({
 		required this.id,
 		required this.nombre,
@@ -34,7 +36,7 @@ class Cliente {
 	Cliente copiarCon({
 		String? id,
 		String? nombre,
-		String? listaPreciosId,
+		Object? listaPreciosId = _sinCambio,
 		bool? creditoHabilitado,
 		bool? activo,
 		String? telefono,
@@ -47,7 +49,9 @@ class Cliente {
 		return Cliente(
 			id: id ?? this.id,
 			nombre: nombre ?? this.nombre,
-			listaPreciosId: listaPreciosId ?? this.listaPreciosId,
+			listaPreciosId: identical(listaPreciosId, _sinCambio)
+				? this.listaPreciosId
+				: listaPreciosId as String?,
 			creditoHabilitado: creditoHabilitado ?? this.creditoHabilitado,
 			activo: activo ?? this.activo,
 			telefono: telefono ?? this.telefono,

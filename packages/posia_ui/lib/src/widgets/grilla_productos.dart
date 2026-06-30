@@ -20,6 +20,7 @@ class GrillaProductos extends StatefulWidget {
 	const GrillaProductos({
 		required this.productos,
 		required this.alSeleccionar,
+		this.alPresionarLargo,
 		this.categoriaId,
 		this.mensajeVacio = 'Sin productos',
 		this.indiceSeleccionado,
@@ -38,6 +39,9 @@ class GrillaProductos extends StatefulWidget {
 
 	/// Accion al seleccionar producto.
 	final ValueChanged<Producto> alSeleccionar;
+
+	/// Accion al mantener pulsado (p. ej. vender por empaque).
+	final ValueChanged<Producto>? alPresionarLargo;
 
 	/// Indice resaltado para navegacion con teclado (opcional).
 	final int? indiceSeleccionado;
@@ -120,6 +124,9 @@ class _GrillaProductosState extends State<GrillaProductos> {
 					producto: producto,
 					seleccionado: seleccionado,
 					alPresionar: () => widget.alSeleccionar(producto),
+					alPresionarLargo: widget.alPresionarLargo == null
+						? null
+						: () => widget.alPresionarLargo!(producto),
 				);
 			},
 		);
@@ -131,12 +138,14 @@ class _TarjetaProducto extends StatelessWidget {
 	const _TarjetaProducto({
 		required this.producto,
 		required this.alPresionar,
+		this.alPresionarLargo,
 		this.seleccionado = false,
 		super.key,
 	});
 
 	final Producto producto;
 	final VoidCallback alPresionar;
+	final VoidCallback? alPresionarLargo;
 	final bool seleccionado;
 
 	@override
@@ -150,6 +159,7 @@ class _TarjetaProducto extends StatelessWidget {
 			shadowColor: Colors.black.withValues(alpha: 0.08),
 			child: InkWell(
 				onTap: alPresionar,
+				onLongPress: alPresionarLargo,
 				borderRadius: BorderRadius.circular(14.0),
 				child: DecoratedBox(
 					decoration: BoxDecoration(

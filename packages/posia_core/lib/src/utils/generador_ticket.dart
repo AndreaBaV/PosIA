@@ -2,11 +2,16 @@
 library;
 
 import '../constants/posia_constants.dart';
+import '../enums/estado_pedido.dart';
+import '../enums/metodo_pago.dart';
+import '../models/compra.dart';
 import '../models/linea_venta.dart';
+import '../models/pedido.dart';
 import '../models/turno_caja.dart';
 import '../models/traspaso.dart';
 import '../models/venta.dart';
 import 'cliente_credito_util.dart';
+import 'formateador_ticket_digital.dart';
 import 'moneda_util.dart';
 
 String _etiquetaMetodoPago(Venta venta) {
@@ -71,66 +76,24 @@ String generarTextoTicket({
   String? direccionCliente,
   bool conLogoImpreso = false,
 }) {
+  final digital = construirTicketDigitalVenta(
+    venta: venta,
+    nombreTienda: nombreTienda,
+    direccionTienda: direccionTienda,
+    etiquetaCaja: etiquetaCaja,
+    nombreVendedor: nombreVendedor,
+    codigoVendedor: codigoVendedor,
+    nombreCliente: nombreCliente,
+    telefonoCliente: telefonoCliente,
+    rfcCliente: rfcCliente,
+    direccionCliente: direccionCliente,
+    montoRecibido: montoRecibido,
+  );
   final buffer = StringBuffer();
-  _escribirEncabezadoMarca(buffer, conLogoImpreso: conLogoImpreso);
-  buffer.writeln(nombreTienda);
-  if (direccionTienda != null && direccionTienda.trim().isNotEmpty) {
-    buffer.writeln(direccionTienda.trim());
+  if (!conLogoImpreso) {
+    buffer.writeln('====== ${NOMBRE_COMERCIAL_APP.toUpperCase()} ======');
   }
-  buffer.writeln('----------------------------');
-  _escribirSiNoVacio(buffer, 'Tienda', nombreTienda);
-  _escribirSiNoVacio(buffer, 'Caja', etiquetaCaja);
-  if (nombreVendedor != null && nombreVendedor.trim().isNotEmpty) {
-    final vendedor = codigoVendedor != null && codigoVendedor.trim().isNotEmpty
-        ? '${nombreVendedor.trim()} (${codigoVendedor.trim()})'
-        : nombreVendedor.trim();
-    buffer.writeln('Vendedor: $vendedor');
-  }
-  if (nombreCliente != null && nombreCliente.trim().isNotEmpty) {
-    buffer.writeln('Cliente: ${nombreCliente.trim()}');
-    _escribirSiNoVacio(buffer, 'Tel', telefonoCliente);
-    _escribirSiNoVacio(buffer, 'Dir', direccionCliente);
-    _escribirSiNoVacio(buffer, 'RFC', rfcCliente);
-  } else {
-    buffer.writeln('Cliente: Publico en general');
-  }
-  buffer
-    ..writeln('----------------------------')
-    ..writeln('Ticket: ${venta.id.substring(0, 8).toUpperCase()}')
-    ..writeln('Fecha: ${_formatearFechaHora(venta.creadaEn)}');
-  if (venta.turnoCajaId != null) {
-    buffer.writeln(
-      'Turno: ${venta.turnoCajaId!.substring(0, 8).toUpperCase()}',
-    );
-  }
-  buffer.writeln('----------------------------');
-  for (final linea in venta.lineas) {
-    buffer.writeln(linea.nombreProducto);
-    var detalle =
-        '  ${linea.cantidad} x ${formatearMoneda(linea.precioUnitario)}'
-        ' = ${formatearMoneda(linea.calcularSubtotal())}';
-    if (linea.descuentoLinea > 0.0) {
-      detalle = '$detalle (desc ${formatearMoneda(linea.descuentoLinea)})';
-    }
-    buffer.writeln(detalle);
-  }
-  buffer.writeln('----------------------------');
-  if (venta.descuentoTicket > 0.0) {
-    buffer.writeln(
-      'Descuento ticket: -${formatearMoneda(venta.descuentoTicket)}',
-    );
-  }
-  buffer
-    ..writeln('TOTAL: ${formatearMoneda(venta.total)}')
-    ..writeln('Pago: ${_etiquetaMetodoPago(venta)}');
-  if (montoRecibido != null && venta.metodoPago.name == 'efectivo') {
-    final cambio = montoRecibido - venta.total;
-    if (cambio >= 0.0) {
-      buffer
-        ..writeln('Recibido: ${formatearMoneda(montoRecibido)}')
-        ..writeln('Cambio: ${formatearMoneda(cambio)}');
-    }
-  }
+  buffer.write(formatearTicketDigitalImpresion(digital));
   if (venta.metodoPago.name == 'credito' &&
       venta.creditoDias != null &&
       venta.creditoVenceEn != null &&
@@ -162,9 +125,6 @@ String generarTextoTicket({
       ..writeln('______________________________')
       ..writeln('Fecha: ________________________');
   }
-  buffer
-    ..writeln('============================')
-    ..writeln('Gracias por su compra');
   return buffer.toString();
 }
 
@@ -180,60 +140,24 @@ String generarTextoPagareCredito({
   String? rfcCliente,
   bool conLogoImpreso = false,
 }) {
-  final buffer = StringBuffer();
-  _escribirEncabezadoMarca(
-    buffer,
-    conLogoImpreso: conLogoImpreso,
-    tituloDocumento: conLogoImpreso
-        ? 'PAGARE'
-        : '====== PAGARE ${NOMBRE_COMERCIAL_APP.toUpperCase()} ======',
+  final digital = construirTicketDigitalPagare(
+    venta: venta,
+    nombreTienda: nombreTienda,
+    nombreCliente: nombreCliente,
+    telefonoCliente: telefonoCliente,
+    direccionCliente: direccionCliente,
+    etiquetaCopia: etiquetaCopia,
+    direccionTienda: direccionTienda,
+    rfcCliente: rfcCliente,
   );
-  buffer.writeln(etiquetaCopia.toUpperCase());
-  buffer.writeln(nombreTienda);
-  if (direccionTienda != null && direccionTienda.trim().isNotEmpty) {
-    buffer.writeln(direccionTienda.trim());
+  final buffer = StringBuffer();
+  if (!conLogoImpreso) {
+    buffer.writeln('====== PAGARE ${NOMBRE_COMERCIAL_APP.toUpperCase()} ======');
+  } else {
+    buffer.writeln('PAGARE');
   }
+  buffer.write(formatearTicketDigitalImpresion(digital));
   buffer
-    ..writeln('----------------------------')
-    ..writeln('Folio: ${venta.id.substring(0, 8).toUpperCase()}')
-    ..writeln('Fecha: ${_formatearFechaHora(venta.creadaEn)}')
-    ..writeln('----------------------------')
-    ..writeln('DEUDOR')
-    ..writeln('Nombre: $nombreCliente')
-    ..writeln('Telefono: $telefonoCliente')
-    ..writeln('Direccion: $direccionCliente');
-  if (rfcCliente != null && rfcCliente.trim().isNotEmpty) {
-    buffer.writeln('RFC: $rfcCliente');
-  }
-  buffer
-    ..writeln('----------------------------')
-    ..writeln('DETALLE DE COMPRA');
-  for (final linea in venta.lineas) {
-    buffer.writeln(linea.nombreProducto);
-    buffer.writeln(
-      '  ${linea.cantidad} x ${formatearMoneda(linea.precioUnitario)}'
-      ' = ${formatearMoneda(linea.calcularSubtotal())}',
-    );
-  }
-  buffer
-    ..writeln('----------------------------')
-    ..writeln('MONTO ADEUDADO: ${formatearMoneda(venta.total)}')
-    ..writeln('PAGO EN UNA SOLA EXHIBICION');
-  if (venta.creditoDias != null && venta.creditoVenceEn != null) {
-    buffer.writeln(
-      generarLeyendaCompromisoCredito(
-        total: venta.total,
-        diasCredito: venta.creditoDias!,
-        fechaVencimiento: venta.creditoVenceEn!.toLocal(),
-        nombreCliente: nombreCliente,
-      ),
-    );
-    buffer.writeln('Vence: ${formatearFechaCredito(venta.creditoVenceEn!.toLocal())}');
-  }
-  buffer
-    ..writeln('----------------------------')
-    ..writeln('El deudor se obliga a pagar el monto')
-    ..writeln('indicado en la fecha de vencimiento.')
     ..writeln('----------------------------')
     ..writeln('FIRMA DEL DEUDOR')
     ..writeln('')
@@ -241,8 +165,7 @@ String generarTextoPagareCredito({
     ..writeln('Firma:')
     ..writeln('')
     ..writeln('______________________________')
-    ..writeln('Fecha: ________________________')
-    ..writeln('==============================');
+    ..writeln('Fecha: ________________________');
   return buffer.toString();
 }
 
@@ -259,41 +182,22 @@ String generarTextoCotizacion({
   int vigenciaDias = 7,
   bool conLogoImpreso = false,
 }) {
-  final buffer = StringBuffer();
-  _escribirEncabezadoMarca(
-    buffer,
-    conLogoImpreso: conLogoImpreso,
-    tituloDocumento: '====== COTIZACION ======',
+  final digital = construirTicketDigitalCotizacion(
+    id: id,
+    nombreTienda: nombreTienda,
+    lineas: lineas,
+    total: total,
+    creadaEn: creadaEn,
+    nombreCliente: nombreCliente,
+    notas: notas,
+    direccionTienda: direccionTienda,
+    vigenciaDias: vigenciaDias,
   );
-  buffer.writeln(nombreTienda);
-  if (direccionTienda != null && direccionTienda.trim().isNotEmpty) {
-    buffer.writeln(direccionTienda.trim());
+  final buffer = StringBuffer();
+  if (!conLogoImpreso) {
+    buffer.writeln('====== COTIZACION ======');
   }
-  buffer
-    ..writeln('----------------------------')
-    ..writeln('Folio: ${id.substring(0, 8).toUpperCase()}')
-    ..writeln('Fecha: ${_formatearFechaHora(creadaEn)}')
-    ..writeln('Vigencia: $vigenciaDias dias');
-  if (nombreCliente != null && nombreCliente.trim().isNotEmpty) {
-    buffer.writeln('Cliente: ${nombreCliente.trim()}');
-  }
-  buffer.writeln('----------------------------');
-  for (final linea in lineas) {
-    buffer.writeln(linea.nombreProducto);
-    buffer.writeln(
-      '  ${linea.cantidad} x ${formatearMoneda(linea.precioUnitario)}'
-      ' = ${formatearMoneda(linea.calcularSubtotal())}',
-    );
-  }
-  buffer
-    ..writeln('----------------------------')
-    ..writeln('TOTAL: ${formatearMoneda(total)}')
-    ..writeln('Documento informativo, no es comprobante fiscal.')
-    ..writeln('Precios sujetos a cambio sin previo aviso.');
-  if (notas != null && notas.trim().isNotEmpty) {
-    buffer.writeln('Notas: ${notas.trim()}');
-  }
-  buffer.writeln('==============================');
+  buffer.write(formatearTicketDigitalImpresion(digital));
   return buffer.toString();
 }
 
@@ -306,34 +210,18 @@ String generarTextoLiquidacionCredito({
   String? telefonoCliente,
   bool conLogoImpreso = false,
 }) {
-  final buffer = StringBuffer();
-  _escribirEncabezadoMarca(
-    buffer,
-    conLogoImpreso: conLogoImpreso,
-    tituloDocumento: '=== LIQUIDACION DE CREDITO ===',
+  final digital = construirTicketDigitalLiquidacionCredito(
+    venta: venta,
+    nombreTienda: nombreTienda,
+    nombreCliente: nombreCliente,
+    direccionTienda: direccionTienda,
+    telefonoCliente: telefonoCliente,
   );
-  buffer.writeln(nombreTienda);
-  if (direccionTienda != null && direccionTienda.trim().isNotEmpty) {
-    buffer.writeln(direccionTienda.trim());
+  final buffer = StringBuffer();
+  if (!conLogoImpreso) {
+    buffer.writeln('=== LIQUIDACION DE CREDITO ===');
   }
-  buffer
-    ..writeln('----------------------------')
-    ..writeln('Folio venta: ${venta.id.substring(0, 8).toUpperCase()}')
-    ..writeln('Cliente: $nombreCliente');
-  if (telefonoCliente != null && telefonoCliente.trim().isNotEmpty) {
-    buffer.writeln('Telefono: $telefonoCliente');
-  }
-  buffer
-    ..writeln('----------------------------')
-    ..writeln('MONTO LIQUIDADO: ${formatearMoneda(venta.total)}')
-    ..writeln('PAGO EN UNA SOLA EXHIBICION')
-    ..writeln('Estado: CREDITO LIQUIDADO')
-    ..writeln(
-      'Fecha liquidacion: ${_formatearFechaHora(venta.creditoLiquidadoEn ?? DateTime.now().toUtc())}',
-    )
-    ..writeln('----------------------------')
-    ..writeln('Gracias por su pago')
-    ..writeln('==============================');
+  buffer.write(formatearTicketDigitalImpresion(digital));
   return buffer.toString();
 }
 
@@ -481,5 +369,129 @@ String generarTextoComprobanteTraspaso({
     ..writeln('______________________________')
     ..writeln('Fecha recepción: _______________')
     ..writeln('==============================');
+  return buffer.toString();
+}
+
+String _etiquetaMetodoPagoPedido(MetodoPago metodo) {
+  return switch (metodo) {
+    MetodoPago.efectivo => 'Efectivo',
+    MetodoPago.tarjeta => 'Tarjeta',
+    MetodoPago.mixto => 'Mixto',
+    MetodoPago.credito => 'Crédito / Fiado',
+    MetodoPago.transferencia => 'Transferencia',
+  };
+}
+
+String _etiquetaEstadoPedido(EstadoPedido estado) {
+  return switch (estado) {
+    EstadoPedido.recibido => 'Recibido',
+    EstadoPedido.asignado => 'Asignado',
+    EstadoPedido.entregado => 'Entregado',
+    EstadoPedido.cancelado => 'Cancelado',
+  };
+}
+
+String _formatearCantidadDocumento(double cantidad) {
+  if (cantidad == cantidad.roundToDouble()) {
+    return cantidad.toStringAsFixed(0);
+  }
+  return cantidad.toStringAsFixed(2);
+}
+
+/// Ticket de compra a proveedor.
+String generarTextoCompra({
+  required Compra compra,
+  required String nombreProveedor,
+  String? nombreTienda,
+  bool conLogoImpreso = false,
+}) {
+  final buffer = StringBuffer();
+  _escribirEncabezadoMarca(
+    buffer,
+    conLogoImpreso: conLogoImpreso,
+    tituloDocumento: '====== COMPRA / ENTRADA ======',
+  );
+  if (nombreTienda != null && nombreTienda.trim().isNotEmpty) {
+    buffer.writeln(nombreTienda.trim());
+  }
+  buffer
+    ..writeln('Proveedor: $nombreProveedor')
+    ..writeln('----------------------------')
+    ..writeln('Folio: ${compra.id.substring(0, 8).toUpperCase()}')
+    ..writeln('Fecha compra: ${_formatearFechaHora(compra.fechaCompra)}')
+    ..writeln('Registrado: ${_formatearFechaHora(compra.creadaEn)}')
+    ..writeln('----------------------------');
+  for (final linea in compra.lineas) {
+    buffer.writeln(linea.nombreProducto);
+    buffer.writeln(
+      '  ${_formatearCantidadDocumento(linea.cantidad)} x '
+      '${formatearMoneda(linea.costoUnitario)}'
+      ' = ${formatearMoneda(linea.subtotal)}',
+    );
+  }
+  buffer
+    ..writeln('----------------------------')
+    ..writeln('TOTAL: ${formatearMoneda(compra.total)}');
+  if (compra.notas.trim().isNotEmpty) {
+    buffer.writeln('Notas: ${compra.notas.trim()}');
+  }
+  buffer
+    ..writeln('Documento de control interno')
+    ..writeln('==============================');
+  return buffer.toString();
+}
+
+/// Resumen de pedido para entrega.
+String generarTextoPedido({
+  required Pedido pedido,
+  String? nombreTienda,
+  bool conLogoImpreso = false,
+}) {
+  final buffer = StringBuffer();
+  _escribirEncabezadoMarca(
+    buffer,
+    conLogoImpreso: conLogoImpreso,
+    tituloDocumento: '========== PEDIDO ==========',
+  );
+  if (nombreTienda != null && nombreTienda.trim().isNotEmpty) {
+    buffer.writeln(nombreTienda.trim());
+  }
+  buffer
+    ..writeln('Folio: ${pedido.id.substring(0, 8).toUpperCase()}')
+    ..writeln('Fecha: ${_formatearFechaHora(pedido.creadoEn)}')
+    ..writeln('Estado: ${_etiquetaEstadoPedido(pedido.estado)}')
+    ..writeln('----------------------------')
+    ..writeln('ENTREGA')
+    ..writeln('Nombre: ${pedido.nombreEntrega}')
+    ..writeln('Teléfono: ${pedido.telefonoEntrega}')
+    ..writeln('Dirección: ${pedido.direccionEntrega}')
+    ..writeln('----------------------------')
+    ..writeln('Pago: ${_etiquetaMetodoPagoPedido(pedido.metodoPago)}');
+  if (pedido.esCredito) {
+    buffer.writeln(
+      'Crédito: ${pedido.creditoDias ?? '?'} días'
+      '${pedido.creditoVenceEn != null ? ' · vence ${_formatearFechaHora(pedido.creditoVenceEn!)}' : ''}',
+    );
+  }
+  if (pedido.asignadoAUsuarioNombre != null &&
+      pedido.asignadoAUsuarioNombre!.trim().isNotEmpty) {
+    buffer.writeln('Asignado a: ${pedido.asignadoAUsuarioNombre!.trim()}');
+  }
+  buffer.writeln('----------------------------');
+  for (final linea in pedido.lineas) {
+    buffer.writeln(linea.nombreProducto);
+    buffer.writeln(
+      '  ${_formatearCantidadDocumento(linea.cantidad)} x '
+      '${formatearMoneda(linea.precioUnitario)}'
+      ' = ${formatearMoneda(linea.subtotal)}',
+    );
+  }
+  buffer
+    ..writeln('----------------------------')
+    ..writeln('TOTAL: ${formatearMoneda(pedido.total)}');
+  if (pedido.notas.trim().isNotEmpty) {
+    buffer.writeln('Notas: ${pedido.notas.trim()}');
+  }
+  buffer.writeln('==============================');
   return buffer.toString();
 }

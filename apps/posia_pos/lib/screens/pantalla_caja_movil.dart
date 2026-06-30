@@ -20,6 +20,7 @@ import 'pantalla_caja.dart'
 		ejecutarCobroCaja,
 		ejecutarCotizacionCaja,
 		ejecutarPonerEnEspera,
+		intentarSeleccionarEmpaqueEnCaja,
 		mostrarTicketsEnEspera,
 		seleccionarProductoEnCaja;
 
@@ -227,6 +228,8 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 			mensajeVacio: _busquedaController.text.trim().isNotEmpty
 				? 'Sin resultados'
 				: 'Sin productos',
+			alPresionarLargo: (producto) =>
+				intentarSeleccionarEmpaqueEnCaja(context, ref, producto),
 			alSeleccionar: (producto) async {
 				ocultarTeclado(context);
 				final agregado = await seleccionarProductoEnCaja(context, ref, producto);

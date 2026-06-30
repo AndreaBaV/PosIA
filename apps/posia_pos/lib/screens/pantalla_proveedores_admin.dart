@@ -7,6 +7,7 @@ import 'package:posia_core/posia_core.dart';
 import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
+import '../widgets/tarjeta_entidad_admin.dart';
 import 'pantalla_ficha_proveedor.dart';
 
 class PantallaProveedoresAdmin extends ConsumerStatefulWidget {
@@ -18,68 +19,260 @@ class PantallaProveedoresAdmin extends ConsumerStatefulWidget {
 }
 
 class _PantallaProveedoresAdminState extends ConsumerState<PantallaProveedoresAdmin> {
-	final _nombreController = TextEditingController();
 	final _busquedaController = TextEditingController();
 	String _filtro = '';
 
 	@override
 	void dispose() {
-		_nombreController.dispose();
 		_busquedaController.dispose();
 		super.dispose();
 	}
 
+	Future<void> _refrescar() async {
+		ref.invalidate(proveedoresAdminProvider);
+		await ref.read(proveedoresAdminProvider.future);
+	}
+
+	List<Proveedor> _filtrar(List<Proveedor> proveedores) {
+		if (_filtro.isEmpty) {
+			return proveedores;
+		}
+		final q = _filtro.toLowerCase();
+		return proveedores.where((p) {
+			return p.nombre.toLowerCase().contains(q) ||
+				p.contacto.toLowerCase().contains(q) ||
+				p.telefono.toLowerCase().contains(q) ||
+				p.email.toLowerCase().contains(q) ||
+				p.rfc.toLowerCase().contains(q);
+		}).toList();
+	}
+
 	@override
 	Widget build(BuildContext context) {
-		final proveedoresAsync = ref.watch(_proveedoresProvider);
+		final proveedoresAsync = ref.watch(proveedoresAdminProvider);
+
 		return Scaffold(
-			appBar: AppBar(title: const Text('Proveedores')),
+			appBar: AppBar(
+				title: const Text('Proveedores'),
+				actions: [
+					IconButton(
+						icon: const Icon(Icons.refresh),
+						tooltip: 'Actualizar',
+						onPressed: _refrescar,
+					),
+				],
+			),
+			floatingActionButton: FloatingActionButton.extended(
+				onPressed: _mostrarDialogoNuevo,
+				icon: const Icon(Icons.local_shipping_outlined),
+				label: const Text('Nuevo proveedor'),
+			),
 			body: proveedoresAsync.when(
 				data: (proveedores) {
-					final filtrados = proveedores.where((p) {
-						if (_filtro.isEmpty) {
-							return true;
-						}
-						final q = _filtro.toLowerCase();
-						return p.nombre.toLowerCase().contains(q) ||
-							p.contacto.toLowerCase().contains(q);
-					}).toList();
-					return ListView(
-					padding: const EdgeInsets.all(16.0),
-					children: [
-						CampoBusqueda(
-							controlador: _busquedaController,
-							sugerencia: 'Buscar proveedor...',
-							alCambiar: (v) => setState(() => _filtro = v.trim()),
-						),
-						if (filtrados.isEmpty)
-							const Center(child: Text('Sin proveedores registrados')),
-						...filtrados.map(
-							(p) => ListTile(
-								title: Text(p.nombre),
-								subtitle: Text('${p.contacto} · ${p.telefono}'),
-								trailing: IconButton(
-									icon: const Icon(Icons.delete_outline),
-									color: PosiaColors.cancelar,
-									tooltip: 'Eliminar proveedor',
-									onPressed: () => _confirmarEliminar(p),
-								),
-								onTap: () => _abrirFicha(p),
+					final filtrados = _filtrar(proveedores)
+					  ..sort((a, b) => a.nombre.compareTo(b.nombre));
+					final conCredito = proveedores.where((p) => p.diasCredito > 0).length;
+
+					return Column(
+						crossAxisAlignment: CrossAxisAlignment.stretch,
+						children: [
+							EncabezadoListaAdmin(
+								descripcion:
+									'Proveedores para compras, entradas de inventario y vínculo con productos.',
+								chips: [
+									ChipResumenAdmin(
+										icono: Icons.storefront_outlined,
+										etiqueta: '${proveedores.length} total',
+									),
+									if (conCredito > 0)
+										ChipResumenAdmin(
+											icono: Icons.schedule_outlined,
+											etiqueta: '$conCredito con crédito',
+										),
+								],
 							),
-						),
-						const Divider(),
-						TextField(
-							controller: _nombreController,
-							decoration: const InputDecoration(labelText: 'Nombre proveedor'),
-						),
-						FilledButton(onPressed: _agregar, child: const Text('Agregar')),
-					],
-				);
+							Padding(
+								padding: const EdgeInsets.symmetric(horizontal: 16.0),
+								child: TextField(
+									controller: _busquedaController,
+									decoration: InputDecoration(
+										labelText: 'Buscar por nombre, contacto, teléfono o RFC',
+										prefixIcon: const Icon(Icons.search),
+										border: const OutlineInputBorder(),
+										suffixIcon: _filtro.isNotEmpty
+											? IconButton(
+												icon: const Icon(Icons.clear),
+												onPressed: () {
+													_busquedaController.clear();
+													setState(() => _filtro = '');
+												},
+											)
+											: null,
+									),
+									onChanged: (v) => setState(() => _filtro = v.trim()),
+								),
+							),
+							if (_filtro.isNotEmpty)
+								Padding(
+									padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 0.0),
+									child: Text(
+										'${filtrados.length} coincidencia${filtrados.length == 1 ? '' : 's'}',
+										style: Theme.of(context).textTheme.bodySmall,
+									),
+								),
+							Expanded(
+								child: RefreshIndicator(
+									onRefresh: _refrescar,
+									child: filtrados.isEmpty
+										? ListView(
+											children: [
+												SizedBox(
+													height: MediaQuery.sizeOf(context).height * 0.25,
+												),
+												EstadoVacioListaAdmin(
+													icono: Icons.local_shipping_outlined,
+													titulo: proveedores.isEmpty
+														? 'Sin proveedores registrados'
+														: 'Sin coincidencias',
+													subtitulo: proveedores.isEmpty
+														? 'Registre proveedores para asociarlos a compras '
+															'y vincular productos del catálogo.'
+														: 'Pruebe con otro término de búsqueda.',
+													textoBoton:
+														proveedores.isEmpty ? 'Agregar proveedor' : null,
+													onAgregar:
+														proveedores.isEmpty ? _mostrarDialogoNuevo : null,
+												),
+											],
+										)
+										: ListView.builder(
+											padding: const EdgeInsets.only(top: 8.0, bottom: 88.0),
+											itemCount: filtrados.length,
+											itemBuilder: (_, i) => _tarjetaProveedor(filtrados[i]),
+										),
+								),
+							),
+						],
+					);
 				},
 				loading: () => const Center(child: CircularProgressIndicator()),
 				error: (e, _) => Center(child: Text('$e')),
 			),
 		);
+	}
+
+	Widget _tarjetaProveedor(Proveedor p) {
+		final subtitulo = [
+			if (p.contacto.isNotEmpty) p.contacto,
+			if (p.telefono.isNotEmpty) p.telefono,
+		].join(' · ');
+
+		return TarjetaEntidadAdmin(
+			titulo: p.nombre,
+			subtitulo: subtitulo.isEmpty ? null : subtitulo,
+			iconoAvatar: Icons.local_shipping_outlined,
+			colorAvatar: PosiaColors.neutro,
+			inactivo: !p.activo,
+			onTap: () => _abrirFicha(p),
+			onEliminar: () => _confirmarEliminar(p),
+			chips: [
+				if (p.diasCredito > 0)
+					ChipDetalleEntidad(
+						icono: Icons.schedule_outlined,
+						texto: 'Crédito · ${p.diasCredito} días',
+					),
+				if (p.email.isNotEmpty)
+					ChipDetalleEntidad(
+						icono: Icons.email_outlined,
+						texto: p.email,
+					),
+				if (p.rfc.isNotEmpty)
+					ChipDetalleEntidad(
+						icono: Icons.badge_outlined,
+						texto: p.rfc,
+					),
+				if (!p.activo)
+					const ChipDetalleEntidad(
+						icono: Icons.block,
+						texto: 'Inactivo',
+					),
+			],
+		);
+	}
+
+	Future<void> _mostrarDialogoNuevo() async {
+		final nombreController = TextEditingController();
+		final contactoController = TextEditingController();
+		final telefonoController = TextEditingController();
+		final crear = await showDialog<bool>(
+			context: context,
+			builder: (ctx) => AlertDialog(
+				title: const Text('Nuevo proveedor'),
+				content: SingleChildScrollView(
+					child: Column(
+						mainAxisSize: MainAxisSize.min,
+						children: [
+							TextField(
+								controller: nombreController,
+								autofocus: true,
+								textCapitalization: TextCapitalization.words,
+								decoration: const InputDecoration(
+									labelText: 'Nombre o razón social *',
+									border: OutlineInputBorder(),
+								),
+							),
+							const SizedBox(height: 12.0),
+							TextField(
+								controller: contactoController,
+								decoration: const InputDecoration(
+									labelText: 'Persona de contacto',
+									border: OutlineInputBorder(),
+								),
+							),
+							const SizedBox(height: 12.0),
+							TextField(
+								controller: telefonoController,
+								keyboardType: TextInputType.phone,
+								decoration: const InputDecoration(
+									labelText: 'Teléfono',
+									border: OutlineInputBorder(),
+								),
+							),
+						],
+					),
+				),
+				actions: [
+					TextButton(
+						onPressed: () => Navigator.pop(ctx, false),
+						child: const Text('Cancelar'),
+					),
+					FilledButton(
+						onPressed: () => Navigator.pop(ctx, true),
+						child: const Text('Crear'),
+					),
+				],
+			),
+		);
+		final nombre = nombreController.text.trim();
+		final contacto = contactoController.text.trim();
+		final telefono = telefonoController.text.trim();
+		nombreController.dispose();
+		contactoController.dispose();
+		telefonoController.dispose();
+		if (crear != true || nombre.isEmpty || !mounted) {
+			return;
+		}
+		final servicio = await ref.read(servicioAdminProvider.future);
+		final proveedor = await servicio.registrarProveedor(
+			nombre: nombre,
+			contacto: contacto,
+			telefono: telefono,
+		);
+		ref.invalidate(proveedoresAdminProvider);
+		if (!mounted) {
+			return;
+		}
+		await _abrirFicha(proveedor);
 	}
 
 	Future<void> _abrirFicha(Proveedor proveedor) async {
@@ -88,20 +281,14 @@ class _PantallaProveedoresAdminState extends ConsumerState<PantallaProveedoresAd
 				builder: (_) => PantallaFichaProveedor(proveedor: proveedor),
 			),
 		);
-		ref.invalidate(_proveedoresProvider);
-	}
-
-	Future<void> _agregar() async {
-		final servicio = await ref.read(servicioAdminProvider.future);
-		await servicio.registrarProveedor(nombre: _nombreController.text.trim());
-		_nombreController.clear();
-		ref.invalidate(_proveedoresProvider);
+		ref.invalidate(proveedoresAdminProvider);
 	}
 
 	Future<void> _confirmarEliminar(Proveedor proveedor) async {
 		final confirmar = await showDialog<bool>(
 			context: context,
 			builder: (ctx) => AlertDialog(
+				icon: const Icon(Icons.delete_outline, color: PosiaColors.cancelar),
 				title: const Text('Eliminar proveedor'),
 				content: Text(
 					'¿Eliminar permanentemente a "${proveedor.nombre}"?\n\n'
@@ -127,7 +314,7 @@ class _PantallaProveedoresAdminState extends ConsumerState<PantallaProveedoresAd
 		try {
 			final servicio = await ref.read(servicioAdminProvider.future);
 			await servicio.eliminarProveedor(proveedor.id);
-			ref.invalidate(_proveedoresProvider);
+			ref.invalidate(proveedoresAdminProvider);
 			if (!mounted) {
 				return;
 			}
@@ -147,8 +334,3 @@ class _PantallaProveedoresAdminState extends ConsumerState<PantallaProveedoresAd
 		}
 	}
 }
-
-final _proveedoresProvider = FutureProvider<List<Proveedor>>((ref) async {
-	final servicio = await ref.watch(servicioAdminProvider.future);
-	return servicio.listarProveedores();
-});

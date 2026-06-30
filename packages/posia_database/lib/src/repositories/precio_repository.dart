@@ -313,9 +313,15 @@ class PrecioRepository implements RepositorioPrecio {
 			.toList();
 	}
 
-	/// Elimina lista y sus precios asociados.
+	/// Elimina lista, sus precios y desvincula clientes asignados.
 	Future<void> eliminarLista(String listaId) async {
 		await _baseDatos.transaction((tx) async {
+			await tx.update(
+				'customers',
+				{'lista_precios_id': null},
+				where: 'lista_precios_id = ?',
+				whereArgs: [listaId],
+			);
 			await tx.delete(
 				'price_list_items',
 				where: 'lista_precios_id = ?',

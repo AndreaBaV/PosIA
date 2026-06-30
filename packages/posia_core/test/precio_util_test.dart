@@ -65,6 +65,87 @@ void main() {
 		expect(precioPresentacionEsValido(121.2, 10.0, 12.0), true);
 	});
 
+	test('calcularPrecioSugeridoPresentacion usa escala mayoreo si coincide factor', () {
+		const escalas = [
+			(cantidadMinima: 12.0, precioUnitario: 8.0),
+			(cantidadMinima: 24.0, precioUnitario: 7.5),
+		];
+		expect(
+			calcularPrecioSugeridoPresentacion(
+				factorABase: 12.0,
+				precioMenudeo: 10.0,
+				escalasMayoreo: escalas,
+			),
+			96.0,
+		);
+		expect(
+			calcularPrecioSugeridoPresentacion(
+				factorABase: 20.0,
+				precioMenudeo: 10.0,
+				escalasMayoreo: escalas,
+			),
+			200.0,
+		);
+	});
+
+	group('seleccionarEscalaMayoreoPorCantidad', () {
+		const escalasPeso = [
+			(cantidadMinima: 0.0, precioUnitario: 80.0),
+			(cantidadMinima: 1.0, precioUnitario: 70.0),
+		];
+
+		test('medio kilo usa tramo de fraccion', () {
+			expect(
+				resolverPrecioConEscalas(
+					precioBase: 70.0,
+					cantidad: 0.5,
+					escalas: escalasPeso,
+				),
+				80.0,
+			);
+			expect(
+				redondearMonto(
+					resolverPrecioConEscalas(
+						precioBase: 70.0,
+						cantidad: 0.5,
+						escalas: escalasPeso,
+					) * 0.5,
+				),
+				40.0,
+			);
+		});
+
+		test('un kilo o mas usa tramo completo', () {
+			expect(
+				resolverPrecioConEscalas(
+					precioBase: 80.0,
+					cantidad: 1.0,
+					escalas: escalasPeso,
+				),
+				70.0,
+			);
+			expect(
+				resolverPrecioConEscalas(
+					precioBase: 80.0,
+					cantidad: 1.5,
+					escalas: escalasPeso,
+				),
+				70.0,
+			);
+		});
+
+		test('sin tramo aplicable usa precio base', () {
+			expect(
+				resolverPrecioConEscalas(
+					precioBase: 70.0,
+					cantidad: 0.5,
+					escalas: const [],
+				),
+				70.0,
+			);
+		});
+	});
+
 	test('errorPrecioVentaDesdeTexto interpreta coma decimal', () {
 		expect(
 			errorPrecioVentaDesdeTexto('101,00', costoUnitario: 100.0),

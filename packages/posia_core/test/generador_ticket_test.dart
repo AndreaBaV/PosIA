@@ -161,7 +161,7 @@ void main() {
 		expect(texto, contains('PAGARE LA FORTUNA'));
 		expect(texto, contains('COPIA CLIENTE'));
 		expect(texto, contains('Juan Lopez'));
-		expect(texto, contains('UNA SOLA EXHIBICION'));
+		expect(texto, anyOf(contains('UNA SOLA EXHIBICION'), contains('una sola exhibición')));
 		expect(texto, contains('FIRMA DEL DEUDOR'));
 	});
 
@@ -188,6 +188,63 @@ void main() {
 		expect(texto, contains('Maria'));
 	});
 
+	test('generarTextoCompra incluye proveedor y total', () {
+		final texto = generarTextoCompra(
+			compra: Compra(
+				id: 'compra-abc-123',
+				tiendaId: 't1',
+				proveedorId: 'prov1',
+				fechaCompra: DateTime.utc(2026, 6, 10),
+				notas: 'Entrega parcial',
+				total: 250.0,
+				creadaEn: DateTime.utc(2026, 6, 10, 12),
+				lineas: const [
+					LineaCompra(
+						productoId: 'p1',
+						nombreProducto: 'Arroz 1kg',
+						cantidad: 10,
+						costoUnitario: 25.0,
+						subtotal: 250.0,
+					),
+				],
+			),
+			nombreProveedor: 'Distribuidora Norte',
+			nombreTienda: 'Tienda Centro',
+		);
+		expect(texto, contains('COMPRA'));
+		expect(texto, contains('Distribuidora Norte'));
+		expect(texto, contains('250'));
+	});
+
+	test('generarTextoPedido incluye entrega y total', () {
+		final texto = generarTextoPedido(
+			pedido: Pedido(
+				id: 'pedido-abc-123',
+				tiendaId: 't1',
+				nombreEntrega: 'Ana Perez',
+				telefonoEntrega: '5551234567',
+				direccionEntrega: 'Calle 5 #10',
+				esCredito: false,
+				metodoPago: MetodoPago.efectivo,
+				total: 180.0,
+				estado: EstadoPedido.recibido,
+				creadoEn: DateTime.utc(2026, 6, 12),
+				lineas: const [
+					LineaPedido(
+						productoId: 'p1',
+						nombreProducto: 'Aceite',
+						cantidad: 2,
+						precioUnitario: 90.0,
+					),
+				],
+			),
+			nombreTienda: 'Tienda Centro',
+		);
+		expect(texto, contains('PEDIDO'));
+		expect(texto, contains('Ana Perez'));
+		expect(texto, contains('180'));
+	});
+
 	test('generarTextoLiquidacionCredito marca credito pagado', () {
 		final venta = Venta(
 			id: 'venta-credito-002',
@@ -208,7 +265,7 @@ void main() {
 			nombreCliente: 'Pedro',
 		);
 		expect(texto, contains('LIQUIDACION DE CREDITO'));
-		expect(texto, contains('CREDITO LIQUIDADO'));
+		expect(texto, anyOf(contains('CREDITO LIQUIDADO'), contains('CRÉDITO LIQUIDADO')));
 		expect(texto, contains('500'));
 	});
 }

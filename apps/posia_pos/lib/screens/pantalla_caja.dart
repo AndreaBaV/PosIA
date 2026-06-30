@@ -18,7 +18,7 @@ import 'package:posia_ui/posia_ui.dart';
 import '../providers/admin_providers.dart';
 import '../widgets/dialogo_completar_datos_credito.dart';
 import '../providers/app_providers.dart';
-import '../utils/compartir_whatsapp_util.dart';
+import '../utils/compartir_ticket_digital_util.dart';
 import '../utils/ticket_credito_util.dart';
 import '../utils/ticket_venta_util.dart';
 import '../widgets/dialogo_cobro.dart';
@@ -362,6 +362,12 @@ class _ConstruirLayoutCaja extends ConsumerWidget {
 												mensajeVacio: busquedaController.text.trim().isNotEmpty
 													? 'Sin coincidencias para "${busquedaController.text.trim()}"'
 													: 'Sin productos en esta categoría',
+												alPresionarLargo: (producto) =>
+													intentarSeleccionarEmpaqueEnCaja(
+														context,
+														ref,
+														producto,
+													),
 												alSeleccionar: (producto) async {
 													final agregado = await seleccionarProductoEnCaja(
 														context,
@@ -424,12 +430,6 @@ Future<bool> seleccionarProductoEnCaja(
 	if (!context.mounted) {
 		return false;
 	}
-	if (await servicio.productoTienePresentaciones(producto.id)) {
-		if (!context.mounted) {
-			return false;
-		}
-		return _seleccionarPresentacion(context, ref, producto);
-	}
 	if (await servicio.productoTieneVariantes(producto.id)) {
 		if (!context.mounted) {
 			return false;
@@ -457,8 +457,10 @@ Future<bool> seleccionarProductoEnCaja(
 	return true;
 }
 
-/// Muestra dialogo de presentaciones comerciales del producto.
-Future<bool> _seleccionarPresentacion(
+/// Muestra dialogo para vender por empaque (caja, bulto, etc.).
+///
+/// Uso secundario: mantener pulsado un producto en la grilla o favoritos.
+Future<bool> seleccionarEmpaqueEnCaja(
 	BuildContext context,
 	WidgetRef ref,
 	Producto producto,
@@ -472,7 +474,7 @@ Future<bool> _seleccionarPresentacion(
 	await showDialog<void>(
 		context: context,
 		builder: (dialogContext) => AlertDialog(
-			title: Text('Presentación: ${producto.nombre}'),
+			title: Text('Vender por empaque: ${producto.nombre}'),
 			content: SizedBox(
 				width: 340.0,
 				child: ListView(
@@ -483,23 +485,29 @@ Future<bool> _seleccionarPresentacion(
 								title: Text(p.nombre),
 								subtitle: Text(
 									p.codigoBarras.isNotEmpty
-										? '${p.codigoBarras} · x${p.factorABase.toStringAsFixed(0)} u.'
-										: 'Factor ${p.factorABase.toStringAsFixed(0)} u. base',
+										? '${p.codigoBarras} · ${_etiquetaContenidoEmpaque(p, producto)}'
+										: _etiquetaContenidoEmpaque(p, producto),
 								),
 								trailing: Text(
-									formatearMoneda(p.precio ?? producto.precioBase),
+									formatearMoneda(
+										p.precio ??
+											redondearMonto(producto.precioBase * p.factorABase),
+									),
 								),
 								onTap: () async {
 									Navigator.of(dialogContext).pop();
 									if (!context.mounted) {
 										return;
 									}
+									final precioEmpaque = p.precio ??
+										redondearMonto(producto.precioBase * p.factorABase);
 									final resultado = await DialogoCantidadProducto.mostrar(
 										context,
 										producto.copiarCon(
 											nombre: '${producto.nombre} - ${p.nombre}',
-											precioBase: p.precio ?? producto.precioBase,
+											precioBase: precioEmpaque,
 										),
+										etiquetaUnidad: p.nombre,
 									);
 									if (!resultado.confirmado) {
 										return;
@@ -527,6 +535,33 @@ Future<bool> _seleccionarPresentacion(
 		),
 	);
 	return agregado;
+}
+
+String _etiquetaContenidoEmpaque(PresentacionProducto presentacion, Producto producto) {
+	final factor = presentacion.factorABase == presentacion.factorABase.roundToDouble()
+		? presentacion.factorABase.toStringAsFixed(0)
+		: presentacion.factorABase.toStringAsFixed(2);
+	final unidadBase = switch (producto.unidadMedida) {
+		UnidadMedida.kilogramo => 'kg',
+		UnidadMedida.litro => 'L',
+		_ => 'piezas',
+	};
+	return '1 ${presentacion.nombre} = $factor $unidadBase';
+}
+
+Future<void> intentarSeleccionarEmpaqueEnCaja(
+	BuildContext context,
+	WidgetRef ref,
+	Producto producto,
+) async {
+	final servicio = await ref.read(servicioCajaProvider.future);
+	if (!await servicio.productoTienePresentaciones(producto.id)) {
+		return;
+	}
+	if (!context.mounted) {
+		return;
+	}
+	await seleccionarEmpaqueEnCaja(context, ref, producto);
 }
 
 /// Muestra dialogo de presentaciones activas del producto.
@@ -579,11 +614,15 @@ Future<bool> _agregarProductoCarniceria(
 	WidgetRef ref,
 	Producto producto,
 ) async {
-	final resultado = await DialogoPesoCarniceria.mostrar(context, producto);
+	final servicio = await ref.read(servicioCajaProvider.future);
+	final resultado = await DialogoPesoCarniceria.mostrar(
+		context,
+		producto,
+		resolverPrecio: (pesoKg) => servicio.resolverPrecioVenta(producto, pesoKg),
+	);
 	if (!resultado.confirmado) {
 		return false;
 	}
-	final servicio = await ref.read(servicioCajaProvider.future);
 	final error = await servicio.agregarProductoConPeso(producto, resultado.pesoKg);
 	if (error.isNotEmpty && context.mounted) {
 		await _mostrarErrorCaja(context, error);
@@ -955,14 +994,17 @@ bool _cobroIncluyeEfectivo(MetodoPago metodo, CobroRequest request) {
 
 Future<void> _mostrarOpcionesPostVenta(
 	BuildContext context, {
-	required String textoTicket,
+	required TicketDigitalContenido ticketDigital,
 	String? telefonoCliente,
 }) async {
 	await showDialog<void>(
 		context: context,
 		builder: (dialogContext) => AlertDialog(
 			title: const Text('Venta completada'),
-			content: const Text('¿Desea enviar el ticket por WhatsApp?'),
+			content: const Text(
+				'¿Desea enviar el ticket digital por WhatsApp?\n'
+				'Se adjuntará una imagen con el logo de la tienda.',
+			),
 			actions: [
 				TextButton(
 					onPressed: () => Navigator.of(dialogContext).pop(),
@@ -970,17 +1012,49 @@ Future<void> _mostrarOpcionesPostVenta(
 				),
 				FilledButton.icon(
 					onPressed: () async {
-						final ok = await compartirTextoWhatsApp(
-							texto: textoTicket,
+						await compartirTicketDigitalWhatsApp(
+							context,
+							contenido: ticketDigital,
 							telefono: telefonoCliente,
 						);
 						if (dialogContext.mounted) {
 							Navigator.of(dialogContext).pop();
-							if (!ok) {
-								ScaffoldMessenger.of(context).showSnackBar(
-									const SnackBar(content: Text('No se pudo abrir WhatsApp')),
-								);
-							}
+						}
+					},
+					icon: const Icon(Icons.chat),
+					label: const Text('WhatsApp'),
+				),
+			],
+		),
+	);
+}
+
+Future<void> _mostrarOpcionesPostCredito(
+	BuildContext context, {
+	required TicketDigitalContenido pagareDigital,
+	String? telefonoCliente,
+}) async {
+	await showDialog<void>(
+		context: context,
+		builder: (dialogContext) => AlertDialog(
+			title: const Text('Crédito registrado'),
+			content: const Text(
+				'¿Desea enviar el pagaré digital por WhatsApp al cliente?',
+			),
+			actions: [
+				TextButton(
+					onPressed: () => Navigator.of(dialogContext).pop(),
+					child: const Text('Cerrar'),
+				),
+				FilledButton.icon(
+					onPressed: () async {
+						await compartirTicketDigitalWhatsApp(
+							context,
+							contenido: pagareDigital,
+							telefono: telefonoCliente,
+						);
+						if (dialogContext.mounted) {
+							Navigator.of(dialogContext).pop();
 						}
 					},
 					icon: const Icon(Icons.chat),
@@ -1057,6 +1131,27 @@ Future<void> ejecutarCobroCaja(BuildContext context, WidgetRef ref) async {
 			for (final pagare in pagares) {
 				await impresora.imprimirTicket(pagare);
 			}
+			if (!context.mounted) {
+				return;
+			}
+			final cliente = venta.clienteId != null
+				? await contenedor.servicioAdmin.obtenerCliente(venta.clienteId!)
+				: null;
+			if (!context.mounted) {
+				return;
+			}
+			final pagareDigital = await obtenerTicketDigitalPagareCliente(
+				venta: venta,
+				servicioAdmin: contenedor.servicioAdmin,
+			);
+			if (!context.mounted) {
+				return;
+			}
+			await _mostrarOpcionesPostCredito(
+				context,
+				pagareDigital: pagareDigital,
+				telefonoCliente: cliente?.telefono,
+			);
 		} else {
 			final textoTicket = await construirTextoTicketVenta(
 				venta: venta,
@@ -1073,6 +1168,12 @@ Future<void> ejecutarCobroCaja(BuildContext context, WidgetRef ref) async {
 			if (!context.mounted) {
 				return;
 			}
+			final ticketDigital = await obtenerTicketDigitalVenta(
+				venta: venta,
+				servicioAdmin: contenedor.servicioAdmin,
+				config: config,
+				montoRecibido: request.montoRecibido,
+			);
 			final cliente = venta.clienteId != null
 				? await contenedor.servicioAdmin.obtenerCliente(venta.clienteId!)
 				: null;
@@ -1081,7 +1182,7 @@ Future<void> ejecutarCobroCaja(BuildContext context, WidgetRef ref) async {
 			}
 			await _mostrarOpcionesPostVenta(
 				context,
-				textoTicket: textoTicket,
+				ticketDigital: ticketDigital,
 				telefonoCliente: cliente?.telefono,
 			);
 		}
@@ -1142,15 +1243,11 @@ Future<void> ejecutarCotizacionCaja(BuildContext context, WidgetRef ref) async {
 				actions: [
 					TextButton.icon(
 						onPressed: () async {
-							final ok = await compartirTextoWhatsApp(
-								texto: resultado.texto,
+							await compartirTicketDigitalWhatsApp(
+								context,
+								contenido: resultado.digital,
 								telefono: clienteActivo?.telefono,
 							);
-							if (dialogContext.mounted && !ok) {
-								ScaffoldMessenger.of(dialogContext).showSnackBar(
-									const SnackBar(content: Text('No se pudo abrir WhatsApp')),
-								);
-							}
 						},
 						icon: const Icon(Icons.chat),
 						label: const Text('WhatsApp'),

@@ -7,6 +7,8 @@ import 'package:posia_core/posia_core.dart';
 import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
+import '../utils/documento_ticket_util.dart';
+import '../widgets/acciones_documento_ticket.dart';
 
 class PantallaMisPedidos extends ConsumerWidget {
 	const PantallaMisPedidos({super.key});
@@ -65,7 +67,7 @@ class PantallaMisPedidos extends ConsumerWidget {
 										}
 									}
 								},
-								alVerDetalle: () => _mostrarDetalle(context, pedido),
+								alVerDetalle: () => _mostrarDetalle(context, ref, pedido),
 							);
 						},
 					);
@@ -76,7 +78,7 @@ class PantallaMisPedidos extends ConsumerWidget {
 		);
 	}
 
-	void _mostrarDetalle(BuildContext context, Pedido pedido) {
+	void _mostrarDetalle(BuildContext context, WidgetRef ref, Pedido pedido) {
 		showModalBottomSheet<void>(
 			context: context,
 			isScrollControlled: true,
@@ -121,6 +123,22 @@ class PantallaMisPedidos extends ConsumerWidget {
 									),
 									trailing: Text(formatearMoneda(l.subtotal)),
 								),
+							),
+							const SizedBox(height: 12.0),
+							AccionesDocumentoTicket(
+								onWhatsApp: () async {
+									final servicio = await ref.read(servicioAdminProvider.future);
+									final texto = await construirTextoPedido(
+										pedido: pedido,
+										servicio: servicio,
+									);
+									await compartirDocumentoWhatsApp(
+										context,
+										texto: texto,
+										telefono: pedido.telefonoEntrega,
+									);
+								},
+								onCerrar: () => Navigator.pop(ctx),
 							),
 						],
 					),

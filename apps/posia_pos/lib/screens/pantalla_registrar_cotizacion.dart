@@ -8,7 +8,7 @@ import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
-import '../utils/compartir_whatsapp_util.dart';
+import '../utils/compartir_ticket_digital_util.dart';
 import '../utils/ticket_venta_util.dart';
 
 class PantallaRegistrarCotizacion extends ConsumerStatefulWidget {
@@ -312,9 +312,15 @@ class _PantallaRegistrarCotizacionState extends ConsumerState<PantallaRegistrarC
 				vigenciaDias: vigencia,
 			);
 			final tienda = await servicio.obtenerTiendaActiva();
+			final nombreTienda = tienda?.nombre ?? 'Tienda';
+			final digital = construirTicketDigitalDesdeCotizacion(
+				cotizacion: cotizacion,
+				nombreTienda: nombreTienda,
+				direccionTienda: tienda?.direccion,
+			);
 			final texto = construirTextoCotizacionGuardada(
 				cotizacion: cotizacion,
-				nombreTienda: tienda?.nombre ?? 'Tienda',
+				nombreTienda: nombreTienda,
 				direccionTienda: tienda?.direccion,
 			);
 			final hardware = await ref.read(hardwareRegistryProvider.future);
@@ -343,15 +349,11 @@ class _PantallaRegistrarCotizacionState extends ConsumerState<PantallaRegistrarC
 					actions: [
 						TextButton.icon(
 							onPressed: () async {
-								final ok = await compartirTextoWhatsApp(
-									texto: texto,
+								await compartirTicketDigitalWhatsApp(
+									context,
+									contenido: digital,
 									telefono: telefonoCliente,
 								);
-								if (dialogContext.mounted && !ok) {
-									ScaffoldMessenger.of(dialogContext).showSnackBar(
-										const SnackBar(content: Text('No se pudo abrir WhatsApp')),
-									);
-								}
 							},
 							icon: const Icon(Icons.chat),
 							label: const Text('WhatsApp'),

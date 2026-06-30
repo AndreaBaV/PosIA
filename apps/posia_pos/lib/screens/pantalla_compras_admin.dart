@@ -8,6 +8,8 @@ import 'package:posia_database/posia_database.dart';
 import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
+import '../utils/documento_ticket_util.dart';
+import '../widgets/acciones_documento_ticket.dart';
 import '../widgets/dialogo_actualizar_precio_venta.dart';
 
 class PantallaComprasAdmin extends ConsumerStatefulWidget {
@@ -510,9 +512,17 @@ class _PantallaComprasAdminState extends ConsumerState<PantallaComprasAdmin>
 							),
 							Align(
 								alignment: Alignment.centerRight,
-								child: FilledButton(
-									onPressed: () => Navigator.pop(ctx),
-									child: const Text('Cerrar'),
+								child: AccionesDocumentoTicket(
+									onWhatsApp: () async {
+										final servicio = await ref.read(servicioAdminProvider.future);
+										final texto = await construirTextoCompra(
+											compra: compra,
+											nombreProveedor: proveedor,
+											servicio: servicio,
+										);
+										await compartirDocumentoWhatsApp(context, texto: texto);
+									},
+									onCerrar: () => Navigator.pop(ctx),
 								),
 							),
 						],

@@ -7,6 +7,9 @@ import 'package:posia_core/posia_core.dart';
 import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
+import '../utils/compartir_ticket_digital_util.dart';
+import '../utils/ticket_credito_util.dart';
+import '../utils/ticket_venta_util.dart';
 import 'pantalla_registrar_credito.dart';
 
 class PantallaFichaCliente extends ConsumerStatefulWidget {
@@ -145,28 +148,54 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 							const SizedBox(height: 8.0),
 							Consumer(
 								builder: (context, ref, _) {
-									final listasAsync = ref.watch(_listasClienteProvider);
+									final listasAsync = ref.watch(listasPreciosAdminProvider);
 									return listasAsync.when(
-										data: (listas) => DropdownButtonFormField<String?>(
-											initialValue: _listaPreciosId,
-											decoration: const InputDecoration(
-												labelText: 'Lista de precios',
-												border: OutlineInputBorder(),
-											),
-											items: [
-												const DropdownMenuItem<String?>(
-													value: null,
-													child: Text('Precio generico (publico)'),
-												),
-												...listas.map(
-													(l) => DropdownMenuItem<String?>(
-														value: l.id,
-														child: Text(l.nombre),
+										data: (listas) {
+											final idsValidos = listas.map((l) => l.id).toSet();
+											final listaAsignada = _listaPreciosId != null &&
+												idsValidos.contains(_listaPreciosId)
+												? _listaPreciosId
+												: null;
+											final listaHuerfana = _listaPreciosId != null &&
+												!idsValidos.contains(_listaPreciosId);
+											return Column(
+												crossAxisAlignment: CrossAxisAlignment.stretch,
+												children: [
+													if (listaHuerfana)
+														Padding(
+															padding: const EdgeInsets.only(bottom: 8.0),
+															child: Text(
+																'La lista asignada ya no existe. '
+																'Al guardar se usará precio genérico.',
+																style: TextStyle(
+																	color: Colors.orange.shade800,
+																	fontSize: 13.0,
+																),
+															),
+														),
+													DropdownButtonFormField<String?>(
+														value: listaAsignada,
+														decoration: const InputDecoration(
+															labelText: 'Lista de precios',
+															border: OutlineInputBorder(),
+														),
+														items: [
+															const DropdownMenuItem<String?>(
+																value: null,
+																child: Text('Precio genérico (público)'),
+															),
+															...listas.map(
+																(l) => DropdownMenuItem<String?>(
+																	value: l.id,
+																	child: Text(l.nombre),
+																),
+															),
+														],
+														onChanged: (v) => setState(() => _listaPreciosId = v),
 													),
-												),
-											],
-											onChanged: (v) => setState(() => _listaPreciosId = v),
-										),
+												],
+											);
+										},
 										loading: () => const LinearProgressIndicator(),
 										error: (e, _) => Text('$e'),
 									);
@@ -246,6 +275,12 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 														'${v.estado.name} · '
 														'${v.creadaEn.toLocal().toString().substring(0, 16)}',
 													),
+													trailing: IconButton(
+														icon: const Icon(Icons.chat),
+														tooltip: 'WhatsApp',
+														onPressed: () => _compartirVentaWhatsApp(v),
+													),
+													onTap: () => _compartirVentaWhatsApp(v),
 												);
 											},
 										);
@@ -261,9 +296,49 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 		);
 	}
 
+	Future<void> _compartirVentaWhatsApp(Venta venta) async {
+		final servicio = await ref.read(servicioAdminProvider.future);
+		final config = await ref.read(configDispositivoProvider.future);
+		try {
+			final TicketDigitalContenido digital;
+			if (venta.metodoPago == MetodoPago.credito && !venta.creditoLiquidado) {
+				digital = await obtenerTicketDigitalPagareCliente(
+					venta: venta,
+					servicioAdmin: servicio,
+				);
+			} else {
+				digital = await obtenerTicketDigitalVenta(
+					venta: venta,
+					servicioAdmin: servicio,
+					config: config,
+				);
+			}
+			await compartirTicketDigitalWhatsApp(
+				context,
+				contenido: digital,
+				telefono: _telefonoController.text.trim().isNotEmpty
+					? _telefonoController.text.trim()
+					: widget.cliente.telefono,
+			);
+		} catch (error) {
+			if (!mounted) {
+				return;
+			}
+			ScaffoldMessenger.of(context).showSnackBar(
+				SnackBar(content: Text('$error'), backgroundColor: PosiaColors.cancelar),
+			);
+		}
+	}
+
 	Future<void> _guardar() async {
 		final diasCredito = int.tryParse(_diasCreditoController.text.trim()) ??
 			DIAS_CREDITO_PREDETERMINADO;
+		final listas = await ref.read(listasPreciosAdminProvider.future);
+		final idsListasValidas = listas.map((l) => l.id).toSet();
+		final listaPreciosId = _listaPreciosId != null &&
+				idsListasValidas.contains(_listaPreciosId)
+			? _listaPreciosId
+			: null;
 		final actualizado = widget.cliente.copiarCon(
 			nombre: _nombreController.text.trim(),
 			telefono: _telefonoController.text.trim(),
@@ -273,7 +348,7 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 			notas: _notasController.text.trim(),
 			creditoHabilitado: _credito,
 			activo: true,
-			listaPreciosId: _listaPreciosId,
+			listaPreciosId: listaPreciosId,
 			diasCredito: diasCredito,
 		);
 		if (_credito) {
@@ -287,6 +362,8 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 		}
 		final servicio = await ref.read(servicioAdminProvider.future);
 		await servicio.actualizarCliente(actualizado);
+		invalidarListasPrecios(ref);
+		ref.invalidate(clientesAdminProvider);
 		if (!mounted) {
 			return;
 		}
@@ -348,11 +425,6 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 		}
 	}
 }
-
-final _listasClienteProvider = FutureProvider<List<ListaPrecios>>((ref) async {
-	final servicio = await ref.watch(servicioAdminProvider.future);
-	return servicio.listarListasPrecios();
-});
 
 class _ColumnStat extends StatelessWidget {
 	const _ColumnStat(this.etiqueta, this.valor);

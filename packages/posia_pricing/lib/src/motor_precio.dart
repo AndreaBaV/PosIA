@@ -115,7 +115,12 @@ class MotorPrecio {
 			return null;
 		}
 
-		final escalaAplicable = _seleccionarEscalaMayoreo(escalas, contexto.cantidad);
+		final escalaAplicable = seleccionarEscalaMayoreoPorCantidad(
+			escalas.map(
+				(e) => (cantidadMinima: e.cantidadMinima, precioUnitario: e.precioUnitario),
+			),
+			contexto.cantidad,
+		);
 		if (escalaAplicable == null) {
 			return null;
 		}
@@ -124,32 +129,6 @@ class MotorPrecio {
 			precioUnitario: redondearMonto(escalaAplicable.precioUnitario),
 			reglaAplicada: ReglaPrecio.escalaMayoreo,
 		);
-	}
-
-	/// Selecciona la escala de mayor cantidad minima que califica.
-	///
-	/// [escalas] Escalas disponibles del producto.
-	/// [cantidad] Cantidad solicitada en venta.
-	/// Retorna escala aplicable o null.
-	EscalaMayoreo? _seleccionarEscalaMayoreo(
-		List<EscalaMayoreo> escalas,
-		double cantidad,
-	) {
-		EscalaMayoreo? mejorEscala;
-		for (final escala in escalas) {
-			final califica = cantidad >= escala.cantidadMinima;
-			if (!califica) {
-				continue;
-			}
-			if (mejorEscala == null) {
-				mejorEscala = escala;
-				continue;
-			}
-			if (escala.cantidadMinima > mejorEscala.cantidadMinima) {
-				mejorEscala = escala;
-			}
-		}
-		return mejorEscala;
 	}
 
 	/// Aplica precio base del producto.

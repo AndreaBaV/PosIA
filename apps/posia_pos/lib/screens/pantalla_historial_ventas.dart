@@ -8,7 +8,7 @@ import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
-import '../utils/compartir_whatsapp_util.dart';
+import '../utils/compartir_ticket_digital_util.dart';
 import '../utils/ticket_credito_util.dart';
 import '../utils/ticket_venta_util.dart';
 
@@ -356,15 +356,14 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 		final servicio = await ref.read(servicioAdminProvider.future);
 		final config = await ref.read(configDispositivoProvider.future);
 		try {
-			String texto;
+			final TicketDigitalContenido digital;
 			if (venta.metodoPago == MetodoPago.credito && !venta.creditoLiquidado) {
-				final pagares = await construirTextosPagareCredito(
+				digital = await obtenerTicketDigitalPagareCliente(
 					venta: venta,
 					servicioAdmin: servicio,
 				);
-				texto = pagares.join('\n\n');
 			} else {
-				texto = await construirTextoTicketVenta(
+				digital = await obtenerTicketDigitalVenta(
 					venta: venta,
 					servicioAdmin: servicio,
 					config: config,
@@ -375,15 +374,14 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 				final cliente = await servicio.obtenerCliente(venta.clienteId!);
 				telefono = cliente?.telefono;
 			}
-			final ok = await compartirTextoWhatsApp(texto: texto, telefono: telefono);
 			if (!mounted) {
 				return;
 			}
-			if (!ok) {
-				ScaffoldMessenger.of(context).showSnackBar(
-					const SnackBar(content: Text('No se pudo abrir WhatsApp')),
-				);
-			}
+			await compartirTicketDigitalWhatsApp(
+				context,
+				contenido: digital,
+				telefono: telefono,
+			);
 		} catch (_) {
 			if (!mounted) {
 				return;

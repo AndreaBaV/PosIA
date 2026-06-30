@@ -9,6 +9,7 @@ import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
+import '../utils/compartir_ticket_digital_util.dart';
 import '../utils/ticket_credito_util.dart';
 import '../widgets/dialogo_completar_datos_credito.dart';
 
@@ -388,6 +389,44 @@ class _PantallaRegistrarCreditoState extends ConsumerState<PantallaRegistrarCred
 			for (final pagare in pagares) {
 				await hardware.obtenerImpresora().imprimirTicket(pagare);
 			}
+			if (!mounted) {
+				return;
+			}
+			final cliente = await servicio.obtenerCliente(_clienteId!);
+			final pagareDigital = await obtenerTicketDigitalPagareCliente(
+				venta: venta,
+				servicioAdmin: servicio,
+			);
+			await showDialog<void>(
+				context: context,
+				builder: (dialogContext) => AlertDialog(
+					title: const Text('Crédito registrado'),
+					content: Text(
+						'¿Desea enviar el pagaré digital por WhatsApp?\n\n'
+						'Total: ${formatearMoneda(venta.total)}',
+					),
+					actions: [
+						TextButton(
+							onPressed: () => Navigator.pop(dialogContext),
+							child: const Text('Cerrar'),
+						),
+						FilledButton.icon(
+							onPressed: () async {
+								await compartirTicketDigitalWhatsApp(
+									context,
+									contenido: pagareDigital,
+									telefono: cliente?.telefono,
+								);
+								if (dialogContext.mounted) {
+									Navigator.pop(dialogContext);
+								}
+							},
+							icon: const Icon(Icons.chat),
+							label: const Text('WhatsApp'),
+						),
+					],
+				),
+			);
 			if (!mounted) {
 				return;
 			}

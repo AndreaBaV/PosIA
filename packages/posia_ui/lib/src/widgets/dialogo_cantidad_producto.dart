@@ -21,17 +21,26 @@ class ResultadoDialogoCantidad {
 
 /// Muestra dialogo para capturar cantidad con decimales.
 class DialogoCantidadProducto extends StatefulWidget {
-	const DialogoCantidadProducto({required this.producto, super.key});
+	const DialogoCantidadProducto({
+		required this.producto,
+		this.etiquetaUnidad,
+		super.key,
+	});
 
 	final Producto producto;
+	final String? etiquetaUnidad;
 
 	static Future<ResultadoDialogoCantidad> mostrar(
 		BuildContext context,
-		Producto producto,
-	) async {
+		Producto producto, {
+		String? etiquetaUnidad,
+	}) async {
 		final resultado = await showDialog<ResultadoDialogoCantidad>(
 			context: context,
-			builder: (_) => DialogoCantidadProducto(producto: producto),
+			builder: (_) => DialogoCantidadProducto(
+				producto: producto,
+				etiquetaUnidad: etiquetaUnidad,
+			),
 		);
 		return resultado ?? const ResultadoDialogoCantidad(confirmado: false, cantidad: 0.0);
 	}
@@ -86,7 +95,8 @@ class _DialogoCantidadProductoState extends State<DialogoCantidadProducto> {
 
 	@override
 	Widget build(BuildContext context) {
-		final unidad = _etiquetaUnidad(widget.producto.unidadMedida);
+		final unidad = widget.etiquetaUnidad ??
+			_etiquetaUnidad(widget.producto.unidadMedida);
 		final subtotal = (double.tryParse(_valorCantidad) ?? 0.0) * widget.producto.precioBase;
 		return AlertDialog(
 			title: Row(
