@@ -131,5 +131,24 @@ void main() {
 			final sigue = await repo.obtenerPorId('u-local');
 			expect(sigue?.nombre, 'Local');
 		});
+
+		test('listarTodos tolera rol invalido de insercion manual', () async {
+			final ahora = DateTime.now().toUtc().toIso8601String();
+			await base.insert('usuarios', {
+				'id': 'u-manual',
+				'nombre': 'Supervisor manual',
+				'codigo': 'SUP999',
+				'pin_credencial': HasherPin.codificar('1234'),
+				'rol': 'Supervisor',
+				'tienda_id': 't-1',
+				'activo': 1,
+				'creado_en': ahora,
+				'actualizado_en': ahora,
+			});
+			final usuarios = await repo.listarTodos();
+			final manual = usuarios.where((u) => u.id == 'u-manual').firstOrNull;
+			expect(manual, isNotNull);
+			expect(manual!.rol, RolUsuario.empleado);
+		});
 	});
 }

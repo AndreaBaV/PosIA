@@ -12,7 +12,15 @@ class UsuarioRepository {
 
 	Future<List<Usuario>> listarTodos() async {
 		final filas = await _baseDatos.query('usuarios', orderBy: 'nombre ASC');
-		return filas.map(_mapear).toList();
+		final resultado = <Usuario>[];
+		for (final fila in filas) {
+			try {
+				resultado.add(_mapear(fila));
+			} on Object {
+				continue;
+			}
+		}
+		return resultado;
 	}
 
 	Future<List<Usuario>> listarActivos() async {
@@ -352,10 +360,21 @@ class UsuarioRepository {
 			id: fila['id'] as String,
 			nombre: fila['nombre'] as String,
 			codigo: fila['codigo'] as String,
-			rol: RolUsuario.values.byName(fila['rol'] as String),
+			rol: _parseRol(fila['rol'] as String?),
 			tiendaId: fila['tienda_id'] as String?,
 			activo: (fila['activo'] as int) == 1,
 		);
+	}
+
+	RolUsuario _parseRol(String? crudo) {
+		if (crudo == null || crudo.isEmpty) {
+			return RolUsuario.empleado;
+		}
+		try {
+			return RolUsuario.values.byName(crudo);
+		} on ArgumentError {
+			return RolUsuario.empleado;
+		}
 	}
 }
 

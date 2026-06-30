@@ -249,6 +249,52 @@ class HubSyncClient {
     }
   }
 
+  /// Lista todas las cuentas del tenant en Postgres para replicar en el dispositivo.
+  Future<List<UsuarioReplicaHub>> listarUsuarios() async {
+    final uri = Uri.parse('$_urlBase/v1/users');
+    try {
+      final respuesta = await _clienteHttp
+          .get(uri, headers: _construirCabeceras())
+          .timeout(const Duration(seconds: TIMEOUT_HUB_SYNC_SEGUNDOS));
+      if (respuesta.statusCode != 200) {
+        return const [];
+      }
+      final json = jsonDecode(respuesta.body) as Map<String, dynamic>;
+      final crudo = json['usuarios'];
+      if (crudo is! List) {
+        return const [];
+      }
+      final usuarios = <UsuarioReplicaHub>[];
+      for (final item in crudo) {
+        if (item is! Map) {
+          continue;
+        }
+        final map = Map<String, dynamic>.from(item);
+        final id = map['id'] as String? ?? '';
+        final pinCredencial = map['pinCredencial'] as String? ?? '';
+        if (id.isEmpty || pinCredencial.isEmpty) {
+          continue;
+        }
+        usuarios.add(
+          UsuarioReplicaHub(
+            id: id,
+            nombre: map['nombre'] as String? ?? '',
+            codigo: map['codigo'] as String? ?? '',
+            rol: map['rol'] as String? ?? 'empleado',
+            tiendaId: map['tiendaId'] as String?,
+            activo: _leerActiva(map['activo']),
+            pinCredencial: pinCredencial,
+            creadoEn: map['creadoEn'] as String? ?? '',
+            actualizadoEn: map['actualizadoEn'] as String? ?? '',
+          ),
+        );
+      }
+      return usuarios;
+    } on Object {
+      return const [];
+    }
+  }
+
   Future<bool> mantenerHubVivo() async {
     final uri = Uri.parse('$_urlBase/v1/health');
     try {
