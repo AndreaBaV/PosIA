@@ -40,8 +40,12 @@ class PresentacionRepository {
 		);
 	}
 
-	Future<List<PresentacionProducto>> listarPorProducto(String productoId) async {
-		final filas = await _baseDatos.query(
+	Future<List<PresentacionProducto>> listarPorProducto(
+		String productoId, {
+		DatabaseExecutor? db,
+	}) async {
+		final exec = db ?? _baseDatos;
+		final filas = await exec.query(
 			'presentaciones_producto',
 			where: 'producto_id = ?',
 			whereArgs: [productoId],

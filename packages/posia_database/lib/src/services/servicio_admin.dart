@@ -3981,14 +3981,14 @@ class ServicioAdmin {
     Producto producto, {
     DatabaseExecutor? db,
   }) async {
-    final repo = _presentacionRepository;
-    if (repo == null) {
-      return;
-    }
-    final existentes = await repo.listarPorProducto(producto.id);
-    if (existentes.any((p) => p.esPresentacionBase)) {
-      return;
-    }
+		final repo = _presentacionRepository;
+		if (repo == null) {
+			return;
+		}
+		final existentes = await repo.listarPorProducto(producto.id, db: db);
+		if (existentes.any((p) => p.esPresentacionBase)) {
+			return;
+		}
     await repo.guardarPresentacion(
       PresentacionProducto(
         id: _generadorId.v4(),
