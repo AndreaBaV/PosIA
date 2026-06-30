@@ -74,6 +74,33 @@ class AlmacenUsuariosPostgres {
 		};
 	}
 
+	Future<List<Map<String, Object?>>> listarTodosParaDispositivo() async {
+		final filas = await _conexion.execute('''
+			SELECT id, nombre, codigo, rol, tienda_id, activo,
+				pin_credencial, creado_en, actualizado_en
+			FROM users
+			ORDER BY nombre
+		''');
+		return filas
+			.map((fila) {
+				final cols = fila.toColumnMap();
+				return {
+					'id': cols['id'] as String? ?? '',
+					'nombre': cols['nombre'] as String? ?? '',
+					'codigo': cols['codigo'] as String? ?? '',
+					'rol': cols['rol'] as String? ?? 'empleado',
+					'tiendaId': cols['tienda_id'] as String?,
+					'activo': (cols['activo'] as int? ?? 0) == 1,
+					'pinCredencial': cols['pin_credencial'] as String? ?? '',
+					'creadoEn': cols['creado_en'] as String? ?? '',
+					'actualizadoEn': cols['actualizado_en'] as String? ?? '',
+				};
+			})
+			.where((u) => (u['id'] as String).isNotEmpty)
+			.where((u) => (u['pinCredencial'] as String).isNotEmpty)
+			.toList();
+	}
+
 	Future<List<Map<String, Object?>>> listarTiendasActivas() async {
 		final filas = await _conexion.execute('''
 			SELECT id, nombre, direccion, activa

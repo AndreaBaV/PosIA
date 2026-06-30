@@ -42,6 +42,7 @@ class EnrutadorApi {
 			..get('/v1/auth/preview', _manejarVistaPreviaAuth)
 			..post('/v1/auth/login', _manejarLoginAuth)
 			..get('/v1/stores', _manejarListarTiendas)
+			..get('/v1/users', _manejarListarUsuarios)
 			..post('/v1/events', _manejarEnvioEventos)
 			..get('/v1/events', _manejarConsultaEventos);
 		return const Pipeline()
@@ -108,6 +109,15 @@ class EnrutadorApi {
 		}
 		final tiendas = await almacen.listarTiendasActivas();
 		return _respuestaJson({'tiendas': tiendas});
+	}
+
+	Future<Response> _manejarListarUsuarios(Request solicitud) async {
+		final almacen = _usuarios;
+		if (almacen == null) {
+			return _respuestaJson({'error': 'Auth no disponible sin Postgres'}, codigo: 503);
+		}
+		final usuarios = await almacen.listarTodosParaDispositivo();
+		return _respuestaJson({'usuarios': usuarios});
 	}
 
 	/// Recibe lote de eventos de un dispositivo.

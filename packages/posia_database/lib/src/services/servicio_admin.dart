@@ -619,6 +619,7 @@ class ServicioAdmin {
 
   /// Empuja cambios locales y descarga usuarios del hub (reparacion).
   Future<ResultadoSync> repararSincronizacionUsuarios() async {
+    await importarUsuariosDesdeHub();
     final repo = _usuarioRepository;
     if (repo != null) {
       final activos = await repo.listarTodos();
@@ -627,6 +628,47 @@ class ServicioAdmin {
       }
     }
     return sincronizarManual();
+  }
+
+  /// Replica en SQLite local las cuentas registradas en Postgres del hub.
+  ///
+  /// Incluye usuarios creados por SQL directo en el servidor (sin evento sync).
+  Future<int> importarUsuariosDesdeHub() async {
+    final hub = await _clienteHubOpcional();
+    if (hub == null || !await hub.verificarSalud() || !await hub.tieneAuthHub()) {
+      return 0;
+    }
+    final repo = _usuarioRepository;
+    if (repo == null) {
+      return 0;
+    }
+    final remotos = await hub.listarUsuarios();
+    var importados = 0;
+    for (final remoto in remotos) {
+      final rol = RolUsuario.values.firstWhere(
+        (valor) => valor.name == remoto.rol,
+        orElse: () => RolUsuario.empleado,
+      );
+      final guardado = await repo.guardarRemoto(
+        id: remoto.id,
+        nombre: remoto.nombre,
+        codigo: remoto.codigo,
+        rol: rol,
+        tiendaId: remoto.tiendaId,
+        activo: remoto.activo,
+        pinCredencial: remoto.pinCredencial,
+        creadoEn: remoto.creadoEn.isNotEmpty
+            ? remoto.creadoEn
+            : DateTime.now().toUtc().toIso8601String(),
+        actualizadoEn: remoto.actualizadoEn.isNotEmpty
+            ? remoto.actualizadoEn
+            : DateTime.now().toUtc().toIso8601String(),
+      );
+      if (guardado) {
+        importados++;
+      }
+    }
+    return importados;
   }
 
   /// Obtiene URL del hub configurada en el dispositivo.
@@ -1124,6 +1166,7 @@ class ServicioAdmin {
     } else {
       await LimpiadorBaseLocal.eliminarDatosEjemplo(_baseDatos);
       await _asegurarTiendasAdministrador(tiendasIniciales: tiendasDesdeHub);
+      await importarUsuariosDesdeHub();
     }
   }
 
