@@ -33,11 +33,15 @@ class Traspaso {
 		required this.completadoEn,
 		required this.notas,
 		required this.lineas,
+		this.almacenOrigenId = '',
+		this.almacenDestinoId = '',
 	});
 
 	final String id;
 	final String tiendaOrigenId;
 	final String tiendaDestinoId;
+	final String almacenOrigenId;
+	final String almacenDestinoId;
 	final EstadoTraspaso estado;
 	final DateTime solicitadoEn;
 	final DateTime? completadoEn;
