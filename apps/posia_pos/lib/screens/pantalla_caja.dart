@@ -1114,7 +1114,20 @@ Future<void> ejecutarCobroCaja(BuildContext context, WidgetRef ref) async {
 		if (!context.mounted || request == null) {
 			return;
 		}
-		final venta = await servicio.cobrar(request);
+		Venta? venta;
+		try {
+			venta = await servicio.cobrar(request);
+		} on Object catch (error) {
+			if (context.mounted) {
+				ScaffoldMessenger.of(context).showSnackBar(
+					SnackBar(
+						content: Text('No se pudo completar la venta: $error'),
+						backgroundColor: PosiaColors.cancelar,
+					),
+				);
+			}
+			return;
+		}
 		await ref.read(carritoNotifierProvider.notifier).recargar();
 		if (!context.mounted || venta == null) {
 			return;

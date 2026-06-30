@@ -4,9 +4,9 @@
 /// Matricula: POSIA-2026-001
 /// Fecha creacion: 2026-06-07 18:30:00 (UTC-6)
 /// Ultima modificacion: 2026-06-07 20:15:00 (UTC-6)
-///
-/// Para esta sección, necesito que muestre las cosas
 library;
+
+import 'dart:async';
 
 import 'package:posia_core/posia_core.dart';
 import 'package:posia_inventory/posia_inventory.dart';
@@ -608,7 +608,6 @@ class ServicioCaja {
           ),
         )
         .toList();
-    final turno = await _servicioCorteCaja?.obtenerTurnoAbierto();
     final total = Venta.calcularTotalDesdeLineas(lineasVenta);
     double? montoEfectivo;
     double? montoTarjeta;
@@ -636,6 +635,8 @@ class ServicioCaja {
         creditoDias,
       );
     }
+    final lineasInventario = await _prepararLineasInventario();
+    final turno = await _servicioCorteCaja?.obtenerTurnoAbierto();
     final venta = Venta(
       id: _generadorId.v4(),
       tiendaId: _tiendaId,
@@ -664,15 +665,16 @@ class ServicioCaja {
           db: tx,
         );
       }
-      final lineasInventario = List<LineaCarrito>.from(_lineasCarrito);
       await _aplicarInventarioVentaTransaccional(tx, lineasInventario);
       await _aplicarDescuentosLoteTransaccional(tx, venta);
     });
-    if (turnoActualizado != null) {
-      await _servicioCorteCaja?.notificarTurnoActualizado(turnoActualizado!);
-    }
-    await _registrarEventoVenta(venta);
     vaciarCarrito();
+    if (turnoActualizado != null) {
+      unawaited(
+        _servicioCorteCaja?.notificarTurnoActualizado(turnoActualizado!),
+      );
+    }
+    unawaited(_registrarEventoVenta(venta));
     return venta;
   }
 
@@ -1045,14 +1047,33 @@ class ServicioCaja {
     return producto.id;
   }
 
+  /// Resuelve ids de stock antes de abrir transaccion SQLite (evita deadlock).
+  Future<List<LineaCarrito>> _prepararLineasInventario() async {
+    final preparadas = <LineaCarrito>[];
+    for (final linea in _lineasCarrito) {
+      if (linea.productoStockId != null) {
+        preparadas.add(linea);
+        continue;
+      }
+      preparadas.add(
+        linea.copiarCon(
+          productoStockId: await _resolverIdStock(linea.producto),
+        ),
+      );
+    }
+    return preparadas;
+  }
+
   Future<void> _aplicarInventarioVentaTransaccional(
     Transaction tx,
     List<LineaCarrito> lineas,
   ) async {
     final ahora = DateTime.now().toUtc();
     for (final linea in lineas) {
-      final stockId =
-          linea.productoStockId ?? await _resolverIdStock(linea.producto);
+      final stockId = linea.productoStockId;
+      if (stockId == null) {
+        throw StateError('Stock no resuelto para ${linea.producto.nombre}');
+      }
       final cantidadBase = linea.cantidad * linea.factorABase;
       final stock = await _inventarioRepository.obtenerStock(
         stockId,
