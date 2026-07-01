@@ -7,6 +7,56 @@ Historial consolidado de versiones e implementaciones.
 
 ---
 
+## 2026-07-01 — Fix: teclado en diálogo de cobro (Android/iOS)
+
+### Problema
+En la aplicación móvil, al terminar una venta y presionar **COBRAR**, el
+diálogo mostraba los campos **Recibido**, **Efectivo/Tarjeta** y **Días
+para pagar** como cuadros de solo lectura. Al tocarlos, no se activaba
+el teclado del sistema (Android/iOS), por lo que el cobrador no podía
+capturar el monto de efectivo recibido. El diálogo estaba diseñado
+únicamente para capturar teclado físico (Windows), interceptando cada
+tecla física y actualizando manualmente un controlador; en pantalla
+táctil no había ningún widget editable que solicitara el teclado
+virtual.
+
+### Cambios (`apps/posia_pos/widgets/dialogo_cobro.dart`)
+- `_campoMontoLectura` (widget de solo lectura basado en `Text` dentro de
+  `InputDecorator`) reemplazado por `_campoMontoEditable`, un `TextField`
+  real con:
+  - `keyboardType: TextInputType.numberWithOptions(decimal: true)` para
+    montos y `TextInputType.number` para días de crédito.
+  - `inputFormatters` con `FilteringTextInputFormatter.allow` para
+    aceptar sólo dígitos, punto y coma.
+  - Normalización en `onChanged` (coma → punto, un solo punto decimal).
+  - `onSubmitted` que confirma el cobro con Enter (o pasa al siguiente
+    campo en pago mixto).
+- Cada campo tiene su propio `FocusNode`. Al ganar foco se actualiza
+  `_campoMontoActivo`, de modo que el teclado numérico táctil embebido
+  siempre escribe en el campo que el usuario está editando.
+- `TecladoNumericoSimple` (paquete `posia_ui`) integrado dentro del
+  diálogo como teclado numérico grande y táctil, consistente con
+  `DialogoCantidadProducto` y `DialogoPesoCarniceria`. Permite capturar
+  el monto con un dedo aunque el teclado del sistema esté oculto.
+- Manejo de teclado físico simplificado: sólo se atrapan Enter (por
+  `onSubmitted`) y Esc (por `Focus.onKeyEvent` a nivel del diálogo). Los
+  dígitos, punto, coma y retroceso los procesa el propio `TextField`.
+- Tab alterna entre efectivo y tarjeta en pago mixto usando el orden
+  natural de foco de Flutter.
+
+### Impacto para el usuario final
+- En Android/iOS ya se abre el teclado numérico del sistema al tocar el
+  campo **Recibido** (o **Efectivo**, **Tarjeta**, **Días para pagar**),
+  por lo que el cobrador puede escribir el efectivo recibido y ver el
+  cambio calculado.
+- El teclado numérico grande embebido sigue disponible en cualquier
+  plataforma (útil con guantes o pantallas táctiles de POS sin teclado
+  físico).
+- En Windows el flujo tecla física → Enter para cobrar se mantiene sin
+  cambios operativos.
+
+---
+
 ## 2026-07-01 — Login robusto en dispositivos recién instalados (TestFlight/Play)
 
 ### Problema
