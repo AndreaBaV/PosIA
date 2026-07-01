@@ -7,6 +7,79 @@ Historial consolidado de versiones e implementaciones.
 
 ---
 
+## 2026-07-01 — Fix: doble teclado y mensajes ocultos en diálogos de captura (Android/iOS)
+
+### Problema
+En el fix anterior (`mobile-v1.0.30`) se activó el teclado del sistema al
+tocar los campos numéricos de los diálogos de cobro, cantidad y peso. Al
+usar la caja móvil se detectaron dos regresiones de UX:
+
+1. **Doble teclado en pantalla**: el diálogo ya mostraba un
+   `TecladoNumericoSimple` (touchpad de dígitos) grande y táctil dentro del
+   propio diálogo. Al tocar el campo, iOS/Android además abrían su
+   teclado del sistema encima, resultando en dos teclados apilados —
+   ruido visual y muy poco funcional en pantallas pequeñas.
+2. **Retroalimentación oculta**: los mensajes de error (por ejemplo
+   *"Monto recibido insuficiente"*, *"Indique una cantidad mayor a
+   cero"*, *"Indique un peso mayor a cero"*) se emitían como `SnackBar`
+   al `ScaffoldMessenger` padre, que queda pegado al borde inferior de
+   la pantalla — exactamente donde también se apoyan el teclado del
+   sistema y el `TecladoNumericoSimple`. La persona cajera nunca veía
+   los avisos.
+
+### Cambios
+- **`packages/posia_ui/lib/src/widgets/banner_mensaje_dialogo.dart`
+  (nuevo)**: widget `BannerMensajeDialogo` reutilizable que renderiza
+  un banner compacto DENTRO del contenido del diálogo (con soporte para
+  tono *error* y *aviso*). Sustituye al `SnackBar` que quedaba oculto
+  bajo el teclado.
+- **`apps/posia_pos/lib/widgets/dialogo_cobro.dart`**:
+  - `_campoMontoEditable` ahora fija `keyboardType: TextInputType.none`
+    y `showCursor: true`. En iOS/Android eso suprime el teclado del
+    sistema (el diálogo ya trae su propio teclado numérico embebido);
+    en Windows/Linux/macOS el teclado físico sigue funcionando sin
+    cambios porque `TextInputType.none` solo desactiva el teclado
+    virtual del sistema, no la captura de eventos físicos.
+  - Nueva variable de estado `_mensajeError` y helpers `_mostrarError`
+    / `_limpiarError`. Todas las validaciones de `_confirmar` (total
+    cero, monto recibido vacío/insuficiente, crédito no disponible,
+    días inválidos, cliente no acepta plazo) ahora setean el banner
+    inline en lugar de emitir `SnackBar`.
+  - El banner se pinta justo arriba del teclado numérico embebido, y
+    se limpia automáticamente al modificar cualquiera de los campos o
+    al cambiar de método de pago.
+- **`packages/posia_ui/lib/src/widgets/dialogo_cantidad_producto.dart`**
+  y **`packages/posia_ui/lib/src/widgets/dialogo_peso_carniceria.dart`**:
+  mismos cambios (TextField con `TextInputType.none` + `showCursor:
+  true` + banner inline). Los mensajes *"Indique una cantidad mayor a
+  cero"* y *"Indique un peso mayor a cero"* ya no usan `SnackBar`.
+- Barrel `posia_ui.dart` exporta `BannerMensajeDialogo` y
+  `TipoMensajeDialogo`.
+
+### Tests
+- `apps/posia_pos/test/dialogo_cobro_test.dart`: se agregó el caso
+  *"mensajes de retroalimentación aparecen dentro del diálogo, no como
+  SnackBar"* y se actualizó la aserción de `keyboardType`
+  (`TextInputType.none`) del campo Recibido. 5/5 OK.
+- `packages/posia_ui/test/dialogo_teclado_movil_test.dart` (nuevo):
+  cubre `BannerMensajeDialogo` (tono error/aviso) y valida en
+  `DialogoCantidadProducto` y `DialogoPesoCarniceria` la supresión del
+  teclado nativo (`TextInputType.none`, `showCursor: true`) y el
+  banner inline al confirmar valores inválidos. 6/6 OK.
+- Suites completas verdes: `posia_ui` 14/14, `posia_pos` 10/10.
+
+### Impacto para el usuario final
+- En Android/iOS solo aparece el teclado numérico grande del diálogo:
+  no hay más "teclado sobre teclado".
+- Los mensajes de error se ven siempre — arriba del teclado —
+  independientemente de la altura del teclado del sistema o del
+  pliegue del touchpad numérico.
+- En escritorio (Windows/Linux/macOS) el teclado físico sigue
+  escribiendo los dígitos como antes; los atajos Enter/Esc se
+  mantienen intactos.
+
+---
+
 ## 2026-07-01 — Fix: teclado en diálogo de cobro (Android/iOS) — release `mobile-v1.0.30`
 
 ### Versión
