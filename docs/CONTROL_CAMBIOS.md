@@ -7,7 +7,11 @@ Historial consolidado de versiones e implementaciones.
 
 ---
 
-## 2026-07-01 — Fix: teclado en diálogo de cobro (Android/iOS)
+## 2026-07-01 — Fix: teclado en diálogo de cobro (Android/iOS) — release `mobile-v1.0.30`
+
+### Versión
+- `apps/posia_pos/pubspec.yaml`: `1.0.0+29` → `1.0.0+30`.
+- Tag de release: `mobile-v1.0.30`.
 
 ### Problema
 En la aplicación móvil, al terminar una venta y presionar **COBRAR**, el
