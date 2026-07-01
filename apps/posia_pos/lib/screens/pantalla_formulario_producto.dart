@@ -270,8 +270,8 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 
 	@override
 	Widget build(BuildContext context) {
-		final categoriasAsync = ref.watch(_categoriasFormProvider);
-		final proveedoresAsync = ref.watch(_proveedoresFormProvider);
+		final categoriasAsync = ref.watch(categoriasFormularioAdminProvider);
+		final proveedoresAsync = ref.watch(proveedoresFormularioAdminProvider);
 		return Scaffold(
 			appBar: AppBar(
 				title: Text(_esEdicion ? 'Editar producto' : 'Nuevo producto'),
@@ -770,13 +770,3 @@ class _EscalaEditable {
 		precioController.dispose();
 	}
 }
-
-final _categoriasFormProvider = FutureProvider<List<Categoria>>((ref) async {
-	final servicio = await ref.watch(servicioAdminProvider.future);
-	return servicio.listarCategorias();
-});
-
-final _proveedoresFormProvider = FutureProvider<List<Proveedor>>((ref) async {
-	final servicio = await ref.watch(servicioAdminProvider.future);
-	return servicio.listarProveedores();
-});

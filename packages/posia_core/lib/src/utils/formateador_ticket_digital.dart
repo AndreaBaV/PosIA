@@ -3,9 +3,7 @@ library;
 
 import '../constants/posia_constants.dart';
 import '../enums/metodo_pago.dart';
-import '../enums/regla_precio.dart';
 import '../models/cotizacion.dart';
-import '../models/linea_cotizacion.dart';
 import '../models/linea_venta.dart';
 import '../models/ticket_digital.dart';
 import '../models/venta.dart';
@@ -57,19 +55,6 @@ List<LineaTicketDigital> _lineasDesdeVenta(List<LineaVenta> lineas) {
 				precioUnitario: l.precioUnitario,
 				subtotal: l.calcularSubtotal(),
 				descuentoLinea: l.descuentoLinea,
-			),
-		)
-		.toList();
-}
-
-List<LineaTicketDigital> _lineasDesdeCotizacion(List<LineaCotizacion> lineas) {
-	return lineas
-		.map(
-			(l) => LineaTicketDigital(
-				descripcion: l.nombreProducto,
-				cantidad: l.cantidad,
-				precioUnitario: l.precioUnitario,
-				subtotal: l.cantidad * l.precioUnitario,
 			),
 		)
 		.toList();

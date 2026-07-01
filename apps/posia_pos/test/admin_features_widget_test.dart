@@ -12,24 +12,20 @@ import 'package:posia_pos/screens/pantalla_cotizaciones_admin.dart';
 import 'package:posia_pos/screens/pantalla_creditos_pendientes.dart';
 import 'package:posia_pos/screens/pantalla_inventario_admin.dart';
 
-import '../../../packages/posia_database/test/fixture_servicio_admin.dart';
-
 void main() {
 	group('Créditos admin', () {
 		testWidgets('estado vacío muestra un solo botón Nuevo crédito (FAB)', (tester) async {
-			final fixture = await FixtureAdmin.abrir();
-			final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
-			addTearDown(fixture.cerrar);
-
 			await tester.pumpWidget(
 				ProviderScope(
 					overrides: [
-						servicioAdminProvider.overrideWith((ref) async => servicio),
+						creditosPendientesAdminProvider.overrideWithValue(
+							const AsyncValue.data([]),
+						),
 					],
 					child: const MaterialApp(home: PantallaCreditosPendientes()),
 				),
 			);
-			await tester.pumpAndSettle();
+			await tester.pump();
 
 			expect(find.text('Nuevo crédito'), findsOneWidget);
 			expect(find.byType(FloatingActionButton), findsOneWidget);
@@ -39,19 +35,17 @@ void main() {
 
 	group('Cotizaciones admin', () {
 		testWidgets('muestra FAB Nueva cotización', (tester) async {
-			final fixture = await FixtureAdmin.abrir();
-			final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
-			addTearDown(fixture.cerrar);
-
 			await tester.pumpWidget(
 				ProviderScope(
 					overrides: [
-						servicioAdminProvider.overrideWith((ref) async => servicio),
+						cotizacionesAdminProvider(30).overrideWithValue(
+							const AsyncValue.data([]),
+						),
 					],
 					child: const MaterialApp(home: PantallaCotizacionesAdmin()),
 				),
 			);
-			await tester.pumpAndSettle();
+			await tester.pump();
 
 			expect(find.text('Nueva cotización'), findsOneWidget);
 			expect(find.byType(FloatingActionButton), findsOneWidget);
@@ -83,22 +77,24 @@ void main() {
 			await tester.pumpWidget(
 				ProviderScope(
 					overrides: [
-						tiendasInventarioProvider.overrideWith(
-							(ref) async => [
+						tiendasInventarioProvider.overrideWithValue(
+							AsyncValue.data([
 								Tienda(
 									id: 't1',
 									nombre: 'Origen',
 									direccion: 'Calle 1',
 									activa: true,
 								),
-							],
+							]),
 						),
-						inventarioAgrupadoProvider('t1').overrideWith((ref) async => datos),
+						inventarioAgrupadoProvider('t1').overrideWithValue(
+							AsyncValue.data(datos),
+						),
 					],
 					child: const MaterialApp(home: PantallaInventarioAdmin()),
 				),
 			);
-			await tester.pumpAndSettle();
+			await tester.pump();
 
 			expect(find.text('Resumen general'), findsOneWidget);
 			expect(find.text('En tiendas'), findsOneWidget);
