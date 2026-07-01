@@ -36,6 +36,7 @@ enum MotivoFalloAuth {
 	hubNoConfigurado,
 	hubNoDisponible,
 	hubSinPostgres,
+	hubApiKeyInvalida,
 	usuarioNoEncontrado,
 	credencialesInvalidas,
 	usuarioInactivo,
@@ -48,11 +49,15 @@ extension MensajeMotivoFalloAuth on MotivoFalloAuth {
 			case MotivoFalloAuth.hubNoConfigurado:
 				return 'Sin conexión al servidor. Configure el hub en Configuración técnica.';
 			case MotivoFalloAuth.hubNoDisponible:
-				return 'No se pudo contactar el servidor. Verifique la URL del hub y la API key '
-					'en Configuración técnica, o espere ~1 min si el servidor gratuito estaba dormido.';
+				return 'No se pudo contactar el servidor. Reintenta en unos segundos; '
+					'si persiste, verifica la URL del hub y tu conexión a internet '
+					'en Configuración técnica.';
 			case MotivoFalloAuth.hubSinPostgres:
 				return 'El servidor hub no tiene base de datos configurada. '
 					'Defina DATABASE_URL (Neon) en el despliegue del backend.';
+			case MotivoFalloAuth.hubApiKeyInvalida:
+				return 'El servidor rechazó la clave API de este dispositivo. '
+					'Actualiza la API Key en Configuración técnica y vuelve a intentar.';
 			case MotivoFalloAuth.usuarioNoEncontrado:
 				return 'Usuario no encontrado';
 			case MotivoFalloAuth.credencialesInvalidas:
