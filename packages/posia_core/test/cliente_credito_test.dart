@@ -85,6 +85,6 @@ void main() {
 		expect(texto, contains('VENTA A CREDITO'));
 		expect(texto, contains('FIRMA DEL CLIENTE'));
 		expect(texto, contains('30 dia(s)'));
-		expect(texto, contains('Dir: Av. Norte 100'));
+		expect(texto, contains('Dirección: Av. Norte 100'));
 	});
 }

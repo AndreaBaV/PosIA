@@ -39,7 +39,7 @@ void main() {
 
 		tearDown(() => base.close());
 
-		Future<void> _guardarLeche({required String tiendaId}) async {
+		Future<void> guardarLeche({required String tiendaId}) async {
 			await repo.guardar(
 				Producto(
 					id: 'prod-leche',
@@ -56,7 +56,7 @@ void main() {
 		}
 
 		test('listarActivosPorTienda incluye producto con stock traspasado', () async {
-			await _guardarLeche(tiendaId: tiendaCentral);
+			await guardarLeche(tiendaId: tiendaCentral);
 			await inventario.guardarStock(
 				StockNivel(
 					productoId: 'prod-leche',
@@ -74,7 +74,7 @@ void main() {
 		});
 
 		test('buscarPorCodigoBarras encuentra producto traspasado en tienda destino', () async {
-			await _guardarLeche(tiendaId: tiendaCentral);
+			await guardarLeche(tiendaId: tiendaCentral);
 			await inventario.guardarStock(
 				StockNivel(
 					productoId: 'prod-leche',
