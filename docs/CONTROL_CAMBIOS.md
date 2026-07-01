@@ -7,6 +7,44 @@ Historial consolidado de versiones e implementaciones.
 
 ---
 
+## 2026-07-01 — Login robusto en dispositivos recién instalados (TestFlight/Play)
+
+### Problema
+Instalaciones nuevas (TestFlight, sideload, Play interno) mostraban
+"Usuario no encontrado" al iniciar sesión con credenciales que sí funcionan
+en el dispositivo original. Causa raíz: cuando el hub respondía con un
+error distinto de 404 (401 clave API, 5xx, timeout de Render free, red),
+el cliente lo interpretaba como "usuario no existe" al no encontrar copia
+local en un dispositivo sin sincronizar.
+
+### Cambios (`posia_sync`, `posia_database`, `posia_core`)
+- `HubSyncClient`: nuevas APIs tipadas `consultarPerfil`, `intentarLogin` y
+  `verificarEstadoAuth` que distinguen 200/404/401/403/503 y errores de red.
+- Modelos `ConsultaPerfilHub`, `IntentoLoginHub`, `EstadoAuthHub` en
+  `posia_sync/auth_hub.dart`.
+- `tieneAuthHub` corregido: ya no devuelve `true` con 401 (clave API mal).
+- 401 con cuerpo "Clave API invalida" se distingue de 401 con cuerpo
+  "Credenciales invalidas" al iniciar sesión.
+- `ServicioAutenticacion` reescrito para:
+  - Reportar `usuarioNoEncontrado`/`credencialesInvalidas` solo cuando el
+    hub da respuesta definitiva (200/404/401 de handler).
+  - Reintentar hasta 2 veces con espera de 2 s ante errores transitorios
+    de red antes de fallar (útil cuando Render free tarda en despertar).
+  - Nuevo motivo `hubApiKeyInvalida` con mensaje accionable.
+  - Ampliar timeout de `mantenerHubVivo` a 60 s para tolerar arranque en
+    frío del hub free tras periodos de inactividad.
+- Tests unitarios cubren 200, 404, 401 (clave y credenciales), 403, 500,
+  503 y timeouts en las tres nuevas APIs (`posia_sync`: 20/20 OK,
+  `posia_database`: 51/51 OK, `posia_pos`: 5/5 OK).
+
+### Impacto para el usuario final
+- El mensaje ya nunca dice "usuario no encontrado" cuando el problema es
+  de red, servidor dormido o clave API mal configurada.
+- Los reintentos silenciosos absorben los primeros ~60 s de arranque en
+  frío del hub, típicos de Render free.
+
+---
+
 ## 2026-06-28 — Integridad transaccional, admin móvil y UX operativa
 
 ### Base de datos (`posia_database`)
