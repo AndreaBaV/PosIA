@@ -52,6 +52,7 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 	var _aceptaCredito = false;
 	var _cerrado = false;
 	_CampoMontoCobro _campoMontoActivo = _CampoMontoCobro.recibido;
+	String? _mensajeError;
 
 	@override
 	void initState() {
@@ -136,8 +137,23 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 				MetodoPago.credito => _CampoMontoCobro.diasCredito,
 				_ => _CampoMontoCobro.recibido,
 			};
+			_mensajeError = null;
 		});
 		WidgetsBinding.instance.addPostFrameCallback((_) => _enfocarCampoActivo());
+	}
+
+	void _mostrarError(String mensaje) {
+		if (!mounted) {
+			return;
+		}
+		setState(() => _mensajeError = mensaje);
+	}
+
+	void _limpiarError() {
+		if (_mensajeError == null) {
+			return;
+		}
+		setState(() => _mensajeError = null);
 	}
 
 	bool get _creditoDisponible =>
@@ -213,6 +229,7 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 			ctrl.text + tecla,
 			admiteDecimal: _campoActivoAceptaDecimal,
 		);
+		_limpiarError();
 		_establecerValorCampo(ctrl, valor);
 	}
 
@@ -225,6 +242,7 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 		if (valor.isEmpty) {
 			return;
 		}
+		_limpiarError();
 		_establecerValorCampo(ctrl, valor.substring(0, valor.length - 1));
 	}
 
@@ -434,6 +452,11 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 										style: TextStyle(color: Colors.grey, fontSize: 11.0),
 									),
 								],
+								if (_mensajeError != null)
+									BannerMensajeDialogo(
+										mensaje: _mensajeError!,
+										padding: const EdgeInsets.only(top: 12.0),
+									),
 								if (_capturaMontoActiva) ...[
 									const SizedBox(height: 12.0),
 									Align(
@@ -478,7 +501,14 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 		return TextField(
 			controller: controlador,
 			focusNode: foco,
-			keyboardType: TextInputType.numberWithOptions(decimal: aceptaDecimales),
+			// Suprimimos el teclado del sistema (iOS/Android) porque el
+			// diálogo ya muestra un TecladoNumericoSimple embebido. Mostrar
+			// dos teclados simultáneamente resulta ruidoso y hace que los
+			// mensajes de retroalimentación queden ocultos bajo el teclado
+			// del sistema. En Windows/Linux/macOS el teclado físico sigue
+			// escribiendo con normalidad.
+			keyboardType: TextInputType.none,
+			showCursor: true,
 			textInputAction: TextInputAction.done,
 			inputFormatters: [
 				FilteringTextInputFormatter.allow(
@@ -506,6 +536,7 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 						selection: TextSelection.collapsed(offset: normalizado.length),
 					);
 				}
+				_limpiarError();
 				setState(() {});
 			},
 			onSubmitted: (_) => alPresionarSubmit(),
@@ -547,52 +578,31 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 			return;
 		}
 		if (_total <= 0.0) {
-			ScaffoldMessenger.of(context).showSnackBar(
-				const SnackBar(content: Text('No hay monto por cobrar')),
-			);
+			_mostrarError('No hay monto por cobrar');
 			return;
 		}
 		if (_metodo == MetodoPago.efectivo) {
 			final recibido = double.tryParse(_recibidoCtrl.text.trim());
 			if (recibido == null || recibido <= 0.0) {
-				ScaffoldMessenger.of(context).showSnackBar(
-					const SnackBar(content: Text('Indique el monto recibido en efectivo')),
-				);
+				_mostrarError('Indique el monto recibido en efectivo');
 				return;
 			}
 			if (recibido < _total) {
-				ScaffoldMessenger.of(context).showSnackBar(
-					const SnackBar(content: Text('Monto recibido insuficiente')),
-				);
+				_mostrarError('Monto recibido insuficiente');
 				return;
 			}
 		}
 		if (_metodo == MetodoPago.credito) {
 			if (!_creditoDisponible) {
-				ScaffoldMessenger.of(context).showSnackBar(
-					const SnackBar(
-						content: Text('No se puede otorgar crédito con los datos actuales'),
-						backgroundColor: PosiaColors.cancelar,
-					),
-				);
+				_mostrarError('No se puede otorgar crédito con los datos actuales');
 				return;
 			}
 			if (_diasCredito <= 0) {
-				ScaffoldMessenger.of(context).showSnackBar(
-					const SnackBar(
-						content: Text('Indique días de crédito válidos'),
-						backgroundColor: PosiaColors.cancelar,
-					),
-				);
+				_mostrarError('Indique días de crédito válidos');
 				return;
 			}
 			if (!_aceptaCredito) {
-				ScaffoldMessenger.of(context).showSnackBar(
-					const SnackBar(
-						content: Text('Confirme que el cliente acepta el plazo de pago'),
-						backgroundColor: PosiaColors.cancelar,
-					),
-				);
+				_mostrarError('Confirme que el cliente acepta el plazo de pago');
 				return;
 			}
 		}
