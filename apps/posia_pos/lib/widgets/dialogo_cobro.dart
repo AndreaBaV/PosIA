@@ -44,7 +44,11 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 	final _efectivoCtrl = TextEditingController();
 	final _tarjetaCtrl = TextEditingController();
 	final _diasCreditoCtrl = TextEditingController();
-	late final FocusNode _capturaFocus;
+	final _recibidoFocus = FocusNode(debugLabel: 'cobro-recibido');
+	final _efectivoFocus = FocusNode(debugLabel: 'cobro-efectivo-mixto');
+	final _tarjetaFocus = FocusNode(debugLabel: 'cobro-tarjeta-mixto');
+	final _diasCreditoFocus = FocusNode(debugLabel: 'cobro-dias-credito');
+	late final FocusNode _atajosFocus;
 	var _aceptaCredito = false;
 	var _cerrado = false;
 	_CampoMontoCobro _campoMontoActivo = _CampoMontoCobro.recibido;
@@ -54,13 +58,42 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 		super.initState();
 		_diasCreditoCtrl.text = (widget.cliente?.diasCredito ?? DIAS_CREDITO_PREDETERMINADO)
 			.toString();
-		_capturaFocus = FocusNode(onKeyEvent: _manejarTeclaCaptura);
-		WidgetsBinding.instance.addPostFrameCallback((_) => _enfocarCaptura());
+		_atajosFocus = FocusNode(
+			debugLabel: 'cobro-atajos',
+			onKeyEvent: _manejarAtajoTeclado,
+			skipTraversal: true,
+			canRequestFocus: false,
+		);
+		_recibidoFocus.addListener(() {
+			if (_recibidoFocus.hasFocus) {
+				_actualizarCampoActivo(_CampoMontoCobro.recibido);
+			}
+		});
+		_efectivoFocus.addListener(() {
+			if (_efectivoFocus.hasFocus) {
+				_actualizarCampoActivo(_CampoMontoCobro.efectivoMixto);
+			}
+		});
+		_tarjetaFocus.addListener(() {
+			if (_tarjetaFocus.hasFocus) {
+				_actualizarCampoActivo(_CampoMontoCobro.tarjetaMixto);
+			}
+		});
+		_diasCreditoFocus.addListener(() {
+			if (_diasCreditoFocus.hasFocus) {
+				_actualizarCampoActivo(_CampoMontoCobro.diasCredito);
+			}
+		});
+		WidgetsBinding.instance.addPostFrameCallback((_) => _enfocarCampoActivo());
 	}
 
 	@override
 	void dispose() {
-		_capturaFocus.dispose();
+		_atajosFocus.dispose();
+		_recibidoFocus.dispose();
+		_efectivoFocus.dispose();
+		_tarjetaFocus.dispose();
+		_diasCreditoFocus.dispose();
 		_recibidoCtrl.dispose();
 		_efectivoCtrl.dispose();
 		_tarjetaCtrl.dispose();
@@ -68,9 +101,27 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 		super.dispose();
 	}
 
-	void _enfocarCaptura() {
-		if (mounted && _capturaFocus.canRequestFocus) {
-			_capturaFocus.requestFocus();
+	void _actualizarCampoActivo(_CampoMontoCobro campo) {
+		if (_campoMontoActivo == campo) {
+			return;
+		}
+		setState(() => _campoMontoActivo = campo);
+	}
+
+	FocusNode _focoDelCampo(_CampoMontoCobro campo) => switch (campo) {
+		_CampoMontoCobro.recibido => _recibidoFocus,
+		_CampoMontoCobro.efectivoMixto => _efectivoFocus,
+		_CampoMontoCobro.tarjetaMixto => _tarjetaFocus,
+		_CampoMontoCobro.diasCredito => _diasCreditoFocus,
+	};
+
+	void _enfocarCampoActivo() {
+		if (!mounted || _cerrado) {
+			return;
+		}
+		final foco = _focoDelCampo(_campoMontoActivo);
+		if (foco.canRequestFocus) {
+			foco.requestFocus();
 		}
 	}
 
@@ -86,12 +137,7 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 				_ => _CampoMontoCobro.recibido,
 			};
 		});
-		_enfocarCaptura();
-	}
-
-	void _seleccionarCampoMonto(_CampoMontoCobro campo) {
-		setState(() => _campoMontoActivo = campo);
-		_enfocarCaptura();
+		WidgetsBinding.instance.addPostFrameCallback((_) => _enfocarCampoActivo());
 	}
 
 	bool get _creditoDisponible =>
@@ -132,6 +178,9 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 		_ => false,
 	};
 
+	bool get _campoActivoAceptaDecimal =>
+		_campoMontoActivo != _CampoMontoCobro.diasCredito;
+
 	TextEditingController get _controladorCampoActivo => switch (_campoMontoActivo) {
 		_CampoMontoCobro.recibido => _recibidoCtrl,
 		_CampoMontoCobro.efectivoMixto => _efectivoCtrl,
@@ -139,7 +188,7 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 		_CampoMontoCobro.diasCredito => _diasCreditoCtrl,
 	};
 
-	KeyEventResult _manejarTeclaCaptura(FocusNode node, KeyEvent event) {
+	KeyEventResult _manejarAtajoTeclado(FocusNode node, KeyEvent event) {
 		if (_cerrado || event is! KeyDownEvent) {
 			return KeyEventResult.ignored;
 		}
@@ -147,58 +196,30 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 			_cancelar();
 			return KeyEventResult.handled;
 		}
-		if (event.logicalKey == LogicalKeyboardKey.enter ||
-			event.logicalKey == LogicalKeyboardKey.numpadEnter) {
-			_confirmar();
-			return KeyEventResult.handled;
-		}
-		if (event.logicalKey == LogicalKeyboardKey.tab) {
-			if (_metodo == MetodoPago.mixto) {
-				setState(() {
-					_campoMontoActivo = _campoMontoActivo == _CampoMontoCobro.efectivoMixto
-						? _CampoMontoCobro.tarjetaMixto
-						: _CampoMontoCobro.efectivoMixto;
-				});
-				return KeyEventResult.handled;
-			}
-			return KeyEventResult.ignored;
-		}
-		if (!_capturaMontoActiva) {
-			return KeyEventResult.ignored;
-		}
-		final digito = digitoDesdeTeclaFisica(event.logicalKey);
-		if (digito != null) {
-			_agregarTeclaMonto(digito);
-			return KeyEventResult.handled;
-		}
-		if (event.logicalKey == LogicalKeyboardKey.period ||
-			event.logicalKey == LogicalKeyboardKey.numpadDecimal ||
-			event.logicalKey == LogicalKeyboardKey.comma) {
-			_agregarTeclaMonto('.');
-			return KeyEventResult.handled;
-		}
-		if (event.logicalKey == LogicalKeyboardKey.backspace ||
-			event.logicalKey == LogicalKeyboardKey.delete) {
-			_borrarTeclaMonto();
-			return KeyEventResult.handled;
-		}
 		return KeyEventResult.ignored;
 	}
 
-	void _agregarTeclaMonto(String tecla) {
+	void _agregarTeclaTouchpad(String tecla) {
+		if (!_capturaMontoActiva) {
+			return;
+		}
 		final ctrl = _controladorCampoActivo;
-		var valor = ctrl.text;
-		if (tecla == '.' && valor.contains('.')) {
-			return;
+		if (tecla == '.') {
+			if (!_campoActivoAceptaDecimal || ctrl.text.contains('.')) {
+				return;
+			}
 		}
-		if (_campoMontoActivo == _CampoMontoCobro.diasCredito && tecla == '.') {
-			return;
-		}
-		valor = _normalizarEntradaMonto(valor + tecla);
+		final valor = _normalizarEntradaMonto(
+			ctrl.text + tecla,
+			admiteDecimal: _campoActivoAceptaDecimal,
+		);
 		_establecerValorCampo(ctrl, valor);
 	}
 
-	void _borrarTeclaMonto() {
+	void _borrarTeclaTouchpad() {
+		if (!_capturaMontoActiva) {
+			return;
+		}
 		final ctrl = _controladorCampoActivo;
 		final valor = ctrl.text;
 		if (valor.isEmpty) {
@@ -208,20 +229,27 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 	}
 
 	void _establecerValorCampo(TextEditingController ctrl, String valor) {
-		setState(() {
-			ctrl.value = TextEditingValue(
-				text: valor,
-				selection: TextSelection.collapsed(offset: valor.length),
-			);
-		});
+		if (ctrl.text == valor) {
+			setState(() {});
+			return;
+		}
+		ctrl.value = TextEditingValue(
+			text: valor,
+			selection: TextSelection.collapsed(offset: valor.length),
+		);
+		setState(() {});
+		_enfocarCampoActivo();
 	}
 
-	String _normalizarEntradaMonto(String raw) {
+	String _normalizarEntradaMonto(String raw, {bool admiteDecimal = true}) {
 		final texto = raw.replaceAll(',', '.');
 		final buffer = StringBuffer();
 		var puntoVisto = false;
 		for (final caracter in texto.split('')) {
-			if (caracter == '.' && !puntoVisto) {
+			if (caracter == '.') {
+				if (!admiteDecimal || puntoVisto) {
+					continue;
+				}
 				puntoVisto = true;
 				buffer.write(caracter);
 			} else if (RegExp(r'\d').hasMatch(caracter)) {
@@ -247,8 +275,7 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 		return PopScope(
 			canPop: !_cerrado,
 			child: Focus(
-				focusNode: _capturaFocus,
-				autofocus: true,
+				focusNode: _atajosFocus,
 				child: AlertDialog(
 				title: const Text('Cobrar venta'),
 				content: SizedBox(
@@ -327,13 +354,14 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 									),
 								if (_metodo == MetodoPago.credito && _creditoDisponible) ...[
 									const SizedBox(height: 12.0),
-									_campoMontoLectura(
+									_campoMontoEditable(
 										controlador: _diasCreditoCtrl,
+										foco: _diasCreditoFocus,
 										etiqueta: 'Días para pagar',
 										sufijo: 'días',
-										activo: _campoMontoActivo == _CampoMontoCobro.diasCredito,
-										alSeleccionar: () =>
-											_seleccionarCampoMonto(_CampoMontoCobro.diasCredito),
+										hint: '30',
+										aceptaDecimales: false,
+										alPresionarSubmit: _confirmar,
 									),
 									if (leyendaCredito != null) ...[
 										const SizedBox(height: 8.0),
@@ -364,12 +392,12 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 								],
 								if (_metodo == MetodoPago.efectivo) ...[
 									const SizedBox(height: 12.0),
-									_campoMontoLectura(
+									_campoMontoEditable(
 										controlador: _recibidoCtrl,
-										etiqueta: 'Recibido (\$)',
-										activo: _campoMontoActivo == _CampoMontoCobro.recibido,
-										alSeleccionar: () =>
-											_seleccionarCampoMonto(_CampoMontoCobro.recibido),
+										foco: _recibidoFocus,
+										etiqueta: r'Recibido ($)',
+										hint: '0.00',
+										alPresionarSubmit: _confirmar,
 									),
 									if (_cambio != null && _cambio! >= 0)
 										Padding(
@@ -385,25 +413,37 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 								],
 								if (_metodo == MetodoPago.mixto) ...[
 									const SizedBox(height: 12.0),
-									_campoMontoLectura(
+									_campoMontoEditable(
 										controlador: _efectivoCtrl,
-										etiqueta: 'Efectivo (\$)',
-										activo: _campoMontoActivo == _CampoMontoCobro.efectivoMixto,
-										alSeleccionar: () =>
-											_seleccionarCampoMonto(_CampoMontoCobro.efectivoMixto),
+										foco: _efectivoFocus,
+										etiqueta: r'Efectivo ($)',
+										hint: '0.00',
+										alPresionarSubmit: () => _tarjetaFocus.requestFocus(),
 									),
 									const SizedBox(height: 8.0),
-									_campoMontoLectura(
+									_campoMontoEditable(
 										controlador: _tarjetaCtrl,
-										etiqueta: 'Tarjeta (\$)',
-										activo: _campoMontoActivo == _CampoMontoCobro.tarjetaMixto,
-										alSeleccionar: () =>
-											_seleccionarCampoMonto(_CampoMontoCobro.tarjetaMixto),
+										foco: _tarjetaFocus,
+										etiqueta: r'Tarjeta ($)',
+										hint: '0.00',
+										alPresionarSubmit: _confirmar,
 									),
 									const SizedBox(height: 4.0),
 									const Text(
-										'Tab alterna entre efectivo y tarjeta',
+										'Toque cada campo para editarlo · Tab alterna con teclado físico',
 										style: TextStyle(color: Colors.grey, fontSize: 11.0),
+									),
+								],
+								if (_capturaMontoActiva) ...[
+									const SizedBox(height: 12.0),
+									Align(
+										alignment: Alignment.center,
+										child: TecladoNumericoSimple(
+											valorActual: _controladorCampoActivo.text,
+											mostrarValor: false,
+											alPresionarTecla: _agregarTeclaTouchpad,
+											alBorrar: _borrarTeclaTouchpad,
+										),
 									),
 								],
 							],
@@ -426,31 +466,49 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 		);
 	}
 
-	Widget _campoMontoLectura({
+	Widget _campoMontoEditable({
 		required TextEditingController controlador,
+		required FocusNode foco,
 		required String etiqueta,
-		required bool activo,
-		required VoidCallback alSeleccionar,
+		required VoidCallback alPresionarSubmit,
 		String? sufijo,
+		String? hint,
+		bool aceptaDecimales = true,
 	}) {
-		return GestureDetector(
-			onTap: alSeleccionar,
-			child: InputDecorator(
-				isFocused: activo,
-				decoration: InputDecoration(
-					labelText: etiqueta,
-					suffixText: sufijo,
-					border: const OutlineInputBorder(),
-					filled: true,
-					fillColor: activo ? PosiaColors.cobrar.withValues(alpha: 0.06) : null,
+		return TextField(
+			controller: controlador,
+			focusNode: foco,
+			keyboardType: TextInputType.numberWithOptions(decimal: aceptaDecimales),
+			textInputAction: TextInputAction.done,
+			inputFormatters: [
+				FilteringTextInputFormatter.allow(
+					aceptaDecimales ? RegExp(r'[0-9.,]') : RegExp(r'[0-9]'),
 				),
-				child: Text(
-					controlador.text.isEmpty ? '—' : controlador.text,
-					style: Theme.of(context).textTheme.titleLarge?.copyWith(
-						fontWeight: FontWeight.w600,
-					),
-				),
+			],
+			decoration: InputDecoration(
+				labelText: etiqueta,
+				suffixText: sufijo,
+				hintText: hint,
+				border: const OutlineInputBorder(),
+				filled: true,
 			),
+			style: Theme.of(context).textTheme.titleLarge?.copyWith(
+				fontWeight: FontWeight.w600,
+			),
+			onChanged: (texto) {
+				final normalizado = _normalizarEntradaMonto(
+					texto,
+					admiteDecimal: aceptaDecimales,
+				);
+				if (normalizado != texto) {
+					controlador.value = TextEditingValue(
+						text: normalizado,
+						selection: TextSelection.collapsed(offset: normalizado.length),
+					);
+				}
+				setState(() {});
+			},
+			onSubmitted: (_) => alPresionarSubmit(),
 		);
 	}
 
@@ -475,7 +533,7 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 			return;
 		}
 		_cerrado = true;
-		_capturaFocus.unfocus();
+		FocusManager.instance.primaryFocus?.unfocus();
 		WidgetsBinding.instance.addPostFrameCallback((_) {
 			if (!mounted) {
 				return;
@@ -551,7 +609,7 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 			diasCredito: _metodo == MetodoPago.credito ? _diasCredito : null,
 		);
 		_cerrado = true;
-		_capturaFocus.unfocus();
+		FocusManager.instance.primaryFocus?.unfocus();
 		WidgetsBinding.instance.addPostFrameCallback((_) {
 			if (!mounted) {
 				return;
