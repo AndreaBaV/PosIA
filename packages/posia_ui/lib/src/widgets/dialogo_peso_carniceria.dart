@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:posia_core/posia_core.dart';
 
 import '../theme/posia_theme.dart';
+import 'banner_mensaje_dialogo.dart';
 import 'teclado_numerico_simple.dart';
 
 /// Resultado del dialogo de peso.
@@ -61,6 +62,7 @@ class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
 	var _cerrado = false;
 	ResultadoPrecio? _precioResuelto;
 	var _resolviendoPrecio = false;
+	String? _mensajeError;
 
 	@override
 	void initState() {
@@ -229,7 +231,13 @@ class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
 							controller: _pesoController,
 							focusNode: _pesoFocus,
 							autofocus: true,
-							keyboardType: const TextInputType.numberWithOptions(decimal: true),
+							// Se suprime el teclado del sistema en móvil porque el
+							// diálogo ya muestra un TecladoNumericoSimple embebido.
+							// Los avisos ("indique un peso mayor a cero") aparecen
+							// en un banner arriba del teclado, no como SnackBar
+							// oculto detrás del teclado del sistema.
+							keyboardType: TextInputType.none,
+							showCursor: true,
 							textInputAction: TextInputAction.done,
 							decoration: InputDecoration(
 								labelText: 'Peso',
@@ -239,19 +247,27 @@ class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
 								helperText: 'Enter agrega · Esc cancela',
 							),
 							onChanged: (texto) {
+								_limpiarError();
 								_establecerValor(_normalizarEntradaPeso(texto));
 								_actualizarPrecioResuelto();
 							},
 						),
+						if (_mensajeError != null)
+							BannerMensajeDialogo(
+								mensaje: _mensajeError!,
+								padding: const EdgeInsets.only(top: 8.0),
+							),
 						const SizedBox(height: 8.0),
 						TecladoNumericoSimple(
 							valorActual: _valorPeso,
 							mostrarValor: false,
 							alPresionarTecla: (tecla) {
+								_limpiarError();
 								_agregarTecla(tecla);
 								_actualizarPrecioResuelto();
 							},
 							alBorrar: () {
+								_limpiarError();
 								_borrarTecla();
 								_actualizarPrecioResuelto();
 							},
@@ -328,14 +344,26 @@ class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
 		}
 		final pesoKg = _pesoKgCapturado();
 		if (pesoKg == null) {
-			ScaffoldMessenger.of(context).showSnackBar(
-				const SnackBar(content: Text('Indique un peso mayor a cero')),
-			);
+			_mostrarError('Indique un peso mayor a cero');
 			return;
 		}
 		_cerrado = true;
 		Navigator.of(context).pop(
 			ResultadoDialogoPeso(confirmado: true, pesoKg: pesoKg),
 		);
+	}
+
+	void _mostrarError(String mensaje) {
+		if (!mounted) {
+			return;
+		}
+		setState(() => _mensajeError = mensaje);
+	}
+
+	void _limpiarError() {
+		if (_mensajeError == null) {
+			return;
+		}
+		setState(() => _mensajeError = null);
 	}
 }

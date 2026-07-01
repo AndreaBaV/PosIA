@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:posia_core/posia_core.dart';
 
 import '../theme/posia_theme.dart';
+import 'banner_mensaje_dialogo.dart';
 import 'teclado_numerico_simple.dart';
 
 /// Resultado del dialogo de cantidad.
@@ -54,6 +55,7 @@ class _DialogoCantidadProductoState extends State<DialogoCantidadProducto> {
 	late final FocusNode _cantidadFocus;
 	String _valorCantidad = '1';
 	var _cerrado = false;
+	String? _mensajeError;
 
 	@override
 	void initState() {
@@ -123,7 +125,11 @@ class _DialogoCantidadProductoState extends State<DialogoCantidadProducto> {
 							controller: _cantidadController,
 							focusNode: _cantidadFocus,
 							autofocus: true,
-							keyboardType: const TextInputType.numberWithOptions(decimal: true),
+							// Se suprime el teclado del sistema en móvil porque el
+							// diálogo ya muestra un TecladoNumericoSimple embebido.
+							// El teclado físico en escritorio sigue funcionando.
+							keyboardType: TextInputType.none,
+							showCursor: true,
 							textInputAction: TextInputAction.done,
 							decoration: InputDecoration(
 								labelText: 'Cantidad',
@@ -132,8 +138,10 @@ class _DialogoCantidadProductoState extends State<DialogoCantidadProducto> {
 								border: const OutlineInputBorder(),
 								helperText: 'Enter agrega · Esc cancela',
 							),
-							onChanged: (texto) =>
-								_establecerValor(_normalizarEntradaCantidad(texto)),
+							onChanged: (texto) {
+								_limpiarError();
+								_establecerValor(_normalizarEntradaCantidad(texto));
+							},
 						),
 						if (subtotal > 0.0) ...[
 							const SizedBox(height: 8.0),
@@ -144,12 +152,23 @@ class _DialogoCantidadProductoState extends State<DialogoCantidadProducto> {
 								),
 							),
 						],
+						if (_mensajeError != null)
+							BannerMensajeDialogo(
+								mensaje: _mensajeError!,
+								padding: const EdgeInsets.only(top: 8.0),
+							),
 						const SizedBox(height: 8.0),
 						TecladoNumericoSimple(
 							valorActual: _valorCantidad,
 							mostrarValor: false,
-							alPresionarTecla: _agregarTecla,
-							alBorrar: _borrarTecla,
+							alPresionarTecla: (tecla) {
+								_limpiarError();
+								_agregarTecla(tecla);
+							},
+							alBorrar: () {
+								_limpiarError();
+								_borrarTecla();
+							},
 						),
 					],
 				),
@@ -232,14 +251,26 @@ class _DialogoCantidadProductoState extends State<DialogoCantidadProducto> {
 		}
 		final cantidad = double.tryParse(_valorCantidad.isEmpty ? '0' : _valorCantidad) ?? 0.0;
 		if (cantidad <= 0.0) {
-			ScaffoldMessenger.of(context).showSnackBar(
-				const SnackBar(content: Text('Indique una cantidad mayor a cero')),
-			);
+			_mostrarError('Indique una cantidad mayor a cero');
 			return;
 		}
 		_cerrado = true;
 		Navigator.of(context).pop(
 			ResultadoDialogoCantidad(confirmado: true, cantidad: cantidad),
 		);
+	}
+
+	void _mostrarError(String mensaje) {
+		if (!mounted) {
+			return;
+		}
+		setState(() => _mensajeError = mensaje);
+	}
+
+	void _limpiarError() {
+		if (_mensajeError == null) {
+			return;
+		}
+		setState(() => _mensajeError = null);
 	}
 }

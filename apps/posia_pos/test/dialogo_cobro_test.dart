@@ -41,12 +41,19 @@ Future<_CapturaCobro> _abrirDialogo(WidgetTester tester, {double subtotal = 100.
 
 void main() {
 	group('DialogoCobro', () {
-		testWidgets('muestra TextField editable para monto recibido (activa teclado en móvil)',
+		testWidgets('muestra TextField editable para monto recibido y suprime teclado nativo',
 			(tester) async {
-			// El bug reportado era que en móvil no se activaba el teclado al tocar el
-			// campo Recibido: el campo se pintaba como Text dentro de InputDecorator
-			// (no editable). Verificamos que ahora es un TextField real (que sí
-			// solicita el teclado del sistema en Android/iOS).
+			// El bug original era que en móvil no se activaba el teclado al tocar el
+			// campo Recibido (era un Text de solo lectura). Luego se detectó que al
+			// activar el teclado nativo simultáneamente con el teclado numérico
+			// embebido se producía ruido visual y los mensajes de retroalimentación
+			// quedaban ocultos bajo el teclado del sistema. La solución es:
+			//   1. Mantener el campo como TextField editable.
+			//   2. Fijar keyboardType a TextInputType.none para que iOS/Android NO
+			//      levanten su teclado nativo (se usa el TecladoNumericoSimple del
+			//      propio diálogo).
+			//   3. Mantener showCursor: true para conservar la retroalimentación
+			//      visual del cursor.
 			final captura = await _abrirDialogo(tester);
 
 			expect(find.text('Cobrar venta'), findsOneWidget);
@@ -56,12 +63,46 @@ void main() {
 			);
 			expect(campoRecibido, findsOneWidget);
 			final textField = tester.widget<TextField>(campoRecibido);
-			expect(textField.keyboardType, const TextInputType.numberWithOptions(decimal: true));
+			expect(textField.keyboardType, TextInputType.none);
+			expect(textField.showCursor, isTrue);
 
 			await tester.tap(find.text('Cancelar'));
 			await tester.pumpAndSettle();
 			expect(captura.completado, isTrue);
 			expect(captura.request, isNull);
+		});
+
+		testWidgets('mensajes de retroalimentación aparecen dentro del diálogo, no como SnackBar',
+			(tester) async {
+			// Bug: al escribir un monto insuficiente, el mensaje "Monto recibido
+			// insuficiente" se emitía como SnackBar al ScaffoldMessenger padre, que
+			// queda oculto detrás del teclado en móvil. Ahora debe mostrarse como
+			// banner dentro del diálogo, arriba del teclado numérico embebido.
+			await tester.binding.setSurfaceSize(const Size(800.0, 1200.0));
+			addTearDown(() => tester.binding.setSurfaceSize(null));
+
+			final captura = await _abrirDialogo(tester, subtotal: 500.0);
+
+			final campoRecibido = find.byWidgetPredicate(
+				(w) => w is TextField && w.decoration?.labelText == r'Recibido ($)',
+			);
+			await tester.enterText(campoRecibido, '100');
+			await tester.pump();
+
+			await tester.tap(find.text('COBRAR (Enter)'));
+			await tester.pumpAndSettle();
+
+			expect(find.byType(BannerMensajeDialogo), findsOneWidget);
+			expect(find.text('Monto recibido insuficiente'), findsOneWidget);
+			expect(find.byType(SnackBar), findsNothing);
+			expect(captura.completado, isFalse);
+
+			await tester.enterText(campoRecibido, '600');
+			await tester.pump();
+			expect(find.byType(BannerMensajeDialogo), findsNothing);
+
+			await tester.tap(find.text('Cancelar'));
+			await tester.pumpAndSettle();
 		});
 
 		testWidgets('permite escribir el monto recibido y devuelve CobroRequest',

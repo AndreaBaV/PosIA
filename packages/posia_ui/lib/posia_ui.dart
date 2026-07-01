@@ -14,6 +14,7 @@ export 'src/utils/layout_responsivo.dart';
 export 'src/utils/presentacion_rol.dart';
 export 'src/theme/posia_theme.dart';
 export 'src/widgets/accesorio_teclado_movil.dart';
+export 'src/widgets/banner_mensaje_dialogo.dart';
 export 'src/widgets/barra_categorias.dart';
 export 'src/widgets/barra_sesion_usuario.dart';
 export 'src/widgets/boton_accion_caja.dart';
