@@ -10,6 +10,13 @@ import '../models/resultado_autenticacion.dart';
 import '../repositories/usuario_repository.dart';
 
 /// Valida credenciales contra el hub (fuente de verdad) con respaldo local offline.
+///
+/// Reglas clave:
+/// - Solo se reporta "usuarioNoEncontrado" o "credencialesInvalidas" cuando el
+///   hub da una respuesta HTTP definitiva (200/401/404). Cualquier error
+///   transitorio (red, timeout, 5xx) o de configuracion (clave API mal, 503)
+///   se traduce a un motivo especifico para no ocultar el problema real bajo
+///   "usuario no encontrado" en dispositivos recien instalados.
 class ServicioAutenticacion {
 	ServicioAutenticacion({
 		HubSyncClient? clienteHub,
@@ -24,24 +31,21 @@ class ServicioAutenticacion {
 			return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.usuarioNoEncontrado);
 		}
 		final hub = _clienteHub;
-		var hubActivo = false;
+		ConsultaPerfilHub? consultaHub;
 		if (hub != null) {
-			hubActivo = await hub.mantenerHubVivo();
-			if (hubActivo) {
-				if (!await hub.tieneAuthHub()) {
-					return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.hubSinPostgres);
+			// Un ping al health despierta Render free antes del auth/preview;
+			// el resultado NO se usa como gate: verificarEstadoAuth ya cubre 401/503.
+			await hub.mantenerHubVivo();
+			consultaHub = await _consultarPerfilConReintento(hub, limpio);
+			if (consultaHub.exitoso) {
+				final perfilHub = consultaHub.perfil!;
+				if (!perfilHub.activo) {
+					return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.usuarioInactivo);
 				}
-				final perfil = await hub.obtenerPerfilUsuario(limpio);
-				if (perfil != null) {
-					if (!perfil.activo) {
-						return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.usuarioInactivo);
-					}
-					return BusquedaPerfilAuth.usuario(_mapearPerfilHub(perfil));
-				}
-				// El hub puede no tener aun el usuario (p. ej. tras limpiar Postgres);
-				// se intenta la copia local sincronizada antes de fallar.
+				return BusquedaPerfilAuth.usuario(_mapearPerfilHub(perfilHub));
 			}
 		}
+		// Antes de reportar error, prueba la copia local sincronizada.
 		final local = await _buscarPerfilLocal(limpio);
 		if (local != null) {
 			return BusquedaPerfilAuth.usuario(local);
@@ -49,10 +53,8 @@ class ServicioAutenticacion {
 		if (hub == null) {
 			return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.hubNoConfigurado);
 		}
-		if (!hubActivo) {
-			return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.hubNoDisponible);
-		}
-		return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.usuarioNoEncontrado);
+		// El hub respondio: interpretar el motivo real.
+		return BusquedaPerfilAuth.fallo(_mapearErrorConsulta(consultaHub!));
 	}
 
 	Future<IntentoAutenticacionAuth> autenticar(String codigo, String pin) async {
@@ -61,21 +63,28 @@ class ServicioAutenticacion {
 			return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.credencialesInvalidas);
 		}
 		final hub = _clienteHub;
-		var hubActivo = false;
+		IntentoLoginHub? intentoHub;
 		if (hub != null) {
-			hubActivo = await hub.mantenerHubVivo();
-			if (hubActivo) {
-				if (!await hub.tieneAuthHub()) {
-					return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.hubSinPostgres);
+			await hub.mantenerHubVivo();
+			intentoHub = await _intentarLoginConReintento(hub, limpio, pin);
+			if (intentoHub.exitoso) {
+				final login = intentoHub.login!;
+				if (!login.perfil.activo) {
+					return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.usuarioInactivo);
 				}
-				final remoto = await hub.iniciarSesion(codigo: limpio, pin: pin);
-				if (remoto != null) {
-					if (!remoto.perfil.activo) {
-						return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.usuarioInactivo);
-					}
-					return IntentoAutenticacionAuth.exito(_mapearLoginHub(remoto));
+				return IntentoAutenticacionAuth.exito(_mapearLoginHub(login));
+			}
+			if (intentoHub.credencialesInvalidas) {
+				// Antes de rechazar duro, chequea si tenemos copia local:
+				// puede que la clave local siga vigente aunque el hub la haya
+				// rotado. Solo se acepta si valida contra la copia sincronizada.
+				final local = await _autenticarLocal(limpio, pin);
+				if (local != null) {
+					return IntentoAutenticacionAuth.exito(local);
 				}
-				// Credenciales rechazadas en hub o usuario solo en copia local.
+				return const IntentoAutenticacionAuth.fallo(
+					MotivoFalloAuth.credencialesInvalidas,
+				);
 			}
 		}
 		final local = await _autenticarLocal(limpio, pin);
@@ -85,10 +94,75 @@ class ServicioAutenticacion {
 		if (hub == null) {
 			return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.hubNoConfigurado);
 		}
-		if (!hubActivo) {
-			return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.hubNoDisponible);
+		return IntentoAutenticacionAuth.fallo(_mapearErrorLogin(intentoHub!));
+	}
+
+	static const _reintentosHubTransitorio = 2;
+	static const _esperaEntreReintentos = Duration(seconds: 2);
+
+	Future<ConsultaPerfilHub> _consultarPerfilConReintento(
+		HubSyncClient hub,
+		String codigo,
+	) async {
+		var ultima = await hub.consultarPerfil(codigo);
+		for (var intento = 1; intento <= _reintentosHubTransitorio; intento++) {
+			if (ultima.esRespuestaDefinitiva ||
+				ultima.estado != EstadoAuthHub.inalcanzable) {
+				break;
+			}
+			await Future<void>.delayed(_esperaEntreReintentos);
+			ultima = await hub.consultarPerfil(codigo);
 		}
-		return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.credencialesInvalidas);
+		return ultima;
+	}
+
+	Future<IntentoLoginHub> _intentarLoginConReintento(
+		HubSyncClient hub,
+		String codigo,
+		String pin,
+	) async {
+		var ultima = await hub.intentarLogin(codigo: codigo, pin: pin);
+		for (var intento = 1; intento <= _reintentosHubTransitorio; intento++) {
+			if (ultima.esRespuestaDefinitiva ||
+				ultima.estado != EstadoAuthHub.inalcanzable) {
+				break;
+			}
+			await Future<void>.delayed(_esperaEntreReintentos);
+			ultima = await hub.intentarLogin(codigo: codigo, pin: pin);
+		}
+		return ultima;
+	}
+
+	MotivoFalloAuth _mapearErrorConsulta(ConsultaPerfilHub consulta) {
+		if (consulta.definitivoNoEncontrado) {
+			return MotivoFalloAuth.usuarioNoEncontrado;
+		}
+		switch (consulta.estado) {
+			case EstadoAuthHub.sinPostgres:
+				return MotivoFalloAuth.hubSinPostgres;
+			case EstadoAuthHub.apiKeyInvalida:
+				return MotivoFalloAuth.hubApiKeyInvalida;
+			case EstadoAuthHub.inalcanzable:
+			case EstadoAuthHub.disponible:
+			case null:
+				return MotivoFalloAuth.hubNoDisponible;
+		}
+	}
+
+	MotivoFalloAuth _mapearErrorLogin(IntentoLoginHub intento) {
+		if (intento.credencialesInvalidas) {
+			return MotivoFalloAuth.credencialesInvalidas;
+		}
+		switch (intento.estado) {
+			case EstadoAuthHub.sinPostgres:
+				return MotivoFalloAuth.hubSinPostgres;
+			case EstadoAuthHub.apiKeyInvalida:
+				return MotivoFalloAuth.hubApiKeyInvalida;
+			case EstadoAuthHub.inalcanzable:
+			case EstadoAuthHub.disponible:
+			case null:
+				return MotivoFalloAuth.hubNoDisponible;
+		}
 	}
 
 	Future<ResultadoAutenticacion?> _autenticarLocal(String codigo, String pin) async {

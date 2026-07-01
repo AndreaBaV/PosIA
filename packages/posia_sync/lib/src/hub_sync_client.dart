@@ -103,7 +103,18 @@ class HubSyncClient {
   }
 
   /// Indica si el hub tiene Postgres y puede autenticar usuarios.
+  ///
+  /// Wrapper retrocompatible sobre [verificarEstadoAuth].
   Future<bool> tieneAuthHub() async {
+    final estado = await verificarEstadoAuth();
+    return estado == EstadoAuthHub.disponible;
+  }
+
+  /// Diagnostica el estado del canal de autenticacion del hub.
+  ///
+  /// Devuelve un estado tipado que distingue "hub sin Postgres" (503),
+  /// "clave API invalida" (401) y "hub inalcanzable" (timeout/red/5xx).
+  Future<EstadoAuthHub> verificarEstadoAuth() async {
     final uri = Uri.parse(
       '$_urlBase/v1/auth/preview',
     ).replace(queryParameters: {'codigo': '__posia_probe__'});
@@ -111,73 +122,207 @@ class HubSyncClient {
       final respuesta = await _clienteHttp
           .get(uri, headers: _construirCabeceras())
           .timeout(const Duration(seconds: TIMEOUT_HUB_SYNC_SEGUNDOS));
-      return respuesta.statusCode != 503;
+      final status = respuesta.statusCode;
+      if (status == 503) {
+        return EstadoAuthHub.sinPostgres;
+      }
+      if (status == 401 || status == 403) {
+        return EstadoAuthHub.apiKeyInvalida;
+      }
+      // 200 (perfil encontrado, improbable con el codigo sonda) o
+      // 404 (respuesta definitiva "no existe") indican que la ruta esta viva.
+      if (status == 200 || status == 400 || status == 404) {
+        return EstadoAuthHub.disponible;
+      }
+      return EstadoAuthHub.inalcanzable;
     } on Object {
-      return false;
+      return EstadoAuthHub.inalcanzable;
     }
   }
 
-  Future<PerfilUsuarioHub?> obtenerPerfilUsuario(String codigo) async {
+  /// Consulta un perfil por codigo con resultado tipado.
+  ///
+  /// Distingue "usuario no existe" (404) de errores transitorios o de
+  /// configuracion (401, 5xx, timeout). Preferir sobre [obtenerPerfilUsuario]
+  /// para flujos de inicio de sesion donde importa distinguir el motivo.
+  Future<ConsultaPerfilHub> consultarPerfil(String codigo) async {
     final limpio = codigo.trim();
     if (limpio.isEmpty) {
-      return null;
+      return const ConsultaPerfilHub.noEncontrado();
     }
     final uri = Uri.parse(
       '$_urlBase/v1/auth/preview',
     ).replace(queryParameters: {'codigo': limpio});
+    final http.Response respuesta;
     try {
-      final respuesta = await _clienteHttp
+      respuesta = await _clienteHttp
           .get(uri, headers: _construirCabeceras())
           .timeout(const Duration(seconds: TIMEOUT_HUB_SYNC_SEGUNDOS));
-      if (respuesta.statusCode != 200) {
-        return null;
-      }
-      final json = jsonDecode(respuesta.body) as Map<String, Object?>;
-      return _mapearPerfil(json);
-    } on Object {
-      return null;
+    } on Object catch (error) {
+      return ConsultaPerfilHub.errorHub(
+        estado: EstadoAuthHub.inalcanzable,
+        detalle: '$error',
+      );
     }
+    final status = respuesta.statusCode;
+    if (status == 200) {
+      try {
+        final json = jsonDecode(respuesta.body) as Map<String, Object?>;
+        final perfil = _mapearPerfil(json);
+        if (perfil == null) {
+          return const ConsultaPerfilHub.errorHub(
+            estado: EstadoAuthHub.inalcanzable,
+            codigoHttp: 200,
+            detalle: 'Perfil sin id',
+          );
+        }
+        return ConsultaPerfilHub.encontrado(perfil);
+      } on Object catch (error) {
+        return ConsultaPerfilHub.errorHub(
+          estado: EstadoAuthHub.inalcanzable,
+          codigoHttp: 200,
+          detalle: '$error',
+        );
+      }
+    }
+    if (status == 404) {
+      return const ConsultaPerfilHub.noEncontrado();
+    }
+    if (status == 503) {
+      return const ConsultaPerfilHub.errorHub(
+        estado: EstadoAuthHub.sinPostgres,
+        codigoHttp: 503,
+      );
+    }
+    if (status == 401 || status == 403) {
+      return ConsultaPerfilHub.errorHub(
+        estado: EstadoAuthHub.apiKeyInvalida,
+        codigoHttp: status,
+      );
+    }
+    return ConsultaPerfilHub.errorHub(
+      estado: EstadoAuthHub.inalcanzable,
+      codigoHttp: status,
+    );
   }
 
-  Future<RespuestaLoginHub?> iniciarSesion({
+  /// Detecta si un cuerpo de error 401 corresponde a "Clave API invalida".
+  ///
+  /// Ambas rutas del hub responden 401 (middleware de clave y handler de
+  /// login), pero solo el middleware devuelve un mensaje de clave.
+  bool _pareceErrorClaveApi(String cuerpo) {
+    final normalizado = cuerpo.toLowerCase();
+    return normalizado.contains('clave api') || normalizado.contains('api key');
+  }
+
+  /// Wrapper retrocompatible: devuelve el perfil solo si el hub confirma 200.
+  Future<PerfilUsuarioHub?> obtenerPerfilUsuario(String codigo) async {
+    final consulta = await consultarPerfil(codigo);
+    return consulta.perfil;
+  }
+
+  /// Intenta iniciar sesion con resultado tipado.
+  ///
+  /// Distingue credenciales invalidas (401) de errores de red/config/servidor
+  /// para poder mostrar mensajes accionables en pantalla.
+  Future<IntentoLoginHub> intentarLogin({
     required String codigo,
     required String pin,
   }) async {
     final limpio = codigo.trim();
     if (limpio.isEmpty || pin.isEmpty) {
-      return null;
+      return const IntentoLoginHub.credencialesInvalidas();
     }
     final uri = Uri.parse('$_urlBase/v1/auth/login');
+    final http.Response respuesta;
     try {
-      final respuesta = await _clienteHttp
+      respuesta = await _clienteHttp
           .post(
             uri,
             headers: _construirCabeceras(),
             body: jsonEncode({'codigo': limpio, 'pin': pin}),
           )
           .timeout(const Duration(seconds: TIMEOUT_HUB_SYNC_SEGUNDOS));
-      if (respuesta.statusCode != 200) {
-        return null;
-      }
-      final json = jsonDecode(respuesta.body) as Map<String, Object?>;
-      final perfil = _mapearPerfil(json);
-      if (perfil == null) {
-        return null;
-      }
-      final pinCredencial = json['pinCredencial'] as String? ?? '';
-      if (pinCredencial.isEmpty) {
-        return null;
-      }
-      return RespuestaLoginHub(
-        perfil: perfil,
-        pinCredencial: pinCredencial,
-        creadoEn: json['creadoEn'] as String? ?? '',
-        actualizadoEn: json['actualizadoEn'] as String? ?? '',
-        tiendas: _mapearTiendas(json['tiendas']),
+    } on Object catch (error) {
+      return IntentoLoginHub.errorHub(
+        estado: EstadoAuthHub.inalcanzable,
+        detalle: '$error',
       );
-    } on Object {
-      return null;
     }
+    final status = respuesta.statusCode;
+    if (status == 200) {
+      try {
+        final json = jsonDecode(respuesta.body) as Map<String, Object?>;
+        final perfil = _mapearPerfil(json);
+        if (perfil == null) {
+          return const IntentoLoginHub.errorHub(
+            estado: EstadoAuthHub.inalcanzable,
+            codigoHttp: 200,
+            detalle: 'Login sin id',
+          );
+        }
+        final pinCredencial = json['pinCredencial'] as String? ?? '';
+        if (pinCredencial.isEmpty) {
+          return const IntentoLoginHub.errorHub(
+            estado: EstadoAuthHub.inalcanzable,
+            codigoHttp: 200,
+            detalle: 'Login sin pinCredencial',
+          );
+        }
+        return IntentoLoginHub.exito(
+          RespuestaLoginHub(
+            perfil: perfil,
+            pinCredencial: pinCredencial,
+            creadoEn: json['creadoEn'] as String? ?? '',
+            actualizadoEn: json['actualizadoEn'] as String? ?? '',
+            tiendas: _mapearTiendas(json['tiendas']),
+          ),
+        );
+      } on Object catch (error) {
+        return IntentoLoginHub.errorHub(
+          estado: EstadoAuthHub.inalcanzable,
+          codigoHttp: 200,
+          detalle: '$error',
+        );
+      }
+    }
+    // Un 401 puede venir del middleware (clave API mal) o del handler
+    // (credenciales invalidas). Se distingue leyendo el cuerpo del error
+    // para no reportar "PIN incorrecto" cuando el problema es de configuracion.
+    if (status == 401) {
+      if (_pareceErrorClaveApi(respuesta.body)) {
+        return const IntentoLoginHub.errorHub(
+          estado: EstadoAuthHub.apiKeyInvalida,
+          codigoHttp: 401,
+        );
+      }
+      return const IntentoLoginHub.credencialesInvalidas();
+    }
+    if (status == 503) {
+      return const IntentoLoginHub.errorHub(
+        estado: EstadoAuthHub.sinPostgres,
+        codigoHttp: 503,
+      );
+    }
+    if (status == 403) {
+      return const IntentoLoginHub.errorHub(
+        estado: EstadoAuthHub.apiKeyInvalida,
+        codigoHttp: 403,
+      );
+    }
+    return IntentoLoginHub.errorHub(
+      estado: EstadoAuthHub.inalcanzable,
+      codigoHttp: status,
+    );
+  }
+
+  /// Wrapper retrocompatible: devuelve login solo si el hub confirma 200.
+  Future<RespuestaLoginHub?> iniciarSesion({
+    required String codigo,
+    required String pin,
+  }) async {
+    final intento = await intentarLogin(codigo: codigo, pin: pin);
+    return intento.login;
   }
 
   PerfilUsuarioHub? _mapearPerfil(Map<String, Object?> json) {

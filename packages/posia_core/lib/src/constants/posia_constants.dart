@@ -48,8 +48,13 @@ const int INTERVALO_MANTENER_HUB_VIVO_SEGUNDOS = 600;
 /// Timeout HTTP normal de sync (falla rapido y reintenta en el siguiente ciclo).
 const int TIMEOUT_HUB_SYNC_SEGUNDOS = 15;
 
-/// Timeout del health check del hub (servidor 24/7, sin arranque en frio).
-const int TIMEOUT_HUB_DESPERTAR_SEGUNDOS = 15;
+/// Timeout del health check del hub.
+///
+/// Render free duerme tras ~15 min de inactividad y puede tardar hasta ~50 s
+/// en despertar en frio. Se toleran 60 s en el ping inicial para que un
+/// dispositivo recien instalado no vea "usuario no encontrado" por un falso
+/// negativo de red mientras el servidor arranca.
+const int TIMEOUT_HUB_DESPERTAR_SEGUNDOS = 60;
 
 /// Nombre del servicio mDNS para descubrimiento LAN.
 const String MDNS_SERVICIO_SYNC = 'posia-sync';
