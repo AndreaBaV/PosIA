@@ -1,6 +1,8 @@
 /// Pantalla de creditos pendientes de liquidar.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:posia_core/posia_core.dart';
@@ -21,21 +23,16 @@ class PantallaCreditosPendientes extends ConsumerStatefulWidget {
 }
 
 class _PantallaCreditosPendientesState extends ConsumerState<PantallaCreditosPendientes> {
-  List<Venta>? _ventas;
   Map<String, String> _nombresCliente = {};
   Map<String, String> _telefonosCliente = {};
-  var _cargando = true;
+  Object? _clientesCargadosPara;
 
-  @override
-  void initState() {
-    super.initState();
-    _recargar();
-  }
-
-  Future<void> _recargar() async {
-    setState(() => _cargando = true);
+  Future<void> _cargarClientes(List<Venta> ventas) async {
+    if (identical(_clientesCargadosPara, ventas)) {
+      return;
+    }
+    _clientesCargadosPara = ventas;
     final servicio = await ref.read(servicioAdminProvider.future);
-    final ventas = await servicio.listarCreditosPendientes();
     final nombres = <String, String>{};
     final telefonos = <String, String>{};
     for (final venta in ventas) {
@@ -49,12 +46,15 @@ class _PantallaCreditosPendientesState extends ConsumerState<PantallaCreditosPen
     }
     if (mounted) {
       setState(() {
-        _ventas = ventas;
         _nombresCliente = nombres;
         _telefonosCliente = telefonos;
-        _cargando = false;
       });
     }
+  }
+
+  void _recargar() {
+    _clientesCargadosPara = null;
+    ref.invalidate(creditosPendientesAdminProvider);
   }
 
   Future<void> _abrirNuevoCredito() async {
@@ -64,7 +64,7 @@ class _PantallaCreditosPendientesState extends ConsumerState<PantallaCreditosPen
       ),
     );
     if (ok == true) {
-      await _recargar();
+      _recargar();
     }
   }
 
@@ -215,7 +215,7 @@ class _PantallaCreditosPendientesState extends ConsumerState<PantallaCreditosPen
           ],
         ),
       );
-      await _recargar();
+      _recargar();
       if (!mounted) {
         return;
       }
@@ -234,6 +234,7 @@ class _PantallaCreditosPendientesState extends ConsumerState<PantallaCreditosPen
 
   @override
   Widget build(BuildContext context) {
+    final creditosAsync = ref.watch(creditosPendientesAdminProvider);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Créditos'),
@@ -246,10 +247,15 @@ class _PantallaCreditosPendientesState extends ConsumerState<PantallaCreditosPen
         icon: const Icon(Icons.add),
         label: const Text('Nuevo crédito'),
       ),
-      body: _cargando
-          ? const Center(child: CircularProgressIndicator())
-          : _ventas == null || _ventas!.isEmpty
-          ? Center(
+      body: creditosAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => Center(child: Text('$error')),
+        data: (ventas) {
+          if (ventas.isNotEmpty) {
+            unawaited(_cargarClientes(ventas));
+          }
+          if (ventas.isEmpty) {
+            return Center(
               child: Padding(
                 padding: const EdgeInsets.all(24.0),
                 child: Column(
@@ -271,46 +277,49 @@ class _PantallaCreditosPendientesState extends ConsumerState<PantallaCreditosPen
                   ],
                 ),
               ),
-            )
-          : ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 88.0),
-              itemCount: _ventas!.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 8.0),
-              itemBuilder: (context, indice) {
-                final venta = _ventas![indice];
-                final nombreCliente = venta.clienteId == null
-                    ? 'Sin cliente'
-                    : (_nombresCliente[venta.clienteId!] ?? 'Cliente');
-                return Card(
-                  child: ListTile(
-                    onTap: () => _mostrarDetalle(venta),
-                    title: Text(nombreCliente),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          formatearMoneda(venta.total),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 15.0,
-                          ),
+            );
+          }
+          return ListView.separated(
+            padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 88.0),
+            itemCount: ventas.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 8.0),
+            itemBuilder: (context, indice) {
+              final venta = ventas[indice];
+              final nombreCliente = venta.clienteId == null
+                  ? 'Sin cliente'
+                  : (_nombresCliente[venta.clienteId!] ?? 'Cliente');
+              return Card(
+                child: ListTile(
+                  onTap: () => _mostrarDetalle(venta),
+                  title: Text(nombreCliente),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        formatearMoneda(venta.total),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15.0,
                         ),
-                        Text('Folio: ${venta.id.substring(0, 8).toUpperCase()}'),
-                        Text('Fecha: ${venta.creadaEn.toLocal()}'),
-                        if (venta.creditoVenceEn != null)
-                          Text(
-                            'Vence: ${formatearFechaCredito(venta.creditoVenceEn!.toLocal())}',
-                          ),
-                      ],
-                    ),
-                    trailing: FilledButton(
-                      onPressed: () => _liquidar(venta),
-                      child: const Text('Liquidar'),
-                    ),
+                      ),
+                      Text('Folio: ${venta.id.substring(0, 8).toUpperCase()}'),
+                      Text('Fecha: ${venta.creadaEn.toLocal()}'),
+                      if (venta.creditoVenceEn != null)
+                        Text(
+                          'Vence: ${formatearFechaCredito(venta.creditoVenceEn!.toLocal())}',
+                        ),
+                    ],
                   ),
-                );
-              },
-            ),
+                  trailing: FilledButton(
+                    onPressed: () => _liquidar(venta),
+                    child: const Text('Liquidar'),
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }

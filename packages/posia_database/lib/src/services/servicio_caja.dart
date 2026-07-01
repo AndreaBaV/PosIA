@@ -882,23 +882,6 @@ class ServicioCaja {
       ..addAll(lineasActualizadas);
   }
 
-  /// Descuenta lotes farmaceuticos vendidos tras cerrar venta.
-  ///
-  /// [venta] Venta completada con lineas de lote.
-  Future<void> _aplicarDescuentosLote(Venta venta) async {
-    final servicioFarmacia = _servicioFarmacia;
-    if (servicioFarmacia == null) {
-      return;
-    }
-    for (final linea in venta.lineas) {
-      final loteId = linea.loteId;
-      if (loteId == null) {
-        continue;
-      }
-      await servicioFarmacia.aplicarVentaLote(loteId, linea.cantidad);
-    }
-  }
-
   /// Busca linea general fusionable sin lote asociado.
   ///
   /// [productoId] Identificador del producto.
@@ -1107,19 +1090,6 @@ class ServicioCaja {
         continue;
       }
       await loteRepo.descontarCantidad(loteId, linea.cantidad, db: tx);
-    }
-  }
-
-  Future<void> _aplicarInventarioVenta() async {
-    for (final linea in _lineasCarrito) {
-      final stockId =
-          linea.productoStockId ?? await _resolverIdStock(linea.producto);
-      final cantidadBase = linea.cantidad * linea.factorABase;
-      await _gestorInventario.ajustarStock(
-        stockId,
-        _tiendaId,
-        -cantidadBase,
-      );
     }
   }
 }

@@ -14,26 +14,6 @@ import 'cliente_credito_util.dart';
 import 'formateador_ticket_digital.dart';
 import 'moneda_util.dart';
 
-String _etiquetaMetodoPago(Venta venta) {
-  switch (venta.metodoPago.name) {
-    case 'mixto':
-      final partes = <String>[
-        'E:${formatearMoneda(venta.montoEfectivo ?? 0)}',
-        'T:${formatearMoneda(venta.montoTarjeta ?? 0)}',
-      ];
-      if ((venta.montoTransferencia ?? 0) > 0) {
-        partes.add('Tr:${formatearMoneda(venta.montoTransferencia!)}');
-      }
-      return 'Mixto (${partes.join(' ')})';
-    case 'transferencia':
-      return 'Transferencia';
-    case 'credito':
-      return 'Crédito / Fiado';
-    default:
-      return venta.metodoPago.name;
-  }
-}
-
 String _formatearFechaHora(DateTime fechaUtc) {
   final local = fechaUtc.toLocal();
   final dia = local.day.toString().padLeft(2, '0');
@@ -41,12 +21,6 @@ String _formatearFechaHora(DateTime fechaUtc) {
   final hora = local.hour.toString().padLeft(2, '0');
   final minuto = local.minute.toString().padLeft(2, '0');
   return '$dia/$mes/${local.year} $hora:$minuto';
-}
-
-void _escribirSiNoVacio(StringBuffer buffer, String etiqueta, String? valor) {
-  if (valor != null && valor.trim().isNotEmpty) {
-    buffer.writeln('$etiqueta: $valor');
-  }
 }
 
 void _escribirEncabezadoMarca(

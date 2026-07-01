@@ -191,6 +191,30 @@ final clientesAdminProvider = FutureProvider<List<Cliente>>((ref) async {
 	return servicio.listarClientes();
 });
 
+/// Creditos pendientes de liquidar en panel admin.
+final creditosPendientesAdminProvider = FutureProvider<List<Venta>>((ref) async {
+	final servicio = await ref.watch(servicioAdminProvider.future);
+	return servicio.listarCreditosPendientes();
+});
+
+/// Cotizaciones guardadas en panel admin.
+final cotizacionesAdminProvider = FutureProvider.family<List<Cotizacion>, int>((ref, dias) async {
+	final servicio = await ref.watch(servicioAdminProvider.future);
+	return servicio.listarCotizaciones(dias: dias);
+});
+
+/// Categorias para formulario de producto.
+final categoriasFormularioAdminProvider = FutureProvider<List<Categoria>>((ref) async {
+	final servicio = await ref.watch(servicioAdminProvider.future);
+	return servicio.listarCategorias();
+});
+
+/// Proveedores para formulario de producto.
+final proveedoresFormularioAdminProvider = FutureProvider<List<Proveedor>>((ref) async {
+	final servicio = await ref.watch(servicioAdminProvider.future);
+	return servicio.listarProveedores();
+});
+
 /// Proveedores para administracion.
 final proveedoresAdminProvider = FutureProvider<List<Proveedor>>((ref) async {
 	final servicio = await ref.watch(servicioAdminProvider.future);

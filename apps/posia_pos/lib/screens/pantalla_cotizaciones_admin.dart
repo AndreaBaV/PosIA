@@ -33,7 +33,7 @@ class _PantallaCotizacionesAdminState extends ConsumerState<PantallaCotizaciones
 
   @override
   Widget build(BuildContext context) {
-    final cotizacionesAsync = ref.watch(_cotizacionesProvider(_dias));
+    final cotizacionesAsync = ref.watch(cotizacionesAdminProvider(_dias));
     return Scaffold(
       appBar: AppBar(title: const Text('Cotizaciones')),
       floatingActionButton: FloatingActionButton.extended(
@@ -144,7 +144,7 @@ class _PantallaCotizacionesAdminState extends ConsumerState<PantallaCotizaciones
       ),
     );
     if (ok == true) {
-      ref.invalidate(_cotizacionesProvider(_dias));
+      ref.invalidate(cotizacionesAdminProvider(_dias));
     }
   }
 
@@ -277,8 +277,3 @@ class _PantallaCotizacionesAdminState extends ConsumerState<PantallaCotizaciones
     }
   }
 }
-
-final _cotizacionesProvider = FutureProvider.family<List<Cotizacion>, int>((ref, dias) async {
-  final servicio = await ref.watch(servicioAdminProvider.future);
-  return servicio.listarCotizaciones(dias: dias);
-});
