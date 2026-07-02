@@ -51,14 +51,15 @@ class PantallaMisPedidos extends ConsumerWidget {
 											operador: usuario,
 										);
 										ref.invalidate(_misPedidosProvider(usuario.id));
+										ref.invalidate(historialOperacionesProvider);
 										if (context.mounted) {
-											ScaffoldMessenger.of(context).showSnackBar(
+											PosiaNotificaciones.mostrarSnackBar(context, 
 												const SnackBar(content: Text('Pedido marcado como entregado')),
 											);
 										}
 									} catch (error) {
 										if (context.mounted) {
-											ScaffoldMessenger.of(context).showSnackBar(
+											PosiaNotificaciones.mostrarSnackBar(context, 
 												SnackBar(
 													content: Text('$error'),
 													backgroundColor: PosiaColors.cancelar,

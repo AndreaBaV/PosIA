@@ -19,6 +19,7 @@ import '../providers/admin_providers.dart';
 import '../widgets/dialogo_completar_datos_credito.dart';
 import '../providers/app_providers.dart';
 import '../utils/compartir_ticket_digital_util.dart';
+import '../utils/existencias_caja_util.dart';
 import '../utils/ticket_credito_util.dart';
 import '../utils/ticket_venta_util.dart';
 import '../widgets/dialogo_cobro.dart';
@@ -97,7 +98,7 @@ class _PantallaCajaState extends ConsumerState<PantallaCaja> {
 		}
 		if (productos.isEmpty) {
 			if (texto.trim().isNotEmpty) {
-				ScaffoldMessenger.of(context).showSnackBar(
+				PosiaNotificaciones.mostrarSnackBar(context, 
 					SnackBar(
 						content: Text('Sin resultados para "${texto.trim()}"'),
 						backgroundColor: PosiaColors.cancelar,
@@ -145,7 +146,7 @@ class _PantallaCajaState extends ConsumerState<PantallaCaja> {
 			return false;
 		}
 		if (RegExp(r'^\d{4,}$').hasMatch(normalizado)) {
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(
 					content: Text('Código no encontrado: $normalizado'),
 					backgroundColor: PosiaColors.cancelar,
@@ -356,12 +357,15 @@ class _ConstruirLayoutCaja extends ConsumerWidget {
 											child: GrillaProductos(
 												categoriaId: estado.categoriaSeleccionadaId,
 												productos: estado.productos,
+												stockLocalPorProducto: estado.stockLocalPorProducto,
 												indiceSeleccionado: busquedaController.text.trim().isNotEmpty
 													? estado.indiceBusquedaSeleccionado
 													: null,
 												mensajeVacio: busquedaController.text.trim().isNotEmpty
 													? 'Sin coincidencias para "${busquedaController.text.trim()}"'
 													: 'Sin productos en esta categoría',
+												alVerExistencias: (producto) =>
+													mostrarExistenciasProductoEnCaja(context, ref, producto),
 												alPresionarLargo: (producto) =>
 													intentarSeleccionarEmpaqueEnCaja(
 														context,
@@ -695,7 +699,7 @@ Future<void> ejecutarPonerEnEspera(BuildContext context, WidgetRef ref) async {
 	final servicio = await ref.read(servicioCajaProvider.future);
 	if (!servicio.carritoTieneLineas()) {
 		if (context.mounted) {
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(content: Text('El carrito está vacío')),
 			);
 		}
@@ -758,14 +762,14 @@ Future<void> ejecutarPonerEnEspera(BuildContext context, WidgetRef ref) async {
 		if (!context.mounted) {
 			return;
 		}
-		ScaffoldMessenger.of(context).showSnackBar(
+		PosiaNotificaciones.mostrarSnackBar(context, 
 			const SnackBar(content: Text('Ticket guardado en espera')),
 		);
 	} on StateError catch (e) {
 		if (!context.mounted) {
 			return;
 		}
-		ScaffoldMessenger.of(context).showSnackBar(
+		PosiaNotificaciones.mostrarSnackBar(context, 
 			SnackBar(content: Text(e.message), backgroundColor: PosiaColors.cancelar),
 		);
 	}
@@ -779,7 +783,7 @@ Future<void> mostrarTicketsEnEspera(BuildContext context, WidgetRef ref) async {
 		return;
 	}
 	if (tickets.isEmpty) {
-		ScaffoldMessenger.of(context).showSnackBar(
+		PosiaNotificaciones.mostrarSnackBar(context, 
 			const SnackBar(content: Text('No hay tickets en espera')),
 		);
 		await ref.read(carritoNotifierProvider.notifier).recargar();
@@ -845,7 +849,7 @@ Future<void> mostrarTicketsEnEspera(BuildContext context, WidgetRef ref) async {
 									Navigator.pop(ctx);
 								}
 								if (context.mounted) {
-									ScaffoldMessenger.of(context).showSnackBar(
+									PosiaNotificaciones.mostrarSnackBar(context, 
 										SnackBar(
 											content: Text('Ticket recuperado: ${ticket.etiquetaLista}'),
 										),
@@ -1106,7 +1110,7 @@ Future<void> ejecutarCobroCaja(BuildContext context, WidgetRef ref) async {
 				break;
 			}
 			if (context.mounted) {
-				ScaffoldMessenger.of(context).showSnackBar(
+				PosiaNotificaciones.mostrarSnackBar(context, 
 					SnackBar(content: Text(errorCobro), backgroundColor: PosiaColors.cancelar),
 				);
 			}
@@ -1119,7 +1123,7 @@ Future<void> ejecutarCobroCaja(BuildContext context, WidgetRef ref) async {
 			venta = await servicio.cobrar(request);
 		} on Object catch (error) {
 			if (context.mounted) {
-				ScaffoldMessenger.of(context).showSnackBar(
+				PosiaNotificaciones.mostrarSnackBar(context, 
 					SnackBar(
 						content: Text('No se pudo completar la venta: $error'),
 						backgroundColor: PosiaColors.cancelar,
@@ -1203,7 +1207,7 @@ Future<void> ejecutarCobroCaja(BuildContext context, WidgetRef ref) async {
 			return;
 		}
 		final esCredito = venta.metodoPago == MetodoPago.credito;
-		ScaffoldMessenger.of(context).showSnackBar(
+		PosiaNotificaciones.mostrarSnackBar(context, 
 			SnackBar(
 				content: Text(
 					esCredito
@@ -1224,7 +1228,7 @@ Future<void> ejecutarCotizacionCaja(BuildContext context, WidgetRef ref) async {
 	final servicio = await ref.read(servicioCajaProvider.future);
 	if (servicio.obtenerCarrito().isEmpty) {
 		if (context.mounted) {
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(content: Text('Agregue productos al carrito')),
 			);
 		}
@@ -1238,6 +1242,7 @@ Future<void> ejecutarCotizacionCaja(BuildContext context, WidgetRef ref) async {
 		);
 		final hardware = await ref.read(hardwareRegistryProvider.future);
 		await hardware.obtenerImpresora().imprimirTicket(resultado.texto);
+		ref.invalidate(cotizacionesAdminProvider);
 		if (!context.mounted) {
 			return;
 		}
@@ -1274,7 +1279,7 @@ Future<void> ejecutarCotizacionCaja(BuildContext context, WidgetRef ref) async {
 		);
 	} catch (error) {
 		if (context.mounted) {
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(content: Text('$error'), backgroundColor: PosiaColors.cancelar),
 			);
 		}

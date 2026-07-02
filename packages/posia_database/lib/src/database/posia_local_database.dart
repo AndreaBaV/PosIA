@@ -1,11 +1,10 @@
 /// Gestor SQLite: dispositivo (config) + base operativa unica por instalacion.
 library;
 
-import 'dart:io';
-
 import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
+import 'conexion_operativa_ruteada.dart';
 import 'migraciones_esquema.dart';
 import '../seed/placeholders_ejemplo.dart';
 import 'motor_sqlite_nativo.dart'
@@ -17,10 +16,16 @@ class PosiaLocalDatabase {
 
 	static PosiaLocalDatabase? _instancia;
 	static Database? _baseDispositivo;
+	/// Conexion de escritura (unica que ejecuta migraciones y mutaciones).
 	static Database? _baseOperativa;
+	/// Conexion de solo-lectura para snapshots WAL concurrentes.
+	static Database? _baseOperativaLectura;
+	/// Envoltorio que enruta lecturas/escrituras a la conexion adecuada.
+	static Database? _baseOperativaRuteada;
 
 	static const String _archivoDispositivo = 'posia_dispositivo.db';
 	static const String _archivoOperativa = 'posia_operativa.db';
+	static const int _timeoutOcupadoMs = 5000;
 
 	static PosiaLocalDatabase obtenerInstancia() {
 		_instancia ??= PosiaLocalDatabase._();
@@ -52,10 +57,19 @@ class PosiaLocalDatabase {
 	}
 
 	Future<Database> obtenerBaseDatos() async {
+		final ruteada = _baseOperativaRuteada;
+		if (ruteada != null) {
+			return ruteada;
+		}
 		return _abrirBaseOperativa();
 	}
 
 	Future<void> cerrarBaseOperativa() async {
+		_baseOperativaRuteada = null;
+		if (_baseOperativaLectura != null) {
+			await _baseOperativaLectura!.close();
+			_baseOperativaLectura = null;
+		}
 		if (_baseOperativa != null) {
 			await _baseOperativa!.close();
 			_baseOperativa = null;
@@ -66,26 +80,60 @@ class PosiaLocalDatabase {
 	Future<void> reiniciarBaseOperativa() async {
 		await cerrarBaseOperativa();
 		final ruta = await motor_sqlite.resolverRutaBaseDatos(_archivoOperativa);
-		final archivo = File(ruta);
-		if (await archivo.exists()) {
-			await archivo.delete();
-		}
+		// deleteDatabase elimina tambien los archivos -wal y -shm de WAL.
+		await deleteDatabase(ruta);
 	}
 
 	Future<Database> _abrirBaseOperativa() async {
-		final existente = _baseOperativa;
+		final existente = _baseOperativaRuteada;
 		if (existente != null) {
 			return existente;
 		}
 		final ruta = await motor_sqlite.resolverRutaBaseDatos(_archivoOperativa);
-		final base = await openDatabase(
+		final escritura = await openDatabase(
 			ruta,
 			version: SCHEMA_VERSION,
+			onConfigure: _configurarConexionEscritura,
 			onCreate: _crearEsquemaTenant,
 			onUpgrade: _migrarEsquemaTenant,
 		);
-		_baseOperativa = base;
-		return base;
+		_baseOperativa = escritura;
+		final lectura = await _abrirConexionLectura(ruta);
+		final ruteada = ConexionOperativaRuteada(
+			escritura: escritura,
+			lectura: lectura ?? escritura,
+		);
+		_baseOperativaRuteada = ruteada;
+		return ruteada;
+	}
+
+	/// Activa WAL para que lectores y escritor operen sin bloquearse, con
+	/// synchronous=NORMAL (seguro bajo WAL) para minimizar fsync por escritura.
+	Future<void> _configurarConexionEscritura(Database db) async {
+		await db.rawQuery('PRAGMA journal_mode=WAL');
+		await db.execute('PRAGMA synchronous=NORMAL');
+		await db.rawQuery('PRAGMA busy_timeout=$_timeoutOcupadoMs');
+	}
+
+	/// Abre una conexion de solo-lectura independiente (snapshots WAL).
+	///
+	/// Si la plataforma no soporta multiples conexiones (p. ej. web), retorna
+	/// null y se reutiliza la conexion de escritura para leer (sin regresion).
+	Future<Database?> _abrirConexionLectura(String ruta) async {
+		try {
+			final lectura = await openDatabase(
+				ruta,
+				readOnly: true,
+				singleInstance: false,
+			);
+			// onConfigure se ignora en readOnly; busy_timeout es ajuste de
+			// conexion (no escritura) y si es valido en solo-lectura.
+			await lectura.rawQuery('PRAGMA busy_timeout=$_timeoutOcupadoMs');
+			_baseOperativaLectura = lectura;
+			return lectura;
+		} on Object {
+			return null;
+		}
 	}
 
 	Future<void> _crearEsquemaTenant(Database base, int version) async {
@@ -165,6 +213,12 @@ class PosiaLocalDatabase {
 		}
 		if (versionAnterior < 23 && versionNueva >= 23) {
 			await MigracionesEsquema.migrarVersion22A23(base);
+		}
+		if (versionAnterior < 24 && versionNueva >= 24) {
+			await MigracionesEsquema.migrarVersion23A24(base);
+		}
+		if (versionAnterior < 25 && versionNueva >= 25) {
+			await MigracionesEsquema.migrarVersion24A25(base);
 		}
 	}
 }

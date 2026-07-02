@@ -14,6 +14,7 @@ import 'package:posia_database/posia_database.dart';
 import 'package:posia_sync/posia_sync.dart';
 import 'package:posia_ui/posia_ui.dart';
 
+import '../models/item_historial.dart';
 import 'app_providers.dart';
 
 /// Repositorio de config del dispositivo (independiente del tenant activo).
@@ -144,6 +145,7 @@ Future<void> refrescarDatosMaestros(WidgetRef ref) async {
 	ref.invalidate(empleadosAsignacionProvider);
 	ref.invalidate(listasPreciosAdminProvider);
 	ref.invalidate(detalleListaPreciosProvider);
+	ref.invalidate(productosCatalogoAdminProvider);
 	await ref.read(contenedorServiciosProvider.future);
 	final carrito = ref.read(carritoNotifierProvider.notifier);
 	if (ref.read(carritoNotifierProvider).hasValue) {
@@ -152,6 +154,12 @@ Future<void> refrescarDatosMaestros(WidgetRef ref) async {
 		ref.invalidate(carritoNotifierProvider);
 	}
 }
+
+/// Catalogo de productos para administracion (unificado).
+final productosCatalogoAdminProvider = FutureProvider<List<Producto>>((ref) async {
+	final servicio = await ref.watch(servicioAdminProvider.future);
+	return servicio.listarProductosCatalogo();
+});
 
 /// Detalle de una lista de precios: clientes asignados y productos con precio.
 class DetalleListaPrecios {
@@ -196,6 +204,23 @@ final creditosPendientesAdminProvider = FutureProvider<List<Venta>>((ref) async 
 	final servicio = await ref.watch(servicioAdminProvider.future);
 	return servicio.listarCreditosPendientes();
 });
+
+/// Ventas y pedidos entregados para historial unificado.
+final historialOperacionesProvider =
+	FutureProvider.family<List<ItemHistorial>, int>((ref, dias) async {
+		final servicio = await ref.watch(servicioAdminProvider.future);
+		final desde = DateTime.now().toUtc().subtract(Duration(days: dias));
+		final hasta = DateTime.now().toUtc();
+		final ventas = await servicio.listarHistorialVentas(
+			FiltroVentas(tiendaId: servicio.tiendaActivaId, desde: desde, hasta: hasta),
+		);
+		final pedidos = await servicio.listarPedidosEntregadosHistorial(dias: dias);
+		final items = <ItemHistorial>[
+			...ventas.map(ItemHistorial.venta),
+			...pedidos.map(ItemHistorial.pedido),
+		]..sort((a, b) => b.fecha.compareTo(a.fecha));
+		return items;
+	});
 
 /// Cotizaciones guardadas en panel admin.
 final cotizacionesAdminProvider = FutureProvider.family<List<Cotizacion>, int>((ref, dias) async {

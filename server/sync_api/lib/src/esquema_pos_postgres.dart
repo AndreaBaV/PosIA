@@ -1,6 +1,7 @@
 /// Esquema PostgreSQL espejo del POS local (SQLite v5).
 library;
 
+import 'package:posia_core/posia_core.dart';
 import 'package:postgres/postgres.dart';
 
 /// DDL del modelo operativo POSIA en Postgres (Neon / on-premise).
@@ -173,6 +174,157 @@ class EsquemaPosPostgres {
 		''');
 		await conexion.execute('''
 			ALTER TABLE products ADD COLUMN IF NOT EXISTS permite_stock_negativo INTEGER NOT NULL DEFAULT 0
+		''');
+		await conexion.execute('''
+			ALTER TABLE products ADD COLUMN IF NOT EXISTS costo_unitario DOUBLE PRECISION NOT NULL DEFAULT 0
+		''');
+		await conexion.execute('''
+			ALTER TABLE customers ADD COLUMN IF NOT EXISTS dias_credito INTEGER NOT NULL DEFAULT $DIAS_CREDITO_PREDETERMINADO
+		''');
+		await conexion.execute('''
+			ALTER TABLE sales ADD COLUMN IF NOT EXISTS descuento_ticket DOUBLE PRECISION NOT NULL DEFAULT 0
+		''');
+		await conexion.execute('''
+			ALTER TABLE sales ADD COLUMN IF NOT EXISTS monto_efectivo DOUBLE PRECISION
+		''');
+		await conexion.execute('''
+			ALTER TABLE sales ADD COLUMN IF NOT EXISTS monto_tarjeta DOUBLE PRECISION
+		''');
+		await conexion.execute('''
+			ALTER TABLE sales ADD COLUMN IF NOT EXISTS monto_transferencia DOUBLE PRECISION
+		''');
+		await conexion.execute('''
+			ALTER TABLE sales ADD COLUMN IF NOT EXISTS credito_dias INTEGER
+		''');
+		await conexion.execute('''
+			ALTER TABLE sales ADD COLUMN IF NOT EXISTS credito_vence_en TEXT
+		''');
+		await conexion.execute('''
+			ALTER TABLE sales ADD COLUMN IF NOT EXISTS credito_liquidado INTEGER NOT NULL DEFAULT 0
+		''');
+		await conexion.execute('''
+			ALTER TABLE sales ADD COLUMN IF NOT EXISTS credito_liquidado_en TEXT
+		''');
+		await conexion.execute('''
+			ALTER TABLE sale_lines ADD COLUMN IF NOT EXISTS descuento_linea DOUBLE PRECISION NOT NULL DEFAULT 0
+		''');
+		await conexion.execute('''
+			CREATE TABLE IF NOT EXISTS wholesale_tiers (
+				id SERIAL PRIMARY KEY,
+				producto_id TEXT NOT NULL,
+				cantidad_minima DOUBLE PRECISION NOT NULL,
+				precio_unitario DOUBLE PRECISION NOT NULL
+			)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_wholesale_tiers_producto
+			ON wholesale_tiers(producto_id)
+		''');
+		await conexion.execute('''
+			CREATE TABLE IF NOT EXISTS quotes (
+				id TEXT PRIMARY KEY,
+				tienda_id TEXT NOT NULL,
+				cliente_id TEXT,
+				nombre_cliente TEXT,
+				total DOUBLE PRECISION NOT NULL,
+				notas TEXT NOT NULL DEFAULT '',
+				vigencia_dias INTEGER NOT NULL DEFAULT $VIGENCIA_COTIZACION_DIAS,
+				creada_en TEXT NOT NULL,
+				caja_id TEXT,
+				vendedor_id TEXT
+			)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_quotes_tienda_fecha
+			ON quotes(tienda_id, creada_en DESC)
+		''');
+		await conexion.execute('''
+			CREATE TABLE IF NOT EXISTS quote_lines (
+				id SERIAL PRIMARY KEY,
+				cotizacion_id TEXT NOT NULL,
+				producto_id TEXT NOT NULL,
+				nombre_producto TEXT NOT NULL,
+				cantidad DOUBLE PRECISION NOT NULL,
+				precio_unitario DOUBLE PRECISION NOT NULL,
+				regla_precio TEXT NOT NULL DEFAULT 'precioBase',
+				subtotal DOUBLE PRECISION NOT NULL
+			)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_quote_lines_cotizacion
+			ON quote_lines(cotizacion_id)
+		''');
+		await conexion.execute('''
+			CREATE TABLE IF NOT EXISTS orders (
+				id TEXT PRIMARY KEY,
+				tienda_id TEXT NOT NULL,
+				cliente_id TEXT,
+				nombre_entrega TEXT NOT NULL,
+				telefono_entrega TEXT NOT NULL,
+				direccion_entrega TEXT NOT NULL,
+				es_credito INTEGER NOT NULL DEFAULT 0,
+				credito_dias INTEGER,
+				credito_vence_en TEXT,
+				metodo_pago TEXT NOT NULL,
+				total DOUBLE PRECISION NOT NULL,
+				notas TEXT NOT NULL DEFAULT '',
+				estado TEXT NOT NULL DEFAULT 'recibido',
+				asignado_a_usuario_id TEXT,
+				asignado_a_usuario_nombre TEXT,
+				asignado_en TEXT,
+				creado_en TEXT NOT NULL,
+				creado_por_usuario_id TEXT,
+				venta_id TEXT
+			)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_orders_tienda_estado
+			ON orders(tienda_id, estado, creado_en DESC)
+		''');
+		await conexion.execute('''
+			CREATE TABLE IF NOT EXISTS order_lines (
+				id SERIAL PRIMARY KEY,
+				pedido_id TEXT NOT NULL,
+				producto_id TEXT NOT NULL,
+				nombre_producto TEXT NOT NULL,
+				cantidad DOUBLE PRECISION NOT NULL,
+				precio_unitario DOUBLE PRECISION NOT NULL,
+				subtotal DOUBLE PRECISION NOT NULL
+			)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_order_lines_pedido
+			ON order_lines(pedido_id)
+		''');
+		await conexion.execute('''
+			CREATE TABLE IF NOT EXISTS attendance_challenges (
+				id TEXT PRIMARY KEY,
+				tienda_id TEXT NOT NULL,
+				pin_hash TEXT NOT NULL,
+				expira_en TEXT NOT NULL,
+				creado_por TEXT NOT NULL,
+				latitud DOUBLE PRECISION,
+				longitud DOUBLE PRECISION,
+				radio_metros DOUBLE PRECISION DEFAULT 150,
+				activo INTEGER NOT NULL DEFAULT 1
+			)
+		''');
+		await conexion.execute('''
+			CREATE TABLE IF NOT EXISTS attendance_records (
+				id TEXT PRIMARY KEY,
+				usuario_id TEXT NOT NULL,
+				tienda_id TEXT NOT NULL,
+				entrada_en TEXT NOT NULL,
+				salida_en TEXT,
+				metodo TEXT NOT NULL,
+				latitud DOUBLE PRECISION,
+				longitud DOUBLE PRECISION,
+				desafio_id TEXT
+			)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_attendance_records_tienda
+			ON attendance_records(tienda_id, entrada_en DESC)
 		''');
 		await conexion.execute('''
 			CREATE TABLE IF NOT EXISTS almacenes (

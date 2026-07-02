@@ -159,13 +159,13 @@ List<EntradaMenuAdmin> construirCatalogoMenuAdmin(Usuario? usuario) {
 			clave: 'historial',
 			seccion: 'Ventas',
 			titulo: 'Historial',
-			subtitulo: 'Ventas y cancelaciones',
+			subtitulo: 'Ventas, pedidos y cancelaciones',
 			icono: Icons.history,
 			color: Colors.green,
 			destino: PantallaHistorialVentas(),
 			palabrasClave: [
 				'historial', 'cancelacion', 'devolucion', 'ticket', 'venta pasada',
-				'buscar venta',
+				'buscar venta', 'pedido', 'entrega', 'entregado',
 			],
 		),
 		EntradaMenuAdmin(

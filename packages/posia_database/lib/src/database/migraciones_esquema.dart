@@ -578,6 +578,12 @@ class MigracionesEsquema {
 			)
 		''');
 		await base.execute('''
+			CREATE TABLE sync_eventos_aplicados (
+				evento_id TEXT PRIMARY KEY,
+				aplicado_en TEXT NOT NULL
+			)
+		''');
+		await base.execute('''
 			CREATE TABLE stores (
 				id TEXT PRIMARY KEY,
 				nombre TEXT NOT NULL,
@@ -989,6 +995,27 @@ class MigracionesEsquema {
 		}
 		await base.execute('DROP TABLE IF EXISTS usuarios');
 		await _crearTablaUsuariosSegura(base);
+	}
+
+	/// v6.24: registro idempotente de eventos de sync ya aplicados.
+	///
+	/// Permite aplicar cada evento remoto exactamente una vez aunque el pull
+	/// reintente una pagina (evita doble descuento/ajuste de stock).
+	static Future<void> migrarVersion23A24(Database base) async {
+		await base.execute('''
+			CREATE TABLE IF NOT EXISTS sync_eventos_aplicados (
+				evento_id TEXT PRIMARY KEY,
+				aplicado_en TEXT NOT NULL
+			)
+		''');
+	}
+
+	/// Indice de escalas mayoreo por producto (v24 → v25).
+	static Future<void> migrarVersion24A25(Database base) async {
+		await base.execute(
+			'CREATE INDEX IF NOT EXISTS idx_wholesale_tiers_producto '
+			'ON wholesale_tiers(producto_id)',
+		);
 	}
 
 	/// v6.23: codigo de barras unico por tienda entre productos activos.

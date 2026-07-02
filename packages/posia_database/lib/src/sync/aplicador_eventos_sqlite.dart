@@ -7,12 +7,17 @@
 library;
 
 import 'package:posia_core/posia_core.dart';
+import 'package:posia_pricing/posia_pricing.dart';
 import 'package:posia_sync/posia_sync.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../repositories/almacen_repository.dart';
+import '../repositories/asistencia_repository.dart';
 import '../repositories/categoria_repository.dart';
 import '../repositories/cliente_repository.dart';
+import '../repositories/cotizacion_repository.dart';
+import '../repositories/pedido_repository.dart';
+import '../repositories/precio_repository.dart';
 import '../repositories/tienda_repository.dart';
 import '../repositories/traspaso_repository.dart';
 import '../repositories/inventario_repository.dart';
@@ -44,6 +49,10 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		UsuarioRepository? usuarioRepository,
 		AlmacenRepository? almacenRepository,
 		TurnoCajaRepository? turnoCajaRepository,
+		CotizacionRepository? cotizacionRepository,
+		PedidoRepository? pedidoRepository,
+		PrecioRepository? precioRepository,
+		AsistenciaRepository? asistenciaRepository,
 	}) : _baseDatos = baseDatos,
 	     _productoRepository = productoRepository,
 	     _clienteRepository = clienteRepository,
@@ -55,7 +64,11 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 	     _tiendaRepository = tiendaRepository,
 	     _usuarioRepository = usuarioRepository,
 	     _almacenRepository = almacenRepository,
-	     _turnoCajaRepository = turnoCajaRepository;
+	     _turnoCajaRepository = turnoCajaRepository,
+	     _cotizacionRepository = cotizacionRepository,
+	     _pedidoRepository = pedidoRepository,
+	     _precioRepository = precioRepository,
+	     _asistenciaRepository = asistenciaRepository;
 
 	final Database _baseDatos;
 	final ProductoRepository _productoRepository;
@@ -69,25 +82,82 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 	final UsuarioRepository? _usuarioRepository;
 	final AlmacenRepository? _almacenRepository;
 	final TurnoCajaRepository? _turnoCajaRepository;
+	final CotizacionRepository? _cotizacionRepository;
+	final PedidoRepository? _pedidoRepository;
+	final PrecioRepository? _precioRepository;
+	final AsistenciaRepository? _asistenciaRepository;
+
+	/// Eventos cuya aplicacion no es idempotente por si sola (mutan stock con
+	/// deltas o escriben varias filas). Se aplican en transaccion + dedupe para
+	/// garantizar integridad y efecto "exactamente una vez" ante reintentos.
+	static const Set<TipoSyncEvento> _tiposTransaccionales = {
+		TipoSyncEvento.saleCompleted,
+		TipoSyncEvento.saleVoided,
+		TipoSyncEvento.stockAdjusted,
+		TipoSyncEvento.transferRequested,
+		TipoSyncEvento.transferCompleted,
+		TipoSyncEvento.salePartialReturn,
+	};
 
 	@override
 	Future<void> aplicarLote(List<SyncEvent> eventos) async {
 		if (eventos.isEmpty) {
 			return;
 		}
-		// Sin transaccion envolvente: los handlers usan los repositorios sobre
-		// la base externa; anidarlos en una transaccion provoca deadlock en
-		// sqflite (la consulta sobre la base espera a la transaccion y viceversa).
-		// Los upserts son idempotentes y el cursor solo avanza tras el lote,
-		// por lo que un reintento parcial es seguro.
 		for (final evento in eventos) {
-			await _aplicarEventoInterno(evento);
+			await _aplicarConGarantias(evento);
 		}
 	}
 
 	@override
 	Future<void> aplicarEvento(SyncEvent evento) async {
-		await _aplicarEventoInterno(evento);
+		await _aplicarConGarantias(evento);
+	}
+
+	/// Aplica un evento garantizando atomicidad e idempotencia cuando importa.
+	///
+	/// - Eventos con deltas/multiescritura: transaccion unica que aplica los
+	///   cambios y registra el id como aplicado (dedupe) de forma atomica; si el
+	///   pull reintenta la misma pagina, el evento se omite y no hay doble efecto.
+	/// - Upserts de fila unica: se aplican directo (ya son atomicos e
+	///   idempotentes via ConflictAlgorithm.replace).
+	Future<void> _aplicarConGarantias(SyncEvent evento) async {
+		if (!_tiposTransaccionales.contains(evento.tipo)) {
+			await _aplicarEventoInterno(evento);
+			return;
+		}
+		await _baseDatos.transaction((txn) async {
+			if (evento.id.isNotEmpty && await _yaAplicado(txn, evento.id)) {
+				return;
+			}
+			await _aplicarEventoInterno(evento, ejecutor: txn);
+			await _marcarAplicado(txn, evento.id);
+		});
+	}
+
+	Future<bool> _yaAplicado(DatabaseExecutor exec, String eventoId) async {
+		final filas = await exec.query(
+			'sync_eventos_aplicados',
+			columns: const ['evento_id'],
+			where: 'evento_id = ?',
+			whereArgs: [eventoId],
+			limit: 1,
+		);
+		return filas.isNotEmpty;
+	}
+
+	Future<void> _marcarAplicado(DatabaseExecutor exec, String eventoId) async {
+		if (eventoId.isEmpty) {
+			return;
+		}
+		await exec.insert(
+			'sync_eventos_aplicados',
+			{
+				'evento_id': eventoId,
+				'aplicado_en': DateTime.now().toUtc().toIso8601String(),
+			},
+			conflictAlgorithm: ConflictAlgorithm.replace,
+		);
 	}
 
 	Future<void> _aplicarEventoInterno(
@@ -114,19 +184,28 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			case TipoSyncEvento.variantUpserted:
 				await _aplicarVarianteRemota(evento);
 			case TipoSyncEvento.salePartialReturn:
-				await _aplicarDevolucionParcialRemota(evento);
+				await _aplicarDevolucionParcialRemota(evento, ejecutor: ejecutor);
 			case TipoSyncEvento.storeUpserted:
 				await _aplicarTiendaRemota(evento);
 			case TipoSyncEvento.userUpserted:
 				await _aplicarUsuarioRemoto(evento);
 			case TipoSyncEvento.cashShiftUpserted:
 				await _aplicarTurnoRemoto(evento);
+			case TipoSyncEvento.quoteUpserted:
+				await _aplicarCotizacionRemota(evento);
+			case TipoSyncEvento.orderUpserted:
+				await _aplicarPedidoRemoto(evento);
+			case TipoSyncEvento.wholesaleTiersReplaced:
+				await _aplicarEscalasMayoreoRemotas(evento);
+			case TipoSyncEvento.attendanceChallengeCreated:
+				await _aplicarDesafioAsistenciaRemoto(evento);
+			case TipoSyncEvento.attendanceCheckedIn:
+				await _aplicarEntradaAsistenciaRemota(evento);
+			case TipoSyncEvento.attendanceCheckedOut:
+				await _aplicarSalidaAsistenciaRemota(evento);
 			case TipoSyncEvento.warehouseUpserted:
 			case TipoSyncEvento.presentationTypeUpserted:
 			case TipoSyncEvento.productPresentationUpserted:
-			case TipoSyncEvento.attendanceChallengeCreated:
-			case TipoSyncEvento.attendanceCheckedIn:
-			case TipoSyncEvento.attendanceCheckedOut:
 			case TipoSyncEvento.employeeProfileUpserted:
 			case TipoSyncEvento.payrollPeriodClosed:
 				break;
@@ -244,12 +323,15 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		);
 	}
 
-	Future<void> _aplicarDevolucionParcialRemota(SyncEvent evento) async {
+	Future<void> _aplicarDevolucionParcialRemota(
+		SyncEvent evento, {
+		DatabaseExecutor? ejecutor,
+	}) async {
 		final ventaId = evento.payload['ventaId'] as String? ?? '';
 		if (ventaId.isEmpty) {
 			return;
 		}
-		final venta = await _ventaRepository.obtenerPorId(ventaId);
+		final venta = await _ventaRepository.obtenerPorId(ventaId, db: ejecutor);
 		if (venta == null || venta.estado == EstadoVenta.cancelada) {
 			return;
 		}
@@ -262,7 +344,12 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 				if (mapa['productoId'] == linea.productoId) {
 					final devuelta = (mapa['cantidadDevuelta'] as num?)?.toDouble() ?? 0.0;
 					cantidadRestante = cantidadRestante - devuelta;
-					await _ajustarStock(linea.productoId, evento.tiendaId, devuelta);
+					await _ajustarStock(
+						linea.productoId,
+						evento.tiendaId,
+						devuelta,
+						ejecutor: ejecutor,
+					);
 				}
 			}
 			if (cantidadRestante > 0.0) {
@@ -289,6 +376,7 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 				total: nuevoTotal,
 				estado: nuevoEstado,
 			),
+			db: ejecutor,
 		);
 	}
 
@@ -300,7 +388,7 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		if (ventaId.isEmpty) {
 			return;
 		}
-		final venta = await _ventaRepository.obtenerPorId(ventaId);
+		final venta = await _ventaRepository.obtenerPorId(ventaId, db: ejecutor);
 		if (venta == null || !venta.puedeAnularse()) {
 			return;
 		}
@@ -312,7 +400,11 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 				ejecutor: ejecutor,
 			);
 		}
-		await _ventaRepository.actualizarEstado(ventaId, EstadoVenta.cancelada);
+		await _ventaRepository.actualizarEstado(
+			ventaId,
+			EstadoVenta.cancelada,
+			db: ejecutor,
+		);
 	}
 
 	Future<void> _aplicarCategoriaRemota(SyncEvent evento) async {
@@ -449,7 +541,8 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		if (ventaId.isEmpty) {
 			return;
 		}
-		final existentes = await _baseDatos.query(
+		final exec = ejecutor ?? _baseDatos;
+		final existentes = await exec.query(
 			'sales',
 			where: 'id = ?',
 			whereArgs: [ventaId],
@@ -478,7 +571,7 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			total: (evento.payload['total'] as num?)?.toDouble() ?? 0.0,
 			creadaEn: evento.creadoEn,
 		);
-		await _ventaRepository.guardar(venta);
+		await _ventaRepository.guardar(venta, db: ejecutor);
 		for (final linea in lineas) {
 			await _ajustarStock(
 				linea.productoId,
@@ -546,6 +639,8 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			rfc: payload['rfc'] as String? ?? '',
 			direccion: payload['direccion'] as String? ?? '',
 			notas: payload['notas'] as String? ?? '',
+			diasCredito: (payload['diasCredito'] as num?)?.toInt() ??
+				DIAS_CREDITO_PREDETERMINADO,
 		);
 		await _clienteRepository.guardar(cliente);
 	}
@@ -628,6 +723,239 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 				stockMinimo: actual?.stockMinimo ?? 0.0,
 			),
 			db: ejecutor,
+		);
+	}
+
+	Future<void> _aplicarCotizacionRemota(SyncEvent evento) async {
+		final repo = _cotizacionRepository;
+		if (repo == null) {
+			return;
+		}
+		final payload = evento.payload;
+		final id = payload['id'] as String? ?? '';
+		if (id.isEmpty) {
+			return;
+		}
+		final lineasCrudas = payload['lineas'] as List<Object?>? ?? [];
+		final lineas = lineasCrudas
+			.whereType<Map<Object?, Object?>>()
+			.map((cruda) {
+				final mapa = Map<String, Object?>.from(cruda);
+				final reglaNombre =
+					mapa['reglaPrecio'] as String? ?? ReglaPrecio.precioBase.name;
+				return LineaCotizacion(
+					productoId: mapa['productoId'] as String? ?? '',
+					nombreProducto: mapa['nombreProducto'] as String? ?? '',
+					cantidad: (mapa['cantidad'] as num?)?.toDouble() ?? 0.0,
+					precioUnitario: (mapa['precioUnitario'] as num?)?.toDouble() ?? 0.0,
+					reglaPrecio: ReglaPrecio.values.firstWhere(
+						(valor) => valor.name == reglaNombre,
+						orElse: () => ReglaPrecio.precioBase,
+					),
+				);
+			})
+			.toList();
+		await repo.guardar(
+			Cotizacion(
+				id: id,
+				tiendaId: payload['tiendaId'] as String? ?? evento.tiendaId,
+				clienteId: payload['clienteId'] as String?,
+				nombreCliente: payload['nombreCliente'] as String?,
+				total: (payload['total'] as num?)?.toDouble() ?? 0.0,
+				notas: payload['notas'] as String? ?? '',
+				vigenciaDias: (payload['vigenciaDias'] as num?)?.toInt() ??
+					VIGENCIA_COTIZACION_DIAS,
+				creadaEn: DateTime.parse(
+					payload['creadaEn'] as String? ?? evento.creadoEn.toIso8601String(),
+				),
+				cajaId: payload['cajaId'] as String?,
+				vendedorId: payload['vendedorId'] as String?,
+				lineas: lineas,
+			),
+		);
+	}
+
+	Future<void> _aplicarPedidoRemoto(SyncEvent evento) async {
+		final repo = _pedidoRepository;
+		if (repo == null) {
+			return;
+		}
+		final payload = evento.payload;
+		final id = payload['id'] as String? ?? '';
+		if (id.isEmpty) {
+			return;
+		}
+		final metodoNombre = payload['metodoPago'] as String? ?? MetodoPago.efectivo.name;
+		final estadoNombre = payload['estado'] as String? ?? EstadoPedido.recibido.name;
+		final lineasCrudas = payload['lineas'] as List<Object?>? ?? [];
+		final lineas = lineasCrudas
+			.whereType<Map<Object?, Object?>>()
+			.map((cruda) {
+				final mapa = Map<String, Object?>.from(cruda);
+				return LineaPedido(
+					productoId: mapa['productoId'] as String? ?? '',
+					nombreProducto: mapa['nombreProducto'] as String? ?? '',
+					cantidad: (mapa['cantidad'] as num?)?.toDouble() ?? 0.0,
+					precioUnitario: (mapa['precioUnitario'] as num?)?.toDouble() ?? 0.0,
+				);
+			})
+			.toList();
+		final asignadoEnCrudo = payload['asignadoEn'] as String?;
+		final creditoVenceCrudo = payload['creditoVenceEn'] as String?;
+		await repo.guardar(
+			Pedido(
+				id: id,
+				tiendaId: payload['tiendaId'] as String? ?? evento.tiendaId,
+				clienteId: payload['clienteId'] as String?,
+				nombreEntrega: payload['nombreEntrega'] as String? ?? '',
+				telefonoEntrega: payload['telefonoEntrega'] as String? ?? '',
+				direccionEntrega: payload['direccionEntrega'] as String? ?? '',
+				esCredito: payload['esCredito'] as bool? ?? false,
+				creditoDias: (payload['creditoDias'] as num?)?.toInt(),
+				creditoVenceEn: creditoVenceCrudo == null
+					? null
+					: DateTime.parse(creditoVenceCrudo),
+				metodoPago: MetodoPago.values.firstWhere(
+					(valor) => valor.name == metodoNombre,
+					orElse: () => MetodoPago.efectivo,
+				),
+				total: (payload['total'] as num?)?.toDouble() ?? 0.0,
+				notas: payload['notas'] as String? ?? '',
+				estado: EstadoPedido.values.firstWhere(
+					(valor) => valor.name == estadoNombre,
+					orElse: () => EstadoPedido.recibido,
+				),
+				asignadoAUsuarioId: payload['asignadoAUsuarioId'] as String?,
+				asignadoAUsuarioNombre: payload['asignadoAUsuarioNombre'] as String?,
+				asignadoEn: asignadoEnCrudo == null ? null : DateTime.parse(asignadoEnCrudo),
+				creadoEn: DateTime.parse(
+					payload['creadoEn'] as String? ?? evento.creadoEn.toIso8601String(),
+				),
+				creadoPorUsuarioId: payload['creadoPorUsuarioId'] as String?,
+				ventaId: payload['ventaId'] as String?,
+				lineas: lineas,
+			),
+		);
+	}
+
+	Future<void> _aplicarEscalasMayoreoRemotas(SyncEvent evento) async {
+		final repo = _precioRepository;
+		if (repo == null) {
+			return;
+		}
+		final productoId = evento.payload['productoId'] as String? ?? '';
+		if (productoId.isEmpty) {
+			return;
+		}
+		final escalasCrudas = evento.payload['escalas'] as List<Object?>? ?? [];
+		final escalas = escalasCrudas
+			.whereType<Map<Object?, Object?>>()
+			.map((cruda) {
+				final mapa = Map<String, Object?>.from(cruda);
+				return EscalaMayoreo(
+					productoId: productoId,
+					cantidadMinima: (mapa['cantidadMinima'] as num?)?.toDouble() ?? 0.0,
+					precioUnitario: (mapa['precioUnitario'] as num?)?.toDouble() ?? 0.0,
+				);
+			})
+			.toList();
+		await repo.reemplazarEscalasMayoreo(productoId, escalas);
+	}
+
+	Future<void> _aplicarDesafioAsistenciaRemoto(SyncEvent evento) async {
+		final repo = _asistenciaRepository;
+		if (repo == null) {
+			return;
+		}
+		final payload = evento.payload;
+		final id = payload['id'] as String? ?? '';
+		if (id.isEmpty) {
+			return;
+		}
+		final tiendaId = payload['tiendaId'] as String? ?? evento.tiendaId;
+		await _baseDatos.transaction((tx) async {
+			await repo.desactivarDesafiosTienda(tiendaId, db: tx);
+			await repo.guardarDesafio(
+				DesafioAsistencia(
+					id: id,
+					tiendaId: tiendaId,
+					pinHash: payload['pinHash'] as String? ?? '',
+					expiraEn: DateTime.parse(
+						payload['expiraEn'] as String? ?? evento.creadoEn.toIso8601String(),
+					),
+					creadoPor: evento.dispositivoId,
+					latitud: (payload['latitud'] as num?)?.toDouble(),
+					longitud: (payload['longitud'] as num?)?.toDouble(),
+					radioMetros: (payload['radioMetros'] as num?)?.toDouble() ?? 150,
+					activo: true,
+				),
+				db: tx,
+			);
+		});
+	}
+
+	Future<void> _aplicarEntradaAsistenciaRemota(SyncEvent evento) async {
+		final repo = _asistenciaRepository;
+		if (repo == null) {
+			return;
+		}
+		final payload = evento.payload;
+		final id = payload['id'] as String? ?? '';
+		if (id.isEmpty) {
+			return;
+		}
+		await repo.guardarRegistro(
+			RegistroAsistencia(
+				id: id,
+				usuarioId: payload['usuarioId'] as String? ?? '',
+				tiendaId: payload['tiendaId'] as String? ?? evento.tiendaId,
+				entradaEn: DateTime.parse(
+					payload['entradaEn'] as String? ?? evento.creadoEn.toIso8601String(),
+				),
+				metodo: payload['metodo'] as String? ?? '',
+				latitud: (payload['latitud'] as num?)?.toDouble(),
+				longitud: (payload['longitud'] as num?)?.toDouble(),
+				desafioId: payload['desafioId'] as String?,
+			),
+		);
+	}
+
+	Future<void> _aplicarSalidaAsistenciaRemota(SyncEvent evento) async {
+		final repo = _asistenciaRepository;
+		if (repo == null) {
+			return;
+		}
+		final payload = evento.payload;
+		final registroId = payload['registroId'] as String? ?? '';
+		if (registroId.isEmpty) {
+			return;
+		}
+		final abierta = await repo.obtenerEntradaAbierta(
+			payload['usuarioId'] as String? ?? '',
+		);
+		final base = abierta?.id == registroId
+			? abierta!
+			: RegistroAsistencia(
+				id: registroId,
+				usuarioId: payload['usuarioId'] as String? ?? '',
+				tiendaId: evento.tiendaId,
+				entradaEn: evento.creadoEn,
+				metodo: '',
+			);
+		await repo.guardarRegistro(
+			RegistroAsistencia(
+				id: base.id,
+				usuarioId: base.usuarioId,
+				tiendaId: base.tiendaId,
+				entradaEn: base.entradaEn,
+				salidaEn: DateTime.parse(
+					payload['salidaEn'] as String? ?? evento.creadoEn.toIso8601String(),
+				),
+				metodo: base.metodo,
+				latitud: base.latitud,
+				longitud: base.longitud,
+				desafioId: base.desafioId,
+			),
 		);
 	}
 

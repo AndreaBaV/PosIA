@@ -6,11 +6,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:posia_core/posia_core.dart';
 import 'package:posia_ui/posia_ui.dart';
 
+import '../models/item_historial.dart';
 import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
 import '../utils/compartir_ticket_digital_util.dart';
+import '../utils/documento_ticket_util.dart';
 import '../utils/ticket_credito_util.dart';
 import '../utils/ticket_venta_util.dart';
+import '../widgets/acciones_documento_ticket.dart';
+
+/// Color distintivo para pedidos entregados en historial.
+const _colorPedidoHistorial = Color(0xFF1565C0);
 
 class PantallaHistorialVentas extends ConsumerStatefulWidget {
 	const PantallaHistorialVentas({super.key});
@@ -26,6 +32,16 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 	String _filtro = '';
 
 	@override
+	void initState() {
+		super.initState();
+		WidgetsBinding.instance.addPostFrameCallback((_) {
+			if (mounted) {
+				ref.invalidate(historialOperacionesProvider(_diasAtras));
+			}
+		});
+	}
+
+	@override
 	void dispose() {
 		_busquedaController.dispose();
 		super.dispose();
@@ -33,9 +49,9 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 
 	@override
 	Widget build(BuildContext context) {
-		final ventasAsync = ref.watch(_historialProvider(_diasAtras));
+		final historialAsync = ref.watch(historialOperacionesProvider(_diasAtras));
 		return Scaffold(
-			appBar: AppBar(title: const Text('Historial de ventas')),
+			appBar: AppBar(title: const Text('Historial')),
 			body: Column(
 				children: [
 					Padding(
@@ -52,62 +68,43 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 					),
 					CampoBusqueda(
 						controlador: _busquedaController,
-						sugerencia: 'Buscar por monto o producto...',
+						sugerencia: 'Buscar por monto, producto o cliente...',
 						alCambiar: (v) => setState(() => _filtro = v.trim().toLowerCase()),
 					),
 					Expanded(
-						child: ventasAsync.when(
-							data: (ventas) {
-								final filtradas = ventas.where((v) {
-									if (_filtro.isEmpty) {
-										return true;
-									}
-									if (formatearMoneda(v.total).toLowerCase().contains(_filtro)) {
-										return true;
-									}
-									for (final linea in v.lineas) {
-										if (linea.nombreProducto.toLowerCase().contains(_filtro)) {
-											return true;
-										}
-									}
-									return false;
-								}).toList();
+						child: historialAsync.when(
+							data: (items) {
+								final filtradas = items.where(_coincideFiltro).toList();
 								if (filtradas.isEmpty) {
-									return const Center(child: Text('Sin ventas en el período'));
+									return const Center(
+										child: Text('Sin ventas ni pedidos en el período'),
+									);
 								}
 								return ListView.builder(
 									itemCount: filtradas.length,
 									itemBuilder: (context, i) {
-										final venta = filtradas[i];
+										final item = filtradas[i];
 										return Card(
 											margin: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
 											child: ListTile(
 												leading: Icon(
-													venta.estado == EstadoVenta.completada
-														? Icons.receipt_long
-														: Icons.cancel,
-													color: venta.estado == EstadoVenta.completada
-														? PosiaColors.cobrar
-														: PosiaColors.cancelar,
+													_iconoItemHistorial(item),
+													color: _colorItemHistorial(item),
 												),
 												title: Text(
-													formatearMoneda(venta.total),
+													formatearMoneda(item.total),
 													style: const TextStyle(fontWeight: FontWeight.bold),
 												),
-												subtitle: Text(
-													'${venta.lineas.length} productos · '
-													'${etiquetaMetodoPago(venta.metodoPago)}'
-													'${venta.metodoPago == MetodoPago.credito && !venta.creditoLiquidado ? ' · Pendiente' : ''}'
-													' · ${venta.creadaEn.toLocal().toString().substring(0, 16)}',
-												),
-												trailing: venta.puedeAnularse()
+												subtitle: Text(_subtituloItemHistorial(item)),
+												trailing: item.tipo == TipoRegistroHistorial.venta &&
+													item.venta!.puedeAnularse()
 													? IconButton(
 														icon: const Icon(Icons.undo, color: PosiaColors.cancelar),
 														tooltip: 'Anular',
-														onPressed: () => _anular(venta.id),
+														onPressed: () => _anular(item.venta!.id),
 													)
 													: null,
-												onTap: () => _mostrarDetalle(context, venta),
+												onTap: () => _abrirDetalle(context, item),
 											),
 										);
 									},
@@ -118,6 +115,182 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 						),
 					),
 				],
+			),
+		);
+	}
+
+	bool _coincideFiltro(ItemHistorial item) {
+		if (_filtro.isEmpty) {
+			return true;
+		}
+		if (formatearMoneda(item.total).toLowerCase().contains(_filtro)) {
+			return true;
+		}
+		return switch (item.tipo) {
+			TipoRegistroHistorial.venta => _coincideFiltroVenta(item.venta!),
+			TipoRegistroHistorial.pedidoEntregado => _coincideFiltroPedido(item.pedido!),
+		};
+	}
+
+	bool _coincideFiltroVenta(Venta venta) {
+		for (final linea in venta.lineas) {
+			if (linea.nombreProducto.toLowerCase().contains(_filtro)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	bool _coincideFiltroPedido(Pedido pedido) {
+		if (pedido.nombreEntrega.toLowerCase().contains(_filtro)) {
+			return true;
+		}
+		if (pedido.telefonoEntrega.contains(_filtro)) {
+			return true;
+		}
+		for (final linea in pedido.lineas) {
+			if (linea.nombreProducto.toLowerCase().contains(_filtro)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	IconData _iconoItemHistorial(ItemHistorial item) {
+		return switch (item.tipo) {
+			TipoRegistroHistorial.venta =>
+				item.venta!.estado == EstadoVenta.completada
+					? Icons.receipt_long
+					: Icons.cancel,
+			TipoRegistroHistorial.pedidoEntregado => Icons.local_shipping_outlined,
+		};
+	}
+
+	Color _colorItemHistorial(ItemHistorial item) {
+		return switch (item.tipo) {
+			TipoRegistroHistorial.venta =>
+				item.venta!.estado == EstadoVenta.completada
+					? PosiaColors.cobrar
+					: PosiaColors.cancelar,
+			TipoRegistroHistorial.pedidoEntregado => _colorPedidoHistorial,
+		};
+	}
+
+	String _subtituloItemHistorial(ItemHistorial item) {
+		final fecha = item.fecha.toLocal().toString().substring(0, 16);
+		return switch (item.tipo) {
+			TipoRegistroHistorial.venta => () {
+				final venta = item.venta!;
+				return 'Venta · ${venta.lineas.length} productos · '
+					'${etiquetaMetodoPago(venta.metodoPago)}'
+					'${venta.metodoPago == MetodoPago.credito && !venta.creditoLiquidado ? ' · Pendiente' : ''}'
+					' · $fecha';
+			}(),
+			TipoRegistroHistorial.pedidoEntregado => () {
+				final pedido = item.pedido!;
+				return 'Pedido entregado · ${pedido.lineas.length} productos · '
+					'${pedido.nombreEntrega} · $fecha';
+			}(),
+		};
+	}
+
+	void _abrirDetalle(BuildContext context, ItemHistorial item) {
+		switch (item.tipo) {
+			case TipoRegistroHistorial.venta:
+				_mostrarDetalleVenta(context, item.venta!);
+			case TipoRegistroHistorial.pedidoEntregado:
+				_mostrarDetallePedido(context, item.pedido!);
+		}
+	}
+
+	void _mostrarDetallePedido(BuildContext context, Pedido pedido) {
+		showModalBottomSheet<void>(
+			context: context,
+			isScrollControlled: true,
+			builder: (ctx) => DraggableScrollableSheet(
+				expand: false,
+				initialChildSize: 0.65,
+				maxChildSize: 0.9,
+				builder: (context, scrollController) => Padding(
+					padding: const EdgeInsets.all(20.0),
+					child: Column(
+						crossAxisAlignment: CrossAxisAlignment.start,
+						children: [
+							Row(
+								children: [
+									const Icon(
+										Icons.local_shipping_outlined,
+										color: _colorPedidoHistorial,
+										size: 32.0,
+									),
+									const SizedBox(width: 12.0),
+									Expanded(
+										child: Column(
+											crossAxisAlignment: CrossAxisAlignment.start,
+											children: [
+												Text(
+													formatearMoneda(pedido.total),
+													style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+														fontWeight: FontWeight.bold,
+													),
+												),
+												Text(
+													'Pedido ${pedido.id.substring(0, 8).toUpperCase()}',
+												),
+											],
+										),
+									),
+								],
+							),
+							const SizedBox(height: 16.0),
+							_wrapInfo('Estado', etiquetaEstadoPedido(pedido.estado)),
+							_wrapInfo('Entregar a', pedido.nombreEntrega),
+							_wrapInfo('Teléfono', pedido.telefonoEntrega),
+							_wrapInfo('Dirección', pedido.direccionEntrega),
+							_wrapInfo('Método de pago', etiquetaMetodoPago(pedido.metodoPago)),
+							if (pedido.asignadoAUsuarioNombre != null)
+								_wrapInfo('Entregó', pedido.asignadoAUsuarioNombre!),
+							_wrapInfo('Fecha', pedido.creadoEn.toLocal().toString().substring(0, 19)),
+							if (pedido.notas.isNotEmpty) _wrapInfo('Notas', pedido.notas),
+							const Divider(height: 24.0),
+							Text('Productos', style: Theme.of(context).textTheme.titleMedium),
+							const SizedBox(height: 8.0),
+							Expanded(
+								child: ListView(
+									controller: scrollController,
+									children: pedido.lineas.map((linea) {
+										return ListTile(
+											contentPadding: EdgeInsets.zero,
+											title: Text(linea.nombreProducto),
+											subtitle: Text(
+												'${linea.cantidad} x ${formatearMoneda(linea.precioUnitario)}',
+											),
+											trailing: Text(
+												formatearMoneda(linea.subtotal),
+												style: const TextStyle(fontWeight: FontWeight.w600),
+											),
+										);
+									}).toList(),
+								),
+							),
+							AccionesDocumentoTicket(
+								onWhatsApp: () async {
+									final servicio = await ref.read(servicioAdminProvider.future);
+									final texto = await construirTextoPedido(
+										pedido: pedido,
+										servicio: servicio,
+									);
+									await compartirDocumentoWhatsApp(
+										context,
+										texto: texto,
+										telefono: pedido.telefonoEntrega,
+									);
+								},
+								onCerrar: () => Navigator.pop(ctx),
+							),
+						],
+					),
+				),
 			),
 		);
 	}
@@ -146,13 +319,13 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 		if (!mounted) {
 			return;
 		}
-		ScaffoldMessenger.of(context).showSnackBar(
+		PosiaNotificaciones.mostrarSnackBar(context, 
 			SnackBar(
 				content: Text(ok ? 'Venta anulada' : 'No se pudo anular'),
 				backgroundColor: ok ? PosiaColors.cobrar : PosiaColors.cancelar,
 			),
 		);
-		ref.invalidate(_historialProvider(_diasAtras));
+		ref.invalidate(historialOperacionesProvider(_diasAtras));
 	}
 
 	Future<void> _eliminar(Venta venta) async {
@@ -182,16 +355,16 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 		if (!mounted) {
 			return;
 		}
-		ScaffoldMessenger.of(context).showSnackBar(
+		PosiaNotificaciones.mostrarSnackBar(context, 
 			SnackBar(
 				content: Text(ok ? 'Venta eliminada' : 'No se pudo eliminar'),
 				backgroundColor: ok ? PosiaColors.cobrar : PosiaColors.cancelar,
 			),
 		);
-		ref.invalidate(_historialProvider(_diasAtras));
+		ref.invalidate(historialOperacionesProvider(_diasAtras));
 	}
 
-	void _mostrarDetalle(BuildContext context, Venta venta) {
+	void _mostrarDetalleVenta(BuildContext context, Venta venta) {
 		showModalBottomSheet<void>(
 			context: context,
 			isScrollControlled: true,
@@ -386,7 +559,7 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(content: Text('No se pudo compartir el ticket')),
 			);
 		}
@@ -423,14 +596,14 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(content: Text('Ticket enviado a impresora')),
 			);
 		} catch (_) {
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(content: Text('No se pudo imprimir el ticket')),
 			);
 		}
@@ -465,25 +638,24 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 			);
 			final hardware = await ref.read(hardwareRegistryProvider.future);
 			await hardware.obtenerImpresora().imprimirTicket(texto);
-			ref.invalidate(_historialProvider(_diasAtras));
+			ref.invalidate(historialOperacionesProvider(_diasAtras));
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(content: Text('Crédito liquidado')),
 			);
 		} catch (error) {
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(content: Text('$error'), backgroundColor: PosiaColors.cancelar),
 			);
 		}
 	}
 
 	Future<void> _devolverParcial(BuildContext context, Venta venta) async {
-		final messenger = ScaffoldMessenger.of(context);
 		final cantidades = <String, double>{};
 		for (final linea in venta.lineas) {
 			if (!context.mounted) {
@@ -524,21 +696,12 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 		if (!context.mounted) {
 			return;
 		}
-		messenger.showSnackBar(
+		PosiaNotificaciones.mostrarSnackBar(context, 
 			SnackBar(
 				content: Text(ok ? 'Devolución registrada' : 'No se pudo devolver'),
 				backgroundColor: ok ? PosiaColors.cobrar : PosiaColors.cancelar,
 			),
 		);
-		ref.invalidate(_historialProvider(_diasAtras));
+		ref.invalidate(historialOperacionesProvider(_diasAtras));
 	}
 }
-
-final _historialProvider = FutureProvider.family<List<Venta>, int>((ref, dias) async {
-	final servicio = await ref.watch(servicioAdminProvider.future);
-	final hasta = DateTime.now().toUtc();
-	final desde = hasta.subtract(Duration(days: dias));
-	return servicio.listarHistorialVentas(
-		FiltroVentas(tiendaId: servicio.tiendaActivaId, desde: desde, hasta: hasta),
-	);
-});

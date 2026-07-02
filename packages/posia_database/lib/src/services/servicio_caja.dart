@@ -771,12 +771,52 @@ class ServicioCaja {
       lineas: lineas,
     );
     await repo.guardar(cotizacion);
+    await _syncOrchestrator.registrarEvento(
+      SyncEvent(
+        id: _generadorId.v4(),
+        tiendaId: cotizacion.tiendaId,
+        dispositivoId: _cajaId,
+        tipo: TipoSyncEvento.quoteUpserted,
+        payload: {
+          'id': cotizacion.id,
+          'tiendaId': cotizacion.tiendaId,
+          'clienteId': cotizacion.clienteId,
+          'nombreCliente': cotizacion.nombreCliente,
+          'total': cotizacion.total,
+          'notas': cotizacion.notas,
+          'vigenciaDias': cotizacion.vigenciaDias,
+          'creadaEn': cotizacion.creadaEn.toIso8601String(),
+          'cajaId': cotizacion.cajaId,
+          'vendedorId': cotizacion.vendedorId,
+          'lineas': cotizacion.lineas
+              .map(
+                (linea) => {
+                  'productoId': linea.productoId,
+                  'nombreProducto': linea.nombreProducto,
+                  'cantidad': linea.cantidad,
+                  'precioUnitario': linea.precioUnitario,
+                  'reglaPrecio': linea.reglaPrecio.name,
+                  'subtotal': linea.subtotal,
+                },
+              )
+              .toList(),
+        },
+        creadoEn: cotizacion.creadaEn,
+        estado: EstadoSyncEvento.pendiente,
+      ),
+    );
     return cotizacion;
   }
 
   /// Lista productos favoritos configurados para caja rapida.
   Future<List<Producto>> listarFavoritosCaja() async {
     return _productoRepository.listarFavoritosCaja(_tiendaId);
+  }
+
+  /// Mapa productoId -> existencia en la tienda activa de caja.
+  Future<Map<String, double>> mapaStockLocalTienda() async {
+    final stocks = await _inventarioRepository.listarStockPorTienda(_tiendaId);
+    return {for (final stock in stocks) stock.productoId: stock.cantidad};
   }
 
   /// Obtiene total vendido en el dia para la tienda activa.

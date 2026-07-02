@@ -26,6 +26,16 @@ class _PantallaCotizacionesAdminState extends ConsumerState<PantallaCotizaciones
   String _filtro = '';
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.invalidate(cotizacionesAdminProvider(_dias));
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _busquedaController.dispose();
     super.dispose();
@@ -246,7 +256,7 @@ class _PantallaCotizacionesAdminState extends ConsumerState<PantallaCotizaciones
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
+      PosiaNotificaciones.mostrarSnackBar(context, 
         SnackBar(content: Text('$error'), backgroundColor: PosiaColors.cancelar),
       );
     }
@@ -264,14 +274,14 @@ class _PantallaCotizacionesAdminState extends ConsumerState<PantallaCotizaciones
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
+      PosiaNotificaciones.mostrarSnackBar(context, 
         const SnackBar(content: Text('Cotización reimpresa')),
       );
     } catch (error) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
+      PosiaNotificaciones.mostrarSnackBar(context, 
         SnackBar(content: Text('$error'), backgroundColor: PosiaColors.cancelar),
       );
     }

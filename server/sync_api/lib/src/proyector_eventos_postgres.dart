@@ -41,6 +41,18 @@ class ProyectorEventosPostgres {
 				await _almacen(evento);
 			case 'userUpserted':
 				await _usuario(evento);
+			case 'quoteUpserted':
+				await _cotizacion(evento);
+			case 'orderUpserted':
+				await _pedido(evento);
+			case 'wholesaleTiersReplaced':
+				await _escalasMayoreo(evento);
+			case 'attendanceChallengeCreated':
+				await _desafioAsistencia(evento);
+			case 'attendanceCheckedIn':
+				await _entradaAsistencia(evento);
+			case 'attendanceCheckedOut':
+				await _salidaAsistencia(evento);
 			default:
 				break;
 		}
@@ -108,10 +120,10 @@ class ProyectorEventosPostgres {
 			Sql.named('''
 				INSERT INTO customers (
 					id, nombre, lista_precios_id, credito_habilitado, activo,
-					telefono, email, rfc, direccion, notas
+					telefono, email, rfc, direccion, notas, dias_credito
 				) VALUES (
 					@id, @nombre, @lista, @credito, @activo,
-					@telefono, @email, @rfc, @direccion, @notas
+					@telefono, @email, @rfc, @direccion, @notas, @dias
 				)
 				ON CONFLICT (id) DO UPDATE SET
 					nombre = EXCLUDED.nombre,
@@ -122,7 +134,8 @@ class ProyectorEventosPostgres {
 					email = EXCLUDED.email,
 					rfc = EXCLUDED.rfc,
 					direccion = EXCLUDED.direccion,
-					notas = EXCLUDED.notas
+					notas = EXCLUDED.notas,
+					dias_credito = EXCLUDED.dias_credito
 			'''),
 			parameters: {
 				'id': id,
@@ -135,6 +148,7 @@ class ProyectorEventosPostgres {
 				'rfc': p['rfc'] ?? '',
 				'direccion': p['direccion'] ?? '',
 				'notas': p['notas'] ?? '',
+				'dias': _int(p['diasCredito'] ?? DIAS_CREDITO_PREDETERMINADO),
 			},
 		);
 	}
@@ -219,10 +233,14 @@ class ProyectorEventosPostgres {
 			Sql.named('''
 				INSERT INTO sales (
 					id, tienda_id, caja_id, cliente_id, metodo_pago, total,
-					creada_en, vendedor_id, estado, turno_caja_id
+					creada_en, vendedor_id, estado, turno_caja_id,
+					descuento_ticket, monto_efectivo, monto_tarjeta, monto_transferencia,
+					credito_dias, credito_vence_en
 				) VALUES (
 					@id, @tienda, @caja, @cliente, @metodo, @total,
-					@creada, @vendedor, 'completada', @turno
+					@creada, @vendedor, 'completada', @turno,
+					@descuento, @efectivo, @tarjeta, @transferencia,
+					@creditoDias, @creditoVence
 				)
 			'''),
 			parameters: {
@@ -235,6 +253,12 @@ class ProyectorEventosPostgres {
 				'creada': creadaEn,
 				'vendedor': p['vendedorId'],
 				'turno': p['turnoCajaId'],
+				'descuento': _dbl(p['descuentoTicket']),
+				'efectivo': p['montoEfectivo'],
+				'tarjeta': p['montoTarjeta'],
+				'transferencia': p['montoTransferencia'],
+				'creditoDias': p['creditoDias'],
+				'creditoVence': p['creditoVenceEn'],
 			},
 		);
 		final lineas = _listaMapas(p['lineas']);
@@ -653,6 +677,282 @@ class ProyectorEventosPostgres {
 				'id': otroId,
 				'nuevo': '${codigo}_LEGACY_$sufijo',
 				'actualizado': actualizadoEn,
+			},
+		);
+	}
+
+	Future<void> _cotizacion(EventoHub evento) async {
+		final p = evento.payload;
+		final id = p['id'] as String? ?? '';
+		if (id.isEmpty) {
+			return;
+		}
+		await _asegurarTienda(evento.tiendaId);
+		await _sesion.execute(
+			Sql.named('''
+				INSERT INTO quotes (
+					id, tienda_id, cliente_id, nombre_cliente, total, notas,
+					vigencia_dias, creada_en, caja_id, vendedor_id
+				) VALUES (
+					@id, @tienda, @cliente, @nombreCliente, @total, @notas,
+					@vigencia, @creada, @caja, @vendedor
+				)
+				ON CONFLICT (id) DO UPDATE SET
+					cliente_id = EXCLUDED.cliente_id,
+					nombre_cliente = EXCLUDED.nombre_cliente,
+					total = EXCLUDED.total,
+					notas = EXCLUDED.notas,
+					vigencia_dias = EXCLUDED.vigencia_dias
+			'''),
+			parameters: {
+				'id': id,
+				'tienda': p['tiendaId'] ?? evento.tiendaId,
+				'cliente': p['clienteId'],
+				'nombreCliente': p['nombreCliente'],
+				'total': _dbl(p['total']),
+				'notas': p['notas'] ?? '',
+				'vigencia': _int(p['vigenciaDias'] ?? VIGENCIA_COTIZACION_DIAS),
+				'creada': p['creadaEn'] ?? evento.creadoEn.toUtc().toIso8601String(),
+				'caja': p['cajaId'],
+				'vendedor': p['vendedorId'],
+			},
+		);
+		await _sesion.execute(
+			Sql.named('DELETE FROM quote_lines WHERE cotizacion_id = @id'),
+			parameters: {'id': id},
+		);
+		for (final linea in _listaMapas(p['lineas'])) {
+			await _sesion.execute(
+				Sql.named('''
+					INSERT INTO quote_lines (
+						cotizacion_id, producto_id, nombre_producto, cantidad,
+						precio_unitario, regla_precio, subtotal
+					) VALUES (
+						@cotizacion, @producto, @nombre, @cantidad,
+						@precio, @regla, @subtotal
+					)
+				'''),
+				parameters: {
+					'cotizacion': id,
+					'producto': linea['productoId'] ?? '',
+					'nombre': linea['nombreProducto'] ?? '',
+					'cantidad': _dbl(linea['cantidad']),
+					'precio': _dbl(linea['precioUnitario']),
+					'regla': linea['reglaPrecio'] ?? 'precioBase',
+					'subtotal': _dbl(linea['subtotal']),
+				},
+			);
+		}
+	}
+
+	Future<void> _pedido(EventoHub evento) async {
+		final p = evento.payload;
+		final id = p['id'] as String? ?? '';
+		if (id.isEmpty) {
+			return;
+		}
+		final tiendaId = p['tiendaId'] as String? ?? evento.tiendaId;
+		await _asegurarTienda(tiendaId);
+		await _sesion.execute(
+			Sql.named('''
+				INSERT INTO orders (
+					id, tienda_id, cliente_id, nombre_entrega, telefono_entrega,
+					direccion_entrega, es_credito, credito_dias, credito_vence_en,
+					metodo_pago, total, notas, estado, asignado_a_usuario_id,
+					asignado_a_usuario_nombre, asignado_en, creado_en,
+					creado_por_usuario_id, venta_id
+				) VALUES (
+					@id, @tienda, @cliente, @nombre, @telefono, @direccion,
+					@esCredito, @creditoDias, @creditoVence, @metodo, @total,
+					@notas, @estado, @asignadoId, @asignadoNombre, @asignadoEn,
+					@creado, @creadoPor, @venta
+				)
+				ON CONFLICT (id) DO UPDATE SET
+					cliente_id = EXCLUDED.cliente_id,
+					nombre_entrega = EXCLUDED.nombre_entrega,
+					telefono_entrega = EXCLUDED.telefono_entrega,
+					direccion_entrega = EXCLUDED.direccion_entrega,
+					es_credito = EXCLUDED.es_credito,
+					credito_dias = EXCLUDED.credito_dias,
+					credito_vence_en = EXCLUDED.credito_vence_en,
+					metodo_pago = EXCLUDED.metodo_pago,
+					total = EXCLUDED.total,
+					notas = EXCLUDED.notas,
+					estado = EXCLUDED.estado,
+					asignado_a_usuario_id = EXCLUDED.asignado_a_usuario_id,
+					asignado_a_usuario_nombre = EXCLUDED.asignado_a_usuario_nombre,
+					asignado_en = EXCLUDED.asignado_en,
+					venta_id = EXCLUDED.venta_id
+			'''),
+			parameters: {
+				'id': id,
+				'tienda': tiendaId,
+				'cliente': p['clienteId'],
+				'nombre': p['nombreEntrega'] ?? '',
+				'telefono': p['telefonoEntrega'] ?? '',
+				'direccion': p['direccionEntrega'] ?? '',
+				'esCredito': _boolInt(p['esCredito']),
+				'creditoDias': p['creditoDias'],
+				'creditoVence': p['creditoVenceEn'],
+				'metodo': p['metodoPago'] ?? 'efectivo',
+				'total': _dbl(p['total']),
+				'notas': p['notas'] ?? '',
+				'estado': p['estado'] ?? 'recibido',
+				'asignadoId': p['asignadoAUsuarioId'],
+				'asignadoNombre': p['asignadoAUsuarioNombre'],
+				'asignadoEn': p['asignadoEn'],
+				'creado': p['creadoEn'] ?? evento.creadoEn.toUtc().toIso8601String(),
+				'creadoPor': p['creadoPorUsuarioId'],
+				'venta': p['ventaId'],
+			},
+		);
+		await _sesion.execute(
+			Sql.named('DELETE FROM order_lines WHERE pedido_id = @id'),
+			parameters: {'id': id},
+		);
+		for (final linea in _listaMapas(p['lineas'])) {
+			await _sesion.execute(
+				Sql.named('''
+					INSERT INTO order_lines (
+						pedido_id, producto_id, nombre_producto, cantidad,
+						precio_unitario, subtotal
+					) VALUES (
+						@pedido, @producto, @nombre, @cantidad, @precio, @subtotal
+					)
+				'''),
+				parameters: {
+					'pedido': id,
+					'producto': linea['productoId'] ?? '',
+					'nombre': linea['nombreProducto'] ?? '',
+					'cantidad': _dbl(linea['cantidad']),
+					'precio': _dbl(linea['precioUnitario']),
+					'subtotal': _dbl(linea['subtotal']),
+				},
+			);
+		}
+	}
+
+	Future<void> _escalasMayoreo(EventoHub evento) async {
+		final p = evento.payload;
+		final productoId = p['productoId'] as String? ?? '';
+		if (productoId.isEmpty) {
+			return;
+		}
+		await _sesion.execute(
+			Sql.named('DELETE FROM wholesale_tiers WHERE producto_id = @producto'),
+			parameters: {'producto': productoId},
+		);
+		for (final escala in _listaMapas(p['escalas'])) {
+			await _sesion.execute(
+				Sql.named('''
+					INSERT INTO wholesale_tiers (producto_id, cantidad_minima, precio_unitario)
+					VALUES (@producto, @cantidad, @precio)
+				'''),
+				parameters: {
+					'producto': productoId,
+					'cantidad': _dbl(escala['cantidadMinima']),
+					'precio': _dbl(escala['precioUnitario']),
+				},
+			);
+		}
+	}
+
+	Future<void> _desafioAsistencia(EventoHub evento) async {
+		final p = evento.payload;
+		final id = p['id'] as String? ?? '';
+		if (id.isEmpty) {
+			return;
+		}
+		final tiendaId = p['tiendaId'] as String? ?? evento.tiendaId;
+		await _asegurarTienda(tiendaId);
+		await _sesion.execute(
+			Sql.named(
+				'UPDATE attendance_challenges SET activo = 0 WHERE tienda_id = @tienda AND activo = 1',
+			),
+			parameters: {'tienda': tiendaId},
+		);
+		await _sesion.execute(
+			Sql.named('''
+				INSERT INTO attendance_challenges (
+					id, tienda_id, pin_hash, expira_en, creado_por,
+					latitud, longitud, radio_metros, activo
+				) VALUES (
+					@id, @tienda, @pin, @expira, @creado,
+					@lat, @lon, @radio, 1
+				)
+				ON CONFLICT (id) DO UPDATE SET
+					pin_hash = EXCLUDED.pin_hash,
+					expira_en = EXCLUDED.expira_en,
+					latitud = EXCLUDED.latitud,
+					longitud = EXCLUDED.longitud,
+					radio_metros = EXCLUDED.radio_metros,
+					activo = EXCLUDED.activo
+			'''),
+			parameters: {
+				'id': id,
+				'tienda': tiendaId,
+				'pin': p['pinHash'] ?? '',
+				'expira': p['expiraEn'] ?? evento.creadoEn.toUtc().toIso8601String(),
+				'creado': evento.dispositivoId,
+				'lat': p['latitud'],
+				'lon': p['longitud'],
+				'radio': _dbl(p['radioMetros'] ?? 150),
+			},
+		);
+	}
+
+	Future<void> _entradaAsistencia(EventoHub evento) async {
+		final p = evento.payload;
+		final id = p['id'] as String? ?? '';
+		if (id.isEmpty) {
+			return;
+		}
+		final tiendaId = p['tiendaId'] as String? ?? evento.tiendaId;
+		await _asegurarTienda(tiendaId);
+		await _sesion.execute(
+			Sql.named('''
+				INSERT INTO attendance_records (
+					id, usuario_id, tienda_id, entrada_en, metodo,
+					latitud, longitud, desafio_id
+				) VALUES (
+					@id, @usuario, @tienda, @entrada, @metodo,
+					@lat, @lon, @desafio
+				)
+				ON CONFLICT (id) DO UPDATE SET
+					entrada_en = EXCLUDED.entrada_en,
+					metodo = EXCLUDED.metodo,
+					latitud = EXCLUDED.latitud,
+					longitud = EXCLUDED.longitud,
+					desafio_id = EXCLUDED.desafio_id
+			'''),
+			parameters: {
+				'id': id,
+				'usuario': p['usuarioId'] ?? '',
+				'tienda': tiendaId,
+				'entrada': p['entradaEn'] ?? evento.creadoEn.toUtc().toIso8601String(),
+				'metodo': p['metodo'] ?? '',
+				'lat': p['latitud'],
+				'lon': p['longitud'],
+				'desafio': p['desafioId'],
+			},
+		);
+	}
+
+	Future<void> _salidaAsistencia(EventoHub evento) async {
+		final p = evento.payload;
+		final registroId = p['registroId'] as String? ?? '';
+		if (registroId.isEmpty) {
+			return;
+		}
+		await _sesion.execute(
+			Sql.named('''
+				UPDATE attendance_records
+				SET salida_en = @salida
+				WHERE id = @id
+			'''),
+			parameters: {
+				'id': registroId,
+				'salida': p['salidaEn'] ?? evento.creadoEn.toUtc().toIso8601String(),
 			},
 		);
 	}

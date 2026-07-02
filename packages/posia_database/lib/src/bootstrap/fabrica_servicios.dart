@@ -121,6 +121,10 @@ class FabricaServicios {
 			usuarioRepository: usuarioRepo,
 			almacenRepository: almacenRepo,
 			turnoCajaRepository: turnoRepo,
+			cotizacionRepository: cotizacionRepo,
+			pedidoRepository: pedidoRepo,
+			precioRepository: precioRepo,
+			asistenciaRepository: asistenciaRepo,
 		);
 		final clienteHub = await _crearClienteHub(configRepo);
 		final sync = SyncOrchestrator(

@@ -70,4 +70,13 @@ enum TipoSyncEvento {
 
 	/// Turno de caja abierto, actualizado o cerrado.
 	cashShiftUpserted,
+
+	/// Cotizacion creada o actualizada.
+	quoteUpserted,
+
+	/// Pedido creado o actualizado.
+	orderUpserted,
+
+	/// Escalas de mayoreo reemplazadas para un producto.
+	wholesaleTiersReplaced,
 }

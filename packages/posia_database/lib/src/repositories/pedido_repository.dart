@@ -85,6 +85,28 @@ class PedidoRepository {
 		return pedidos;
 	}
 
+	/// Pedidos entregados de una tienda dentro de un periodo (por fecha de pedido).
+	Future<List<Pedido>> listarEntregadosPorTiendaEnPeriodo(
+		String tiendaId, {
+		required DateTime desde,
+	}) async {
+		final filas = await _baseDatos.query(
+			'orders',
+			where: 'tienda_id = ? AND estado = ? AND creado_en >= ?',
+			whereArgs: [
+				tiendaId,
+				EstadoPedido.entregado.name,
+				desde.toUtc().toIso8601String(),
+			],
+			orderBy: 'creado_en DESC',
+		);
+		final pedidos = <Pedido>[];
+		for (final fila in filas) {
+			pedidos.add(await _mapearPedido(fila));
+		}
+		return pedidos;
+	}
+
 	Future<List<Pedido>> listarPorEmpleado(String usuarioId) async {
 		final filas = await _baseDatos.query(
 			'orders',

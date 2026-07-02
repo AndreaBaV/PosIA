@@ -150,6 +150,66 @@ class ServicioAdmin {
   final String _tiendaActivaId;
   final String _cajaId;
   final Uuid _generadorId = const Uuid();
+  MotorPrecio? _motorPrecioCache;
+
+  MotorPrecio? get _motorPrecio {
+    final repo = _precioRepository;
+    if (repo == null) {
+      return null;
+    }
+    return _motorPrecioCache ??= MotorPrecio(repositorioPrecio: repo);
+  }
+
+  /// Resuelve precio comercial con listas, mayoreo y cliente.
+  Future<ResultadoPrecio> resolverPrecioComercial({
+    required Producto producto,
+    required double cantidad,
+    Cliente? cliente,
+  }) async {
+    final motor = _motorPrecio;
+    if (motor == null) {
+      return ResultadoPrecio(
+        precioUnitario: producto.precioBase,
+        reglaAplicada: ReglaPrecio.precioBase,
+      );
+    }
+    return motor.resolverPrecio(
+      ContextoPrecio(
+        producto: producto,
+        cantidad: cantidad,
+        tiendaId: _tiendaActivaId,
+        cliente: cliente,
+        canal: _canalVentaProducto(producto),
+      ),
+    );
+  }
+
+  /// Resuelve precio comercial por identificadores de producto y cliente.
+  Future<ResultadoPrecio> resolverPrecioComercialPorId({
+    required String productoId,
+    required double cantidad,
+    String? clienteId,
+  }) async {
+    final producto = await _productoRepository.obtenerPorId(productoId);
+    if (producto == null) {
+      throw StateError('Producto no encontrado');
+    }
+    Cliente? cliente;
+    if (clienteId != null) {
+      cliente = await _clienteRepository?.obtenerPorId(clienteId);
+    }
+    return resolverPrecioComercial(
+      producto: producto,
+      cantidad: cantidad,
+      cliente: cliente,
+    );
+  }
+
+  CanalVenta _canalVentaProducto(Producto producto) {
+    return producto.moduloVertical == ModuloVertical.carniceria
+        ? CanalVenta.mayoreo
+        : CanalVenta.mostrador;
+  }
 
   Future<T> _enTransaccion<T>(Future<T> Function(Transaction tx) accion) {
     return _baseDatos.transaction(accion);
@@ -310,6 +370,20 @@ class ServicioAdmin {
       await asegurarPresentacionBase(producto, db: tx);
     });
     await _registrarEventoProducto(producto);
+    if (req.escalasMayoreo.isNotEmpty) {
+      await _registrarEventoEscalasMayoreo(
+        producto.id,
+        req.escalasMayoreo
+            .map(
+              (e) => EscalaMayoreo(
+                productoId: producto.id,
+                cantidadMinima: e.cantidadMinima,
+                precioUnitario: e.precioUnitario,
+              ),
+            )
+            .toList(),
+      );
+    }
     return producto;
   }
 
@@ -358,6 +432,9 @@ class ServicioAdmin {
       }
     });
     await _registrarEventoProducto(actualizado);
+    if (escalasMayoreo != null) {
+      await _registrarEventoEscalasMayoreo(actualizado.id, escalasMayoreo);
+    }
     return actualizado;
   }
 
@@ -505,79 +582,88 @@ class ServicioAdmin {
     String? tiendaReferenciaId,
   }) async {
     final tiendaRef = tiendaReferenciaId ?? _tiendaActivaId;
-    final tiendas = await _tiendaRepository.listarActivas();
-    final almacenRepo = _almacenRepository;
-    final almacenes = almacenRepo != null ? await almacenRepo.listarActivos() : <Almacen>[];
-    final stockAlmacenPorProducto = <String, Map<String, StockAlmacen>>{};
-    if (almacenRepo != null) {
-      for (final stock in await almacenRepo.listarTodoStock()) {
-        stockAlmacenPorProducto
-            .putIfAbsent(stock.productoId, () => {})[stock.almacenId] = stock;
-      }
-    }
-    final productosPorId = <String, Producto>{};
-    for (final tienda in tiendas) {
-      final productos = await _productoRepository.listarActivosPorTienda(
-        tienda.id,
-      );
-      for (final producto in productos) {
-        productosPorId[producto.id] = producto;
-      }
-    }
-    for (final productoId in stockAlmacenPorProducto.keys) {
-      if (productosPorId.containsKey(productoId)) {
-        continue;
-      }
-      final producto = await _productoRepository.obtenerPorId(productoId);
-      if (producto != null) {
-        productosPorId[productoId] = producto;
-      }
-    }
+    final productos = await _productoRepository.listarTodosPorTienda(_tiendaActivaId);
     final agrupados = <InventarioAgrupado>[];
-    for (final producto in productosPorId.values) {
-      final porNombre = <String, double>{};
-      final porTiendaId = <String, double>{};
-      final minimosPorTiendaId = <String, double>{};
-      for (final tienda in tiendas) {
-        final stock = await _inventarioRepository.obtenerStock(
-          producto.id,
-          tienda.id,
-        );
-        porNombre[tienda.nombre] = stock?.cantidad ?? 0.0;
-        porTiendaId[tienda.id] = stock?.cantidad ?? 0.0;
-        minimosPorTiendaId[tienda.id] = stock?.stockMinimo ?? 0.0;
-      }
-      final porAlmacenNombre = <String, double>{};
-      final porAlmacenId = <String, double>{};
-      final minimosPorAlmacenId = <String, double>{};
-      final stocksProducto = stockAlmacenPorProducto[producto.id] ?? {};
-      for (final almacen in almacenes) {
-        final stock = stocksProducto[almacen.id];
-        porAlmacenNombre[almacen.nombre] = stock?.cantidad ?? 0.0;
-        porAlmacenId[almacen.id] = stock?.cantidad ?? 0.0;
-        minimosPorAlmacenId[almacen.id] = stock?.stockMinimo ?? 0.0;
-      }
-      final referencia = await _inventarioRepository.obtenerStock(
-        producto.id,
-        tiendaRef,
+    for (final producto in productos) {
+      final agrupado = await _construirInventarioAgrupado(
+        producto: producto,
+        tiendaReferenciaId: tiendaRef,
       );
-      agrupados.add(
-        InventarioAgrupado(
-          productoId: producto.id,
-          nombreProducto: producto.nombre,
-          existenciasPorTienda: porNombre,
-          existenciasPorTiendaId: porTiendaId,
-          stockMinimoPorTiendaId: minimosPorTiendaId,
-          existenciasPorAlmacen: porAlmacenNombre,
-          existenciasPorAlmacenId: porAlmacenId,
-          stockMinimoPorAlmacenId: minimosPorAlmacenId,
-          stockMinimoLocal: referencia?.stockMinimo ?? 0.0,
-          cantidadLocal: referencia?.cantidad ?? 0.0,
-        ),
-      );
+      if (agrupado != null) {
+        agrupados.add(agrupado);
+      }
     }
     agrupados.sort((a, b) => a.nombreProducto.compareTo(b.nombreProducto));
     return agrupados;
+  }
+
+  /// Existencias de un producto en todas las tiendas y almacenes.
+  Future<InventarioAgrupado?> obtenerExistenciasProducto(
+    String productoId, {
+    String? tiendaReferenciaId,
+  }) async {
+    final producto = await _productoRepository.obtenerPorId(productoId);
+    if (producto == null) {
+      return null;
+    }
+    return _construirInventarioAgrupado(
+      producto: producto,
+      tiendaReferenciaId: tiendaReferenciaId ?? _tiendaActivaId,
+    );
+  }
+
+  Future<InventarioAgrupado?> _construirInventarioAgrupado({
+    required Producto producto,
+    required String tiendaReferenciaId,
+  }) async {
+    final tiendas = await _tiendaRepository.listarActivas();
+    final almacenRepo = _almacenRepository;
+    final almacenes = almacenRepo != null ? await almacenRepo.listarActivos() : <Almacen>[];
+    final stocksProducto = <String, StockAlmacen>{};
+    if (almacenRepo != null) {
+      for (final stock in await almacenRepo.listarTodoStock()) {
+        if (stock.productoId == producto.id) {
+          stocksProducto[stock.almacenId] = stock;
+        }
+      }
+    }
+    final porNombre = <String, double>{};
+    final porTiendaId = <String, double>{};
+    final minimosPorTiendaId = <String, double>{};
+    for (final tienda in tiendas) {
+      final stock = await _inventarioRepository.obtenerStock(
+        producto.id,
+        tienda.id,
+      );
+      porNombre[tienda.nombre] = stock?.cantidad ?? 0.0;
+      porTiendaId[tienda.id] = stock?.cantidad ?? 0.0;
+      minimosPorTiendaId[tienda.id] = stock?.stockMinimo ?? 0.0;
+    }
+    final porAlmacenNombre = <String, double>{};
+    final porAlmacenId = <String, double>{};
+    final minimosPorAlmacenId = <String, double>{};
+    for (final almacen in almacenes) {
+      final stock = stocksProducto[almacen.id];
+      porAlmacenNombre[almacen.nombre] = stock?.cantidad ?? 0.0;
+      porAlmacenId[almacen.id] = stock?.cantidad ?? 0.0;
+      minimosPorAlmacenId[almacen.id] = stock?.stockMinimo ?? 0.0;
+    }
+    final referencia = await _inventarioRepository.obtenerStock(
+      producto.id,
+      tiendaReferenciaId,
+    );
+    return InventarioAgrupado(
+      productoId: producto.id,
+      nombreProducto: producto.nombre,
+      existenciasPorTienda: porNombre,
+      existenciasPorTiendaId: porTiendaId,
+      stockMinimoPorTiendaId: minimosPorTiendaId,
+      existenciasPorAlmacen: porAlmacenNombre,
+      existenciasPorAlmacenId: porAlmacenId,
+      stockMinimoPorAlmacenId: minimosPorAlmacenId,
+      stockMinimoLocal: referencia?.stockMinimo ?? 0.0,
+      cantidadLocal: referencia?.cantidad ?? 0.0,
+    );
   }
 
   /// Obtiene estado actual de la cola de sincronizacion.
@@ -1732,6 +1818,16 @@ class ServicioAdmin {
     return repo.listarPorEmpleado(empleado.id);
   }
 
+  /// Pedidos entregados para mostrar en historial de operaciones.
+  Future<List<Pedido>> listarPedidosEntregadosHistorial({int dias = 7}) async {
+    final repo = _pedidoRepository;
+    if (repo == null) {
+      return [];
+    }
+    final desde = DateTime.now().toUtc().subtract(Duration(days: dias));
+    return repo.listarEntregadosPorTiendaEnPeriodo(_tiendaActivaId, desde: desde);
+  }
+
   Future<Pedido?> obtenerPedido(String pedidoId) async {
     return _pedidoRepository?.obtenerPorId(pedidoId);
   }
@@ -1743,9 +1839,8 @@ class ServicioAdmin {
     if (repo == null) {
       return [];
     }
-    final hasta = DateTime.now().toUtc();
-    final desde = hasta.subtract(Duration(days: dias));
-    return repo.listarPorTienda(_tiendaActivaId, desde: desde, hasta: hasta);
+    final desde = DateTime.now().toUtc().subtract(Duration(days: dias));
+    return repo.listarPorTienda(_tiendaActivaId, desde: desde);
   }
 
   Future<Cotizacion?> obtenerCotizacion(String cotizacionId) async {
@@ -1770,25 +1865,51 @@ class ServicioAdmin {
     if (vigenciaDias <= 0) {
       throw StateError('Indique días de vigencia válidos');
     }
+    Cliente? cliente;
     String? nombreCliente;
     if (clienteId != null) {
-      final cliente = await _clienteRepository?.obtenerPorId(clienteId);
+      cliente = await _clienteRepository?.obtenerPorId(clienteId);
       nombreCliente = cliente?.nombre;
+    }
+    final lineasResueltas = <LineaCotizacion>[];
+    for (final solicitud in lineas) {
+      if (solicitud.cantidad <= 0) {
+        throw StateError('Cantidad inválida en línea de cotización');
+      }
+      final producto = await _productoRepository.obtenerPorId(solicitud.productoId);
+      if (producto == null) {
+        throw StateError('Producto no encontrado');
+      }
+      final precio = await resolverPrecioComercial(
+        producto: producto,
+        cantidad: solicitud.cantidad,
+        cliente: cliente,
+      );
+      lineasResueltas.add(
+        LineaCotizacion(
+          productoId: producto.id,
+          nombreProducto: producto.nombre,
+          cantidad: solicitud.cantidad,
+          precioUnitario: redondearMonto(precio.precioUnitario),
+          reglaPrecio: precio.reglaAplicada,
+        ),
+      );
     }
     final cotizacion = Cotizacion(
       id: _generadorId.v4(),
       tiendaId: _tiendaActivaId,
       clienteId: clienteId,
       nombreCliente: nombreCliente,
-      total: Cotizacion.calcularTotalDesdeLineas(lineas),
+      total: Cotizacion.calcularTotalDesdeLineas(lineasResueltas),
       notas: notas.trim(),
       vigenciaDias: vigenciaDias,
       creadaEn: DateTime.now().toUtc(),
       cajaId: _cajaId,
       vendedorId: vendedorId,
-      lineas: lineas,
+      lineas: lineasResueltas,
     );
     await repo.guardar(cotizacion);
+    await _registrarEventoCotizacion(cotizacion);
     return cotizacion;
   }
 
@@ -1842,6 +1963,10 @@ class ServicioAdmin {
       );
     }
     final lineasPedido = <LineaPedido>[];
+    Cliente? clientePedido;
+    if (clienteId != null) {
+      clientePedido = await _clienteRepository?.obtenerPorId(clienteId);
+    }
     for (final solicitud in lineas) {
       if (solicitud.cantidad <= 0) {
         throw StateError('Cantidad invalida en linea de pedido');
@@ -1850,12 +1975,17 @@ class ServicioAdmin {
       if (producto == null) {
         throw StateError('Producto no encontrado');
       }
+      final precio = await resolverPrecioComercial(
+        producto: producto,
+        cantidad: solicitud.cantidad,
+        cliente: clientePedido,
+      );
       lineasPedido.add(
         LineaPedido(
           productoId: producto.id,
           nombreProducto: producto.nombre,
           cantidad: solicitud.cantidad,
-          precioUnitario: redondearMonto(solicitud.precioUnitario),
+          precioUnitario: redondearMonto(precio.precioUnitario),
         ),
       );
     }
@@ -1878,6 +2008,7 @@ class ServicioAdmin {
       lineas: lineasPedido,
     );
     await repo.guardar(pedido);
+    await _registrarEventoPedido(pedido);
     return pedido;
   }
 
@@ -1918,6 +2049,7 @@ class ServicioAdmin {
       asignadoEn: DateTime.now().toUtc(),
     );
     await repo.guardar(actualizado);
+    await _registrarEventoPedido(actualizado);
     return actualizado;
   }
 
@@ -1948,6 +2080,7 @@ class ServicioAdmin {
     }
     final actualizado = pedido.copiarCon(estado: EstadoPedido.entregado);
     await repo.guardar(actualizado);
+    await _registrarEventoPedido(actualizado);
     return actualizado;
   }
 
@@ -1970,6 +2103,7 @@ class ServicioAdmin {
     }
     final actualizado = pedido.copiarCon(estado: EstadoPedido.cancelado);
     await repo.guardar(actualizado);
+    await _registrarEventoPedido(actualizado);
     return actualizado;
   }
 
@@ -2086,12 +2220,17 @@ class ServicioAdmin {
       if (solicitud.cantidad <= 0) {
         throw StateError('Cantidad invalida en linea de credito');
       }
-      if (solicitud.precioUnitario <= 0) {
-        throw StateError('Precio invalido en linea de credito');
-      }
       final producto = await _productoRepository.obtenerPorId(solicitud.productoId);
       if (producto == null) {
         throw StateError('Producto no encontrado');
+      }
+      final precio = await resolverPrecioComercial(
+        producto: producto,
+        cantidad: solicitud.cantidad,
+        cliente: cliente,
+      );
+      if (precio.precioUnitario <= 0) {
+        throw StateError('Precio invalido en linea de credito');
       }
       final stock = await _inventarioRepository.obtenerStock(
         producto.id,
@@ -2109,8 +2248,8 @@ class ServicioAdmin {
           productoId: producto.id,
           nombreProducto: producto.nombre,
           cantidad: solicitud.cantidad,
-          precioUnitario: redondearMonto(solicitud.precioUnitario),
-          reglaPrecio: ReglaPrecio.precioBase,
+          precioUnitario: redondearMonto(precio.precioUnitario),
+          reglaPrecio: precio.reglaAplicada,
         ),
       );
     }
@@ -3323,6 +3462,112 @@ class ServicioAdmin {
         'direccion': cliente.direccion,
         'notas': cliente.notas,
         'diasCredito': cliente.diasCredito,
+      },
+      creadoEn: DateTime.now().toUtc(),
+      estado: EstadoSyncEvento.pendiente,
+    );
+    await _syncOrchestrator.registrarEvento(evento);
+  }
+
+  Future<void> _registrarEventoCotizacion(Cotizacion cotizacion) async {
+    final evento = SyncEvent(
+      id: _generadorId.v4(),
+      tiendaId: cotizacion.tiendaId,
+      dispositivoId: _cajaId,
+      tipo: TipoSyncEvento.quoteUpserted,
+      payload: {
+        'id': cotizacion.id,
+        'tiendaId': cotizacion.tiendaId,
+        'clienteId': cotizacion.clienteId,
+        'nombreCliente': cotizacion.nombreCliente,
+        'total': cotizacion.total,
+        'notas': cotizacion.notas,
+        'vigenciaDias': cotizacion.vigenciaDias,
+        'creadaEn': cotizacion.creadaEn.toIso8601String(),
+        'cajaId': cotizacion.cajaId,
+        'vendedorId': cotizacion.vendedorId,
+        'lineas': cotizacion.lineas
+            .map(
+              (linea) => {
+                'productoId': linea.productoId,
+                'nombreProducto': linea.nombreProducto,
+                'cantidad': linea.cantidad,
+                'precioUnitario': linea.precioUnitario,
+                'reglaPrecio': linea.reglaPrecio.name,
+                'subtotal': linea.subtotal,
+              },
+            )
+            .toList(),
+      },
+      creadoEn: cotizacion.creadaEn,
+      estado: EstadoSyncEvento.pendiente,
+    );
+    await _syncOrchestrator.registrarEvento(evento);
+  }
+
+  Future<void> _registrarEventoPedido(Pedido pedido) async {
+    final evento = SyncEvent(
+      id: _generadorId.v4(),
+      tiendaId: pedido.tiendaId,
+      dispositivoId: _cajaId,
+      tipo: TipoSyncEvento.orderUpserted,
+      payload: {
+        'id': pedido.id,
+        'tiendaId': pedido.tiendaId,
+        'clienteId': pedido.clienteId,
+        'nombreEntrega': pedido.nombreEntrega,
+        'telefonoEntrega': pedido.telefonoEntrega,
+        'direccionEntrega': pedido.direccionEntrega,
+        'esCredito': pedido.esCredito,
+        'creditoDias': pedido.creditoDias,
+        'creditoVenceEn': pedido.creditoVenceEn?.toIso8601String(),
+        'metodoPago': pedido.metodoPago.name,
+        'total': pedido.total,
+        'notas': pedido.notas,
+        'estado': pedido.estado.name,
+        'asignadoAUsuarioId': pedido.asignadoAUsuarioId,
+        'asignadoAUsuarioNombre': pedido.asignadoAUsuarioNombre,
+        'asignadoEn': pedido.asignadoEn?.toIso8601String(),
+        'creadoEn': pedido.creadoEn.toIso8601String(),
+        'creadoPorUsuarioId': pedido.creadoPorUsuarioId,
+        'ventaId': pedido.ventaId,
+        'lineas': pedido.lineas
+            .map(
+              (linea) => {
+                'productoId': linea.productoId,
+                'nombreProducto': linea.nombreProducto,
+                'cantidad': linea.cantidad,
+                'precioUnitario': linea.precioUnitario,
+                'subtotal': linea.subtotal,
+              },
+            )
+            .toList(),
+      },
+      creadoEn: pedido.creadoEn,
+      estado: EstadoSyncEvento.pendiente,
+    );
+    await _syncOrchestrator.registrarEvento(evento);
+  }
+
+  Future<void> _registrarEventoEscalasMayoreo(
+    String productoId,
+    List<EscalaMayoreo> escalas,
+  ) async {
+    final evento = SyncEvent(
+      id: _generadorId.v4(),
+      tiendaId: _tiendaActivaId,
+      dispositivoId: _cajaId,
+      tipo: TipoSyncEvento.wholesaleTiersReplaced,
+      payload: {
+        'productoId': productoId,
+        'escalas': escalas
+            .map(
+              (escala) => {
+                'cantidadMinima': escala.cantidadMinima,
+                'precioUnitario': escala.precioUnitario,
+              },
+            )
+            .toList(),
       },
       creadoEn: DateTime.now().toUtc(),
       estado: EstadoSyncEvento.pendiente,

@@ -69,6 +69,28 @@ class _PantallaRegistrarCotizacionState extends ConsumerState<PantallaRegistrarC
 		return redondearMonto(total);
 	}
 
+	Future<double> _calcularTotalResuelto() async {
+		final servicio = await ref.read(servicioAdminProvider.future);
+		final productos = ref.read(_productosCotizacionProvider).asData?.value ?? [];
+		var total = 0.0;
+		for (final producto in productos) {
+			if (!_seleccionados.contains(producto.id)) {
+				continue;
+			}
+			final cantidad = double.tryParse(_controllerCantidad(producto.id).text) ?? 0.0;
+			if (cantidad <= 0) {
+				continue;
+			}
+			final precio = await servicio.resolverPrecioComercialPorId(
+				productoId: producto.id,
+				cantidad: cantidad,
+				clienteId: _clienteId,
+			);
+			total += cantidad * precio.precioUnitario;
+		}
+		return redondearMonto(total);
+	}
+
 	@override
 	Widget build(BuildContext context) {
 		final clientesAsync = ref.watch(_clientesCotizacionProvider);
@@ -140,14 +162,11 @@ class _PantallaRegistrarCotizacionState extends ConsumerState<PantallaRegistrarC
 						style: Theme.of(context).textTheme.titleMedium,
 					),
 					const SizedBox(height: 8.0),
-					TextField(
-						controller: _busquedaController,
-						decoration: const InputDecoration(
-							labelText: 'Buscar producto',
-							border: OutlineInputBorder(),
-							prefixIcon: Icon(Icons.search),
-						),
-						onChanged: (v) => setState(() => _filtroProducto = v.trim().toLowerCase()),
+					CampoBusqueda(
+						padding: EdgeInsets.zero,
+						controlador: _busquedaController,
+						sugerencia: 'Buscar producto',
+						alCambiar: (v) => setState(() => _filtroProducto = v.trim().toLowerCase()),
 					),
 					const SizedBox(height: 8.0),
 					productosAsync.when(
@@ -226,13 +245,19 @@ class _PantallaRegistrarCotizacionState extends ConsumerState<PantallaRegistrarC
 						error: (e, _) => Text('$e'),
 					),
 					const SizedBox(height: 12.0),
-					Text(
-						'Total: ${formatearMoneda(_totalEstimado)}',
-						style: Theme.of(context).textTheme.titleLarge?.copyWith(
-							fontWeight: FontWeight.bold,
-							color: PosiaColors.cobrar,
-						),
-						textAlign: TextAlign.center,
+					FutureBuilder<double>(
+						future: _calcularTotalResuelto(),
+						builder: (context, snapshot) {
+							final total = snapshot.data ?? _totalEstimado;
+							return Text(
+								'Total: ${formatearMoneda(total)}',
+								style: Theme.of(context).textTheme.titleLarge?.copyWith(
+									fontWeight: FontWeight.bold,
+									color: PosiaColors.cobrar,
+								),
+								textAlign: TextAlign.center,
+							);
+						},
 					),
 					const SizedBox(height: 12.0),
 					FilledButton.icon(
@@ -253,7 +278,7 @@ class _PantallaRegistrarCotizacionState extends ConsumerState<PantallaRegistrarC
 
 	Future<void> _registrar() async {
 		if (_seleccionados.isEmpty) {
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(
 					content: Text('Seleccione al menos un producto'),
 					backgroundColor: PosiaColors.cancelar,
@@ -264,7 +289,7 @@ class _PantallaRegistrarCotizacionState extends ConsumerState<PantallaRegistrarC
 		final vigencia = int.tryParse(_vigenciaController.text.trim()) ??
 			VIGENCIA_COTIZACION_DIAS;
 		if (vigencia <= 0) {
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(
 					content: Text('Indique días de vigencia válidos'),
 					backgroundColor: PosiaColors.cancelar,
@@ -284,7 +309,7 @@ class _PantallaRegistrarCotizacionState extends ConsumerState<PantallaRegistrarC
 				if (!mounted) {
 					return;
 				}
-				ScaffoldMessenger.of(context).showSnackBar(
+				PosiaNotificaciones.mostrarSnackBar(context, 
 					SnackBar(
 						content: Text('Cantidad inválida para ${producto.nombre}'),
 						backgroundColor: PosiaColors.cancelar,
@@ -311,6 +336,7 @@ class _PantallaRegistrarCotizacionState extends ConsumerState<PantallaRegistrarC
 				notas: _notasController.text,
 				vigenciaDias: vigencia,
 			);
+			ref.invalidate(cotizacionesAdminProvider);
 			final tienda = await servicio.obtenerTiendaActiva();
 			final nombreTienda = tienda?.nombre ?? 'Tienda';
 			final digital = construirTicketDigitalDesdeCotizacion(
@@ -373,7 +399,7 @@ class _PantallaRegistrarCotizacionState extends ConsumerState<PantallaRegistrarC
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(
 					content: Text(e.message),
 					backgroundColor: PosiaColors.cancelar,

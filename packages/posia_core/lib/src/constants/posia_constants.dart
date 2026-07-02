@@ -1,13 +1,13 @@
 /// Constantes globales del sistema POSIA.
-///
 /// Autor: Equipo POSIA
 /// Matricula: POSIA-2026-001
 /// Fecha creacion: 2026-06-07 18:30:00 (UTC-6)
 /// Ultima modificacion: 2026-06-07 18:30:00 (UTC-6)
+
 library;
 
 /// Version actual del esquema local SQLite.
-const int SCHEMA_VERSION = 23;
+const int SCHEMA_VERSION = 25;
 
 /// Identificador de categoria virtual "Todos" en caja.
 const String CATEGORIA_TODOS_ID = '__todos__';
