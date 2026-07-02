@@ -55,6 +55,16 @@ void main() {
 			);
 		}
 
+		test('listarActivosPorTienda incluye todo el catalogo activo', () async {
+			await guardarLeche(tiendaId: tiendaCentral);
+
+			final central = await repo.listarActivosPorTienda(tiendaCentral);
+			final sur = await repo.listarActivosPorTienda(tiendaSur);
+
+			expect(central.map((p) => p.id), contains('prod-leche'));
+			expect(sur.map((p) => p.id), contains('prod-leche'));
+		});
+
 		test('listarActivosPorTienda incluye producto con stock traspasado', () async {
 			await guardarLeche(tiendaId: tiendaCentral);
 			await inventario.guardarStock(
