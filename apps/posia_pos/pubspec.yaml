@@ -1,7 +1,13 @@
 name: posia_pos
 description: Aplicacion de caja POSIA para Windows, iOS y Android.
 publish_to: none
-version: 1.1.1
+# El versionCode (numero despues del '+') debe ser estrictamente mayor al
+# ultimo publicado en Google Play / TestFlight. Google Play rechaza
+# reutilizar codigos ya subidos (por ejemplo el '+1' por defecto).
+# En CI, el workflow mobile-release.yml sobrescribe este numero con
+# `--build-number=$((VERSION_CODE_BASE + GITHUB_RUN_NUMBER))` para asegurar
+# incrementos monotonicos entre releases automatizadas.
+version: 1.1.1+42
 
 environment:
   sdk: ^3.11.0
