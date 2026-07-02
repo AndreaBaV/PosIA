@@ -300,7 +300,7 @@ class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguraci
 	Future<void> _guardarDispositivo() async {
 		final tiendaId = _tiendaSeleccionadaId;
 		if (tiendaId == null) {
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(content: Text('Selecciona una tienda')),
 			);
 			return;
@@ -315,7 +315,7 @@ class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguraci
 		if (!mounted) {
 			return;
 		}
-		ScaffoldMessenger.of(context).showSnackBar(
+		PosiaNotificaciones.mostrarSnackBar(context, 
 			const SnackBar(
 				content: Text('Configuración guardada. Reinicia la app si cambiaste de tienda.'),
 			),
@@ -337,7 +337,7 @@ class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguraci
 		if (!mounted) {
 			return;
 		}
-		ScaffoldMessenger.of(context).showSnackBar(
+		PosiaNotificaciones.mostrarSnackBar(context, 
 			const SnackBar(content: Text('Impresora configurada')),
 		);
 	}
@@ -350,7 +350,7 @@ class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguraci
 		if (!mounted) {
 			return;
 		}
-		ScaffoldMessenger.of(context).showSnackBar(
+		PosiaNotificaciones.mostrarSnackBar(context, 
 			const SnackBar(content: Text('Atajos de caja guardados')),
 		);
 	}
@@ -358,7 +358,7 @@ class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguraci
 	Future<void> _guardarPin() async {
 		final pin = _pinController.text.trim();
 		if (pin.length != 4) {
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(content: Text('El PIN debe tener 4 dígitos')),
 			);
 			return;
@@ -369,7 +369,7 @@ class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguraci
 		if (!mounted) {
 			return;
 		}
-		ScaffoldMessenger.of(context).showSnackBar(
+		PosiaNotificaciones.mostrarSnackBar(context, 
 			const SnackBar(content: Text('PIN actualizado')),
 		);
 	}

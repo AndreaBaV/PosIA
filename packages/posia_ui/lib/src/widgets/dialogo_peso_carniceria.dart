@@ -7,7 +7,7 @@ import 'package:posia_core/posia_core.dart';
 
 import '../theme/posia_theme.dart';
 import 'banner_mensaje_dialogo.dart';
-import 'teclado_numerico_simple.dart';
+import 'contenido_dialogo_teclado.dart';
 
 /// Resultado del dialogo de peso.
 class ResultadoDialogoPeso {
@@ -202,8 +202,8 @@ class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
 					Expanded(child: Text(widget.producto.nombre)),
 				],
 			),
-			content: SizedBox(
-				width: 320.0,
+			content: ContenidoDialogoTeclado(
+				ancho: 320.0,
 				child: Column(
 					mainAxisSize: MainAxisSize.min,
 					children: [
@@ -231,12 +231,7 @@ class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
 							controller: _pesoController,
 							focusNode: _pesoFocus,
 							autofocus: true,
-							// Se suprime el teclado del sistema en móvil porque el
-							// diálogo ya muestra un TecladoNumericoSimple embebido.
-							// Los avisos ("indique un peso mayor a cero") aparecen
-							// en un banner arriba del teclado, no como SnackBar
-							// oculto detrás del teclado del sistema.
-							keyboardType: TextInputType.none,
+							keyboardType: const TextInputType.numberWithOptions(decimal: true),
 							showCursor: true,
 							textInputAction: TextInputAction.done,
 							decoration: InputDecoration(
@@ -257,21 +252,6 @@ class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
 								mensaje: _mensajeError!,
 								padding: const EdgeInsets.only(top: 8.0),
 							),
-						const SizedBox(height: 8.0),
-						TecladoNumericoSimple(
-							valorActual: _valorPeso,
-							mostrarValor: false,
-							alPresionarTecla: (tecla) {
-								_limpiarError();
-								_agregarTecla(tecla);
-								_actualizarPrecioResuelto();
-							},
-							alBorrar: () {
-								_limpiarError();
-								_borrarTecla();
-								_actualizarPrecioResuelto();
-							},
-						),
 					],
 				),
 			),
@@ -312,20 +292,6 @@ class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
 			}
 		}
 		return buffer.toString();
-	}
-
-	void _agregarTecla(String tecla) {
-		if (tecla == '.' && _valorPeso.contains('.')) {
-			return;
-		}
-		_establecerValor(_valorPeso + tecla);
-	}
-
-	void _borrarTecla() {
-		if (_valorPeso.isEmpty) {
-			return;
-		}
-		_establecerValor(_valorPeso.substring(0, _valorPeso.length - 1));
 	}
 
 	void _cancelar() {

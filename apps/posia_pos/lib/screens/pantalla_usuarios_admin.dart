@@ -499,7 +499,7 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 				Navigator.pop(ctx);
 			}
 			if (mounted) {
-				ScaffoldMessenger.of(context).showSnackBar(
+				PosiaNotificaciones.mostrarSnackBar(context, 
 					SnackBar(
 						content: Text(editando == null ? 'Cuenta creada' : 'Cuenta actualizada'),
 					),
@@ -508,7 +508,7 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 			return true;
 		} on StateError catch (e) {
 			if (ctx.mounted) {
-				ScaffoldMessenger.of(ctx).showSnackBar(
+				PosiaNotificaciones.mostrarSnackBar(ctx, 
 					SnackBar(content: Text(e.message), backgroundColor: PosiaColors.cancelar),
 				);
 			}
@@ -518,7 +518,7 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 
 	Future<void> _cambiarActivo(Usuario usuario, bool activo, Usuario operador) async {
 		if (usuario.id == operador.id && !activo) {
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(
 					content: Text('No puede desactivar su propia cuenta'),
 					backgroundColor: PosiaColors.cancelar,
@@ -537,7 +537,7 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 			ref.invalidate(empleadosAsignacionProvider);
 			await refrescarDatosMaestros(ref);
 			if (mounted) {
-				ScaffoldMessenger.of(context).showSnackBar(
+				PosiaNotificaciones.mostrarSnackBar(context, 
 					SnackBar(
 						content: Text(
 							activo ? '${usuario.nombre} activado' : '${usuario.nombre} desactivado',
@@ -549,7 +549,7 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(content: Text(e.message), backgroundColor: PosiaColors.cancelar),
 			);
 		} finally {

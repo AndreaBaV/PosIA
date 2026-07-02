@@ -222,26 +222,10 @@ class _PantallaListasPreciosAdminState extends ConsumerState<PantallaListasPreci
 					),
 				),
 				const SizedBox(height: 12.0),
-				Padding(
-					padding: const EdgeInsets.symmetric(horizontal: 16.0),
-					child: TextField(
-						controller: _busquedaController,
-						decoration: InputDecoration(
-							labelText: 'Buscar producto en esta lista',
-							prefixIcon: const Icon(Icons.search),
-							border: const OutlineInputBorder(),
-							suffixIcon: _filtro.isNotEmpty
-								? IconButton(
-									icon: const Icon(Icons.clear),
-									onPressed: () {
-										_busquedaController.clear();
-										setState(() => _filtro = '');
-									},
-								)
-								: null,
-						),
-						onChanged: (v) => setState(() => _filtro = v.trim()),
-					),
+				CampoBusqueda(
+					controlador: _busquedaController,
+					sugerencia: 'Buscar producto en esta lista',
+					alCambiar: (v) => setState(() => _filtro = v.trim()),
 				),
 				Padding(
 					padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 4.0),
@@ -361,7 +345,7 @@ class _PantallaListasPreciosAdminState extends ConsumerState<PantallaListasPreci
 			return;
 		}
 		if (disponibles.isEmpty) {
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(content: Text('Todos los productos ya están en esta lista')),
 			);
 			return;
@@ -384,14 +368,14 @@ class _PantallaListasPreciosAdminState extends ConsumerState<PantallaListasPreci
 			if (!context.mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(content: Text('Producto agregado a la lista')),
 			);
 		} on StateError catch (e) {
 			if (!context.mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(content: Text(e.message), backgroundColor: PosiaColors.cancelar),
 			);
 		}
@@ -449,7 +433,7 @@ class _PantallaListasPreciosAdminState extends ConsumerState<PantallaListasPreci
 			if (!context.mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(content: Text(error), backgroundColor: PosiaColors.cancelar),
 			);
 			return;
@@ -461,14 +445,14 @@ class _PantallaListasPreciosAdminState extends ConsumerState<PantallaListasPreci
 			if (!context.mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(content: Text('Precio actualizado')),
 			);
 		} on StateError catch (e) {
 			if (!context.mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(content: Text(e.message), backgroundColor: PosiaColors.cancelar),
 			);
 		}
@@ -518,7 +502,7 @@ class _PantallaListasPreciosAdminState extends ConsumerState<PantallaListasPreci
 		if (!context.mounted) {
 			return;
 		}
-		ScaffoldMessenger.of(context).showSnackBar(
+		PosiaNotificaciones.mostrarSnackBar(context, 
 			const SnackBar(content: Text('Producto quitado de la lista')),
 		);
 	}
@@ -647,7 +631,7 @@ class _DialogoAgregarProductoListaState extends State<_DialogoAgregarProductoLis
 		final producto = _productoSeleccionado;
 		final precio = parsearPrecioTexto(_precioController.text);
 		if (producto == null) {
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(
 					content: Text('Seleccione un producto de la lista'),
 					backgroundColor: PosiaColors.cancelar,
@@ -656,7 +640,7 @@ class _DialogoAgregarProductoListaState extends State<_DialogoAgregarProductoLis
 			return;
 		}
 		if (precio == null) {
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(
 					content: Text('Ingrese un precio válido'),
 					backgroundColor: PosiaColors.cancelar,
@@ -669,7 +653,7 @@ class _DialogoAgregarProductoListaState extends State<_DialogoAgregarProductoLis
 			costoUnitario: producto.costoUnitario,
 		);
 		if (error != null) {
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(content: Text(error), backgroundColor: PosiaColors.cancelar),
 			);
 			return;
@@ -693,24 +677,12 @@ class _DialogoAgregarProductoListaState extends State<_DialogoAgregarProductoLis
 				child: Column(
 					crossAxisAlignment: CrossAxisAlignment.stretch,
 					children: [
-						TextField(
-							controller: _busquedaController,
+						CampoBusqueda(
+							padding: EdgeInsets.zero,
 							autofocus: true,
-							decoration: InputDecoration(
-								labelText: 'Buscar por nombre o código',
-								prefixIcon: const Icon(Icons.search),
-								border: const OutlineInputBorder(),
-								suffixIcon: _filtro.isNotEmpty
-									? IconButton(
-										icon: const Icon(Icons.clear),
-										onPressed: () {
-											_busquedaController.clear();
-											setState(() => _filtro = '');
-										},
-									)
-									: null,
-							),
-							onChanged: (v) => setState(() => _filtro = v.trim()),
+							controlador: _busquedaController,
+							sugerencia: 'Buscar por nombre o código',
+							alCambiar: (v) => setState(() => _filtro = v.trim()),
 						),
 						const SizedBox(height: 8.0),
 						Text(

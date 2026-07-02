@@ -152,7 +152,7 @@ class _PantallaCorteCajaState extends ConsumerState<PantallaCorteCaja> {
 				await hardware.obtenerImpresora().imprimirTicket(textoCorte);
 			} catch (_) {
 				if (mounted) {
-					ScaffoldMessenger.of(context).showSnackBar(
+					PosiaNotificaciones.mostrarSnackBar(context, 
 						const SnackBar(content: Text('Corte cerrado; no se pudo imprimir ticket')),
 					);
 				}

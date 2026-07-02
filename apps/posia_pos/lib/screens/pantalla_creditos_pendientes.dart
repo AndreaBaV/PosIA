@@ -219,14 +219,14 @@ class _PantallaCreditosPendientesState extends ConsumerState<PantallaCreditosPen
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
+      PosiaNotificaciones.mostrarSnackBar(context, 
         const SnackBar(content: Text('Crédito liquidado')),
       );
     } catch (error) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
+      PosiaNotificaciones.mostrarSnackBar(context, 
         SnackBar(content: Text('$error'), backgroundColor: PosiaColors.cancelar),
       );
     }

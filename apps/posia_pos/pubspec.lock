@@ -465,7 +465,7 @@ packages:
     source: hosted
     version: "4.1.2"
   image:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: image
       sha256: f9881ff4998044947ec38d098bc7c8316ae1186fa786eddffdb867b9bc94dfce
@@ -1380,6 +1380,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.2.1"
+  whatsapp_direct_send:
+    dependency: "direct main"
+    description:
+      name: whatsapp_direct_send
+      sha256: d90cef3759d55ffa8512ea59d6ff923cc01cc92ff2f4e7a8369d1a2913974ae8
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.2.1"
   win32:
     dependency: transitive
     description:

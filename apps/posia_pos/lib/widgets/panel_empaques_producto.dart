@@ -194,13 +194,13 @@ class _PanelEmpaquesProductoState extends ConsumerState<PanelEmpaquesProducto> {
 	}
 
 	void _mostrarError(String mensaje) {
-		ScaffoldMessenger.of(context).showSnackBar(
+		PosiaNotificaciones.mostrarSnackBar(context, 
 			SnackBar(content: Text(mensaje), backgroundColor: PosiaColors.cancelar),
 		);
 	}
 
 	void _mostrarExito(String mensaje) {
-		ScaffoldMessenger.of(context).showSnackBar(
+		PosiaNotificaciones.mostrarSnackBar(context, 
 			SnackBar(content: Text(mensaje)),
 		);
 	}

@@ -13,6 +13,7 @@ import 'package:posia_voice/posia_voice.dart';
 
 import '../providers/app_providers.dart';
 import '../util/teclado_util.dart';
+import '../utils/existencias_caja_util.dart';
 import '../voz/servicio_voz_dispositivo.dart';
 import 'pantalla_caja.dart'
 	show
@@ -210,7 +211,6 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 					focusNode: _busquedaFocus,
 					autofocus: false,
 					mostrarIconoEscaneo: false,
-					mostrarBotonOcultarTeclado: true,
 					hintText: 'Buscar…',
 					alCambiar: (texto) =>
 						ref.read(carritoNotifierProvider.notifier).establecerBusqueda(texto),
@@ -225,9 +225,12 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 			columnas: columnas,
 			categoriaId: estado.categoriaSeleccionadaId,
 			productos: estado.productos,
+			stockLocalPorProducto: estado.stockLocalPorProducto,
 			mensajeVacio: _busquedaController.text.trim().isNotEmpty
 				? 'Sin resultados'
 				: 'Sin productos',
+			alVerExistencias: (producto) =>
+				mostrarExistenciasProductoEnCaja(context, ref, producto),
 			alPresionarLargo: (producto) =>
 				intentarSeleccionarEmpaqueEnCaja(context, ref, producto),
 			alSeleccionar: (producto) async {
@@ -303,7 +306,7 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 		final productos = estado?.productos ?? [];
 		if (!mounted || productos.isEmpty) {
 			if (texto.trim().isNotEmpty && mounted) {
-				ScaffoldMessenger.of(context).showSnackBar(
+				PosiaNotificaciones.mostrarSnackBar(context, 
 					const SnackBar(
 						content: Text('Sin resultados'),
 						backgroundColor: PosiaColors.cancelar,
@@ -449,7 +452,7 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 					'Actívalo en Ajustes → Aplicaciones → La Fortuna → Micrófono.',
 				);
 			} else {
-				ScaffoldMessenger.of(context).showSnackBar(
+				PosiaNotificaciones.mostrarSnackBar(context, 
 					const SnackBar(
 						content: Text('Micrófono requerido'),
 						duration: Duration(seconds: 2),
@@ -521,7 +524,7 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 				if (Platform.isIOS) {
 					await _mostrarAyudaPermisosVozIos();
 				} else {
-					ScaffoldMessenger.of(context).showSnackBar(
+					PosiaNotificaciones.mostrarSnackBar(context, 
 						SnackBar(
 							content: Text(
 								_servicioVoz.ultimoError ?? 'Voz no disponible en este dispositivo',
@@ -636,7 +639,7 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 		}
 		setState(() => _escuchando = false);
 		if (mensajes.isNotEmpty) {
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(content: Text(mensajes.join(' · '))),
 			);
 		}

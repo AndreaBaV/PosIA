@@ -194,16 +194,6 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 		_ => false,
 	};
 
-	bool get _campoActivoAceptaDecimal =>
-		_campoMontoActivo != _CampoMontoCobro.diasCredito;
-
-	TextEditingController get _controladorCampoActivo => switch (_campoMontoActivo) {
-		_CampoMontoCobro.recibido => _recibidoCtrl,
-		_CampoMontoCobro.efectivoMixto => _efectivoCtrl,
-		_CampoMontoCobro.tarjetaMixto => _tarjetaCtrl,
-		_CampoMontoCobro.diasCredito => _diasCreditoCtrl,
-	};
-
 	KeyEventResult _manejarAtajoTeclado(FocusNode node, KeyEvent event) {
 		if (_cerrado || event is! KeyDownEvent) {
 			return KeyEventResult.ignored;
@@ -213,50 +203,6 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 			return KeyEventResult.handled;
 		}
 		return KeyEventResult.ignored;
-	}
-
-	void _agregarTeclaTouchpad(String tecla) {
-		if (!_capturaMontoActiva) {
-			return;
-		}
-		final ctrl = _controladorCampoActivo;
-		if (tecla == '.') {
-			if (!_campoActivoAceptaDecimal || ctrl.text.contains('.')) {
-				return;
-			}
-		}
-		final valor = _normalizarEntradaMonto(
-			ctrl.text + tecla,
-			admiteDecimal: _campoActivoAceptaDecimal,
-		);
-		_limpiarError();
-		_establecerValorCampo(ctrl, valor);
-	}
-
-	void _borrarTeclaTouchpad() {
-		if (!_capturaMontoActiva) {
-			return;
-		}
-		final ctrl = _controladorCampoActivo;
-		final valor = ctrl.text;
-		if (valor.isEmpty) {
-			return;
-		}
-		_limpiarError();
-		_establecerValorCampo(ctrl, valor.substring(0, valor.length - 1));
-	}
-
-	void _establecerValorCampo(TextEditingController ctrl, String valor) {
-		if (ctrl.text == valor) {
-			setState(() {});
-			return;
-		}
-		ctrl.value = TextEditingValue(
-			text: valor,
-			selection: TextSelection.collapsed(offset: valor.length),
-		);
-		setState(() {});
-		_enfocarCampoActivo();
 	}
 
 	String _normalizarEntradaMonto(String raw, {bool admiteDecimal = true}) {
@@ -296,10 +242,9 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 				focusNode: _atajosFocus,
 				child: AlertDialog(
 				title: const Text('Cobrar venta'),
-				content: SizedBox(
-					width: 420.0,
-					child: SingleChildScrollView(
-						child: Column(
+				content: ContenidoDialogoTeclado(
+					ancho: 420.0,
+					child: Column(
 							mainAxisSize: MainAxisSize.min,
 							crossAxisAlignment: CrossAxisAlignment.stretch,
 							children: [
@@ -457,21 +402,15 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 										mensaje: _mensajeError!,
 										padding: const EdgeInsets.only(top: 12.0),
 									),
-								if (_capturaMontoActiva) ...[
-									const SizedBox(height: 12.0),
-									Align(
-										alignment: Alignment.center,
-										child: TecladoNumericoSimple(
-											valorActual: _controladorCampoActivo.text,
-											mostrarValor: false,
-											alPresionarTecla: _agregarTeclaTouchpad,
-											alBorrar: _borrarTeclaTouchpad,
-										),
+								if (_capturaMontoActiva && _metodo != MetodoPago.mixto) ...[
+									const SizedBox(height: 4.0),
+									const Text(
+										'Toque el campo para editarlo · Tab alterna con teclado físico',
+										style: TextStyle(color: Colors.grey, fontSize: 11.0),
 									),
 								],
 							],
 						),
-					),
 				),
 				actions: [
 					TextButton(
@@ -501,13 +440,9 @@ class _DialogoCobroState extends State<_DialogoCobro> {
 		return TextField(
 			controller: controlador,
 			focusNode: foco,
-			// Suprimimos el teclado del sistema (iOS/Android) porque el
-			// diálogo ya muestra un TecladoNumericoSimple embebido. Mostrar
-			// dos teclados simultáneamente resulta ruidoso y hace que los
-			// mensajes de retroalimentación queden ocultos bajo el teclado
-			// del sistema. En Windows/Linux/macOS el teclado físico sigue
-			// escribiendo con normalidad.
-			keyboardType: TextInputType.none,
+			keyboardType: aceptaDecimales
+				? const TextInputType.numberWithOptions(decimal: true)
+				: TextInputType.number,
 			showCursor: true,
 			textInputAction: TextInputAction.done,
 			inputFormatters: [

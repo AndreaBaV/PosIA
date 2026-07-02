@@ -28,10 +28,10 @@ class PantallaInicioSesion extends ConsumerStatefulWidget {
 class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 	final _codigoController = TextEditingController();
 	final _codigoFocus = FocusNode();
+	final _pinController = TextEditingController();
 	final _gestorBiometria = GestorAccesoBiometrico();
 	_PasoInicioSesion _paso = _PasoInicioSesion.identificacion;
 	Usuario? _usuarioIdentificado;
-	String _pinIngresado = '';
 	String? _mensajeError;
 	bool _validando = false;
 	bool _biometriaDisponible = false;
@@ -43,6 +43,7 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 	void initState() {
 		super.initState();
 		_codigoFocus.addListener(() => setState(() {}));
+		_pinController.addListener(_revisarPinCompleto);
 		WidgetsBinding.instance.addPostFrameCallback((_) => _prepararBiometria());
 	}
 
@@ -50,7 +51,17 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 	void dispose() {
 		_codigoController.dispose();
 		_codigoFocus.dispose();
+		_pinController.dispose();
 		super.dispose();
+	}
+
+	void _revisarPinCompleto() {
+		if (_validando || _paso != _PasoInicioSesion.contrasena) {
+			return;
+		}
+		if (_pinController.text.length >= LONGITUD_PIN_ADMIN) {
+			_validarAcceso();
+		}
 	}
 
 	Future<void> _prepararBiometria() async {
@@ -160,13 +171,6 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 							decoration: InputDecoration(
 								labelText: 'Usuario',
 								prefixIcon: const Icon(Icons.person_outline),
-								suffixIcon: _codigoFocus.hasFocus
-									? IconButton(
-										icon: const Icon(Icons.keyboard_hide),
-										tooltip: 'Ocultar teclado',
-										onPressed: () => ocultarTeclado(context),
-									)
-									: null,
 								border: OutlineInputBorder(
 									borderRadius: BorderRadius.circular(12.0),
 								),
@@ -268,41 +272,33 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 						const SizedBox(height: 8.0),
 						Center(child: InsigniaRol(rol: usuario.rol, compacto: true)),
 						const SizedBox(height: 16.0),
-						DecoratedBox(
-							decoration: BoxDecoration(
-								color: colorRol.withValues(alpha: 0.06),
-								borderRadius: BorderRadius.circular(16.0),
-								border: Border.all(color: colorRol.withValues(alpha: 0.25)),
-							),
-							child: Padding(
-								padding: const EdgeInsets.symmetric(vertical: 20.0, horizontal: 12.0),
-								child: Column(
-									children: [
-										if (_mensajeError != null)
-											Padding(
-												padding: const EdgeInsets.only(bottom: 12.0),
-												child: Text(
-													_mensajeError!,
-													style: const TextStyle(color: PosiaColors.cancelar),
-													textAlign: TextAlign.center,
-												),
-											),
-										if (_validando)
-											const Padding(
-												padding: EdgeInsets.symmetric(vertical: 56.0),
-												child: CircularProgressIndicator(),
-											)
-										else
-											TecladoPinAdmin(
-												pinActual: _pinIngresado,
-												autofocusTeclado: true,
-												alPresionarDigito: _agregarDigito,
-												alBorrar: _borrarDigito,
-											),
-									],
+						if (_mensajeError != null)
+							Padding(
+								padding: const EdgeInsets.only(bottom: 12.0),
+								child: Text(
+									_mensajeError!,
+									style: const TextStyle(color: PosiaColors.cancelar),
+									textAlign: TextAlign.center,
 								),
 							),
-						),
+						if (_validando)
+							const Padding(
+								padding: EdgeInsets.symmetric(vertical: 24.0),
+								child: CircularProgressIndicator(),
+							)
+						else
+							CampoSecreto(
+								controller: _pinController,
+								autofocus: true,
+								keyboardType: TextInputType.number,
+								maxLength: LONGITUD_PIN_ADMIN,
+								decoration: const InputDecoration(
+									labelText: 'PIN',
+									prefixIcon: Icon(Icons.lock_outline),
+									counterText: '',
+									helperText: 'Enter confirma · Esc atrás',
+								),
+							),
 					],
 				),
 			),
@@ -346,7 +342,8 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(
+				context,
 				SnackBar(
 					content: Text('Hola, ${usuario.nombre}'),
 					backgroundColor: PresentacionRol.color(usuario.rol),
@@ -391,7 +388,7 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 			setState(() {
 				_usuarioIdentificado = usuario;
 				_paso = _PasoInicioSesion.contrasena;
-				_pinIngresado = '';
+				_pinController.clear();
 				_mensajeError = null;
 			});
 		} finally {
@@ -405,38 +402,14 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 		setState(() {
 			_paso = _PasoInicioSesion.identificacion;
 			_usuarioIdentificado = null;
-			_pinIngresado = '';
-			_mensajeError = null;
-		});
-	}
-
-	void _agregarDigito(String digito) {
-		if (_validando || _pinIngresado.length >= LONGITUD_PIN_ADMIN) {
-			return;
-		}
-		setState(() {
-			_pinIngresado = _pinIngresado + digito;
-			_mensajeError = null;
-		});
-		if (_pinIngresado.length < LONGITUD_PIN_ADMIN) {
-			return;
-		}
-		_validarAcceso();
-	}
-
-	void _borrarDigito() {
-		if (_pinIngresado.isEmpty || _validando) {
-			return;
-		}
-		setState(() {
-			_pinIngresado = _pinIngresado.substring(0, _pinIngresado.length - 1);
+			_pinController.clear();
 			_mensajeError = null;
 		});
 	}
 
 	Future<void> _validarAcceso() async {
 		final codigo = ValidadorCodigoUsuario.normalizar(_codigoController.text);
-		final pin = _pinIngresado;
+		final pin = _pinController.text;
 		setState(() => _validando = true);
 
 		try {
@@ -448,7 +421,7 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 					return;
 				}
 				setState(() {
-					_pinIngresado = '';
+					_pinController.clear();
 					_mensajeError = intento.motivoFallo?.mensajeUsuario ?? 'Contraseña incorrecta';
 				});
 				return;
@@ -471,7 +444,8 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(
+				context,
 				SnackBar(
 					content: Text(
 						registrarBiometria && _biometriaDisponible
@@ -487,7 +461,7 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 				return;
 			}
 			setState(() {
-				_pinIngresado = '';
+				_pinController.clear();
 				_mensajeError = '$error';
 			});
 		} finally {

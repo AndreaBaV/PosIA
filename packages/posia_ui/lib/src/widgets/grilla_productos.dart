@@ -21,6 +21,8 @@ class GrillaProductos extends StatefulWidget {
 		required this.productos,
 		required this.alSeleccionar,
 		this.alPresionarLargo,
+		this.alVerExistencias,
+		this.stockLocalPorProducto = const {},
 		this.categoriaId,
 		this.mensajeVacio = 'Sin productos',
 		this.indiceSeleccionado,
@@ -30,6 +32,9 @@ class GrillaProductos extends StatefulWidget {
 
 	/// Productos disponibles en catalogo.
 	final List<Producto> productos;
+
+	/// Existencia en la tienda activa por productoId.
+	final Map<String, double> stockLocalPorProducto;
 
 	/// Categoria activa (para conservar scroll al cambiar filtro).
 	final String? categoriaId;
@@ -42,6 +47,9 @@ class GrillaProductos extends StatefulWidget {
 
 	/// Accion al mantener pulsado (p. ej. vender por empaque).
 	final ValueChanged<Producto>? alPresionarLargo;
+
+	/// Accion al pulsar el icono de existencias.
+	final ValueChanged<Producto>? alVerExistencias;
 
 	/// Indice resaltado para navegacion con teclado (opcional).
 	final int? indiceSeleccionado;
@@ -118,15 +126,22 @@ class _GrillaProductosState extends State<GrillaProductos> {
 			itemBuilder: (context, indice) {
 				final producto = widget.productos[indice];
 				final seleccionado = widget.indiceSeleccionado == indice;
+				final stockLocal = widget.stockLocalPorProducto[producto.id] ?? 0.0;
+				final sinExistenciaLocal =
+					stockLocal <= 0 && !producto.permiteStockNegativo;
 				final clave = _clavesTarjetas.putIfAbsent(indice, GlobalKey.new);
 				return _TarjetaProducto(
 					key: clave,
 					producto: producto,
 					seleccionado: seleccionado,
+					sinExistenciaLocal: sinExistenciaLocal,
 					alPresionar: () => widget.alSeleccionar(producto),
 					alPresionarLargo: widget.alPresionarLargo == null
 						? null
 						: () => widget.alPresionarLargo!(producto),
+					alVerExistencias: widget.alVerExistencias == null
+						? null
+						: () => widget.alVerExistencias!(producto),
 				);
 			},
 		);
@@ -139,21 +154,27 @@ class _TarjetaProducto extends StatelessWidget {
 		required this.producto,
 		required this.alPresionar,
 		this.alPresionarLargo,
+		this.alVerExistencias,
 		this.seleccionado = false,
+		this.sinExistenciaLocal = false,
 		super.key,
 	});
 
 	final Producto producto;
 	final VoidCallback alPresionar;
 	final VoidCallback? alPresionarLargo;
+	final VoidCallback? alVerExistencias;
 	final bool seleccionado;
+	final bool sinExistenciaLocal;
 
 	@override
 	Widget build(BuildContext context) {
+		final colorAcento = sinExistenciaLocal ? PosiaColors.sinExistencia : PosiaColors.cobrar;
+		final colorFondo = seleccionado
+			? colorAcento.withValues(alpha: 0.12)
+			: (sinExistenciaLocal ? PosiaColors.tarjetaSinExistencia : PosiaColors.tarjeta);
 		return Material(
-			color: seleccionado
-				? PosiaColors.cobrar.withValues(alpha: 0.12)
-				: PosiaColors.tarjeta,
+			color: colorFondo,
 			borderRadius: BorderRadius.circular(14.0),
 			elevation: seleccionado ? 3.0 : 1.0,
 			shadowColor: Colors.black.withValues(alpha: 0.08),
@@ -165,48 +186,93 @@ class _TarjetaProducto extends StatelessWidget {
 					decoration: BoxDecoration(
 						borderRadius: BorderRadius.circular(14.0),
 						border: seleccionado
-							? Border.all(color: PosiaColors.cobrar, width: 2.5)
-							: null,
+							? Border.all(color: colorAcento, width: 2.5)
+							: (sinExistenciaLocal
+								? Border.all(color: PosiaColors.sinExistencia.withValues(alpha: 0.45))
+								: null),
 					),
-					child: Padding(
-						padding: const EdgeInsets.all(10.0),
-						child: Column(
-							mainAxisAlignment: MainAxisAlignment.center,
-							children: [
-								Container(
-									padding: const EdgeInsets.all(10.0),
-									decoration: BoxDecoration(
-										color: PosiaColors.cobrar.withValues(alpha: 0.1),
-										borderRadius: BorderRadius.circular(12.0),
-									),
-									child: Icon(
-										_resolverIconoProducto(producto),
-										size: 40.0,
-										color: PosiaColors.cobrar,
+					child: Stack(
+						children: [
+							Padding(
+								padding: const EdgeInsets.all(10.0),
+								child: Column(
+									mainAxisAlignment: MainAxisAlignment.center,
+									children: [
+										Container(
+											padding: const EdgeInsets.all(10.0),
+											decoration: BoxDecoration(
+												color: colorAcento.withValues(alpha: 0.1),
+												borderRadius: BorderRadius.circular(12.0),
+											),
+											child: Icon(
+												_resolverIconoProducto(producto),
+												size: 40.0,
+												color: colorAcento,
+											),
+										),
+										const SizedBox(height: 8.0),
+										Text(
+											formatearMoneda(producto.precioBase),
+											style: Theme.of(context).textTheme.titleMedium?.copyWith(
+												color: colorAcento,
+												fontWeight: FontWeight.bold,
+											),
+										),
+										if (producto.moduloVertical == ModuloVertical.carniceria)
+											Text(
+												'/ kg',
+												style: TextStyle(color: Colors.grey.shade600, fontSize: 11.0),
+											),
+										const SizedBox(height: 4.0),
+										Text(
+											producto.nombre,
+											textAlign: TextAlign.center,
+											maxLines: 2,
+											overflow: TextOverflow.ellipsis,
+											style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+												fontWeight: FontWeight.w500,
+												color: sinExistenciaLocal ? PosiaColors.neutro : null,
+											),
+										),
+										if (sinExistenciaLocal) ...[
+											const SizedBox(height: 4.0),
+											Text(
+												'Sin existencia',
+												style: Theme.of(context).textTheme.labelSmall?.copyWith(
+													color: PosiaColors.sinExistencia,
+													fontWeight: FontWeight.w600,
+												),
+											),
+										],
+									],
+								),
+							),
+							if (alVerExistencias != null)
+								Positioned(
+									top: 2.0,
+									right: 2.0,
+									child: Material(
+										color: Colors.transparent,
+										child: IconButton(
+											tooltip: 'Ver existencias',
+											visualDensity: VisualDensity.compact,
+											padding: EdgeInsets.zero,
+											constraints: const BoxConstraints(
+												minWidth: 36.0,
+												minHeight: 36.0,
+											),
+											icon: Icon(
+												Icons.info_outline,
+												size: 20.0,
+												color: sinExistenciaLocal
+													? PosiaColors.sinExistencia
+													: PosiaColors.neutro,
+											),
+											onPressed: alVerExistencias,
+										),
 									),
 								),
-								const SizedBox(height: 8.0),
-								Text(
-									formatearMoneda(producto.precioBase),
-									style: Theme.of(context).textTheme.titleMedium?.copyWith(
-										color: PosiaColors.cobrar,
-										fontWeight: FontWeight.bold,
-									),
-								),
-								if (producto.moduloVertical == ModuloVertical.carniceria)
-									Text('/ kg', style: TextStyle(color: Colors.grey.shade600, fontSize: 11.0)),
-								const SizedBox(height: 4.0),
-								Text(
-									producto.nombre,
-									textAlign: TextAlign.center,
-									maxLines: 2,
-									overflow: TextOverflow.ellipsis,
-									style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-										fontWeight: FontWeight.w500,
-									),
-								),
-							],
-						),
+						],
 					),
 				),
 			),

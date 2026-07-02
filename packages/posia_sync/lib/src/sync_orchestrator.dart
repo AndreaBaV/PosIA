@@ -130,12 +130,21 @@ class SyncOrchestrator {
 			);
 			if (!resultado.exitoso || resultado.eventos.isEmpty) {
 				continuar = false;
-			} else {
-				await aplicador.aplicarLote(resultado.eventos);
-				aplicados = aplicados + resultado.eventos.length;
-				cursor = resultado.ultimoSeq;
-				await almacenCursor.guardarCursorHub(cursor);
+				continue;
 			}
+			await aplicador.aplicarLote(resultado.eventos);
+			aplicados = aplicados + resultado.eventos.length;
+			// Guarda de seguridad: si el cursor no avanza, detener el pull para no
+			// repetir la misma pagina indefinidamente (evita bloquear la BD y la UI).
+			if (resultado.ultimoSeq <= cursor) {
+				continuar = false;
+				continue;
+			}
+			cursor = resultado.ultimoSeq;
+			await almacenCursor.guardarCursorHub(cursor);
+			// Cede el hilo entre paginas para que las lecturas de la UI (Admin,
+			// caja) se intercalen y no perciban un spinner interminable.
+			await Future<void>.delayed(Duration.zero);
 		}
 		return aplicados;
 	}

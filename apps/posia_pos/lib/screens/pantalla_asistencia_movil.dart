@@ -86,7 +86,7 @@ class _PantallaAsistenciaMovilState extends ConsumerState<PantallaAsistenciaMovi
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(
 					content: Text('Entrada registrada'),
 					backgroundColor: PosiaColors.cobrar,
@@ -97,7 +97,7 @@ class _PantallaAsistenciaMovilState extends ConsumerState<PantallaAsistenciaMovi
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(content: Text('$error'), backgroundColor: PosiaColors.cancelar),
 			);
 		} finally {
@@ -117,7 +117,7 @@ class _PantallaAsistenciaMovilState extends ConsumerState<PantallaAsistenciaMovi
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(content: Text('Biometría no disponible')),
 			);
 			return;
@@ -144,7 +144,7 @@ class _PantallaAsistenciaMovilState extends ConsumerState<PantallaAsistenciaMovi
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(
 					content: Text('Entrada registrada'),
 					backgroundColor: PosiaColors.cobrar,
@@ -155,7 +155,7 @@ class _PantallaAsistenciaMovilState extends ConsumerState<PantallaAsistenciaMovi
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(content: Text('$error'), backgroundColor: PosiaColors.cancelar),
 			);
 		} finally {
@@ -178,7 +178,7 @@ class _PantallaAsistenciaMovilState extends ConsumerState<PantallaAsistenciaMovi
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(
 					content: Text('Salida registrada'),
 					duration: Duration(seconds: 2),
@@ -188,7 +188,7 @@ class _PantallaAsistenciaMovilState extends ConsumerState<PantallaAsistenciaMovi
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(content: Text('$error'), backgroundColor: PosiaColors.cancelar),
 			);
 		} finally {
@@ -204,9 +204,11 @@ class _PantallaAsistenciaMovilState extends ConsumerState<PantallaAsistenciaMovi
 		return GestureDetector(
 			onTap: () => ocultarTeclado(context),
 			child: Scaffold(
+				resizeToAvoidBottomInset: true,
 				appBar: AppBar(title: const Text('Asistencia')),
-				body: Padding(
+				body: CuerpoScrollTeclado(
 					padding: const EdgeInsets.all(16.0),
+					alinearAlCentroCuandoCabe: true,
 					child: abierta != null
 						? Column(
 							mainAxisAlignment: MainAxisAlignment.center,
@@ -228,58 +230,47 @@ class _PantallaAsistenciaMovilState extends ConsumerState<PantallaAsistenciaMovi
 							],
 						)
 						: Column(
+							mainAxisSize: MainAxisSize.min,
 							children: [
-								Expanded(
-									child: Column(
-										mainAxisAlignment: MainAxisAlignment.center,
-										children: [
-											OutlinedButton.icon(
-												onPressed: _cargando ? null : _entradaBiometrica,
-												icon: const Icon(Icons.fingerprint, size: 28.0),
-												label: const Text('Entrada biométrica'),
-												style: OutlinedButton.styleFrom(
-													minimumSize: const Size(double.infinity, 56.0),
-												),
-											),
-											const SizedBox(height: 24.0),
-											const Row(
-												children: [
-													Expanded(child: Divider()),
-													Padding(
-														padding: EdgeInsets.symmetric(horizontal: 10.0),
-														child: Text('o', style: TextStyle(color: Colors.grey)),
-													),
-													Expanded(child: Divider()),
-												],
-											),
-											const SizedBox(height: 24.0),
-											TextField(
-												controller: _pinController,
-												focusNode: _pinFocus,
-												keyboardType: TextInputType.number,
-												maxLength: 4,
-												textAlign: TextAlign.center,
-												style: const TextStyle(
-													fontSize: 24.0,
-													letterSpacing: 8.0,
-													fontWeight: FontWeight.bold,
-												),
-												decoration: InputDecoration(
-													labelText: 'PIN',
-													border: const OutlineInputBorder(),
-													counterText: '',
-													suffixIcon: _pinFocus.hasFocus
-														? IconButton(
-															icon: const Icon(Icons.keyboard_hide),
-															tooltip: 'Ocultar teclado',
-															onPressed: () => ocultarTeclado(context),
-														)
-														: null,
-												),
-											),
-										],
+								OutlinedButton.icon(
+									onPressed: _cargando ? null : _entradaBiometrica,
+									icon: const Icon(Icons.fingerprint, size: 28.0),
+									label: const Text('Entrada biométrica'),
+									style: OutlinedButton.styleFrom(
+										minimumSize: const Size(double.infinity, 56.0),
 									),
 								),
+								const SizedBox(height: 24.0),
+								const Row(
+									children: [
+										Expanded(child: Divider()),
+										Padding(
+											padding: EdgeInsets.symmetric(horizontal: 10.0),
+											child: Text('o', style: TextStyle(color: Colors.grey)),
+										),
+										Expanded(child: Divider()),
+									],
+								),
+								const SizedBox(height: 24.0),
+								TextField(
+									controller: _pinController,
+									focusNode: _pinFocus,
+									keyboardType: TextInputType.number,
+									maxLength: 4,
+									textAlign: TextAlign.center,
+									style: const TextStyle(
+										fontSize: 24.0,
+										letterSpacing: 8.0,
+										fontWeight: FontWeight.bold,
+									),
+									scrollPadding: const EdgeInsets.only(bottom: 120.0),
+									decoration: const InputDecoration(
+										labelText: 'PIN',
+										border: OutlineInputBorder(),
+										counterText: '',
+									),
+								),
+								const SizedBox(height: 24.0),
 								SizedBox(
 									width: double.infinity,
 									height: 48.0,

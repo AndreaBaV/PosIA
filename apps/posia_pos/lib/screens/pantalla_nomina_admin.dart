@@ -874,7 +874,6 @@ class _PantallaNominaAdminState extends ConsumerState<PantallaNominaAdmin> {
 		if (!mounted) {
 			return;
 		}
-		final messenger = ScaffoldMessenger.of(context);
 		final usuario = ref.read(sesionUsuarioProvider);
 		if (usuario == null) {
 			return;
@@ -896,7 +895,7 @@ class _PantallaNominaAdminState extends ConsumerState<PantallaNominaAdmin> {
 			ref.invalidate(_datosNominaProvider);
 			if (mounted) {
 				setState(() => _periodoFiltroId = periodo.id);
-				messenger.showSnackBar(
+				PosiaNotificaciones.mostrarSnackBar(context, 
 					SnackBar(
 						content: Text(
 							'Período calculado (${_formatoRangoPeriodo(periodo)})',
@@ -921,7 +920,7 @@ class _PantallaNominaAdminState extends ConsumerState<PantallaNominaAdmin> {
 		if (!context.mounted) {
 			return;
 		}
-		ScaffoldMessenger.of(context).showSnackBar(
+		PosiaNotificaciones.mostrarSnackBar(context, 
 			const SnackBar(content: Text('CSV copiado al portapapeles')),
 		);
 	}

@@ -26,6 +26,12 @@ class PosiaColors {
 
 	/// Superficie de tarjetas de producto.
 	static const Color tarjeta = Color(0xFFFFFFFF);
+
+	/// Producto visible pero sin existencia en la tienda actual.
+	static const Color sinExistencia = Color(0xFF9E9E9E);
+
+	/// Fondo de tarjeta sin existencia local.
+	static const Color tarjetaSinExistencia = Color(0xFFEEEEEE);
 }
 
 /// Provee [ThemeData] configurado para modo caja.
@@ -47,10 +53,64 @@ class PosiaTheme {
 			surface: PosiaColors.tarjeta,
 			onSurface: PosiaColors.neutro,
 		);
+		const radioBorde = 12.0;
+		final bordeHabilitado = OutlineInputBorder(
+			borderRadius: BorderRadius.circular(radioBorde),
+			borderSide: BorderSide(color: Colors.grey.shade300),
+		);
 		return ThemeData(
 			useMaterial3: true,
 			colorScheme: esquema,
 			scaffoldBackgroundColor: PosiaColors.fondo,
+			inputDecorationTheme: InputDecorationTheme(
+				filled: true,
+				fillColor: PosiaColors.tarjeta,
+				isDense: true,
+				contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
+				border: OutlineInputBorder(borderRadius: BorderRadius.circular(radioBorde)),
+				enabledBorder: bordeHabilitado,
+				focusedBorder: OutlineInputBorder(
+					borderRadius: BorderRadius.circular(radioBorde),
+					borderSide: const BorderSide(color: PosiaColors.cobrar, width: 2.0),
+				),
+				errorBorder: OutlineInputBorder(
+					borderRadius: BorderRadius.circular(radioBorde),
+					borderSide: const BorderSide(color: PosiaColors.cancelar),
+				),
+				focusedErrorBorder: OutlineInputBorder(
+					borderRadius: BorderRadius.circular(radioBorde),
+					borderSide: const BorderSide(color: PosiaColors.cancelar, width: 2.0),
+				),
+				prefixIconColor: PosiaColors.neutro.withValues(alpha: 0.65),
+				hintStyle: TextStyle(color: Colors.grey.shade500),
+				labelStyle: TextStyle(color: Colors.grey.shade700),
+			),
+			dropdownMenuTheme: DropdownMenuThemeData(
+				inputDecorationTheme: InputDecorationTheme(
+					filled: true,
+					fillColor: PosiaColors.tarjeta,
+					border: OutlineInputBorder(borderRadius: BorderRadius.circular(radioBorde)),
+					enabledBorder: bordeHabilitado,
+					focusedBorder: OutlineInputBorder(
+						borderRadius: BorderRadius.circular(radioBorde),
+						borderSide: const BorderSide(color: PosiaColors.cobrar, width: 2.0),
+					),
+				),
+			),
+			expansionTileTheme: const ExpansionTileThemeData(
+				iconColor: PosiaColors.cobrar,
+				collapsedIconColor: PosiaColors.neutro,
+				childrenPadding: EdgeInsets.zero,
+				tilePadding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+			),
+			snackBarTheme: SnackBarThemeData(
+				behavior: SnackBarBehavior.floating,
+				shape: RoundedRectangleBorder(
+					borderRadius: BorderRadius.circular(12.0),
+				),
+				backgroundColor: PosiaColors.neutro,
+				contentTextStyle: const TextStyle(color: Colors.white),
+			),
 			cardTheme: CardThemeData(
 				color: PosiaColors.tarjeta,
 				elevation: 1.0,

@@ -650,14 +650,13 @@ class _PantallaReportesAdminState extends ConsumerState<PantallaReportesAdmin> {
 			alertas: datos.alertas,
 			nombresTienda: datos.nombresTienda,
 		);
-		final messenger = ScaffoldMessenger.of(context);
 		switch (accion) {
 			case _AccionExportar.copiar:
 				await ExportadorReportes.copiarPortapapeles(csv);
 				if (!context.mounted) {
 					return;
 				}
-				messenger.showSnackBar(
+				PosiaNotificaciones.mostrarSnackBar(context, 
 					const SnackBar(content: Text('Reporte copiado al portapapeles')),
 				);
 			case _AccionExportar.guardar:
@@ -666,13 +665,13 @@ class _PantallaReportesAdminState extends ConsumerState<PantallaReportesAdmin> {
 					return;
 				}
 				if (ruta == null) {
-					messenger.showSnackBar(
+					PosiaNotificaciones.mostrarSnackBar(context, 
 						const SnackBar(
 							content: Text('No se pudo guardar el archivo en esta plataforma'),
 						),
 					);
 				} else {
-					messenger.showSnackBar(
+					PosiaNotificaciones.mostrarSnackBar(context, 
 						SnackBar(content: Text('Reporte guardado: $ruta')),
 					);
 				}

@@ -30,9 +30,9 @@ class _PantallaInstalacionTecnicoState extends ConsumerState<PantallaInstalacion
 	final _nombreNegocioController = TextEditingController();
 	final _nombreTiendaController = TextEditingController(text: 'Principal');
 	final _codigoAdminController = TextEditingController(text: '1001');
-	String _pinTecnico = '';
-	String _pinTecnicoConfirmacion = '';
-	String _pinAdminNegocio = '';
+	final _pinAdminNegocioController = TextEditingController();
+	final _pinTecnicoController = TextEditingController();
+	final _pinTecnicoConfirmacionController = TextEditingController();
 	bool _conectarNube = true;
 	bool _guardando = false;
 	String? _mensaje;
@@ -45,6 +45,9 @@ class _PantallaInstalacionTecnicoState extends ConsumerState<PantallaInstalacion
 		_nombreNegocioController.dispose();
 		_nombreTiendaController.dispose();
 		_codigoAdminController.dispose();
+		_pinAdminNegocioController.dispose();
+		_pinTecnicoController.dispose();
+		_pinTecnicoConfirmacionController.dispose();
 		super.dispose();
 	}
 
@@ -165,24 +168,16 @@ class _PantallaInstalacionTecnicoState extends ConsumerState<PantallaInstalacion
 						),
 					),
 					const SizedBox(height: 12.0),
-					const Text('PIN del administrador', style: TextStyle(fontWeight: FontWeight.w600)),
-					const SizedBox(height: 8.0),
-					TecladoPinAdmin(
-						pinActual: _pinAdminNegocio,
-						alPresionarDigito: (d) {
-							if (_pinAdminNegocio.length >= LONGITUD_PIN_ADMIN) {
-								return;
-							}
-							setState(() => _pinAdminNegocio = _pinAdminNegocio + d);
-						},
-						alBorrar: () {
-							if (_pinAdminNegocio.isEmpty) {
-								return;
-							}
-							setState(() =>
-								_pinAdminNegocio = _pinAdminNegocio.substring(0, _pinAdminNegocio.length - 1),
-							);
-						},
+					CampoSecreto(
+						controller: _pinAdminNegocioController,
+						keyboardType: TextInputType.number,
+						maxLength: LONGITUD_PIN_ADMIN,
+						decoration: const InputDecoration(
+							labelText: 'PIN del administrador',
+							border: OutlineInputBorder(),
+							prefixIcon: Icon(Icons.lock_outline),
+							counterText: '',
+						),
 					),
 				],
 				if (!widget.reconfiguracion) ...[
@@ -197,44 +192,28 @@ class _PantallaInstalacionTecnicoState extends ConsumerState<PantallaInstalacion
 						style: TextStyle(color: Colors.black54, fontSize: 13.0),
 					),
 					const SizedBox(height: 12.0),
-					TecladoPinAdmin(
-						pinActual: _pinTecnico,
-						alPresionarDigito: (d) {
-							if (_pinTecnico.length >= LONGITUD_PIN_ADMIN) {
-								return;
-							}
-							setState(() => _pinTecnico = _pinTecnico + d);
-						},
-						alBorrar: () {
-							if (_pinTecnico.isEmpty) {
-								return;
-							}
-							setState(() => _pinTecnico = _pinTecnico.substring(0, _pinTecnico.length - 1));
-						},
+					CampoSecreto(
+						controller: _pinTecnicoController,
+						keyboardType: TextInputType.number,
+						maxLength: LONGITUD_PIN_ADMIN,
+						decoration: const InputDecoration(
+							labelText: 'PIN técnico',
+							border: OutlineInputBorder(),
+							prefixIcon: Icon(Icons.lock_outline),
+							counterText: '',
+						),
 					),
 					const SizedBox(height: 16.0),
-					const Text(
-						'Confirma el PIN',
-						style: TextStyle(fontWeight: FontWeight.w600),
-					),
-					const SizedBox(height: 12.0),
-					TecladoPinAdmin(
-						pinActual: _pinTecnicoConfirmacion,
-						alPresionarDigito: (d) {
-							if (_pinTecnicoConfirmacion.length >= LONGITUD_PIN_ADMIN) {
-								return;
-							}
-							setState(() => _pinTecnicoConfirmacion = _pinTecnicoConfirmacion + d);
-						},
-						alBorrar: () {
-							if (_pinTecnicoConfirmacion.isEmpty) {
-								return;
-							}
-							setState(() =>
-								_pinTecnicoConfirmacion =
-									_pinTecnicoConfirmacion.substring(0, _pinTecnicoConfirmacion.length - 1),
-							);
-						},
+					CampoSecreto(
+						controller: _pinTecnicoConfirmacionController,
+						keyboardType: TextInputType.number,
+						maxLength: LONGITUD_PIN_ADMIN,
+						decoration: const InputDecoration(
+							labelText: 'Confirma el PIN',
+							border: OutlineInputBorder(),
+							prefixIcon: Icon(Icons.lock_outline),
+							counterText: '',
+						),
 					),
 				],
 				if (_mensaje != null) ...[
@@ -290,11 +269,14 @@ class _PantallaInstalacionTecnicoState extends ConsumerState<PantallaInstalacion
 			return;
 		}
 		if (!widget.reconfiguracion) {
-			if (_pinTecnico.length != LONGITUD_PIN_ADMIN) {
+			final pinTecnico = _pinTecnicoController.text;
+			final pinTecnicoConfirmacion = _pinTecnicoConfirmacionController.text;
+			final pinAdminNegocio = _pinAdminNegocioController.text;
+			if (pinTecnico.length != LONGITUD_PIN_ADMIN) {
 				setState(() => _mensaje = 'Define un PIN técnico de $LONGITUD_PIN_ADMIN dígitos');
 				return;
 			}
-			if (_pinTecnico != _pinTecnicoConfirmacion) {
+			if (pinTecnico != pinTecnicoConfirmacion) {
 				setState(() => _mensaje = 'Los PIN no coinciden');
 				return;
 			}
@@ -303,7 +285,7 @@ class _PantallaInstalacionTecnicoState extends ConsumerState<PantallaInstalacion
 					setState(() => _mensaje = 'Ingresa el nombre del negocio');
 					return;
 				}
-				if (_pinAdminNegocio.length != LONGITUD_PIN_ADMIN) {
+				if (pinAdminNegocio.length != LONGITUD_PIN_ADMIN) {
 					setState(() => _mensaje = 'Define el PIN del administrador ($LONGITUD_PIN_ADMIN dígitos)');
 					return;
 				}
@@ -319,12 +301,12 @@ class _PantallaInstalacionTecnicoState extends ConsumerState<PantallaInstalacion
 				hubUrl: _hubUrlController.text,
 				hubApiKey: _hubApiKeyController.text,
 				soloOffline: !_conectarNube,
-				pinTecnico: widget.reconfiguracion ? '' : _pinTecnico,
+				pinTecnico: widget.reconfiguracion ? '' : _pinTecnicoController.text,
 				nombreNegocio: _nombreNegocioController.text,
 				nombreTienda: _nombreTiendaController.text,
 				nombreAdmin: '',
 				codigoAdmin: _conectarNube ? '' : _codigoAdminController.text,
-				pinAdmin: _conectarNube ? '' : _pinAdminNegocio,
+				pinAdmin: _conectarNube ? '' : _pinAdminNegocioController.text,
 			);
 			ref.invalidate(servicioAutenticacionProvider);
 			ref.invalidate(instalacionCompletaProvider);
@@ -345,9 +327,7 @@ class _PantallaInstalacionTecnicoState extends ConsumerState<PantallaInstalacion
 				return;
 			}
 			if (widget.reconfiguracion) {
-				ScaffoldMessenger.of(context).showSnackBar(
-					SnackBar(content: Text(mensaje)),
-				);
+				PosiaNotificaciones.mostrar(context, mensaje);
 				Navigator.of(context).pop();
 				return;
 			}
@@ -412,8 +392,26 @@ class _DialogoPinTecnico extends StatefulWidget {
 }
 
 class _DialogoPinTecnicoState extends State<_DialogoPinTecnico> {
-	var _pin = '';
+	final _pinController = TextEditingController();
 	String? _error;
+
+	@override
+	void initState() {
+		super.initState();
+		_pinController.addListener(_revisarPinCompleto);
+	}
+
+	@override
+	void dispose() {
+		_pinController.dispose();
+		super.dispose();
+	}
+
+	void _revisarPinCompleto() {
+		if (_pinController.text.length >= LONGITUD_PIN_ADMIN) {
+			_validar();
+		}
+	}
 
 	@override
 	Widget build(BuildContext context) {
@@ -424,30 +422,17 @@ class _DialogoPinTecnicoState extends State<_DialogoPinTecnico> {
 				children: [
 					const Text('Ingresa el PIN de administrador del dispositivo.'),
 					const SizedBox(height: 12.0),
-					TecladoPinAdmin(
-						pinActual: _pin,
-						autofocusTeclado: true,
-						alPresionarDigito: (d) {
-							if (_pin.length >= LONGITUD_PIN_ADMIN) {
-								return;
-							}
-							setState(() {
-								_pin = _pin + d;
-								_error = null;
-							});
-							if (_pin.length == LONGITUD_PIN_ADMIN) {
-								_validar();
-							}
-						},
-						alBorrar: () {
-							if (_pin.isEmpty) {
-								return;
-							}
-							setState(() {
-								_pin = _pin.substring(0, _pin.length - 1);
-								_error = null;
-							});
-						},
+					CampoSecreto(
+						controller: _pinController,
+						autofocus: true,
+						keyboardType: TextInputType.number,
+						maxLength: LONGITUD_PIN_ADMIN,
+						decoration: const InputDecoration(
+							labelText: 'PIN',
+							border: OutlineInputBorder(),
+							prefixIcon: Icon(Icons.lock_outline),
+							counterText: '',
+						),
 					),
 					if (_error != null) ...[
 						const SizedBox(height: 8.0),
@@ -465,19 +450,20 @@ class _DialogoPinTecnicoState extends State<_DialogoPinTecnico> {
 	}
 
 	void _validar() {
+		final pin = _pinController.text;
 		if (widget.pinEsperado.isEmpty) {
 			setState(() {
-				_pin = '';
+				_pinController.clear();
 				_error = 'PIN técnico no configurado. Complete la instalación inicial.';
 			});
 			return;
 		}
-		if (_pin == widget.pinEsperado) {
-			Navigator.of(context).pop(_pin);
+		if (pin == widget.pinEsperado) {
+			Navigator.of(context).pop(pin);
 			return;
 		}
 		setState(() {
-			_pin = '';
+			_pinController.clear();
 			_error = 'PIN incorrecto';
 		});
 	}

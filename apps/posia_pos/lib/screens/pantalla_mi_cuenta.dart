@@ -119,14 +119,14 @@ class _PantallaMiCuentaState extends ConsumerState<PantallaMiCuenta> {
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(content: Text('Nombre actualizado')),
 			);
 		} on StateError catch (e) {
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(content: Text(e.message), backgroundColor: PosiaColors.cancelar),
 			);
 		}
@@ -148,14 +148,14 @@ class _PantallaMiCuentaState extends ConsumerState<PantallaMiCuenta> {
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(content: Text('PIN actualizado')),
 			);
 		} on StateError catch (e) {
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(content: Text(e.message), backgroundColor: PosiaColors.cancelar),
 			);
 		}

@@ -91,26 +91,10 @@ class _PantallaProveedoresAdminState extends ConsumerState<PantallaProveedoresAd
 										),
 								],
 							),
-							Padding(
-								padding: const EdgeInsets.symmetric(horizontal: 16.0),
-								child: TextField(
-									controller: _busquedaController,
-									decoration: InputDecoration(
-										labelText: 'Buscar por nombre, contacto, teléfono o RFC',
-										prefixIcon: const Icon(Icons.search),
-										border: const OutlineInputBorder(),
-										suffixIcon: _filtro.isNotEmpty
-											? IconButton(
-												icon: const Icon(Icons.clear),
-												onPressed: () {
-													_busquedaController.clear();
-													setState(() => _filtro = '');
-												},
-											)
-											: null,
-									),
-									onChanged: (v) => setState(() => _filtro = v.trim()),
-								),
+							CampoBusqueda(
+								controlador: _busquedaController,
+								sugerencia: 'Buscar por nombre, contacto, teléfono o RFC',
+								alCambiar: (v) => setState(() => _filtro = v.trim()),
 							),
 							if (_filtro.isNotEmpty)
 								Padding(
@@ -318,14 +302,14 @@ class _PantallaProveedoresAdminState extends ConsumerState<PantallaProveedoresAd
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(content: Text('Proveedor eliminado')),
 			);
 		} on StateError catch (e) {
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(
 					content: Text(e.message),
 					backgroundColor: PosiaColors.cancelar,

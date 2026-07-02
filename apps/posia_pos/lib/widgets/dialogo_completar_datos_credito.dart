@@ -76,7 +76,7 @@ Future<Cliente?> mostrarDialogoCompletarDatosCredito({
 						final dias = int.tryParse(diasCtrl.text.trim()) ??
 							DIAS_CREDITO_PREDETERMINADO;
 						if (telefono.isEmpty || direccion.isEmpty) {
-							ScaffoldMessenger.of(ctx).showSnackBar(
+							PosiaNotificaciones.mostrarSnackBar(ctx, 
 								const SnackBar(
 									content: Text('Teléfono y dirección son obligatorios'),
 									backgroundColor: PosiaColors.cancelar,
@@ -85,7 +85,7 @@ Future<Cliente?> mostrarDialogoCompletarDatosCredito({
 							return;
 						}
 						if (dias <= 0) {
-							ScaffoldMessenger.of(ctx).showSnackBar(
+							PosiaNotificaciones.mostrarSnackBar(ctx, 
 								const SnackBar(
 									content: Text('Los días de crédito deben ser mayores a cero'),
 									backgroundColor: PosiaColors.cancelar,

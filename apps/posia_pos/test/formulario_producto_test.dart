@@ -41,7 +41,7 @@ void main() {
 		);
 		await tester.tap(find.text('Guardar producto'));
 		await tester.pump();
-		await tester.pump(const Duration(milliseconds: 400));
+		await tester.pumpAndSettle();
 
 		expect(find.text('Nombre y categoría son obligatorios'), findsOneWidget);
 	});

@@ -49,39 +49,47 @@ class _PantallaMovimientosInventarioState
 						return nombre.toLowerCase().contains(_filtro.toLowerCase()) ||
 							m.motivo.toLowerCase().contains(_filtro.toLowerCase());
 					}).toList();
-					return Column(
-						children: [
+					return CustomScrollView(
+						keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+						slivers: [
 							if (datos.tiendas.length > 1)
-								Padding(
-									padding: const EdgeInsets.fromLTRB(12.0, 12.0, 12.0, 0.0),
-									child: DropdownButtonFormField<String>(
-										initialValue: datos.tiendaId,
-										decoration: const InputDecoration(
-											labelText: 'Tienda',
-											border: OutlineInputBorder(),
+								SliverToBoxAdapter(
+									child: Padding(
+										padding: const EdgeInsets.fromLTRB(12.0, 12.0, 12.0, 0.0),
+										child: DropdownButtonFormField<String>(
+											initialValue: datos.tiendaId,
+											decoration: const InputDecoration(
+												labelText: 'Tienda',
+												border: OutlineInputBorder(),
+											),
+											items: datos.tiendas
+												.map(
+													(t) => DropdownMenuItem(
+														value: t.id,
+														child: Text(t.nombre),
+													),
+												)
+												.toList(),
+											onChanged: (v) => setState(() => _tiendaOperacionId = v),
 										),
-										items: datos.tiendas
-											.map(
-												(t) => DropdownMenuItem(
-													value: t.id,
-													child: Text(t.nombre),
-												),
-											)
-											.toList(),
-										onChanged: (v) => setState(() => _tiendaOperacionId = v),
 									),
 								),
-							CampoBusqueda(
-								controlador: _busquedaController,
-								sugerencia: 'Buscar movimiento...',
-								alCambiar: (v) => setState(() => _filtro = v.trim()),
+							SliverToBoxAdapter(
+								child: CampoBusqueda(
+									controlador: _busquedaController,
+									sugerencia: 'Buscar movimiento...',
+									alCambiar: (v) => setState(() => _filtro = v.trim()),
+								),
 							),
-							Expanded(
-								child: filtrados.isEmpty
-									? const Center(child: Text('Sin movimientos'))
-									: ListView.builder(
-										itemCount: filtrados.length,
-										itemBuilder: (_, i) {
+							if (filtrados.isEmpty)
+								const SliverFillRemaining(
+									hasScrollBody: false,
+									child: Center(child: Text('Sin movimientos')),
+								)
+							else
+								SliverList(
+									delegate: SliverChildBuilderDelegate(
+										(context, i) {
 											final m = filtrados[i];
 											final nombre = datos.nombresProducto[m.productoId] ?? m.productoId;
 											return ListTile(
@@ -97,71 +105,91 @@ class _PantallaMovimientosInventarioState
 												),
 											);
 										},
+										childCount: filtrados.length,
 									),
-							),
-							ExpansionTile(
-								title: const Text('Registrar movimiento'),
-								initiallyExpanded: _formularioExpandido,
-								onExpansionChanged: (v) => setState(() => _formularioExpandido = v),
-								children: [
-									Padding(
-										padding: const EdgeInsets.all(12.0),
-										child: Column(
-											children: [
-												DropdownButtonFormField<TipoMovimientoInventario>(
-													initialValue: _tipo,
-													items: const [
-														TipoMovimientoInventario.salida,
-														TipoMovimientoInventario.ajuste,
-													]
-														.map(
-															(t) => DropdownMenuItem(
-																value: t,
-																child: Text(etiquetaTipoMovimiento(t)),
-															),
-														)
-														.toList(),
-													onChanged: (v) => setState(() {
-														_tipo = v!;
-														_motivoSeleccionado = motivoInventarioPredeterminado(_tipo);
-													}),
-													decoration: const InputDecoration(labelText: 'Tipo'),
-												),
-												DropdownButtonFormField<String>(
-													initialValue: _productoId ?? datos.productos.firstOrNull?.id,
-													items: datos.productos
-														.map(
-															(p) => DropdownMenuItem(
-																value: p.id,
-																child: Text(p.nombre),
-															),
-														)
-														.toList(),
-													onChanged: (v) => setState(() => _productoId = v),
-													decoration: const InputDecoration(labelText: 'Producto'),
-												),
-												TextField(
-													controller: _cantidadController,
-													keyboardType: TextInputType.number,
-													decoration: InputDecoration(
-														labelText: _tipo == TipoMovimientoInventario.ajuste
-															? 'Cantidad final deseada'
-															: 'Cantidad',
+								),
+							SliverToBoxAdapter(
+								child: TarjetaDesplegable(
+									titulo: 'Registrar movimiento',
+									subtitulo: 'Entrada, salida o ajuste de inventario',
+									icono: Icons.add_circle_outline,
+									inicialmenteExpandido: _formularioExpandido,
+									alCambiarExpansion: (v) {
+										setState(() => _formularioExpandido = v);
+										if (v) {
+											WidgetsBinding.instance.addPostFrameCallback((_) {
+												if (mounted) {
+													AccesorioTecladoMovil.desplazarCampoEnfocado(context);
+												}
+											});
+										}
+									},
+									margen: const EdgeInsets.fromLTRB(12.0, 8.0, 12.0, 12.0),
+									children: [
+										DropdownButtonFormField<TipoMovimientoInventario>(
+											initialValue: _tipo,
+											items: const [
+												TipoMovimientoInventario.salida,
+												TipoMovimientoInventario.ajuste,
+											]
+												.map(
+													(t) => DropdownMenuItem(
+														value: t,
+														child: Text(etiquetaTipoMovimiento(t)),
 													),
-												),
-												SelectorMotivoInventario(
-													tipo: _tipo,
-													valor: _motivoSeleccionado,
-													alCambiar: (motivo) => setState(() => _motivoSeleccionado = motivo),
-												),
-												FilledButton(
-													onPressed: _registrar,
-													child: const Text('Registrar movimiento'),
-												),
-											],
+												)
+												.toList(),
+											onChanged: (v) => setState(() {
+												_tipo = v!;
+												_motivoSeleccionado = motivoInventarioPredeterminado(_tipo);
+											}),
+											decoration: const InputDecoration(labelText: 'Tipo'),
 										),
-									),
-								],
+										const SizedBox(height: 12.0),
+										DropdownButtonFormField<String>(
+											initialValue: _productoId ?? datos.productos.firstOrNull?.id,
+											items: datos.productos
+												.map(
+													(p) => DropdownMenuItem(
+														value: p.id,
+														child: Text(p.nombre),
+													),
+												)
+												.toList(),
+											onChanged: (v) => setState(() => _productoId = v),
+											decoration: const InputDecoration(labelText: 'Producto'),
+										),
+										const SizedBox(height: 12.0),
+										TextField(
+											controller: _cantidadController,
+											keyboardType: TextInputType.number,
+											decoration: InputDecoration(
+												labelText: _tipo == TipoMovimientoInventario.ajuste
+													? 'Cantidad final deseada'
+													: 'Cantidad',
+											),
+										),
+										const SizedBox(height: 12.0),
+										SelectorMotivoInventario(
+											tipo: _tipo,
+											valor: _motivoSeleccionado,
+											alCambiar: (motivo) => setState(() => _motivoSeleccionado = motivo),
+										),
+										const SizedBox(height: 12.0),
+										FilledButton(
+											onPressed: _registrar,
+											child: const Text('Registrar movimiento'),
+										),
+									],
+								),
+							),
+							SliverPadding(
+								padding: EdgeInsets.only(
+									bottom: MediaQuery.viewInsetsOf(context).bottom > 0
+										? AccesorioTecladoMovil.alturaBarraListo +
+											AccesorioTecladoMovil.margenInferiorDesplazamiento
+										: 12.0,
+								),
 							),
 						],
 					);
@@ -205,14 +233,14 @@ class _PantallaMovimientosInventarioState
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(content: Text('Movimiento registrado')),
 			);
 		} on StateError catch (e) {
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(content: Text(e.message), backgroundColor: PosiaColors.cancelar),
 			);
 		}

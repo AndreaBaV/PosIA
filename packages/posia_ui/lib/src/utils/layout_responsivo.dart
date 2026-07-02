@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:posia_core/posia_core.dart';
 
 import '../theme/posia_theme.dart';
+import '../widgets/accesorio_teclado_movil.dart';
 
 /// Categoria de ancho de pantalla.
 enum TipoPantalla {
@@ -159,10 +160,20 @@ class MarcoAutenticacion extends StatelessWidget {
 		required double padding,
 		required bool incluirEncabezado,
 	}) {
+		final insetTeclado = MediaQuery.viewInsetsOf(context).bottom;
+		final tecladoAbierto = insetTeclado > 0;
+		final margenTeclado = tecladoAbierto
+			? AccesorioTecladoMovil.alturaBarraListo +
+				AccesorioTecladoMovil.margenInferiorDesplazamiento
+			: 0.0;
+
 		return SingleChildScrollView(
-			padding: EdgeInsets.symmetric(
-				horizontal: padding,
-				vertical: padding,
+			keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+			padding: EdgeInsets.fromLTRB(
+				padding,
+				padding,
+				padding,
+				padding + margenTeclado,
 			),
 			child: ConstrainedBox(
 				constraints: BoxConstraints(minHeight: alto - padding * 2),
@@ -174,7 +185,9 @@ class MarcoAutenticacion extends StatelessWidget {
 							),
 						),
 						child: Column(
-							mainAxisAlignment: MainAxisAlignment.center,
+							mainAxisAlignment: tecladoAbierto
+								? MainAxisAlignment.start
+								: MainAxisAlignment.center,
 							crossAxisAlignment: CrossAxisAlignment.stretch,
 							children: [
 								if (incluirEncabezado)

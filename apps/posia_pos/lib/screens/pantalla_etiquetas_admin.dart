@@ -107,7 +107,7 @@ class _PantallaEtiquetasAdminState extends ConsumerState<PantallaEtiquetasAdmin>
 
 	Future<void> _mostrarVistaPrevia() async {
 		if (_seleccionados.isEmpty) {
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(content: Text('Seleccione al menos un producto')),
 			);
 			return;
@@ -115,7 +115,7 @@ class _PantallaEtiquetasAdminState extends ConsumerState<PantallaEtiquetasAdmin>
 		final ancho = double.tryParse(_anchoCtrl.text.trim());
 		final alto = double.tryParse(_altoCtrl.text.trim());
 		if (ancho == null || alto == null || ancho < 20 || alto < 15) {
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(content: Text('Tamaño inválido (mínimo 20 x 15 mm)')),
 			);
 			return;
@@ -155,14 +155,14 @@ class _PantallaEtiquetasAdminState extends ConsumerState<PantallaEtiquetasAdmin>
 			if (!mounted || rutaGuardada == null) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(content: Text('PDF guardado: $rutaGuardada')),
 			);
 		} catch (error) {
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(content: Text('$error'), backgroundColor: PosiaColors.cancelar),
 			);
 		} finally {
@@ -246,14 +246,11 @@ class _PantallaEtiquetasAdminState extends ConsumerState<PantallaEtiquetasAdmin>
 										],
 									),
 									const SizedBox(height: 12.0),
-									TextField(
-										controller: _busquedaCtrl,
-										decoration: const InputDecoration(
-											labelText: 'Buscar producto',
-											prefixIcon: Icon(Icons.search),
-											border: OutlineInputBorder(),
-										),
-										onChanged: (_) => setState(() {}),
+									CampoBusqueda(
+										padding: EdgeInsets.zero,
+										controlador: _busquedaCtrl,
+										sugerencia: 'Buscar producto',
+										alCambiar: (_) => setState(() {}),
 									),
 								],
 							),

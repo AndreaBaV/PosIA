@@ -24,6 +24,7 @@ dependencies:
   latlong2: ^0.9.1
   local_auth: ^2.3.0
   pdf: ^3.11.3
+  image: ^4.8.0
   barcode: ^2.2.9
   speech_to_text: ^7.0.0
   posia_core:
@@ -45,6 +46,7 @@ dependencies:
   posia_voice:
     path: ../../packages/posia_voice
   flutter_secure_storage: ^10.3.1
+  whatsapp_direct_send: ^0.2.1
 
 dev_dependencies:
   flutter_launcher_icons: ^0.14.3

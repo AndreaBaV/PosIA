@@ -1,12 +1,13 @@
 /// Comparte tickets digitales por WhatsApp como imagen o PDF con logo.
 library;
 
+import 'package:posia_ui/posia_ui.dart';
+
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:posia_core/posia_core.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../util/generador_ticket_digital_pdf.dart';
 import '../util/marca_la_fortuna.dart';
@@ -17,28 +18,6 @@ String _nombreArchivoTicket(String folio, String extension) {
 	return 'ticket_${folio}_$marca.$extension';
 }
 
-Rect? _origenCompartir(BuildContext context) {
-	final box = context.findRenderObject() as RenderBox?;
-	if (box == null) {
-		return null;
-	}
-	return box.localToGlobal(Offset.zero) & box.size;
-}
-
-Future<ShareResult> _compartirArchivoTicket({
-	required BuildContext context,
-	required List<XFile> archivos,
-	required String leyenda,
-	required String asunto,
-}) {
-	return Share.shareXFiles(
-		archivos,
-		text: leyenda,
-		subject: asunto,
-		sharePositionOrigin: _origenCompartir(context),
-	);
-}
-
 /// Comparte ticket digital: PNG con logo y detalle; PDF como respaldo.
 Future<void> compartirTicketDigitalWhatsApp(
 	BuildContext context, {
@@ -46,7 +25,7 @@ Future<void> compartirTicketDigitalWhatsApp(
 	String? telefono,
 }) async {
 	final leyenda = formatearLeyendaCompartirTicketDigital(contenido);
-	final asunto = '${contenido.tituloDocumento} · ${contenido.folio}';
+	final nombreBase = 'ticket_${contenido.folio}';
 	try {
 		final logo = await cargarLogoTicketMarca();
 		final tempDir = await getTemporaryDirectory();
@@ -62,22 +41,14 @@ Future<void> compartirTicketDigitalWhatsApp(
 		if (!context.mounted) {
 			return;
 		}
-		final resultado = await _compartirArchivoTicket(
-			context: context,
-			archivos: [XFile(pngFile.path, mimeType: 'image/png')],
+		await compartirArchivoWhatsAppConAviso(
+			context,
+			rutaArchivo: pngFile.path,
+			mimeType: 'image/png',
 			leyenda: leyenda,
-			asunto: asunto,
+			telefono: telefono,
+			nombreDescarga: '$nombreBase.png',
 		);
-		if (!context.mounted) {
-			return;
-		}
-		if (resultado.status == ShareResultStatus.unavailable) {
-			await compartirTextoWhatsAppConAviso(
-				context,
-				texto: leyenda,
-				telefono: telefono,
-			);
-		}
 	} catch (_) {
 		try {
 			final logo = await cargarLogoTicketMarca();
@@ -94,27 +65,19 @@ Future<void> compartirTicketDigitalWhatsApp(
 			if (!context.mounted) {
 				return;
 			}
-			final resultado = await _compartirArchivoTicket(
-				context: context,
-				archivos: [XFile(pdfFile.path, mimeType: 'application/pdf')],
+			await compartirArchivoWhatsAppConAviso(
+				context,
+				rutaArchivo: pdfFile.path,
+				mimeType: 'application/pdf',
 				leyenda: leyenda,
-				asunto: asunto,
+				telefono: telefono,
+				nombreDescarga: '$nombreBase.pdf',
 			);
-			if (!context.mounted) {
-				return;
-			}
-			if (resultado.status == ShareResultStatus.unavailable) {
-				await compartirTextoWhatsAppConAviso(
-					context,
-					texto: leyenda,
-					telefono: telefono,
-				);
-			}
 		} catch (error) {
 			if (!context.mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(
 					content: Text('No se pudo generar el documento: $error'),
 					backgroundColor: Colors.red.shade700,

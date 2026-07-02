@@ -486,7 +486,7 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 					if (!mounted) {
 						return;
 					}
-					ScaffoldMessenger.of(context).showSnackBar(
+					PosiaNotificaciones.mostrarSnackBar(context, 
 						const SnackBar(
 							content: Text('Traspaso entre almacenes completado'),
 							backgroundColor: PosiaColors.cobrar,
@@ -501,7 +501,7 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 					if (!mounted) {
 						return;
 					}
-					ScaffoldMessenger.of(context).showSnackBar(
+					PosiaNotificaciones.mostrarSnackBar(context, 
 						const SnackBar(
 							content: Text('Abastecimiento desde almacén completado'),
 							backgroundColor: PosiaColors.cobrar,
@@ -509,6 +509,7 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 					);
 				}
 				ref.invalidate(_traspasosDatosProvider);
+				await refrescarDatosMaestros(ref);
 				_limpiarSeleccion();
 				_notasController.clear();
 				return;
@@ -521,6 +522,7 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 				operador: operador,
 			);
 			ref.invalidate(_traspasosDatosProvider);
+			await refrescarDatosMaestros(ref);
 			_limpiarSeleccion();
 			_notasController.clear();
 			if (!mounted) {
@@ -535,7 +537,7 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(content: Text('$error'), backgroundColor: PosiaColors.cancelar),
 			);
 		}
@@ -742,14 +744,14 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(content: Text('Ticket enviado a impresora')),
 			);
 		} catch (_) {
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(
 					content: Text('No se pudo imprimir el ticket'),
 					backgroundColor: PosiaColors.cancelar,
@@ -778,14 +780,14 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(content: Text('Comprobante enviado a impresora')),
 			);
 		} catch (_) {
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(
 					content: Text('No se pudo imprimir el comprobante'),
 					backgroundColor: PosiaColors.cancelar,
@@ -800,7 +802,7 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 		if (!mounted) {
 			return;
 		}
-		ScaffoldMessenger.of(context).showSnackBar(
+		PosiaNotificaciones.mostrarSnackBar(context, 
 			SnackBar(
 				content: Text(ok ? 'Traspaso recibido' : 'No se pudo recibir'),
 				backgroundColor: ok ? PosiaColors.cobrar : PosiaColors.cancelar,

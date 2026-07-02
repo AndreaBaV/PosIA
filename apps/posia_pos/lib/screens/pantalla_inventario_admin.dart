@@ -222,40 +222,31 @@ class _PantallaInventarioAdminState extends ConsumerState<PantallaInventarioAdmi
 										final bajoMinimo = reg.bajoMinimoEn(tiendaId);
 
 										return Card(
-
 											margin: const EdgeInsets.symmetric(
-
 												horizontal: 12.0,
-
 												vertical: 4.0,
-
 											),
-
 											color: bajoMinimo ? Colors.red.shade50 : null,
-
-											child: ExpansionTile(
-
-												leading: Icon(
-
-													bajoMinimo ? Icons.warning : Icons.inventory,
-
-													color: bajoMinimo
-
-														? PosiaColors.cancelar
-
-														: PosiaColors.cobrar,
-
-												),
-
-												title: Text(reg.nombreProducto),
-
-												subtitle: Text(
-													'$nombreTienda: ${cantidadTienda.toStringAsFixed(1)} · '
-													'Almacenes: ${reg.totalAlmacenes.toStringAsFixed(1)} · '
-													'Total: ${reg.totalEmpresa.toStringAsFixed(1)}',
-												),
-
-												children: [
+											clipBehavior: Clip.antiAlias,
+											child: Theme(
+												data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+												child: ExpansionTile(
+													leading: Icon(
+														bajoMinimo ? Icons.warning : Icons.inventory,
+														color: bajoMinimo ? PosiaColors.cancelar : PosiaColors.cobrar,
+													),
+													title: Text(
+														reg.nombreProducto,
+														style: const TextStyle(fontWeight: FontWeight.w600),
+													),
+													subtitle: Text(
+														'$nombreTienda: ${cantidadTienda.toStringAsFixed(1)} · '
+														'Almacenes: ${reg.totalAlmacenes.toStringAsFixed(1)} · '
+														'Total: ${reg.totalEmpresa.toStringAsFixed(1)}',
+													),
+													shape: const RoundedRectangleBorder(),
+													collapsedShape: const RoundedRectangleBorder(),
+													children: [
 													if (reg.existenciasPorTienda.isNotEmpty) ...[
 														const ListTile(
 															dense: true,
@@ -386,6 +377,7 @@ class _PantallaInventarioAdminState extends ConsumerState<PantallaInventarioAdmi
 												],
 
 											),
+										),
 
 										);
 
@@ -467,7 +459,7 @@ class _PantallaInventarioAdminState extends ConsumerState<PantallaInventarioAdmi
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(
 					content: Text('Cantidad inválida'),
 					backgroundColor: PosiaColors.cancelar,
@@ -491,7 +483,7 @@ class _PantallaInventarioAdminState extends ConsumerState<PantallaInventarioAdmi
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(
 					content: Text(
 						tipo == TipoMovimientoInventario.ajuste
@@ -504,7 +496,7 @@ class _PantallaInventarioAdminState extends ConsumerState<PantallaInventarioAdmi
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(content: Text(e.message), backgroundColor: PosiaColors.cancelar),
 			);
 		}

@@ -55,7 +55,7 @@ Future<bool> mostrarDialogoActualizarPrecioVenta({
 							costoUnitario: producto.costoUnitario,
 						);
 						if (error != null) {
-							ScaffoldMessenger.of(ctx).showSnackBar(
+							PosiaNotificaciones.mostrarSnackBar(ctx, 
 								SnackBar(
 									content: Text(error),
 									backgroundColor: PosiaColors.cancelar,
@@ -74,7 +74,7 @@ Future<bool> mostrarDialogoActualizarPrecioVenta({
 							}
 						} catch (error) {
 							if (ctx.mounted) {
-								ScaffoldMessenger.of(ctx).showSnackBar(
+								PosiaNotificaciones.mostrarSnackBar(ctx, 
 									SnackBar(
 										content: Text('$error'),
 										backgroundColor: PosiaColors.cancelar,
@@ -192,7 +192,7 @@ Future<void> mostrarDialogoPreciosPostCompra({
 							}
 						} catch (error) {
 							if (ctx.mounted) {
-								ScaffoldMessenger.of(ctx).showSnackBar(
+								PosiaNotificaciones.mostrarSnackBar(ctx, 
 									SnackBar(
 										content: Text('$error'),
 										backgroundColor: PosiaColors.cancelar,
@@ -210,7 +210,7 @@ Future<void> mostrarDialogoPreciosPostCompra({
 		ctrl.dispose();
 	}
 	if (guardado == true && context.mounted) {
-		ScaffoldMessenger.of(context).showSnackBar(
+		PosiaNotificaciones.mostrarSnackBar(context, 
 			const SnackBar(content: Text('Precios de venta actualizados')),
 		);
 	}

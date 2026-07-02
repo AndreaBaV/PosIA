@@ -151,7 +151,7 @@ class _PantallaTiendasAdminState extends ConsumerState<PantallaTiendasAdmin> {
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(content: Text(e.message), backgroundColor: PosiaColors.cancelar),
 			);
 		}
@@ -166,7 +166,7 @@ class _PantallaTiendasAdminState extends ConsumerState<PantallaTiendasAdmin> {
 				if (!mounted) {
 					return;
 				}
-				ScaffoldMessenger.of(context).showSnackBar(
+				PosiaNotificaciones.mostrarSnackBar(context, 
 					SnackBar(
 						content: Text('Límite de $LIMITE_MAX_TIENDAS tiendas activas'),
 						backgroundColor: PosiaColors.cancelar,
@@ -334,7 +334,7 @@ class _PantallaTiendasAdminState extends ConsumerState<PantallaTiendasAdmin> {
 		if (!mounted) {
 			return;
 		}
-		ScaffoldMessenger.of(context).showSnackBar(
+		PosiaNotificaciones.mostrarSnackBar(context, 
 			SnackBar(
 				content: Text(ok ? 'Tienda eliminada' : 'No se puede eliminar (tienda activa o con ventas)'),
 				backgroundColor: ok ? PosiaColors.cobrar : PosiaColors.cancelar,

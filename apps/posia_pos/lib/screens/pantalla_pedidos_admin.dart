@@ -358,7 +358,7 @@ class _PantallaPedidosAdminState extends ConsumerState<PantallaPedidosAdmin>
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(content: Text('Pedido registrado')),
 			);
 			_tabs.animateTo(0);
@@ -366,7 +366,7 @@ class _PantallaPedidosAdminState extends ConsumerState<PantallaPedidosAdmin>
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(content: Text('$error'), backgroundColor: PosiaColors.cancelar),
 			);
 		}
@@ -378,7 +378,7 @@ class _PantallaPedidosAdminState extends ConsumerState<PantallaPedidosAdmin>
 			return;
 		}
 		if (empleados.isEmpty) {
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(
 					content: Text('No hay empleados disponibles para asignar'),
 					backgroundColor: PosiaColors.cancelar,
@@ -438,14 +438,14 @@ class _PantallaPedidosAdminState extends ConsumerState<PantallaPedidosAdmin>
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(content: Text('Pedido asignado')),
 			);
 		} catch (error) {
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(content: Text('$error'), backgroundColor: PosiaColors.cancelar),
 			);
 		}
@@ -476,14 +476,14 @@ class _PantallaPedidosAdminState extends ConsumerState<PantallaPedidosAdmin>
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(content: Text('Pedido cancelado')),
 			);
 		} catch (error) {
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(content: Text('$error'), backgroundColor: PosiaColors.cancelar),
 			);
 		}

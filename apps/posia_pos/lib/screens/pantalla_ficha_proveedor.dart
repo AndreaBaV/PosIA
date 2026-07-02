@@ -223,7 +223,7 @@ class _PantallaFichaProveedorState extends ConsumerState<PantallaFichaProveedor>
 		if (!mounted) {
 			return;
 		}
-		ScaffoldMessenger.of(context).showSnackBar(
+		PosiaNotificaciones.mostrarSnackBar(context, 
 			const SnackBar(content: Text('Proveedor actualizado')),
 		);
 	}
@@ -265,7 +265,7 @@ class _PantallaFichaProveedorState extends ConsumerState<PantallaFichaProveedor>
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(
 					content: Text(e.message),
 					backgroundColor: PosiaColors.cancelar,

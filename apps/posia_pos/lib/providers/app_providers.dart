@@ -205,6 +205,7 @@ class EstadoCarrito {
 		this.favoritos = const [],
 		this.ticketsEnEspera = 0,
 		this.indiceBusquedaSeleccionado = 0,
+		this.stockLocalPorProducto = const {},
 	});
 
 	/// Catalogo visible en grilla.
@@ -240,6 +241,9 @@ class EstadoCarrito {
 	/// Producto resaltado al buscar con teclado.
 	final int indiceBusquedaSeleccionado;
 
+	/// Existencia local por productoId para resaltar sin stock en grilla.
+	final Map<String, double> stockLocalPorProducto;
+
 	/// Genera copia con campos actualizados.
 	EstadoCarrito copiarCon({
 		List<Producto>? productos,
@@ -253,6 +257,7 @@ class EstadoCarrito {
 		List<Producto>? favoritos,
 		int? ticketsEnEspera,
 		int? indiceBusquedaSeleccionado,
+		Map<String, double>? stockLocalPorProducto,
 	}) {
 		return EstadoCarrito(
 			productos: productos ?? this.productos,
@@ -268,6 +273,8 @@ class EstadoCarrito {
 			ticketsEnEspera: ticketsEnEspera ?? this.ticketsEnEspera,
 			indiceBusquedaSeleccionado:
 				indiceBusquedaSeleccionado ?? this.indiceBusquedaSeleccionado,
+			stockLocalPorProducto:
+				stockLocalPorProducto ?? this.stockLocalPorProducto,
 		);
 	}
 }
@@ -457,6 +464,7 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 		}
 		final servicio = await ref.read(servicioCajaProvider.future);
 		await _asegurarCatalogo();
+		final stockLocal = await servicio.mapaStockLocalTienda();
 		final contenedor = await ref.read(contenedorServiciosProvider.future);
 		final turno = await contenedor.servicioAdmin
 			.obtenerServicioCorteCaja()
@@ -470,6 +478,7 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 				nombreVendedor: servicio.obtenerVendedorActivo()?.nombre,
 				favoritos: await servicio.listarFavoritosCaja(),
 				ticketsEnEspera: await servicio.contarTicketsEnEspera(),
+				stockLocalPorProducto: stockLocal,
 			),
 		);
 	}
@@ -526,6 +535,7 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 			_textoBusqueda,
 		);
 		final favoritos = await servicio.listarFavoritosCaja();
+		final stockLocal = await servicio.mapaStockLocalTienda();
 		final vendedor = servicio.obtenerVendedorActivo();
 		final turno = await contenedor.servicioAdmin
 			.obtenerServicioCorteCaja()
@@ -542,6 +552,7 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 			turnoAbierto: turno != null,
 			favoritos: favoritos,
 			ticketsEnEspera: await servicio.contarTicketsEnEspera(),
+			stockLocalPorProducto: stockLocal,
 		);
 	}
 }

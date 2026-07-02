@@ -15,7 +15,6 @@ class CampoBusquedaCaja extends StatefulWidget {
 		this.hintText = 'Buscar…',
 		this.autofocus = true,
 		this.mostrarIconoEscaneo = true,
-		this.mostrarBotonOcultarTeclado = false,
 		super.key,
 	});
 
@@ -26,38 +25,26 @@ class CampoBusquedaCaja extends StatefulWidget {
 	final String hintText;
 	final bool autofocus;
 	final bool mostrarIconoEscaneo;
-	final bool mostrarBotonOcultarTeclado;
 
 	@override
 	State<CampoBusquedaCaja> createState() => _CampoBusquedaCajaState();
 }
 
 class _CampoBusquedaCajaState extends State<CampoBusquedaCaja> {
-	bool _tieneFoco = false;
-
 	@override
 	void initState() {
 		super.initState();
 		widget.controlador.addListener(_actualizar);
-		widget.focusNode.addListener(_actualizarFoco);
 	}
 
 	@override
 	void dispose() {
 		widget.controlador.removeListener(_actualizar);
-		widget.focusNode.removeListener(_actualizarFoco);
 		super.dispose();
 	}
 
 	void _actualizar() {
 		setState(() {});
-	}
-
-	void _actualizarFoco() {
-		final foco = widget.focusNode.hasFocus;
-		if (foco != _tieneFoco) {
-			setState(() => _tieneFoco = foco);
-		}
 	}
 
 	void _ocultarTeclado() {
@@ -75,7 +62,10 @@ class _CampoBusquedaCajaState extends State<CampoBusquedaCaja> {
 				textInputAction: TextInputAction.search,
 				decoration: InputDecoration(
 					hintText: widget.hintText,
-					prefixIcon: const Icon(Icons.search),
+					prefixIcon: Icon(
+						Icons.search,
+						color: PosiaColors.cobrar.withValues(alpha: 0.85),
+					),
 					suffixIcon: Row(
 						mainAxisSize: MainAxisSize.min,
 						children: [
@@ -87,12 +77,6 @@ class _CampoBusquedaCajaState extends State<CampoBusquedaCaja> {
 										color: PosiaColors.cobrar.withValues(alpha: 0.85),
 										size: 22.0,
 									),
-								),
-							if (widget.mostrarBotonOcultarTeclado && _tieneFoco)
-								IconButton(
-									icon: const Icon(Icons.keyboard_hide),
-									tooltip: 'Ocultar teclado',
-									onPressed: _ocultarTeclado,
 								),
 							if (widget.controlador.text.isNotEmpty)
 								IconButton(

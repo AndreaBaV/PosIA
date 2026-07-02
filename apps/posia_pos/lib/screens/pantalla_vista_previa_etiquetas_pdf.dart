@@ -45,7 +45,7 @@ class _PantallaVistaPreviaEtiquetasPdfState extends State<PantallaVistaPreviaEti
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(content: Text('$error'), backgroundColor: PosiaColors.cancelar),
 			);
 		} finally {

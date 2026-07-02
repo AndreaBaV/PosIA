@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:posia_core/posia_core.dart';
 import 'package:posia_pos/widgets/dialogo_cobro.dart';
-import 'package:posia_ui/posia_ui.dart';
 
 class _CapturaCobro {
 	CobroRequest? request;
@@ -127,34 +126,6 @@ void main() {
 			expect(request, isNotNull);
 			expect(request!.metodoPago, MetodoPago.efectivo);
 			expect(request.montoRecibido, 200.0);
-		});
-
-		testWidgets('teclado numérico embebido escribe en el campo activo',
-			(tester) async {
-			await tester.binding.setSurfaceSize(const Size(800.0, 1200.0));
-			addTearDown(() => tester.binding.setSurfaceSize(null));
-
-			final captura = await _abrirDialogo(tester, subtotal: 50.0);
-
-			expect(find.byType(TecladoNumericoSimple), findsOneWidget);
-
-			await tester.tap(find.widgetWithText(InkWell, '5'));
-			await tester.pump();
-			await tester.tap(find.widgetWithText(InkWell, '0'));
-			await tester.pump();
-			await tester.tap(find.widgetWithText(InkWell, '0'));
-			await tester.pump();
-
-			final campoRecibido = find.byWidgetPredicate(
-				(w) => w is TextField && w.decoration?.labelText == r'Recibido ($)',
-			);
-			final textField = tester.widget<TextField>(campoRecibido);
-			expect(textField.controller?.text, '500');
-
-			await tester.tap(find.text('Cancelar'));
-			await tester.pumpAndSettle();
-			expect(captura.completado, isTrue);
-			expect(captura.request, isNull);
 		});
 
 		testWidgets('cambio de método a Mixto muestra dos campos editables',

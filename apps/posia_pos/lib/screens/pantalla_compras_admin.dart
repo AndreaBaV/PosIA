@@ -443,7 +443,7 @@ class _PantallaComprasAdminState extends ConsumerState<PantallaComprasAdmin>
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(content: Text('Compra registrada')),
 			);
 			await mostrarDialogoPreciosPostCompra(
@@ -460,7 +460,7 @@ class _PantallaComprasAdminState extends ConsumerState<PantallaComprasAdmin>
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(content: Text('$error'), backgroundColor: PosiaColors.cancelar),
 			);
 		}

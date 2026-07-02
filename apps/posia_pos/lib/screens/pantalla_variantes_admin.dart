@@ -126,7 +126,7 @@ class _PantallaVariantesAdminState extends ConsumerState<PantallaVariantesAdmin>
 		);
 		if (errorPrecio != null) {
 			if (mounted) {
-				ScaffoldMessenger.of(context).showSnackBar(
+				PosiaNotificaciones.mostrarSnackBar(context, 
 					SnackBar(
 						content: Text(errorPrecio),
 						backgroundColor: PosiaColors.cancelar,
@@ -150,7 +150,7 @@ class _PantallaVariantesAdminState extends ConsumerState<PantallaVariantesAdmin>
 			);
 		} on StateError catch (e) {
 			if (mounted) {
-				ScaffoldMessenger.of(context).showSnackBar(
+				PosiaNotificaciones.mostrarSnackBar(context, 
 					SnackBar(content: Text(e.message), backgroundColor: PosiaColors.cancelar),
 				);
 			}
@@ -221,7 +221,7 @@ class _PantallaVariantesAdminState extends ConsumerState<PantallaVariantesAdmin>
 		);
 		if (errorPrecio != null) {
 			if (mounted) {
-				ScaffoldMessenger.of(context).showSnackBar(
+				PosiaNotificaciones.mostrarSnackBar(context, 
 					SnackBar(
 						content: Text(errorPrecio),
 						backgroundColor: PosiaColors.cancelar,
@@ -246,7 +246,7 @@ class _PantallaVariantesAdminState extends ConsumerState<PantallaVariantesAdmin>
 			);
 		} on StateError catch (e) {
 			if (mounted) {
-				ScaffoldMessenger.of(context).showSnackBar(
+				PosiaNotificaciones.mostrarSnackBar(context, 
 					SnackBar(content: Text(e.message), backgroundColor: PosiaColors.cancelar),
 				);
 			}

@@ -119,8 +119,9 @@ class VentaRepository {
 	}
 
 	/// Obtiene venta por identificador.
-	Future<Venta?> obtenerPorId(String ventaId) async {
-		final filas = await _baseDatos.query(
+	Future<Venta?> obtenerPorId(String ventaId, {DatabaseExecutor? db}) async {
+		final exec = db ?? _baseDatos;
+		final filas = await exec.query(
 			'sales',
 			where: 'id = ?',
 			whereArgs: [ventaId],
@@ -129,7 +130,7 @@ class VentaRepository {
 		if (filas.isEmpty) {
 			return null;
 		}
-		return _mapearVenta(filas.first);
+		return _mapearVenta(filas.first, db: exec);
 	}
 
 	/// Reemplaza lineas, total y estado de una venta existente.
@@ -306,9 +307,13 @@ class VentaRepository {
 	///
 	/// [filaVenta] Registro de tabla sales.
 	/// Retorna entidad [Venta] completa.
-	Future<Venta> _mapearVenta(Map<String, Object?> filaVenta) async {
+	Future<Venta> _mapearVenta(
+		Map<String, Object?> filaVenta, {
+		DatabaseExecutor? db,
+	}) async {
+		final exec = db ?? _baseDatos;
 		final ventaId = filaVenta['id'] as String;
-		final filasLineas = await _baseDatos.query(
+		final filasLineas = await exec.query(
 			'sale_lines',
 			where: 'venta_id = ?',
 			whereArgs: [ventaId],

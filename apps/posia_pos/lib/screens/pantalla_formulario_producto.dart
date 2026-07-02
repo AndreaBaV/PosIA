@@ -568,7 +568,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 		final categoriaValida = _categoriaId != null &&
 			categorias.any((c) => c.activa && c.id == _categoriaId);
 		if (nombre.isEmpty || !categoriaValida) {
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(
 					content: Text('Nombre y categoría son obligatorios'),
 					backgroundColor: PosiaColors.cancelar,
@@ -582,7 +582,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 			costoUnitario: costo,
 		);
 		if (errorMenudeo != null) {
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(
 					content: Text(errorMenudeo),
 					backgroundColor: PosiaColors.cancelar,
@@ -599,7 +599,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 				costoUnitario: costo,
 			);
 			if (errorEscala != null) {
-				ScaffoldMessenger.of(context).showSnackBar(
+				PosiaNotificaciones.mostrarSnackBar(context, 
 					SnackBar(
 						content: Text('Mayoreo: $errorEscala'),
 						backgroundColor: PosiaColors.cancelar,
@@ -738,7 +738,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(content: Text(e.message), backgroundColor: PosiaColors.cancelar),
 			);
 		} finally {

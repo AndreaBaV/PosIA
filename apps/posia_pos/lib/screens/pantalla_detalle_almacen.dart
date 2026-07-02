@@ -217,7 +217,7 @@ class _PantallaDetalleAlmacenState extends ConsumerState<PantallaDetalleAlmacen>
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(
 					content: Text('Cantidad inválida'),
 					backgroundColor: PosiaColors.cancelar,
@@ -239,14 +239,14 @@ class _PantallaDetalleAlmacenState extends ConsumerState<PantallaDetalleAlmacen>
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(content: Text('Existencia actualizada')),
 			);
 		} on StateError catch (e) {
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(content: Text(e.message), backgroundColor: PosiaColors.cancelar),
 			);
 		}
@@ -256,65 +256,13 @@ class _PantallaDetalleAlmacenState extends ConsumerState<PantallaDetalleAlmacen>
 		if (!mounted) {
 			return;
 		}
-		final messenger = ScaffoldMessenger.of(context);
 		final productos = await ref.read(productosAlmacenProvider.future);
 		if (!mounted) {
 			return;
 		}
 		final producto = await showDialog<Producto>(
 			context: context,
-			builder: (ctx) {
-				var filtro = '';
-				return StatefulBuilder(
-					builder: (ctx, setDialog) {
-						final filtrados = productos.where((p) {
-							if (filtro.isEmpty) {
-								return true;
-							}
-							final f = filtro.toLowerCase();
-							return p.nombre.toLowerCase().contains(f) ||
-								p.codigoBarras.contains(f);
-						}).take(30).toList();
-						return AlertDialog(
-							title: const Text('Producto a ingresar'),
-							content: SizedBox(
-								width: double.maxFinite,
-								child: Column(
-									mainAxisSize: MainAxisSize.min,
-									children: [
-										TextField(
-											decoration: const InputDecoration(
-												labelText: 'Buscar',
-												border: OutlineInputBorder(),
-												prefixIcon: Icon(Icons.search),
-											),
-											onChanged: (v) => setDialog(() => filtro = v.trim()),
-										),
-										const SizedBox(height: 8.0),
-										Flexible(
-											child: ListView.builder(
-												shrinkWrap: true,
-												itemCount: filtrados.length,
-												itemBuilder: (_, i) {
-													final p = filtrados[i];
-													return ListTile(
-														title: Text(p.nombre),
-														subtitle: Text(formatearMoneda(p.precioBase)),
-														onTap: () => Navigator.pop(ctx, p),
-													);
-												},
-											),
-										),
-									],
-								),
-							),
-							actions: [
-								TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
-							],
-						);
-					},
-				);
-			},
+			builder: (ctx) => _DialogoSeleccionProductoAlmacen(productos: productos),
 		);
 		if (producto == null || !mounted) {
 			return;
@@ -343,7 +291,7 @@ class _PantallaDetalleAlmacenState extends ConsumerState<PantallaDetalleAlmacen>
 		final cantidad = double.tryParse(controller.text.trim().replaceAll(',', '.'));
 		controller.dispose();
 		if (cantidad == null || cantidad <= 0) {
-			messenger.showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(
 					content: Text('Cantidad inválida'),
 					backgroundColor: PosiaColors.cancelar,
@@ -365,13 +313,85 @@ class _PantallaDetalleAlmacenState extends ConsumerState<PantallaDetalleAlmacen>
 			if (!mounted) {
 				return;
 			}
-			messenger.showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(content: Text('Entrada registrada: ${cantidad.toStringAsFixed(1)} u.')),
 			);
 		} on StateError catch (e) {
-			messenger.showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(content: Text(e.message), backgroundColor: PosiaColors.cancelar),
 			);
 		}
+	}
+}
+
+class _DialogoSeleccionProductoAlmacen extends StatefulWidget {
+	const _DialogoSeleccionProductoAlmacen({required this.productos});
+
+	final List<Producto> productos;
+
+	@override
+	State<_DialogoSeleccionProductoAlmacen> createState() =>
+		_DialogoSeleccionProductoAlmacenState();
+}
+
+class _DialogoSeleccionProductoAlmacenState extends State<_DialogoSeleccionProductoAlmacen> {
+	final _busquedaController = TextEditingController();
+	String _filtro = '';
+
+	@override
+	void dispose() {
+		_busquedaController.dispose();
+		super.dispose();
+	}
+
+	@override
+	Widget build(BuildContext context) {
+		final filtrados = widget.productos.where((p) {
+			if (_filtro.isEmpty) {
+				return true;
+			}
+			final f = _filtro.toLowerCase();
+			return p.nombre.toLowerCase().contains(f) || p.codigoBarras.contains(f);
+		}).take(30).toList();
+
+		return AlertDialog(
+			title: const Text('Producto a ingresar'),
+			content: SizedBox(
+				width: double.maxFinite,
+				child: Column(
+					mainAxisSize: MainAxisSize.min,
+					children: [
+						CampoBusqueda(
+							padding: EdgeInsets.zero,
+							autofocus: true,
+							controlador: _busquedaController,
+							sugerencia: 'Buscar producto...',
+							alCambiar: (v) => setState(() => _filtro = v.trim()),
+						),
+						const SizedBox(height: 8.0),
+						Flexible(
+							child: ListView.builder(
+								shrinkWrap: true,
+								itemCount: filtrados.length,
+								itemBuilder: (_, i) {
+									final p = filtrados[i];
+									return ListTile(
+										title: Text(p.nombre),
+										subtitle: Text(formatearMoneda(p.precioBase)),
+										onTap: () => Navigator.pop(context, p),
+									);
+								},
+							),
+						),
+					],
+				),
+			),
+			actions: [
+				TextButton(
+					onPressed: () => Navigator.pop(context),
+					child: const Text('Cancelar'),
+				),
+			],
+		);
 	}
 }

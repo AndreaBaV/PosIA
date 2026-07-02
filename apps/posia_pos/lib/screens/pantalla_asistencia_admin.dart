@@ -123,7 +123,7 @@ class _PantallaAsistenciaAdminState extends ConsumerState<PantallaAsistenciaAdmi
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(content: Text('$error'), backgroundColor: PosiaColors.cancelar),
 			);
 		}

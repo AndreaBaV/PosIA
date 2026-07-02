@@ -7,7 +7,7 @@ import 'package:posia_core/posia_core.dart';
 
 import '../theme/posia_theme.dart';
 import 'banner_mensaje_dialogo.dart';
-import 'teclado_numerico_simple.dart';
+import 'contenido_dialogo_teclado.dart';
 
 /// Resultado del dialogo de cantidad.
 class ResultadoDialogoCantidad {
@@ -108,8 +108,8 @@ class _DialogoCantidadProductoState extends State<DialogoCantidadProducto> {
 					Expanded(child: Text(widget.producto.nombre)),
 				],
 			),
-			content: SizedBox(
-				width: 320.0,
+			content: ContenidoDialogoTeclado(
+				ancho: 320.0,
 				child: Column(
 					mainAxisSize: MainAxisSize.min,
 					children: [
@@ -125,10 +125,7 @@ class _DialogoCantidadProductoState extends State<DialogoCantidadProducto> {
 							controller: _cantidadController,
 							focusNode: _cantidadFocus,
 							autofocus: true,
-							// Se suprime el teclado del sistema en móvil porque el
-							// diálogo ya muestra un TecladoNumericoSimple embebido.
-							// El teclado físico en escritorio sigue funcionando.
-							keyboardType: TextInputType.none,
+							keyboardType: const TextInputType.numberWithOptions(decimal: true),
 							showCursor: true,
 							textInputAction: TextInputAction.done,
 							decoration: InputDecoration(
@@ -157,19 +154,6 @@ class _DialogoCantidadProductoState extends State<DialogoCantidadProducto> {
 								mensaje: _mensajeError!,
 								padding: const EdgeInsets.only(top: 8.0),
 							),
-						const SizedBox(height: 8.0),
-						TecladoNumericoSimple(
-							valorActual: _valorCantidad,
-							mostrarValor: false,
-							alPresionarTecla: (tecla) {
-								_limpiarError();
-								_agregarTecla(tecla);
-							},
-							alBorrar: () {
-								_limpiarError();
-								_borrarTecla();
-							},
-						),
 					],
 				),
 			),
@@ -219,20 +203,6 @@ class _DialogoCantidadProductoState extends State<DialogoCantidadProducto> {
 			}
 		}
 		return buffer.toString();
-	}
-
-	void _agregarTecla(String tecla) {
-		if (tecla == '.' && _valorCantidad.contains('.')) {
-			return;
-		}
-		_establecerValor(_valorCantidad + tecla);
-	}
-
-	void _borrarTecla() {
-		if (_valorCantidad.isEmpty) {
-			return;
-		}
-		_establecerValor(_valorCantidad.substring(0, _valorCantidad.length - 1));
 	}
 
 	void _cancelar() {

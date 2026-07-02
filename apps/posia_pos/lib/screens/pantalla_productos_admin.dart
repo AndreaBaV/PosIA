@@ -32,7 +32,7 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 
 	@override
 	Widget build(BuildContext context) {
-		final productosAsync = ref.watch(_productosCatalogoProvider);
+		final productosAsync = ref.watch(productosCatalogoAdminProvider);
 		final categoriasAsync = ref.watch(_categoriasProductosProvider);
 		return Scaffold(
 			appBar: AppBar(
@@ -188,7 +188,7 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 																		producto.id,
 																		!producto.favoritoCaja,
 																	);
-																	ref.invalidate(_productosCatalogoProvider);
+																	ref.invalidate(productosCatalogoAdminProvider);
 																},
 															),
 															Text(
@@ -227,7 +227,7 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 			),
 		);
 		if (ok == true) {
-			ref.invalidate(_productosCatalogoProvider);
+			ref.invalidate(productosCatalogoAdminProvider);
 		}
 	}
 
@@ -247,7 +247,7 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 				obtenerServicio: () => ref.read(servicioAdminProvider.future),
 			);
 			if (ok) {
-				ref.invalidate(_productosCatalogoProvider);
+				ref.invalidate(productosCatalogoAdminProvider);
 			}
 			return;
 		}
@@ -288,7 +288,7 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 			if (!context.mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(
 					content: Text(
 						ok
@@ -298,7 +298,7 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 					backgroundColor: ok ? PosiaColors.cobrar : PosiaColors.cancelar,
 				),
 			);
-			ref.invalidate(_productosCatalogoProvider);
+			ref.invalidate(productosCatalogoAdminProvider);
 			await refrescarDatosMaestros(ref);
 		}
 	}
@@ -321,11 +321,6 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 		];
 	}
 }
-
-final _productosCatalogoProvider = FutureProvider<List<Producto>>((ref) async {
-	final servicio = await ref.watch(servicioAdminProvider.future);
-	return servicio.listarProductosCatalogo();
-});
 
 final _categoriasProductosProvider = FutureProvider<List<Categoria>>((ref) async {
 	final servicio = await ref.watch(servicioAdminProvider.future);

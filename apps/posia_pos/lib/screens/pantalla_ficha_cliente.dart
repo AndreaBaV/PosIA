@@ -324,7 +324,7 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(content: Text('$error'), backgroundColor: PosiaColors.cancelar),
 			);
 		}
@@ -354,7 +354,7 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 		if (_credito) {
 			final error = validarClienteParaCredito(actualizado, diasCredito: diasCredito);
 			if (error != null) {
-				ScaffoldMessenger.of(context).showSnackBar(
+				PosiaNotificaciones.mostrarSnackBar(context, 
 					SnackBar(content: Text(error)),
 				);
 				return;
@@ -367,7 +367,7 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 		if (!mounted) {
 			return;
 		}
-		ScaffoldMessenger.of(context).showSnackBar(
+		PosiaNotificaciones.mostrarSnackBar(context, 
 			const SnackBar(content: Text('Cliente actualizado')),
 		);
 	}
@@ -416,7 +416,7 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 			if (!mounted) {
 				return;
 			}
-			ScaffoldMessenger.of(context).showSnackBar(
+			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(
 					content: Text(e.message),
 					backgroundColor: PosiaColors.cancelar,

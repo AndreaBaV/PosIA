@@ -3,6 +3,7 @@ library;
 
 import 'dart:typed_data';
 
+import 'package:image/image.dart' as img;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:posia_core/posia_core.dart';
@@ -39,36 +40,73 @@ String _fechaLegible(DateTime fechaUtc) {
 	return '$dia/$mes/${local.year}  $hora:$minuto';
 }
 
+/// Altura de pagina en puntos PDF, ajustada al contenido real del ticket.
 double _calcularAltoPagina(TicketDigitalContenido contenido) {
-	const base = 148.0;
-	const metaLine = 12.5;
-	const productLine = 26.0;
-	const footerLine = 10.0;
+	const encabezado = 125.0;
+	const divisor = 14.6;
+	const metaLinea = 13.0;
+	const tablaEncabezado = 24.0;
+	const productoBase = 34.0;
+	const productoDescuentoExtra = 10.0;
+	const bloqueTotales = 22.0;
+	const lineaPago = 13.0;
+	const notaPie = 9.0;
+	const margenExtra = 20.0;
+
+	var alto = encabezado;
+	if (contenido.direccionTienda != null &&
+		contenido.direccionTienda!.trim().isNotEmpty) {
+		alto += 10;
+	}
+	if (contenido.etiquetaSecundaria != null) {
+		alto += 10;
+	}
+	alto += divisor;
 	final metaCount =
 		2 +
 		contenido.campos.length +
 		(contenido.nombreCliente != null ? 1 : 0);
-	var extra = 0.0;
-	if (contenido.descuentoTicket > 0) {
-		extra += 12.0;
+	alto += metaCount * metaLinea;
+	alto += divisor;
+	alto += tablaEncabezado;
+	for (final linea in contenido.lineas) {
+		alto += productoBase;
+		if (linea.descuentoLinea > 0) {
+			alto += productoDescuentoExtra;
+		}
 	}
+	alto += divisor;
+	if (contenido.descuentoTicket > 0) {
+		alto += 12;
+	}
+	alto += bloqueTotales;
 	if (contenido.montoRecibido != null) {
-		extra += 12.0;
+		alto += 6 + lineaPago;
 	}
 	if (contenido.cambio != null) {
-		extra += 12.0;
+		alto += lineaPago;
 	}
-	if (contenido.etiquetaSecundaria != null) {
-		extra += 10.0;
-	}
-	final altoMm =
-		base +
-		(metaCount * metaLine) +
-		(contenido.lineas.length * productLine) +
-		(contenido.notasPie.length * footerLine) +
-		extra +
-		40.0;
-	return altoMm * PdfPageFormat.mm;
+	alto += divisor;
+	alto += contenido.notasPie.length * notaPie;
+	alto += margenExtra;
+	// Margenes superior e inferior definidos en [pageFormat].
+	return alto + 20;
+}
+
+Uint8List _pngFondoBlancoRecortado(PdfRaster raster) {
+	final original = raster.asImage();
+	final conFondo = img.Image(
+		width: original.width,
+		height: original.height,
+		numChannels: 4,
+	);
+	img.fill(conFondo, color: img.ColorRgb8(255, 255, 255));
+	img.compositeImage(conFondo, original);
+	final recortado = img.trim(
+		conFondo,
+		mode: img.TrimMode.topLeftColor,
+	);
+	return Uint8List.fromList(img.encodePng(recortado));
 }
 
 pw.Widget _lineaDivisora({PdfColor color = _grisClaro}) {
@@ -362,9 +400,12 @@ Future<Uint8List> generarTicketDigitalPdfBytes({
 	documento.addPage(
 		pw.Page(
 			pageFormat: pageFormat,
-			build: (context) => pw.Column(
-				crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-				children: _construirContenido(contenido: contenido, logo: logo),
+			build: (context) => pw.Container(
+				color: PdfColors.white,
+				child: pw.Column(
+					crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+					children: _construirContenido(contenido: contenido, logo: logo),
+				),
 			),
 		),
 	);
@@ -384,5 +425,5 @@ Future<Uint8List> generarTicketDigitalPngBytes({
 	if (paginas.isEmpty) {
 		throw StateError('No se pudo generar imagen del ticket');
 	}
-	return paginas.first.toPng();
+	return _pngFondoBlancoRecortado(paginas.first);
 }
