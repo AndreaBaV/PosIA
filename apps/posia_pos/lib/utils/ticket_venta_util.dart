@@ -69,10 +69,11 @@ String? _etiquetaCaja(ConfigDispositivo? config) {
   if (config == null) {
     return null;
   }
-  if (config.nombreCaja != null && config.nombreCaja!.trim().isNotEmpty) {
-    return config.nombreCaja!.trim();
+  final nombre = config.nombreCaja?.trim();
+  if (nombre != null && nombre.isNotEmpty) {
+    return nombre;
   }
-  return config.cajaId.substring(0, 8).toUpperCase();
+  return null;
 }
 
 List<LineaVenta> _lineasCotizacionComoVenta(List<LineaCotizacion> lineas) {

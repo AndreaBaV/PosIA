@@ -91,21 +91,31 @@ Future<bool> compartirTextoWhatsApp({
 		)) {
 			return true;
 		}
-		if (await _intentarLanzar(
+		return _intentarLanzar(
 			_uriWaMe(telefonoLimpio, textoCodificado),
 			LaunchMode.externalApplication,
-		)) {
-			return true;
-		}
-	} else {
-		if (await _intentarLanzar(
-			_uriWaMe(telefonoLimpio, textoCodificado),
-			LaunchMode.externalApplication,
-		)) {
-			return true;
-		}
+		);
 	}
 
+	if (_esEscritorio()) {
+		if (await _intentarLanzar(
+			_uriWhatsAppNativo(telefonoLimpio, textoCodificado),
+			LaunchMode.externalApplication,
+		)) {
+			return true;
+		}
+		return _intentarLanzar(
+			_uriWhatsAppWeb(telefonoLimpio, textoCodificado),
+			LaunchMode.externalApplication,
+		);
+	}
+
+	if (await _intentarLanzar(
+		_uriWaMe(telefonoLimpio, textoCodificado),
+		LaunchMode.externalApplication,
+	)) {
+		return true;
+	}
 	return _intentarLanzar(
 		_uriWhatsAppWeb(telefonoLimpio, textoCodificado),
 		LaunchMode.externalApplication,
@@ -206,11 +216,12 @@ Future<void> compartirArchivoWhatsAppConAviso(
 		return;
 	}
 
-	if (await _compartirArchivoHojaSistema(
-		rutaArchivo: rutaArchivo,
-		mimeType: mimeType,
-		sharePositionOrigin: origen,
-	)) {
+	if (!_esEscritorio() &&
+		await _compartirArchivoHojaSistema(
+			rutaArchivo: rutaArchivo,
+			mimeType: mimeType,
+			sharePositionOrigin: origen,
+		)) {
 		return;
 	}
 
@@ -235,7 +246,7 @@ Future<void> compartirArchivoWhatsAppConAviso(
 	}
 	final mensaje = _esEscritorio()
 		? 'Ticket guardado en Descargas.\n'
-			'En WhatsApp Web use el clip para adjuntar:\n$rutaAccesible'
+			'Adjunte la imagen en WhatsApp con el clip:\n$rutaAccesible'
 		: 'Ticket guardado.\n'
 			'Adjunte la imagen desde archivos en WhatsApp:\n$rutaAccesible';
 	PosiaNotificaciones.mostrarSnackBar(context, 

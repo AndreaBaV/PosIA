@@ -38,12 +38,12 @@ void main() {
 		expect(texto, contains('LA FORTUNA'));
 		expect(texto, contains('Av. Principal 123'));
 		expect(texto, contains('Caja: Caja 1'));
-		expect(texto, contains('Juan Perez (001)'));
+		expect(texto, contains('Atendió: Juan Perez'));
 		expect(texto, contains('Maria Garcia'));
 		expect(texto, isNot(contains('Publico en general')));
 		expect(texto, contains('11/06/2026'));
-		expect(texto, contains('TURNO-TE'));
-		expect(texto, contains('TOTAL'));
+		expect(texto, isNot(contains('TURNO')));
+		expect(texto, contains('110626-T001'));
 		expect(texto, contains('100'));
 	});
 
@@ -287,7 +287,7 @@ void main() {
 		final leyenda = formatearLeyendaCompartirTicketDigital(contenido);
 		expect(leyenda, contains('La Fortuna'));
 		expect(leyenda, contains('TICKET DE VENTA'));
-		expect(leyenda, contains('Folio VENTA-TE'));
+		expect(leyenda, contains('Folio 100626-T003'));
 		expect(leyenda, isNot(contains('🛒')));
 		expect(leyenda, isNot(contains('Producto demo')));
 	});

@@ -90,7 +90,7 @@ double _calcularAltoPagina(TicketDigitalContenido contenido) {
 	alto += contenido.notasPie.length * notaPie;
 	alto += margenExtra;
 	// Margenes superior e inferior definidos en [pageFormat].
-	return alto + 20;
+	return alto + 30;
 }
 
 Uint8List _pngFondoBlancoRecortado(PdfRaster raster) {
@@ -389,13 +389,14 @@ Future<Uint8List> generarTicketDigitalPdfBytes({
 }) async {
 	final logo = pw.MemoryImage(logoPng);
 	final documento = pw.Document();
+	const margenTicket = 15.0;
 	final pageFormat = PdfPageFormat(
 		PdfPageFormat.roll80.width,
 		_calcularAltoPagina(contenido),
-		marginLeft: 10,
-		marginRight: 10,
-		marginTop: 10,
-		marginBottom: 10,
+		marginLeft: margenTicket,
+		marginRight: margenTicket,
+		marginTop: margenTicket,
+		marginBottom: margenTicket,
 	);
 	documento.addPage(
 		pw.Page(

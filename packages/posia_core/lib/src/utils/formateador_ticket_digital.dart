@@ -11,23 +11,37 @@ import 'cliente_credito_util.dart';
 import 'moneda_util.dart';
 
 String _etiquetaMetodoPago(Venta venta) {
-	switch (venta.metodoPago.name) {
-		case 'mixto':
+	return switch (venta.metodoPago) {
+		MetodoPago.efectivo => 'Efectivo',
+		MetodoPago.tarjeta => 'Tarjeta',
+		MetodoPago.mixto => () {
 			final partes = <String>[
-				'E:${formatearMoneda(venta.montoEfectivo ?? 0)}',
-				'T:${formatearMoneda(venta.montoTarjeta ?? 0)}',
+				'Efectivo ${formatearMoneda(venta.montoEfectivo ?? 0)}',
+				'Tarjeta ${formatearMoneda(venta.montoTarjeta ?? 0)}',
 			];
 			if ((venta.montoTransferencia ?? 0) > 0) {
-				partes.add('Tr:${formatearMoneda(venta.montoTransferencia!)}');
+				partes.add(
+					'Transferencia ${formatearMoneda(venta.montoTransferencia!)}',
+				);
 			}
-			return 'Mixto (${partes.join(' ')})';
-		case 'transferencia':
-			return 'Transferencia';
-		case 'credito':
-			return 'Crédito / Fiado';
-		default:
-			return venta.metodoPago.name;
-	}
+			return 'Mixto (${partes.join(' · ')})';
+		}(),
+		MetodoPago.credito => 'Crédito / Fiado',
+		MetodoPago.transferencia => 'Transferencia',
+	};
+}
+
+/// Folio legible para el cliente (fecha corta + sufijo alfanumérico).
+String formatearFolioTicket(String id, DateTime fechaUtc) {
+	final local = fechaUtc.toLocal();
+	final dia = local.day.toString().padLeft(2, '0');
+	final mes = local.month.toString().padLeft(2, '0');
+	final anio = (local.year % 100).toString().padLeft(2, '0');
+	final compacto = id.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toUpperCase();
+	final sufijo = compacto.length >= 4
+		? compacto.substring(compacto.length - 4)
+		: compacto.padLeft(4, '0');
+	return '$dia$mes$anio-$sufijo';
 }
 
 String _formatearFechaTicket(DateTime fechaUtc) {
@@ -79,10 +93,7 @@ TicketDigitalContenido construirTicketDigitalVenta({
 		campos['Caja'] = etiquetaCaja.trim();
 	}
 	if (nombreVendedor != null && nombreVendedor.trim().isNotEmpty) {
-		final vendedor = codigoVendedor != null && codigoVendedor.trim().isNotEmpty
-			? '${nombreVendedor.trim()} (${codigoVendedor.trim()})'
-			: nombreVendedor.trim();
-		campos['Vendedor'] = vendedor;
+		campos['Atendió'] = nombreVendedor.trim();
 	}
 	if (telefonoCliente != null && telefonoCliente.trim().isNotEmpty) {
 		campos['Teléfono'] = telefonoCliente.trim();
@@ -94,9 +105,6 @@ TicketDigitalContenido construirTicketDigitalVenta({
 		campos['RFC'] = rfcCliente.trim();
 	}
 	campos['Pago'] = _etiquetaMetodoPago(venta);
-	if (venta.turnoCajaId != null) {
-		campos['Turno'] = venta.turnoCajaId!.substring(0, 8).toUpperCase();
-	}
 
 	double? cambio;
 	if (montoRecibido != null && venta.metodoPago == MetodoPago.efectivo) {
@@ -113,7 +121,7 @@ TicketDigitalContenido construirTicketDigitalVenta({
 
 	return TicketDigitalContenido(
 		tipo: TipoDocumentoTicketDigital.venta,
-		folio: venta.id.substring(0, 8).toUpperCase(),
+		folio: formatearFolioTicket(venta.id, venta.creadaEn),
 		fecha: venta.creadaEn,
 		nombreTienda: nombreTienda,
 		direccionTienda: direccionTienda,
@@ -153,7 +161,7 @@ TicketDigitalContenido construirTicketDigitalCotizacion({
 
 	return TicketDigitalContenido(
 		tipo: TipoDocumentoTicketDigital.cotizacion,
-		folio: id.substring(0, 8).toUpperCase(),
+		folio: formatearFolioTicket(id, creadaEn),
 		fecha: creadaEn,
 		nombreTienda: nombreTienda,
 		direccionTienda: direccionTienda,
@@ -243,7 +251,7 @@ TicketDigitalContenido construirTicketDigitalPagare({
 	];
 	return TicketDigitalContenido(
 		tipo: TipoDocumentoTicketDigital.pagare,
-		folio: venta.id.substring(0, 8).toUpperCase(),
+		folio: formatearFolioTicket(venta.id, venta.creadaEn),
 		fecha: venta.creadaEn,
 		nombreTienda: nombreTienda,
 		direccionTienda: direccionTienda,
@@ -276,7 +284,7 @@ TicketDigitalContenido construirTicketDigitalLiquidacionCredito({
 	}
 	return TicketDigitalContenido(
 		tipo: TipoDocumentoTicketDigital.liquidacionCredito,
-		folio: venta.id.substring(0, 8).toUpperCase(),
+		folio: formatearFolioTicket(venta.id, venta.creadaEn),
 		fecha: venta.creditoLiquidadoEn ?? DateTime.now().toUtc(),
 		nombreTienda: nombreTienda,
 		direccionTienda: direccionTienda,
