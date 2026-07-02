@@ -567,6 +567,11 @@ flutter run -d <iphone> --dart-define=POSIA_HUB_URL=... --dart-define=POSIA_HUB_
 
 En `pubspec.yaml`: `version: 1.0.1+2` · Tag: `mobile-v1.0.1`
 
+**Nota sobre `versionCode` / `CFBundleVersion`:** el workflow **sobrescribe** el número tras el `+` en CI usando `--build-number=$((VERSION_CODE_BASE + github.run_number))`. Esto garantiza que cada release automatizada tenga un `versionCode` estrictamente mayor al anterior y evita que Google Play rechace la subida con `Version code X has already been used` cuando alguien olvida bumpear el sufijo `+N` en `pubspec.yaml`.
+
+- El valor de `pubspec.yaml` solo afecta compilaciones locales (`flutter build ...` desde tu máquina).
+- Si necesitas subir manualmente un `.aab` fuera del workflow con un `versionCode` mayor al que CI generaría, aumenta también `VERSION_CODE_BASE` en `.github/workflows/mobile-release.yml` para que la siguiente release automatizada siga siendo monotónicamente creciente.
+
 ---
 
 ## 12. Configuración del dispositivo
