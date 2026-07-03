@@ -8,6 +8,7 @@ import 'package:posia_core/posia_core.dart';
 import '../theme/posia_theme.dart';
 import 'banner_mensaje_dialogo.dart';
 import 'contenido_dialogo_teclado.dart';
+import 'teclado_numerico_simple.dart';
 
 /// Resultado del dialogo de peso.
 class ResultadoDialogoPeso {
@@ -231,7 +232,7 @@ class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
 							controller: _pesoController,
 							focusNode: _pesoFocus,
 							autofocus: true,
-							keyboardType: const TextInputType.numberWithOptions(decimal: true),
+							keyboardType: TextInputType.none,
 							showCursor: true,
 							textInputAction: TextInputAction.done,
 							decoration: InputDecoration(
@@ -244,6 +245,30 @@ class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
 							onChanged: (texto) {
 								_limpiarError();
 								_establecerValor(_normalizarEntradaPeso(texto));
+								_actualizarPrecioResuelto();
+							},
+						),
+						const SizedBox(height: 8.0),
+						TecladoNumericoSimple(
+							valorActual: _valorPeso,
+							mostrarValor: false,
+							alPresionarTecla: (tecla) {
+								_limpiarError();
+								_establecerValor(
+									_normalizarEntradaPeso('$_valorPeso$tecla'),
+								);
+								_actualizarPrecioResuelto();
+							},
+							alBorrar: () {
+								_limpiarError();
+								if (_valorPeso.isEmpty) {
+									return;
+								}
+								_establecerValor(
+									_normalizarEntradaPeso(
+										_valorPeso.substring(0, _valorPeso.length - 1),
+									),
+								);
 								_actualizarPrecioResuelto();
 							},
 						),
