@@ -60,6 +60,10 @@ jobs:
           dart run flutter_launcher_icons
           dart run flutter_native_splash:create
 
+      - name: Analyze
+        working-directory: ${{ env.APP_DIR }}
+        run: dart analyze .
+
       - name: Configure Android signing
         id: android_signing
         env:
@@ -242,6 +246,11 @@ jobs:
           flutter pub get
           dart run flutter_launcher_icons
           dart run flutter_native_splash:create
+
+      - name: Analyze
+        if: steps.signing.outputs.configured == 'true'
+        working-directory: ${{ env.APP_DIR }}
+        run: dart analyze .
 
       - name: Import Apple Distribution certificate
         if: steps.signing.outputs.configured == 'true'
