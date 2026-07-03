@@ -120,6 +120,11 @@ class GestorAccesoBiometrico {
     await _guardarTodos(todos.where((p) => p.usuarioId != usuarioId).toList());
   }
 
+  /// Quita perfiles biometricos guardados (p. ej. tras limpiar cache local).
+  Future<void> limpiarAlmacen() async {
+    await _almacen.delete(key: _claveAlmacenPerfiles);
+  }
+
   Future<PerfilAccesoBiometrico?> autenticarYRecuperar({
     String? usuarioId,
   }) async {

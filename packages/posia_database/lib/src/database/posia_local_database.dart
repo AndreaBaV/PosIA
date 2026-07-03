@@ -84,6 +84,22 @@ class PosiaLocalDatabase {
 		await deleteDatabase(ruta);
 	}
 
+	/// Elimina la base de configuracion del dispositivo (hub, caja, sesion).
+	Future<void> reiniciarBaseDispositivo() async {
+		if (_baseDispositivo != null) {
+			await _baseDispositivo!.close();
+			_baseDispositivo = null;
+		}
+		final ruta = await motor_sqlite.resolverRutaBaseDatos(_archivoDispositivo);
+		await deleteDatabase(ruta);
+	}
+
+	/// Borra ambas bases SQLite locales (instalacion en blanco).
+	Future<void> reiniciarAlmacenLocalCompleto() async {
+		await reiniciarBaseOperativa();
+		await reiniciarBaseDispositivo();
+	}
+
 	Future<Database> _abrirBaseOperativa() async {
 		final existente = _baseOperativaRuteada;
 		if (existente != null) {

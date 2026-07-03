@@ -8,6 +8,8 @@ import 'configuracion_entorno_io.dart'
 abstract final class ClavesEnv {
 	static const String hubUrl = 'POSIA_HUB_URL';
 	static const String hubApiKey = 'POSIA_HUB_API_KEY';
+	static const String limpiarCacheLocal = 'POSIA_LIMPIAR_CACHE_LOCAL';
+	static const String buildId = 'POSIA_BUILD_ID';
 	static const String databaseUrl = 'DATABASE_URL';
 	static const String apiKey = 'API_KEY';
 	static const String port = 'PORT';

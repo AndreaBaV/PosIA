@@ -9,6 +9,8 @@ library;
 import 'package:posia_core/posia_core.dart';
 import 'package:posia_database/posia_database.dart';
 
+import 'limpiador_cache_local.dart';
+
 /// Prepara motor SQLite y datos iniciales antes de mostrar caja.
 class InicializadorApp {
 	InicializadorApp._();
@@ -21,6 +23,7 @@ class InicializadorApp {
 			return;
 		}
 		await ConfiguracionEntorno.cargar();
+		await LimpiadorCacheLocal.aplicarSiCorresponde();
 		await PosiaLocalDatabase.inicializarMotor();
 		final gestor = PosiaLocalDatabase.obtenerInstancia();
 		final base = await gestor.obtenerBaseDatosDispositivo();

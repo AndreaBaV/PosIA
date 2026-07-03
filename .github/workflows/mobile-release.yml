@@ -27,6 +27,9 @@ env:
   FLUTTER_VERSION: "3.41.5"
   JAVA_VERSION: "17"
   APP_DIR: apps/posia_pos
+  # "true" borra SQLite local al primer arranque de cada version (+build).
+  # Poner "false" en produccion para conservar datos entre actualizaciones.
+  POSIA_LIMPIAR_CACHE_LOCAL: "true"
 
 jobs:
   android:
@@ -93,6 +96,7 @@ jobs:
         env:
           POSIA_HUB_URL: ${{ secrets.POSIA_HUB_URL }}
           POSIA_HUB_API_KEY: ${{ secrets.POSIA_HUB_API_KEY }}
+          POSIA_LIMPIAR_CACHE_LOCAL: ${{ env.POSIA_LIMPIAR_CACHE_LOCAL }}
         run: |
           if [ "${{ github.event_name }}" = "push" ]; then
             if [ -z "$POSIA_HUB_URL" ] || [ -z "$POSIA_HUB_API_KEY" ]; then
@@ -100,9 +104,11 @@ jobs:
               exit 1
             fi
           fi
-          ARGS=""
+          BUILD_ID=$(grep -E '^version:' pubspec.yaml | head -1 | awk '{print $2}' | tr -d '\r')
+          ARGS="--dart-define=POSIA_BUILD_ID=$BUILD_ID"
           [ -n "$POSIA_HUB_URL" ] && ARGS="$ARGS --dart-define=POSIA_HUB_URL=$POSIA_HUB_URL"
           [ -n "$POSIA_HUB_API_KEY" ] && ARGS="$ARGS --dart-define=POSIA_HUB_API_KEY=$POSIA_HUB_API_KEY"
+          [ "$POSIA_LIMPIAR_CACHE_LOCAL" = "true" ] && ARGS="$ARGS --dart-define=POSIA_LIMPIAR_CACHE_LOCAL=true"
           flutter build appbundle --release $ARGS
 
       - name: Upload AAB artifact
@@ -155,10 +161,13 @@ jobs:
         env:
           POSIA_HUB_URL: ${{ secrets.POSIA_HUB_URL }}
           POSIA_HUB_API_KEY: ${{ secrets.POSIA_HUB_API_KEY }}
+          POSIA_LIMPIAR_CACHE_LOCAL: ${{ env.POSIA_LIMPIAR_CACHE_LOCAL }}
         run: |
-          ARGS=""
+          BUILD_ID=$(grep -E '^version:' pubspec.yaml | head -1 | awk '{print $2}' | tr -d '\r')
+          ARGS="--dart-define=POSIA_BUILD_ID=$BUILD_ID"
           [ -n "$POSIA_HUB_URL" ] && ARGS="$ARGS --dart-define=POSIA_HUB_URL=$POSIA_HUB_URL"
           [ -n "$POSIA_HUB_API_KEY" ] && ARGS="$ARGS --dart-define=POSIA_HUB_API_KEY=$POSIA_HUB_API_KEY"
+          [ "$POSIA_LIMPIAR_CACHE_LOCAL" = "true" ] && ARGS="$ARGS --dart-define=POSIA_LIMPIAR_CACHE_LOCAL=true"
           flutter build apk --release $ARGS
 
       - name: Upload APK artifact
@@ -308,6 +317,7 @@ jobs:
         env:
           POSIA_HUB_URL: ${{ secrets.POSIA_HUB_URL }}
           POSIA_HUB_API_KEY: ${{ secrets.POSIA_HUB_API_KEY }}
+          POSIA_LIMPIAR_CACHE_LOCAL: ${{ env.POSIA_LIMPIAR_CACHE_LOCAL }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           IOS_PROVISION_PROFILE_NAME: ${{ secrets.IOS_PROVISION_PROFILE_NAME }}
           CODE_SIGN_STYLE: Manual
@@ -315,9 +325,11 @@ jobs:
           DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
           PROVISIONING_PROFILE_SPECIFIER: ${{ secrets.IOS_PROVISION_PROFILE_NAME }}
         run: |
-          ARGS=""
+          BUILD_ID=$(grep -E '^version:' pubspec.yaml | head -1 | awk '{print $2}' | tr -d '\r')
+          ARGS="--dart-define=POSIA_BUILD_ID=$BUILD_ID"
           [ -n "$POSIA_HUB_URL" ] && ARGS="$ARGS --dart-define=POSIA_HUB_URL=$POSIA_HUB_URL"
           [ -n "$POSIA_HUB_API_KEY" ] && ARGS="$ARGS --dart-define=POSIA_HUB_API_KEY=$POSIA_HUB_API_KEY"
+          [ "$POSIA_LIMPIAR_CACHE_LOCAL" = "true" ] && ARGS="$ARGS --dart-define=POSIA_LIMPIAR_CACHE_LOCAL=true"
           flutter build ipa --release \
             --export-options-plist=ios/ExportOptions.plist \
             $ARGS
