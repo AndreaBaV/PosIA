@@ -1,14 +1,18 @@
 /// Configuracion local del dispositivo POS.
 library;
 
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:posia_core/posia_core.dart';
 import 'package:posia_database/posia_database.dart';
+import 'package:posia_hardware/posia_hardware.dart';
 import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
+import '../utils/imprimir_ticket_digital_util.dart';
 
 class PantallaConfiguracionAdmin extends ConsumerStatefulWidget {
 	const PantallaConfiguracionAdmin({super.key});
@@ -26,6 +30,11 @@ class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguraci
 	String? _tiendaSeleccionadaId;
 	String _modoImpresora = 'ambos';
 	bool _abrirCajonAlCobrar = false;
+	String _nombreImpresoraUsb = '';
+	int _anchoRolloMm = 80;
+	bool _impresoraInicializada = false;
+	List<ImpresoraWindows>? _impresorasDetectadas;
+	bool _cargandoImpresoras = false;
 	AtajosCajaConfig _atajosCaja = AtajosCajaConfig.predeterminados();
 	var _atajosInicializados = false;
 
@@ -130,20 +139,21 @@ class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguraci
 							Text(
 								'Modo archivo guarda en Documents/$CARPETA_DOCUMENTOS_APP/tickets. '
 								'Modo red usa ESC/POS por TCP (puerto 9100). '
+								'Modo USB Windows envía al spooler de Windows (para impresoras conectadas por cable USB). '
 								'El modo ambos intenta la red y respalda en archivo.',
 							),
 							const SizedBox(height: 16.0),
 							impresoraAsync.when(
 								data: (config) {
-									if (_hostImpresoraController.text.isEmpty) {
+									if (!_impresoraInicializada) {
 										_hostImpresoraController.text = config.hostRed;
-									}
-									if (_puertoImpresoraController.text == '9100' &&
-										config.puertoRed != 9100) {
 										_puertoImpresoraController.text = config.puertoRed.toString();
+										_modoImpresora = config.modo;
+										_abrirCajonAlCobrar = config.abrirCajonAlCobrar;
+										_nombreImpresoraUsb = config.nombreImpresoraUsb;
+										_anchoRolloMm = config.anchoRolloMm;
+										_impresoraInicializada = true;
 									}
-									_modoImpresora = config.modo;
-									_abrirCajonAlCobrar = config.abrirCajonAlCobrar;
 									return Column(
 										children: [
 											DropdownButtonFormField<String>(
@@ -153,35 +163,51 @@ class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguraci
 													DropdownMenuItem(value: 'archivo', child: Text('Solo archivo')),
 													DropdownMenuItem(value: 'red', child: Text('Solo red')),
 													DropdownMenuItem(value: 'ambos', child: Text('Red + archivo')),
+													DropdownMenuItem(
+														value: 'usb_windows',
+														child: Text('USB Windows (impresora local)'),
+													),
 												],
-												onChanged: (v) => setState(() => _modoImpresora = v ?? 'ambos'),
+												onChanged: (v) => setState(() {
+													_modoImpresora = v ?? 'ambos';
+													if (_modoImpresora == 'usb_windows' &&
+														_impresorasDetectadas == null) {
+														_refrescarImpresorasWindows();
+													}
+												}),
 												decoration: const InputDecoration(
 													labelText: 'Modo de impresión',
 													border: OutlineInputBorder(),
 												),
 											),
 											const SizedBox(height: 12.0),
-											TextField(
-												controller: _hostImpresoraController,
-												decoration: const InputDecoration(
-													labelText: 'IP o hostname impresora',
-													border: OutlineInputBorder(),
+											if (_modoImpresora == 'usb_windows') ...[
+												_seccionImpresoraUsbWindows(),
+											] else ...[
+												TextField(
+													controller: _hostImpresoraController,
+													decoration: const InputDecoration(
+														labelText: 'IP o hostname impresora',
+														border: OutlineInputBorder(),
+													),
 												),
-											),
-											const SizedBox(height: 12.0),
-											TextField(
-												controller: _puertoImpresoraController,
-												keyboardType: TextInputType.number,
-												decoration: const InputDecoration(
-													labelText: 'Puerto TCP',
-													border: OutlineInputBorder(),
+												const SizedBox(height: 12.0),
+												TextField(
+													controller: _puertoImpresoraController,
+													keyboardType: TextInputType.number,
+													decoration: const InputDecoration(
+														labelText: 'Puerto TCP',
+														border: OutlineInputBorder(),
+													),
 												),
-											),
+											],
 											const SizedBox(height: 12.0),
 											SwitchListTile(
 												title: const Text('Abrir cajón al cobrar'),
-												subtitle: const Text(
-													'Requiere impresora térmica con cajón conectado (modo red)',
+												subtitle: Text(
+													_modoImpresora == 'usb_windows'
+														? 'Envía el pulso ESC p 0 25 250 a la impresora seleccionada (cajón por RJ11/RJ12)'
+														: 'Requiere impresora térmica con cajón conectado (modo red)',
 												),
 												value: _abrirCajonAlCobrar,
 												onChanged: (v) => setState(
@@ -195,9 +221,23 @@ class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguraci
 								error: (e, _) => Text('$e'),
 							),
 							const SizedBox(height: 12.0),
-							FilledButton(
-								onPressed: _guardarImpresora,
-								child: const Text('Guardar impresora'),
+							Row(
+								children: [
+									Expanded(
+										child: FilledButton(
+											onPressed: _guardarImpresora,
+											child: const Text('Guardar impresora'),
+										),
+									),
+									const SizedBox(width: 12.0),
+									Expanded(
+										child: OutlinedButton.icon(
+											onPressed: _probarImpresoraYCajon,
+											icon: const Icon(Icons.print),
+											label: const Text('Probar impresora + cajón'),
+										),
+									),
+								],
 							),
 							const Divider(height: 40.0),
 							const Text(
@@ -322,6 +362,126 @@ class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguraci
 		);
 	}
 
+	String _etiquetaImpresoraWindows(ImpresoraWindows imp) =>
+		'${imp.nombre}  ·  ${imp.puerto}';
+
+	Widget _seccionImpresoraUsbWindows() {
+		if (!Platform.isWindows) {
+			return Container(
+				padding: const EdgeInsets.all(12.0),
+				decoration: BoxDecoration(
+					color: Colors.orange.shade50,
+					border: Border.all(color: Colors.orange),
+					borderRadius: BorderRadius.circular(4.0),
+				),
+				child: const Text(
+					'El modo USB Windows solo funciona cuando la aplicación corre '
+					'en Windows. En este dispositivo no está disponible.',
+				),
+			);
+		}
+		final impresoras = _impresorasDetectadas;
+		return Column(
+			crossAxisAlignment: CrossAxisAlignment.start,
+			children: [
+				Row(
+					children: [
+						Expanded(
+							child: _cargandoImpresoras
+								? const LinearProgressIndicator()
+								: DropdownButtonFormField<String>(
+									key: ValueKey('usb_${impresoras?.length ?? 0}_$_nombreImpresoraUsb'),
+									initialValue: _nombreImpresoraUsb.isEmpty ? null : _nombreImpresoraUsb,
+									isExpanded: true,
+									selectedItemBuilder: (context) => (impresoras ?? [])
+										.map(
+											(imp) => Align(
+												alignment: AlignmentDirectional.centerStart,
+												child: Text(
+													_etiquetaImpresoraWindows(imp),
+													overflow: TextOverflow.ellipsis,
+													maxLines: 1,
+												),
+											),
+										)
+										.toList(),
+									items: (impresoras ?? [])
+										.map(
+											(imp) => DropdownMenuItem<String>(
+												value: imp.nombre,
+												child: Text(
+													_etiquetaImpresoraWindows(imp),
+													overflow: TextOverflow.ellipsis,
+												),
+											),
+										)
+										.toList(),
+									onChanged: (v) => setState(() => _nombreImpresoraUsb = v ?? ''),
+									decoration: const InputDecoration(
+										labelText: 'Impresora USB detectada en Windows',
+										border: OutlineInputBorder(),
+									),
+								),
+						),
+						const SizedBox(width: 8.0),
+						IconButton(
+							tooltip: 'Volver a buscar impresoras',
+							onPressed: _cargandoImpresoras ? null : _refrescarImpresorasWindows,
+							icon: const Icon(Icons.refresh),
+						),
+					],
+				),
+				const SizedBox(height: 8.0),
+				if (impresoras != null && impresoras.isEmpty)
+					const Text(
+						'Windows no reportó impresoras. Verifica que el equipo la '
+						'reconozca en "Dispositivos e impresoras" y presiona el botón '
+						'de recarga.',
+						style: TextStyle(color: Colors.orange),
+					),
+				const SizedBox(height: 12.0),
+				DropdownButtonFormField<int>(
+					key: ValueKey('ancho_$_anchoRolloMm'),
+					initialValue: _anchoRolloMm,
+					items: const [
+						DropdownMenuItem(value: 80, child: Text('80 mm (48 columnas)')),
+						DropdownMenuItem(value: 58, child: Text('58 mm (32 columnas)')),
+					],
+					onChanged: (v) => setState(() => _anchoRolloMm = v ?? 80),
+					decoration: const InputDecoration(
+						labelText: 'Ancho del rollo térmico',
+						border: OutlineInputBorder(),
+					),
+				),
+			],
+		);
+	}
+
+	Future<void> _refrescarImpresorasWindows() async {
+		if (!Platform.isWindows) {
+			return;
+		}
+		setState(() => _cargandoImpresoras = true);
+		try {
+			final lista = enumerarImpresorasWindows();
+			if (!mounted) return;
+			setState(() {
+				_impresorasDetectadas = lista;
+				if (_nombreImpresoraUsb.isEmpty && lista.isNotEmpty) {
+					final usb = lista.firstWhere(
+						(i) => i.esUsb,
+						orElse: () => lista.first,
+					);
+					_nombreImpresoraUsb = usb.nombre;
+				}
+			});
+		} finally {
+			if (mounted) {
+				setState(() => _cargandoImpresoras = false);
+			}
+		}
+	}
+
 	Future<void> _guardarImpresora() async {
 		final servicio = await ref.read(servicioAdminProvider.future);
 		await servicio.guardarConfigImpresora(
@@ -330,6 +490,8 @@ class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguraci
 				hostRed: _hostImpresoraController.text.trim(),
 				puertoRed: int.tryParse(_puertoImpresoraController.text.trim()) ?? 9100,
 				abrirCajonAlCobrar: _abrirCajonAlCobrar,
+				nombreImpresoraUsb: _nombreImpresoraUsb.trim(),
+				anchoRolloMm: _anchoRolloMm,
 			),
 		);
 		ref.invalidate(configImpresoraProvider);
@@ -340,6 +502,46 @@ class _PantallaConfiguracionAdminState extends ConsumerState<PantallaConfiguraci
 		PosiaNotificaciones.mostrarSnackBar(context, 
 			const SnackBar(content: Text('Impresora configurada')),
 		);
+	}
+
+	Future<void> _probarImpresoraYCajon() async {
+		try {
+			await _guardarImpresora();
+			final registro = await ref.read(hardwareRegistryProvider.future);
+			final impresora = registro.obtenerImpresora();
+			final servicio = await ref.read(servicioAdminProvider.future);
+			final tienda = await servicio.obtenerTiendaActiva();
+			final ticketPrueba = construirTicketDigitalPrueba(
+				nombreTienda: tienda?.nombre ?? 'Tienda de prueba',
+				nombreImpresoraUsb: _nombreImpresoraUsb,
+				anchoRolloMm: _anchoRolloMm,
+			);
+			await imprimirTicketDigital(
+				impresora: impresora,
+				contenido: ticketPrueba,
+			);
+			final cajon = registro.obtenerCajon();
+			if (cajon != null) {
+				await cajon.abrir();
+			}
+			if (!mounted) return;
+			PosiaNotificaciones.mostrarSnackBar(
+				context,
+				SnackBar(
+					content: Text(
+						cajon != null
+							? 'Ticket de prueba enviado y cajón abierto.'
+							: 'Ticket de prueba enviado (cajón no configurado).',
+					),
+				),
+			);
+		} catch (e) {
+			if (!mounted) return;
+			PosiaNotificaciones.mostrarSnackBar(
+				context,
+				SnackBar(content: Text('Falló la prueba: $e')),
+			);
+		}
 	}
 
 	Future<void> _guardarAtajosCaja() async {

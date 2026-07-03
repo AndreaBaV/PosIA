@@ -10,6 +10,7 @@ import 'package:posia_ui/posia_ui.dart';
 import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
 import '../utils/compartir_ticket_digital_util.dart';
+import '../utils/imprimir_ticket_digital_util.dart';
 import '../utils/ticket_credito_util.dart';
 import '../widgets/dialogo_completar_datos_credito.dart';
 
@@ -410,13 +411,14 @@ class _PantallaRegistrarCreditoState extends ConsumerState<PantallaRegistrarCred
 				operador: operador,
 			);
 			final hardware = await ref.read(hardwareRegistryProvider.future);
-			final pagares = await construirTextosPagareCredito(
+			final pagares = await obtenerTicketsDigitalesPagareCredito(
 				venta: venta,
 				servicioAdmin: servicio,
 			);
-			for (final pagare in pagares) {
-				await hardware.obtenerImpresora().imprimirTicket(pagare);
-			}
+			await imprimirTicketsDigitales(
+				impresora: hardware.obtenerImpresora(),
+				contenidos: pagares,
+			);
 			if (!mounted) {
 				return;
 			}

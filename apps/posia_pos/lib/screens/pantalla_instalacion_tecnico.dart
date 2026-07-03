@@ -117,7 +117,7 @@ class _PantallaInstalacionTecnicoState extends ConsumerState<PantallaInstalacion
 						controller: _hubUrlController,
 						decoration: const InputDecoration(
 							labelText: 'URL del hub',
-							hintText: 'https://tu-api.onrender.com',
+							hintText: 'https://tu-api.code.run',
 							border: OutlineInputBorder(),
 							prefixIcon: Icon(Icons.cloud_outlined),
 						),

@@ -11,6 +11,7 @@ import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
 import '../utils/compartir_ticket_digital_util.dart';
 import '../utils/documento_ticket_util.dart';
+import '../utils/imprimir_ticket_digital_util.dart';
 import '../utils/ticket_credito_util.dart';
 import '../utils/ticket_venta_util.dart';
 import '../widgets/acciones_documento_ticket.dart';
@@ -572,26 +573,33 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 			final hardware = await ref.read(hardwareRegistryProvider.future);
 			final impresora = hardware.obtenerImpresora();
 			if (venta.metodoPago == MetodoPago.credito && !venta.creditoLiquidado) {
-				final pagares = await construirTextosPagareCredito(
+				final pagares = await obtenerTicketsDigitalesPagareCredito(
 					venta: venta,
 					servicioAdmin: servicio,
 				);
-				for (final pagare in pagares) {
-					await impresora.imprimirTicket(pagare);
-				}
+				await imprimirTicketsDigitales(
+					impresora: impresora,
+					contenidos: pagares,
+				);
 			} else if (venta.metodoPago == MetodoPago.credito && venta.creditoLiquidado) {
-				final texto = await construirTextoLiquidacionCredito(
+				final digital = await obtenerTicketDigitalLiquidacionCredito(
 					venta: venta,
 					servicioAdmin: servicio,
 				);
-				await impresora.imprimirTicket(texto);
+				await imprimirTicketDigital(
+					impresora: impresora,
+					contenido: digital,
+				);
 			} else {
-				final texto = await construirTextoTicketVenta(
+				final digital = await obtenerTicketDigitalVenta(
 					venta: venta,
 					servicioAdmin: servicio,
 					config: config,
 				);
-				await impresora.imprimirTicket(texto);
+				await imprimirTicketDigital(
+					impresora: impresora,
+					contenido: digital,
+				);
 			}
 			if (!mounted) {
 				return;
@@ -632,12 +640,15 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 		try {
 			final servicio = await ref.read(servicioAdminProvider.future);
 			final actualizada = await servicio.liquidarCreditoVenta(venta.id);
-			final texto = await construirTextoLiquidacionCredito(
+			final digital = await obtenerTicketDigitalLiquidacionCredito(
 				venta: actualizada,
 				servicioAdmin: servicio,
 			);
 			final hardware = await ref.read(hardwareRegistryProvider.future);
-			await hardware.obtenerImpresora().imprimirTicket(texto);
+			await imprimirTicketDigital(
+				impresora: hardware.obtenerImpresora(),
+				contenido: digital,
+			);
 			ref.invalidate(historialOperacionesProvider(_diasAtras));
 			if (!mounted) {
 				return;

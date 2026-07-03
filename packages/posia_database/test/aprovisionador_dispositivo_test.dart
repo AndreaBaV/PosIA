@@ -41,5 +41,54 @@ void main() {
 
 			expect(segunda.cajaId, primera.cajaId);
 		});
+
+		test(
+			'no borra la API key guardada si el build no trae POSIA_HUB_API_KEY',
+			() async {
+				// Regresión: antes se sobreescribia siempre con el valor de
+				// build. Si un tecnico corregia la clave a mano desde
+				// "Configuración técnica" pero el APK/IPA se compilo sin
+				// POSIA_HUB_API_KEY, el siguiente arranque la borraba y volvía
+				// a fallar con "Clave API inválida".
+				await config.guardarHubUrl('https://hub.ejemplo.code.run');
+				await config.guardarHubApiKey('clave-correcta-puesta-a-mano');
+
+				await AprovisionadorDispositivo.refrescarHubConValores(
+					config: config,
+					urlBuild: 'https://hub.ejemplo.code.run',
+					claveBuild: '',
+				);
+
+				final clave = await config.obtenerValor(claveConfigHubApiKey);
+				expect(clave, 'clave-correcta-puesta-a-mano');
+			},
+		);
+
+		test('rota la API key cuando el build trae una distinta no vacia',
+			() async {
+				await config.guardarHubUrl('https://hub.ejemplo.code.run');
+				await config.guardarHubApiKey('clave-vieja');
+
+				await AprovisionadorDispositivo.refrescarHubConValores(
+					config: config,
+					urlBuild: 'https://hub.ejemplo.code.run',
+					claveBuild: 'clave-nueva',
+				);
+
+				final clave = await config.obtenerValor(claveConfigHubApiKey);
+				expect(clave, 'clave-nueva');
+			},
+		);
+
+		test('normaliza la URL de build quitando barras finales', () async {
+			await AprovisionadorDispositivo.refrescarHubConValores(
+				config: config,
+				urlBuild: 'https://hub.ejemplo.code.run///',
+				claveBuild: 'clave',
+			);
+
+			final url = await config.obtenerHubUrl();
+			expect(url, 'https://hub.ejemplo.code.run');
+		});
 	});
 }

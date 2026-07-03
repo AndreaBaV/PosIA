@@ -257,15 +257,23 @@ cd server/sync_api
 dart run bin/server.dart
 ```
 
-#### Opción C — Neon + Render (free, se duerme)
+#### Opción C — Neon + Northflank (plan gratuito)
+
+Despliegue actual del proyecto. Northflank compila el `Dockerfile` de la raíz
+del monorepo (contexto = repo completo para incluir `packages/posia_core`).
 
 | Variable | Valor |
 |----------|-------|
 | `DATABASE_URL` | Connection string Neon (`?sslmode=require`) |
-| `API_KEY` | Clave compartida (`x-api-key`) |
+| `API_KEY` | Clave compartida (`x-api-key`), **debe coincidir con `POSIA_HUB_API_KEY` del build móvil** |
 | `PORT` | `8080` |
+| `POSIA_ENV` | `production` |
 
-#### Opción D — Neon + Oracle Always Free (recomendado $0, 24/7)
+Health check: `/v1/health`. Si el plan puede suspender el contenedor por
+inactividad, el cliente lo despierta con un ping inicial de hasta 60 s antes
+de autenticar.
+
+#### Opción D — Neon + Oracle Always Free (24/7 sin suspensión)
 
 1. VM **Ampere A1** Ubuntu 22.04 aarch64 (1 OCPU, 6 GB RAM)
 2. Puertos 22, 80, 443 abiertos; 8080 solo local
@@ -292,20 +300,25 @@ curl https://TU-DOMINIO/v1/health
 ### Build producción (embeber hub en app)
 
 ```powershell
-$env:POSIA_HUB_URL="https://tu-api.onrender.com"
+$env:POSIA_HUB_URL="https://tu-api.code.run"
 $env:POSIA_HUB_API_KEY="tu-clave-secreta"
 .\scripts\build_movil_release.ps1
 ```
 
 Un solo APK/IPA sirve para todos los tenants; el tenant se resuelve al iniciar sesión.
 
+`POSIA_HUB_API_KEY` **tiene que ser byte a byte la misma** que la variable
+`API_KEY` del hub. Si difiere (o queda vacía en el build), todos los usuarios
+verán "Clave API inválida" al primer login.
+
 ### Solución de problemas sync
 
 | Problema | Solución |
 |----------|----------|
-| 401 Unauthorized | Igualar API key servidor y app |
+| 401 "Clave API inválida" en todos los teléfonos | El build no lleva la misma API key que el hub. Revisar `POSIA_HUB_API_KEY` (GitHub Secrets) vs `API_KEY` en el proveedor y recompilar release móvil |
+| 401 Unauthorized en un solo dispositivo | Reconfigurar la clave desde Configuración técnica |
 | SSL error | `?sslmode=require` en Neon |
-| Timeout primera sync | Render dormido — esperar ~30 s |
+| Timeout primera sync | Hub suspendido por inactividad — esperar ~30 s y reintentar |
 | Sin URL hub | Caja opera 100 % offline |
 
 ---

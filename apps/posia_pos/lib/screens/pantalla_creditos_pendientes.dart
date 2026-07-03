@@ -11,6 +11,7 @@ import 'package:posia_ui/posia_ui.dart';
 import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
 import '../utils/compartir_ticket_digital_util.dart';
+import '../utils/imprimir_ticket_digital_util.dart';
 import '../utils/ticket_credito_util.dart';
 import 'pantalla_registrar_credito.dart';
 
@@ -172,12 +173,15 @@ class _PantallaCreditosPendientesState extends ConsumerState<PantallaCreditosPen
     try {
       final servicio = await ref.read(servicioAdminProvider.future);
       final actualizada = await servicio.liquidarCreditoVenta(venta.id);
-      final texto = await construirTextoLiquidacionCredito(
+      final digital = await obtenerTicketDigitalLiquidacionCredito(
         venta: actualizada,
         servicioAdmin: servicio,
       );
       final hardware = await ref.read(hardwareRegistryProvider.future);
-      await hardware.obtenerImpresora().imprimirTicket(texto);
+      await imprimirTicketDigital(
+        impresora: hardware.obtenerImpresora(),
+        contenido: digital,
+      );
       if (!mounted) {
         return;
       }

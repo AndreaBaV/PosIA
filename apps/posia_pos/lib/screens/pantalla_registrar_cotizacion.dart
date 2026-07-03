@@ -9,6 +9,7 @@ import 'package:posia_ui/posia_ui.dart';
 import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
 import '../utils/compartir_ticket_digital_util.dart';
+import '../utils/imprimir_ticket_digital_util.dart';
 import '../utils/ticket_venta_util.dart';
 
 class PantallaRegistrarCotizacion extends ConsumerStatefulWidget {
@@ -344,13 +345,11 @@ class _PantallaRegistrarCotizacionState extends ConsumerState<PantallaRegistrarC
 				nombreTienda: nombreTienda,
 				direccionTienda: tienda?.direccion,
 			);
-			final texto = construirTextoCotizacionGuardada(
-				cotizacion: cotizacion,
-				nombreTienda: nombreTienda,
-				direccionTienda: tienda?.direccion,
-			);
 			final hardware = await ref.read(hardwareRegistryProvider.future);
-			await hardware.obtenerImpresora().imprimirTicket(texto);
+			await imprimirTicketDigital(
+				impresora: hardware.obtenerImpresora(),
+				contenido: digital,
+			);
 
 			String? telefonoCliente;
 			if (_clienteId != null) {

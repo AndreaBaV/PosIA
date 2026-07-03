@@ -44,6 +44,12 @@ const String claveConfigImpresoraHost = 'printer_host';
 /// Clave de puerto de impresora termica.
 const String claveConfigImpresoraPuerto = 'printer_port';
 
+/// Nombre de impresora USB instalada en Windows (modo usb_windows).
+const String claveConfigImpresoraUsbNombre = 'printer_usb_name';
+
+/// Ancho del rollo termico (mm) de la impresora fisica.
+const String claveConfigImpresoraAnchoMm = 'printer_ancho_mm';
+
 /// Abrir cajon al cobrar en efectivo.
 const String claveConfigCajonAbrir = 'cash_drawer_open';
 
@@ -160,11 +166,15 @@ class ConfigRepository {
 		final host = await obtenerValor(claveConfigImpresoraHost);
 		final puerto = await obtenerValor(claveConfigImpresoraPuerto);
 		final abrirCajon = await obtenerValor(claveConfigCajonAbrir);
+		final nombreUsb = await obtenerValor(claveConfigImpresoraUsbNombre);
+		final anchoMm = await obtenerValor(claveConfigImpresoraAnchoMm);
 		return ConfigImpresora(
 			modo: modo ?? 'ambos',
 			hostRed: host ?? '',
 			puertoRed: int.tryParse(puerto ?? '') ?? 9100,
 			abrirCajonAlCobrar: abrirCajon == '1',
+			nombreImpresoraUsb: nombreUsb ?? '',
+			anchoRolloMm: int.tryParse(anchoMm ?? '') ?? 80,
 		);
 	}
 
@@ -175,6 +185,11 @@ class ConfigRepository {
 		await guardarValor(
 			claveConfigCajonAbrir,
 			config.abrirCajonAlCobrar ? '1' : '0',
+		);
+		await guardarValor(claveConfigImpresoraUsbNombre, config.nombreImpresoraUsb);
+		await guardarValor(
+			claveConfigImpresoraAnchoMm,
+			config.anchoRolloMm.toString(),
 		);
 	}
 

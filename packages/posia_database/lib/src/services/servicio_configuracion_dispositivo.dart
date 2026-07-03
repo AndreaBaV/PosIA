@@ -55,7 +55,8 @@ class ServicioConfiguracionDispositivo {
 			if (!responde) {
 				throw StateError(
 					'No se pudo conectar a $url. Verifique la URL (sin barra final), '
-					'que el servidor esté desplegado y espere ~1 min si usa Render gratuito.',
+					'que el servidor esté desplegado y, si el hub estaba suspendido '
+					'por inactividad, espere ~1 min y reintente.',
 				);
 			}
 			await _config.guardarHubUrl(url);

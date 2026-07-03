@@ -42,7 +42,9 @@ const int PUERTO_SYNC_LAN_DEFAULT = 8765;
 /// Intervalo del ciclo periodico de sincronizacion en segundos.
 const int INTERVALO_SYNC_PERIODICO_SEGUNDOS = 60;
 
-/// Ping al hub para evitar que Render free se duerma (cada 10 min).
+/// Ping periódico al hub para mantener la conexión activa (cada 10 min).
+///
+/// Útil en despliegues gratuitos o con auto-suspend por inactividad.
 const int INTERVALO_MANTENER_HUB_VIVO_SEGUNDOS = 600;
 
 /// Timeout HTTP normal de sync (falla rapido y reintenta en el siguiente ciclo).
@@ -50,10 +52,11 @@ const int TIMEOUT_HUB_SYNC_SEGUNDOS = 15;
 
 /// Timeout del health check del hub.
 ///
-/// Render free duerme tras ~15 min de inactividad y puede tardar hasta ~50 s
-/// en despertar en frio. Se toleran 60 s en el ping inicial para que un
-/// dispositivo recien instalado no vea "usuario no encontrado" por un falso
-/// negativo de red mientras el servidor arranca.
+/// Algunos planes gratuitos (Northflank spot, etc.) suspenden el contenedor por
+/// inactividad y pueden tardar decenas de segundos en despertar en frío. Se
+/// toleran 60 s en el ping inicial para que un dispositivo recién instalado no
+/// vea "usuario no encontrado" por un falso negativo de red mientras el
+/// servidor arranca.
 const int TIMEOUT_HUB_DESPERTAR_SEGUNDOS = 60;
 
 /// Nombre del servicio mDNS para descubrimiento LAN.

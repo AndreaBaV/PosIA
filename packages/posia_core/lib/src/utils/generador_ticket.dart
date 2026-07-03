@@ -41,7 +41,6 @@ String generarTextoTicket({
   required String nombreTienda,
   double? montoRecibido,
   String? direccionTienda,
-  String? etiquetaCaja,
   String? nombreVendedor,
   String? codigoVendedor,
   String? nombreCliente,
@@ -54,7 +53,6 @@ String generarTextoTicket({
     venta: venta,
     nombreTienda: nombreTienda,
     direccionTienda: direccionTienda,
-    etiquetaCaja: etiquetaCaja,
     nombreVendedor: nombreVendedor,
     codigoVendedor: codigoVendedor,
     nombreCliente: nombreCliente,
@@ -126,7 +124,9 @@ String generarTextoPagareCredito({
   );
   final buffer = StringBuffer();
   if (!conLogoImpreso) {
-    buffer.writeln('====== PAGARE ${NOMBRE_COMERCIAL_APP.toUpperCase()} ======');
+    buffer.writeln(
+      '====== PAGARE ${NOMBRE_COMERCIAL_APP.toUpperCase()} ======',
+    );
   } else {
     buffer.writeln('PAGARE');
   }

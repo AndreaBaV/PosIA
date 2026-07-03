@@ -1,4 +1,5 @@
-# Dockerfile en la RAÍZ del monorepo — Render lo busca aquí por defecto.
+# Dockerfile en la RAÍZ del monorepo — usado por Northflank y cualquier PaaS
+# que compile desde la raíz. Contexto = raíz para incluir packages/posia_core.
 FROM dart:stable AS construir
 WORKDIR /app
 

@@ -10,6 +10,10 @@ dependencies:
   flutter:
     sdk: flutter
   image: ^4.5.4
+  # Requerido en Windows para hablar con el spooler de impresion (winspool.drv)
+  # y enumerar impresoras USB instaladas. En Android/iOS no se carga en runtime.
+  ffi: ^2.1.0
+  win32: ^5.15.0
 
 dev_dependencies:
   flutter_lints: ^6.0.0

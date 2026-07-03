@@ -20,6 +20,7 @@ import '../widgets/dialogo_completar_datos_credito.dart';
 import '../providers/app_providers.dart';
 import '../utils/compartir_ticket_digital_util.dart';
 import '../utils/existencias_caja_util.dart';
+import '../utils/imprimir_ticket_digital_util.dart';
 import '../utils/ticket_credito_util.dart';
 import '../utils/ticket_venta_util.dart';
 import '../widgets/dialogo_cobro.dart';
@@ -1141,13 +1142,14 @@ Future<void> ejecutarCobroCaja(BuildContext context, WidgetRef ref) async {
 		final hardware = await ref.read(hardwareRegistryProvider.future);
 		final impresora = hardware.obtenerImpresora();
 		if (venta.metodoPago == MetodoPago.credito) {
-			final pagares = await construirTextosPagareCredito(
+			final pagares = await obtenerTicketsDigitalesPagareCredito(
 				venta: venta,
 				servicioAdmin: contenedor.servicioAdmin,
 			);
-			for (final pagare in pagares) {
-				await impresora.imprimirTicket(pagare);
-			}
+			await imprimirTicketsDigitales(
+				impresora: impresora,
+				contenidos: pagares,
+			);
 			if (!context.mounted) {
 				return;
 			}
@@ -1170,13 +1172,16 @@ Future<void> ejecutarCobroCaja(BuildContext context, WidgetRef ref) async {
 				telefonoCliente: cliente?.telefono,
 			);
 		} else {
-			final textoTicket = await construirTextoTicketVenta(
+			final ticketDigital = await obtenerTicketDigitalVenta(
 				venta: venta,
 				servicioAdmin: contenedor.servicioAdmin,
 				config: config,
 				montoRecibido: request.montoRecibido,
 			);
-			await impresora.imprimirTicket(textoTicket);
+			await imprimirTicketDigital(
+				impresora: impresora,
+				contenido: ticketDigital,
+			);
 			if (_cobroIncluyeEfectivo(venta.metodoPago, request)) {
 				try {
 					await hardware.obtenerCajon()?.abrir();
@@ -1185,12 +1190,6 @@ Future<void> ejecutarCobroCaja(BuildContext context, WidgetRef ref) async {
 			if (!context.mounted) {
 				return;
 			}
-			final ticketDigital = await obtenerTicketDigitalVenta(
-				venta: venta,
-				servicioAdmin: contenedor.servicioAdmin,
-				config: config,
-				montoRecibido: request.montoRecibido,
-			);
 			final cliente = venta.clienteId != null
 				? await contenedor.servicioAdmin.obtenerCliente(venta.clienteId!)
 				: null;
@@ -1241,7 +1240,10 @@ Future<void> ejecutarCotizacionCaja(BuildContext context, WidgetRef ref) async {
 			servicioAdmin: contenedor.servicioAdmin,
 		);
 		final hardware = await ref.read(hardwareRegistryProvider.future);
-		await hardware.obtenerImpresora().imprimirTicket(resultado.texto);
+		await imprimirTicketDigital(
+			impresora: hardware.obtenerImpresora(),
+			contenido: resultado.digital,
+		);
 		ref.invalidate(cotizacionesAdminProvider);
 		if (!context.mounted) {
 			return;

@@ -1,86 +1,91 @@
-/// Comparte tickets digitales por WhatsApp como imagen o PDF con logo.
+/// Comparte tickets digitales por WhatsApp como PDF con diseno completo.
 library;
 
 import 'package:posia_ui/posia_ui.dart';
 
-import 'dart:io';
-
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:posia_core/posia_core.dart';
 
 import '../util/generador_ticket_digital_pdf.dart';
 import '../util/marca_la_fortuna.dart';
+import '../util/renderizador_ticket_bitmap.dart';
 import 'compartir_whatsapp_util.dart';
+import 'ticket_archivo_util.dart';
 
-String _nombreArchivoTicket(String folio, String extension) {
-	final marca = DateTime.now().millisecondsSinceEpoch;
-	return 'ticket_${folio}_$marca.$extension';
-}
-
-/// Comparte ticket digital: PNG con logo y detalle; PDF como respaldo.
+/// Genera PDF con diseno completo, lo guarda y abre WhatsApp.
+///
+/// En impresora termica se usa bitmap; para WhatsApp siempre PDF formateado.
+/// Si el PDF falla, intenta PNG como ultimo recurso.
 Future<void> compartirTicketDigitalWhatsApp(
 	BuildContext context, {
 	required TicketDigitalContenido contenido,
 	String? telefono,
+	int anchoRolloMm = 80,
 }) async {
 	final leyenda = formatearLeyendaCompartirTicketDigital(contenido);
-	final nombreBase = 'ticket_${contenido.folio}';
 	try {
 		final logo = await cargarLogoTicketMarca();
-		final tempDir = await getTemporaryDirectory();
-		final pngBytes = await generarTicketDigitalPngBytes(
+		final pdfBytes = await generarTicketDigitalPdfBytes(
 			contenido: contenido,
 			logoPng: logo,
 		);
-		final pngFile = File(
-			'${tempDir.path}${Platform.pathSeparator}'
-			'${_nombreArchivoTicket(contenido.folio, 'png')}',
+		final archivo = await guardarTicketEnDocumentos(
+			folio: contenido.folio,
+			bytes: pdfBytes,
+			extension: 'pdf',
 		);
-		await pngFile.writeAsBytes(pngBytes);
+		if (archivo == null) {
+			throw StateError('No se pudo guardar el ticket');
+		}
 		if (!context.mounted) {
 			return;
 		}
 		await compartirArchivoWhatsAppConAviso(
 			context,
-			rutaArchivo: pngFile.path,
-			mimeType: 'image/png',
+			rutaArchivo: archivo.path,
+			mimeType: 'application/pdf',
 			leyenda: leyenda,
 			telefono: telefono,
-			nombreDescarga: '$nombreBase.png',
 		);
-	} catch (_) {
+	} catch (errorPdf) {
 		try {
 			final logo = await cargarLogoTicketMarca();
-			final tempDir = await getTemporaryDirectory();
-			final pdfBytes = await generarTicketDigitalPdfBytes(
+			final pngBytes = renderizarTicketDigitalPng(
 				contenido: contenido,
 				logoPng: logo,
+				anchoRolloMm: anchoRolloMm,
 			);
-			final pdfFile = File(
-				'${tempDir.path}${Platform.pathSeparator}'
-				'${_nombreArchivoTicket(contenido.folio, 'pdf')}',
+			final archivo = await guardarTicketEnDocumentos(
+				folio: contenido.folio,
+				bytes: pngBytes,
+				extension: 'png',
 			);
-			await pdfFile.writeAsBytes(pdfBytes);
+			if (archivo == null) {
+				throw StateError('No se pudo guardar el ticket');
+			}
 			if (!context.mounted) {
 				return;
 			}
 			await compartirArchivoWhatsAppConAviso(
 				context,
-				rutaArchivo: pdfFile.path,
-				mimeType: 'application/pdf',
+				rutaArchivo: archivo.path,
+				mimeType: 'image/png',
 				leyenda: leyenda,
 				telefono: telefono,
-				nombreDescarga: '$nombreBase.pdf',
 			);
-		} catch (error) {
+		} catch (errorPng) {
 			if (!context.mounted) {
 				return;
 			}
-			PosiaNotificaciones.mostrarSnackBar(context, 
+			PosiaNotificaciones.mostrarSnackBar(
+				context,
 				SnackBar(
-					content: Text('No se pudo generar el documento: $error'),
+					content: Text(
+						'No se pudo generar el ticket.\n'
+						'PDF: $errorPdf\nPNG: $errorPng',
+					),
 					backgroundColor: Colors.red.shade700,
+					duration: const Duration(seconds: 8),
 				),
 			);
 		}

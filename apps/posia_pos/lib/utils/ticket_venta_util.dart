@@ -18,12 +18,10 @@ Future<String> construirTextoTicketVenta({
   final vendedor = venta.vendedorId != null
       ? await servicioAdmin.obtenerVendedor(venta.vendedorId!)
       : null;
-  final etiquetaCaja = _etiquetaCaja(config);
   return generarTextoTicket(
     venta: venta,
     nombreTienda: tienda?.nombre ?? 'Tienda',
     direccionTienda: tienda?.direccion,
-    etiquetaCaja: etiquetaCaja,
     nombreVendedor: vendedor?.nombre,
     codigoVendedor: vendedor?.codigo,
     nombreCliente: cliente?.nombre,
@@ -49,12 +47,10 @@ Future<TicketDigitalContenido> obtenerTicketDigitalVenta({
   final vendedor = venta.vendedorId != null
       ? await servicioAdmin.obtenerVendedor(venta.vendedorId!)
       : null;
-  final etiquetaCaja = _etiquetaCaja(config);
   return construirTicketDigitalVenta(
     venta: venta,
     nombreTienda: tienda?.nombre ?? 'Tienda',
     direccionTienda: tienda?.direccion,
-    etiquetaCaja: etiquetaCaja,
     nombreVendedor: vendedor?.nombre,
     codigoVendedor: vendedor?.codigo,
     nombreCliente: cliente?.nombre,
@@ -63,17 +59,6 @@ Future<TicketDigitalContenido> obtenerTicketDigitalVenta({
     direccionCliente: cliente?.direccion,
     montoRecibido: montoRecibido,
   );
-}
-
-String? _etiquetaCaja(ConfigDispositivo? config) {
-  if (config == null) {
-    return null;
-  }
-  final nombre = config.nombreCaja?.trim();
-  if (nombre != null && nombre.isNotEmpty) {
-    return nombre;
-  }
-  return null;
 }
 
 List<LineaVenta> _lineasCotizacionComoVenta(List<LineaCotizacion> lineas) {
@@ -112,12 +97,14 @@ String construirTextoCotizacionGuardada({
 
 /// Persiste cotizacion desde carrito con texto e imagen digital.
 Future<({Cotizacion cotizacion, String texto, TicketDigitalContenido digital})>
-    registrarCotizacionDesdeCarrito({
+registrarCotizacionDesdeCarrito({
   required ServicioCaja servicioCaja,
   required ServicioAdmin servicioAdmin,
   String? notas,
 }) async {
-  final cotizacion = await servicioCaja.registrarCotizacionCarrito(notas: notas);
+  final cotizacion = await servicioCaja.registrarCotizacionCarrito(
+    notas: notas,
+  );
   final tienda = await servicioAdmin.obtenerTiendaActiva();
   final nombreTienda = tienda?.nombre ?? 'Tienda';
   final digital = construirTicketDigitalDesdeCotizacion(

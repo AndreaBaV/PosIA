@@ -13,38 +13,35 @@ class EscPosNetworkPrinter implements ReceiptPrinter {
 		required this.host,
 		this.port = 9100,
 		this.timeout = const Duration(seconds: 5),
+		this.anchoRolloMm = 80,
 	});
 
 	final String host;
 	final int port;
 	final Duration timeout;
+	final int anchoRolloMm;
 
 	@override
 	Future<void> imprimirTicket(
 		String contenido, {
 		Uint8List? logoPng,
+		Uint8List? imagenTicketPng,
 	}) async {
 		if (host.trim().isEmpty) {
 			throw StateError('Host de impresora no configurado');
 		}
+		final bytes = construirBytesEscPosTicket(
+			contenido: contenido,
+			logoPng: logoPng,
+			imagenTicketPng: imagenTicketPng,
+			anchoRolloMm: anchoRolloMm,
+		);
 		final socket = await Socket.connect(host.trim(), port, timeout: timeout);
 		try {
-			final bytes = <int>[0x1B, 0x40];
-			if (logoPng != null && logoPng.isNotEmpty) {
-				bytes.addAll(pngAEscPosRaster(logoPng));
-				bytes.addAll([0x0A]);
-			}
-			bytes.addAll(_codificarTexto(contenido));
-			bytes.addAll([0x0A, 0x0A, 0x0A]);
-			bytes.addAll([0x1D, 0x56, 0x00]);
 			socket.add(bytes);
 			await socket.flush();
 		} finally {
 			await socket.close();
 		}
-	}
-
-	List<int> _codificarTexto(String texto) {
-		return texto.codeUnits;
 	}
 }

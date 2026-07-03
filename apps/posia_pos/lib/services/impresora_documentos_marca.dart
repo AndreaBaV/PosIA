@@ -19,7 +19,15 @@ class ImpresoraDocumentosMarca implements ReceiptPrinter {
 	Future<void> imprimirTicket(
 		String contenido, {
 		Uint8List? logoPng,
+		Uint8List? imagenTicketPng,
 	}) async {
+		if (imagenTicketPng != null && imagenTicketPng.isNotEmpty) {
+			await _delegado.imprimirTicket(
+				contenido,
+				imagenTicketPng: imagenTicketPng,
+			);
+			return;
+		}
 		final logo = logoPng ?? await cargarLogoTicketMarca();
 		await _delegado.imprimirTicket(contenido, logoPng: logo);
 	}
@@ -30,12 +38,16 @@ class ImpresoraDocumentosMarca implements ReceiptPrinter {
 		required String hostRed,
 		int puertoRed = 9100,
 		required String directorioArchivo,
+		String nombreImpresoraUsb = '',
+		int anchoRolloMm = 80,
 	}) {
 		final delegado = ImpresoraConfigurable(
 			modo: modo,
 			hostRed: hostRed,
 			puertoRed: puertoRed,
 			directorioArchivo: directorioArchivo,
+			nombreImpresoraUsb: nombreImpresoraUsb,
+			anchoRolloMm: anchoRolloMm,
 			escribirTicketArchivo: escribirTicketArchivoConMarca,
 		);
 		return ImpresoraDocumentosMarca(delegado: delegado);

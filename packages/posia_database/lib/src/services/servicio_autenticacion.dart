@@ -33,8 +33,9 @@ class ServicioAutenticacion {
 		final hub = _clienteHub;
 		ConsultaPerfilHub? consultaHub;
 		if (hub != null) {
-			// Un ping al health despierta Render free antes del auth/preview;
-			// el resultado NO se usa como gate: verificarEstadoAuth ya cubre 401/503.
+			// Un ping al health despierta al hub si estaba suspendido por
+			// inactividad antes de disparar auth/preview; el resultado NO se
+			// usa como gate porque verificarEstadoAuth ya cubre 401/503.
 			await hub.mantenerHubVivo();
 			consultaHub = await _consultarPerfilConReintento(hub, limpio);
 			if (consultaHub.exitoso) {

@@ -132,25 +132,43 @@ final hardwareRegistryProvider = FutureProvider<HardwareRegistry>((ref) async {
 	final contenedor = await ref.watch(contenedorServiciosProvider.future);
 	final configImpresora = await contenedor.servicioAdmin.obtenerConfigImpresora();
 	final directorioTickets = await _resolverDirectorioTickets();
-	CashDrawer? cajon;
-	if (configImpresora.abrirCajonAlCobrar &&
-		configImpresora.hostRed.trim().isNotEmpty) {
-		cajon = EscPosCashDrawer(
-			host: configImpresora.hostRed,
-			port: configImpresora.puertoRed,
-		);
-	}
+	final modo = _resolverModoImpresora(configImpresora.modo);
+	final cajon = _construirCajon(configImpresora, modo);
 	return HardwareRegistry(
 		scanner: TecladoBarcodeScanner(),
 		impresora: ImpresoraDocumentosMarca.crear(
-			modo: _resolverModoImpresora(configImpresora.modo),
+			modo: modo,
 			hostRed: configImpresora.hostRed,
 			puertoRed: configImpresora.puertoRed,
 			directorioArchivo: directorioTickets,
+			nombreImpresoraUsb: configImpresora.nombreImpresoraUsb,
+			anchoRolloMm: configImpresora.anchoRolloMm,
 		),
 		cajon: cajon,
 	);
 });
+
+CashDrawer? _construirCajon(ConfigImpresora config, ModoImpresora modo) {
+	if (!config.abrirCajonAlCobrar) {
+		return null;
+	}
+	if (modo == ModoImpresora.usbWindows) {
+		if (config.nombreImpresoraUsb.trim().isEmpty) {
+			return null;
+		}
+		return EscPosWindowsCashDrawer(
+			nombreImpresora: config.nombreImpresoraUsb,
+		);
+	}
+	if ((modo == ModoImpresora.red || modo == ModoImpresora.ambos) &&
+		config.hostRed.trim().isNotEmpty) {
+		return EscPosCashDrawer(
+			host: config.hostRed,
+			port: config.puertoRed,
+		);
+	}
+	return null;
+}
 
 ModoImpresora _resolverModoImpresora(String modo) {
 	switch (modo) {
@@ -158,6 +176,8 @@ ModoImpresora _resolverModoImpresora(String modo) {
 			return ModoImpresora.archivo;
 		case 'red':
 			return ModoImpresora.red;
+		case 'usb_windows':
+			return ModoImpresora.usbWindows;
 		default:
 			return ModoImpresora.ambos;
 	}

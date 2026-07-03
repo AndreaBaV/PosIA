@@ -9,6 +9,7 @@ import 'package:posia_ui/posia_ui.dart';
 import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
 import '../utils/compartir_ticket_digital_util.dart';
+import '../utils/imprimir_ticket_digital_util.dart';
 import '../utils/ticket_venta_util.dart';
 import 'pantalla_registrar_cotizacion.dart';
 
@@ -265,12 +266,15 @@ class _PantallaCotizacionesAdminState extends ConsumerState<PantallaCotizaciones
   Future<void> _reimprimir(String cotizacionId) async {
     try {
       final servicio = await ref.read(servicioAdminProvider.future);
-      final texto = await construirTextoCotizacionPorId(
+      final digital = await obtenerTicketDigitalCotizacionPorId(
         cotizacionId: cotizacionId,
         servicioAdmin: servicio,
       );
       final hardware = await ref.read(hardwareRegistryProvider.future);
-      await hardware.obtenerImpresora().imprimirTicket(texto);
+      await imprimirTicketDigital(
+        impresora: hardware.obtenerImpresora(),
+        contenido: digital,
+      );
       if (!mounted) {
         return;
       }

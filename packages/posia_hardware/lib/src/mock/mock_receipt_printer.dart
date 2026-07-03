@@ -25,6 +25,7 @@ class MockReceiptPrinter implements ReceiptPrinter {
 	Future<void> imprimirTicket(
 		String contenido, {
 		Uint8List? logoPng,
+		Uint8List? imagenTicketPng,
 	}) async {
 		_ticketsImpresos.add(contenido);
 	}

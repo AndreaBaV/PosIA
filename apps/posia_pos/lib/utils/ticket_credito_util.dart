@@ -76,6 +76,51 @@ Future<TicketDigitalContenido> obtenerTicketDigitalPagareCliente({
   );
 }
 
+/// Construye las dos copias del pagare con diseño digital (admin + cliente).
+Future<List<TicketDigitalContenido>> obtenerTicketsDigitalesPagareCredito({
+  required Venta venta,
+  required ServicioAdmin servicioAdmin,
+}) async {
+  if (venta.clienteId == null) {
+    throw StateError('La venta a crédito requiere cliente');
+  }
+  final cliente = await servicioAdmin.obtenerCliente(venta.clienteId!);
+  if (cliente == null) {
+    throw StateError('Cliente no encontrado');
+  }
+  final tienda = await servicioAdmin.obtenerTiendaActiva();
+  final nombreTienda = tienda?.nombre ?? 'Tienda';
+  final direccionTienda = tienda?.direccion;
+  final args = (
+    nombreCliente: cliente.nombre,
+    telefonoCliente: cliente.telefono,
+    direccionCliente: cliente.direccion,
+    rfcCliente: cliente.rfc,
+  );
+  return [
+    construirTicketDigitalPagare(
+      venta: venta,
+      nombreTienda: nombreTienda,
+      nombreCliente: args.nombreCliente,
+      telefonoCliente: args.telefonoCliente,
+      direccionCliente: args.direccionCliente,
+      etiquetaCopia: 'COPIA ADMINISTRADOR',
+      direccionTienda: direccionTienda,
+      rfcCliente: args.rfcCliente,
+    ),
+    construirTicketDigitalPagare(
+      venta: venta,
+      nombreTienda: nombreTienda,
+      nombreCliente: args.nombreCliente,
+      telefonoCliente: args.telefonoCliente,
+      direccionCliente: args.direccionCliente,
+      etiquetaCopia: 'COPIA CLIENTE',
+      direccionTienda: direccionTienda,
+      rfcCliente: args.rfcCliente,
+    ),
+  ];
+}
+
 /// Comprobante al liquidar un credito pendiente.
 Future<String> construirTextoLiquidacionCredito({
   required Venta venta,

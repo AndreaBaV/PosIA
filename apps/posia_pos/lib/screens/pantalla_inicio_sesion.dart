@@ -13,7 +13,6 @@ import '../services/gestor_acceso_biometrico.dart';
 import '../services/servicio_inicio_sesion.dart';
 import '../util/plataforma_util.dart';
 import '../util/teclado_util.dart';
-import 'pantalla_instalacion_tecnico.dart';
 
 enum _PasoInicioSesion { identificacion, contrasena }
 
@@ -108,22 +107,18 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
 					contenido: _paso == _PasoInicioSesion.identificacion
 						? _tarjetaIdentificacion(context)
 						: _tarjetaContrasena(context),
-					pie: Column(
-						crossAxisAlignment: CrossAxisAlignment.stretch,
-						children: [
-							if (_paso == _PasoInicioSesion.contrasena)
+					pie: _paso == _PasoInicioSesion.contrasena
+						? Column(
+							crossAxisAlignment: CrossAxisAlignment.stretch,
+							children: [
 								TextButton.icon(
 									onPressed: _validando ? null : _volverIdentificacion,
 									icon: const Icon(Icons.arrow_back, size: 20.0),
 									label: const Text('Atrás'),
 								),
-							TextButton.icon(
-								onPressed: () => abrirInstalacionTecnica(context, ref),
-								icon: const Icon(Icons.engineering, size: 18.0),
-								label: const Text('Técnico'),
-							),
-						],
-					),
+							],
+						)
+						: const SizedBox.shrink(),
 				),
 			),
 		);

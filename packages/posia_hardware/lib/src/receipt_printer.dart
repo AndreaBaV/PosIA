@@ -12,10 +12,12 @@ import 'dart:typed_data';
 abstract class ReceiptPrinter {
 	/// Imprime contenido de ticket en texto plano ESC/POS o PDF.
 	///
-	/// [contenido] Texto del ticket a imprimir.
-	/// [logoPng] Logo opcional en PNG para encabezado (termica o PDF).
+	/// [contenido] Texto del ticket a imprimir (ignorado si [imagenTicketPng] viene).
+	/// [logoPng] Logo opcional en PNG para encabezado (solo modo texto).
+	/// [imagenTicketPng] Ticket completo como PNG (mismo diseño que WhatsApp).
 	Future<void> imprimirTicket(
 		String contenido, {
 		Uint8List? logoPng,
+		Uint8List? imagenTicketPng,
 	});
 }

@@ -15,8 +15,9 @@ class AprovisionadorDispositivo {
 
 	/// Ejecuta una sola vez por instalacion antes de mostrar la UI.
 	static Future<void> asegurar(ConfigRepository config) async {
-		// Refresca el hub desde el build/env aunque ya este instalado,
-		// para que cambiar de servidor (Render -> 24/7) surta efecto.
+		// Refresca el hub desde el build/env aunque ya este instalado, para que
+		// cambiar de proveedor (por ejemplo migrar a un servidor 24/7) o rotar
+		// la API key con un nuevo release surta efecto sin re-instalar.
 		await _refrescarHubDesdeConfig(config);
 		if (await config.esInstalacionCompleta()) {
 			return;
@@ -42,20 +43,46 @@ class AprovisionadorDispositivo {
 		}
 	}
 
-	/// Sincroniza la URL/clave del hub guardadas con la config de build/env.
-	///
-	/// Solo requiere URL: soporta servidores con o sin API key.
 	static Future<void> _refrescarHubDesdeConfig(ConfigRepository config) async {
-		final urlBuild =
-			ConfiguracionDespliegue.hubUrl.trim().replaceAll(RegExp(r'/+$'), '');
-		if (urlBuild.isEmpty) {
+		await refrescarHubConValores(
+			config: config,
+			urlBuild: ConfiguracionDespliegue.hubUrl,
+			claveBuild: ConfiguracionDespliegue.hubApiKey,
+		);
+	}
+
+	/// Sincroniza URL/clave del hub guardadas con los valores del build.
+	///
+	/// Solo sobrescribe cuando el build trae valores no vacios: si el APK/IPA
+	/// se compilo sin `POSIA_HUB_API_KEY` (o esta se rotó en el servidor y aún
+	/// no se recompila), NO se toca la clave guardada. Así un técnico puede
+	/// corregirla desde "Configuración técnica" sin que el siguiente arranque
+	/// la borre y deje al usuario con "Clave API inválida" para siempre.
+	///
+	/// Expuesto para pruebas; en producción se invoca via [asegurar] con los
+	/// valores de [ConfiguracionDespliegue].
+	static Future<void> refrescarHubConValores({
+		required ConfigRepository config,
+		required String urlBuild,
+		required String claveBuild,
+	}) async {
+		final url = urlBuild.trim().replaceAll(RegExp(r'/+$'), '');
+		if (url.isEmpty) {
 			return;
 		}
 		final urlActual = await config.obtenerHubUrl();
-		if (urlActual != urlBuild) {
-			await config.guardarHubUrl(urlBuild);
+		if (urlActual != url) {
+			await config.guardarHubUrl(url);
 		}
-		await config.guardarHubApiKey(ConfiguracionDespliegue.hubApiKey);
+		final clave = claveBuild.trim();
+		if (clave.isEmpty) {
+			return;
+		}
+		final claveActual =
+			(await config.obtenerValor(claveConfigHubApiKey))?.trim() ?? '';
+		if (claveActual != clave) {
+			await config.guardarHubApiKey(clave);
+		}
 	}
 
 	/// Genera UUID de caja si aun no hay identidad unica del dispositivo.
