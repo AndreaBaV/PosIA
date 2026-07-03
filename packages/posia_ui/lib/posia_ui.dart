@@ -30,6 +30,7 @@ export 'src/widgets/dialogo_cantidad_producto.dart';
 export 'src/widgets/dialogo_peso_carniceria.dart';
 export 'src/widgets/dialogo_existencias_producto.dart';
 export 'src/widgets/grilla_productos.dart';
+export 'src/widgets/lista_productos_caja.dart';
 export 'src/widgets/insignia_rol.dart';
 export 'src/widgets/panel_carrito.dart';
 export 'src/widgets/panel_calculo_utilidad.dart';

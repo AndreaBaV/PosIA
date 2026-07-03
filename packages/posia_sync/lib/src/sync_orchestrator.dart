@@ -30,6 +30,7 @@ class SyncOrchestrator {
     AlmacenCursorSync? almacenCursor,
     required String tiendaId,
     required String dispositivoId,
+    this.alAplicarEventoRemoto,
   }) : _colaLocal = colaLocal,
        _clienteHub = clienteHub,
        _clienteLan = clienteLan,
@@ -45,6 +46,9 @@ class SyncOrchestrator {
   final AlmacenCursorSync? _almacenCursor;
   final String _tiendaId;
   final String _dispositivoId;
+
+  /// Invocado tras aplicar cada evento recibido del hub (ventas de otras cajas).
+  Future<void> Function(SyncEvent evento)? alAplicarEventoRemoto;
 
   bool tieneHubConfigurado() => _clienteHub != null;
 
@@ -135,8 +139,11 @@ class SyncOrchestrator {
         continuar = false;
         continue;
       }
-      await aplicador.aplicarLote(resultado.eventos);
-      aplicados = aplicados + resultado.eventos.length;
+      for (final evento in resultado.eventos) {
+        await aplicador.aplicarEvento(evento);
+        await alAplicarEventoRemoto?.call(evento);
+        aplicados = aplicados + 1;
+      }
       // Guarda de seguridad: si el cursor no avanza, detener el pull para no
       // repetir la misma pagina indefinidamente (evita bloquear la BD y la UI).
       if (resultado.ultimoSeq <= cursor) {

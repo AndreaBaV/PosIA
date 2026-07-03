@@ -26,6 +26,7 @@ class ImpresoraConfigurable implements ReceiptPrinter {
 		this.nombreImpresoraUsb = '',
 		this.anchoRolloMm = 80,
 		this.escribirTicketArchivo,
+		this.permitirRespaldoArchivo = true,
 	});
 
 	final ModoImpresora modo;
@@ -45,6 +46,9 @@ class ImpresoraConfigurable implements ReceiptPrinter {
 		Uint8List? logoPng,
 		String directorio,
 	)? escribirTicketArchivo;
+
+	/// Si es false, un fallo de red no guarda copia local (util en movil con IP).
+	final bool permitirRespaldoArchivo;
 
 	@override
 	Future<void> imprimirTicket(
@@ -86,10 +90,13 @@ class ImpresoraConfigurable implements ReceiptPrinter {
 					return;
 				}
 			} catch (_) {
-				if (modo == ModoImpresora.red) {
+				if (modo == ModoImpresora.red || !permitirRespaldoArchivo) {
 					rethrow;
 				}
 			}
+		}
+		if (!permitirRespaldoArchivo) {
+			throw StateError('No se pudo imprimir en la impresora de red');
 		}
 		await _escribirArchivo(
 			contenido,
