@@ -174,7 +174,7 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 															),
 														),
 													DropdownButtonFormField<String?>(
-														value: listaAsignada,
+														initialValue: listaAsignada,
 														decoration: const InputDecoration(
 															labelText: 'Lista de precios',
 															border: OutlineInputBorder(),
@@ -313,6 +313,9 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 					config: config,
 				);
 			}
+			if (!mounted) {
+				return;
+			}
 			await compartirTicketDigitalWhatsApp(
 				context,
 				contenido: digital,
@@ -354,6 +357,9 @@ class _PantallaFichaClienteState extends ConsumerState<PantallaFichaCliente>
 		if (_credito) {
 			final error = validarClienteParaCredito(actualizado, diasCredito: diasCredito);
 			if (error != null) {
+				if (!mounted) {
+					return;
+				}
 				PosiaNotificaciones.mostrarSnackBar(context, 
 					SnackBar(content: Text(error)),
 				);

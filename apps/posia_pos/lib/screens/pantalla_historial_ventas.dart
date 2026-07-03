@@ -281,6 +281,9 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 										pedido: pedido,
 										servicio: servicio,
 									);
+									if (!context.mounted) {
+										return;
+									}
 									await compartirDocumentoWhatsApp(
 										context,
 										texto: texto,

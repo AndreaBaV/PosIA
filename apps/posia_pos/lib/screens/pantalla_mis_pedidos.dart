@@ -133,6 +133,9 @@ class PantallaMisPedidos extends ConsumerWidget {
 										pedido: pedido,
 										servicio: servicio,
 									);
+									if (!context.mounted) {
+										return;
+									}
 									await compartirDocumentoWhatsApp(
 										context,
 										texto: texto,

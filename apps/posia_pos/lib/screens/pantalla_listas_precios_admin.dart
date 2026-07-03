@@ -99,7 +99,7 @@ class _PantallaListasPreciosAdminState extends ConsumerState<PantallaListasPreci
 								child: listas.isEmpty
 									? const Text('Sin listas. Cree una para comenzar.')
 									: DropdownButtonFormField<String>(
-										value: listaId,
+										initialValue: listaId,
 										isExpanded: true,
 										decoration: const InputDecoration(
 											labelText: 'Lista de precios',

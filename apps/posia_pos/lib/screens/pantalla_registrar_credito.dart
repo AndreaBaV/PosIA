@@ -427,6 +427,9 @@ class _PantallaRegistrarCreditoState extends ConsumerState<PantallaRegistrarCred
 				venta: venta,
 				servicioAdmin: servicio,
 			);
+			if (!mounted) {
+				return;
+			}
 			await showDialog<void>(
 				context: context,
 				builder: (dialogContext) => AlertDialog(

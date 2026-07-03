@@ -123,6 +123,9 @@ class _PantallaCreditosPendientesState extends ConsumerState<PantallaCreditosPen
                         venta: venta,
                         servicioAdmin: servicio,
                       );
+                      if (!context.mounted) {
+                        return;
+                      }
                       await compartirTicketDigitalWhatsApp(
                         context,
                         contenido: digital,
@@ -204,6 +207,9 @@ class _PantallaCreditosPendientesState extends ConsumerState<PantallaCreditosPen
                   venta: actualizada,
                   servicioAdmin: servicio,
                 );
+                if (!dialogContext.mounted) {
+                  return;
+                }
                 await compartirTicketDigitalWhatsApp(
                   dialogContext,
                   contenido: digital,

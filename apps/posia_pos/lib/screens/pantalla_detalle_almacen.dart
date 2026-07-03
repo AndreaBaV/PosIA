@@ -291,6 +291,9 @@ class _PantallaDetalleAlmacenState extends ConsumerState<PantallaDetalleAlmacen>
 		final cantidad = double.tryParse(controller.text.trim().replaceAll(',', '.'));
 		controller.dispose();
 		if (cantidad == null || cantidad <= 0) {
+			if (!mounted) {
+				return;
+			}
 			PosiaNotificaciones.mostrarSnackBar(context, 
 				const SnackBar(
 					content: Text('Cantidad inválida'),
@@ -317,6 +320,9 @@ class _PantallaDetalleAlmacenState extends ConsumerState<PantallaDetalleAlmacen>
 				SnackBar(content: Text('Entrada registrada: ${cantidad.toStringAsFixed(1)} u.')),
 			);
 		} on StateError catch (e) {
+			if (!mounted) {
+				return;
+			}
 			PosiaNotificaciones.mostrarSnackBar(context, 
 				SnackBar(content: Text(e.message), backgroundColor: PosiaColors.cancelar),
 			);

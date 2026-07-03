@@ -10,7 +10,6 @@ import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
 import '../utils/compartir_ticket_digital_util.dart';
 import '../utils/imprimir_ticket_digital_util.dart';
-import '../utils/ticket_venta_util.dart';
 
 class PantallaRegistrarCotizacion extends ConsumerStatefulWidget {
 	const PantallaRegistrarCotizacion({this.clienteInicial, super.key});

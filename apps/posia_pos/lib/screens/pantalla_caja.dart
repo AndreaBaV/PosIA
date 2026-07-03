@@ -28,7 +28,7 @@ import '../widgets/dialogo_cobro.dart';
 /// Evita abrir varios dialogos de cobro apilados (doble clic / F2 repetido).
 bool _cobroCajaEnEjecucion = false;
 
-/// Interfaz de venta con grilla de productos, carrito y barra de acciones.
+/// Interfaz de venta con lista de productos, carrito y barra de acciones.
 class PantallaCaja extends ConsumerStatefulWidget {
 	/// Crea pantalla de caja POSIA.
 	const PantallaCaja({super.key});
@@ -175,19 +175,11 @@ class _PantallaCajaState extends ConsumerState<PantallaCaja> {
 			if (productos.isNotEmpty) {
 				final notifier = ref.read(carritoNotifierProvider.notifier);
 				if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-					notifier.moverSeleccionBusqueda(deltaColumna: 0, deltaFila: 1);
+					notifier.moverSeleccionBusqueda(delta: 1);
 					return KeyEventResult.handled;
 				}
 				if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-					notifier.moverSeleccionBusqueda(deltaColumna: 0, deltaFila: -1);
-					return KeyEventResult.handled;
-				}
-				if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-					notifier.moverSeleccionBusqueda(deltaColumna: 1, deltaFila: 0);
-					return KeyEventResult.handled;
-				}
-				if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-					notifier.moverSeleccionBusqueda(deltaColumna: -1, deltaFila: 0);
+					notifier.moverSeleccionBusqueda(delta: -1);
 					return KeyEventResult.handled;
 				}
 			}
@@ -355,7 +347,7 @@ class _ConstruirLayoutCaja extends ConsumerWidget {
 										child: Card(
 											margin: EdgeInsets.zero,
 											clipBehavior: Clip.antiAlias,
-											child: GrillaProductos(
+											child: ListaProductosCaja(
 												categoriaId: estado.categoriaSeleccionadaId,
 												productos: estado.productos,
 												stockLocalPorProducto: estado.stockLocalPorProducto,
@@ -464,7 +456,7 @@ Future<bool> seleccionarProductoEnCaja(
 
 /// Muestra dialogo para vender por empaque (caja, bulto, etc.).
 ///
-/// Uso secundario: mantener pulsado un producto en la grilla o favoritos.
+/// Uso secundario: mantener pulsado un producto en la lista o favoritos.
 Future<bool> seleccionarEmpaqueEnCaja(
 	BuildContext context,
 	WidgetRef ref,
@@ -620,6 +612,9 @@ Future<bool> _agregarProductoCarniceria(
 	Producto producto,
 ) async {
 	final servicio = await ref.read(servicioCajaProvider.future);
+	if (!context.mounted) {
+		return false;
+	}
 	final resultado = await DialogoPesoCarniceria.mostrar(
 		context,
 		producto,
@@ -629,7 +624,10 @@ Future<bool> _agregarProductoCarniceria(
 		return false;
 	}
 	final error = await servicio.agregarProductoConPeso(producto, resultado.pesoKg);
-	if (error.isNotEmpty && context.mounted) {
+	if (!context.mounted) {
+		return false;
+	}
+	if (error.isNotEmpty) {
 		await _mostrarErrorCaja(context, error);
 		return false;
 	}

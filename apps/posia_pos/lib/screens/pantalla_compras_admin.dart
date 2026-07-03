@@ -520,6 +520,9 @@ class _PantallaComprasAdminState extends ConsumerState<PantallaComprasAdmin>
 											nombreProveedor: proveedor,
 											servicio: servicio,
 										);
+										if (!context.mounted) {
+											return;
+										}
 										await compartirDocumentoWhatsApp(context, texto: texto);
 									},
 									onCerrar: () => Navigator.pop(ctx),
