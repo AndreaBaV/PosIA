@@ -228,7 +228,7 @@ class EstadoCarrito {
 		this.stockLocalPorProducto = const {},
 	});
 
-	/// Catalogo visible en grilla.
+	/// Catalogo visible en lista.
 	final List<Producto> productos;
 
 	/// Categorias activas para filtro.
@@ -261,7 +261,7 @@ class EstadoCarrito {
 	/// Producto resaltado al buscar con teclado.
 	final int indiceBusquedaSeleccionado;
 
-	/// Existencia local por productoId para resaltar sin stock en grilla.
+	/// Existencia local por productoId para resaltar sin stock en lista.
 	final Map<String, double> stockLocalPorProducto;
 
 	/// Genera copia con campos actualizados.
@@ -301,8 +301,6 @@ class EstadoCarrito {
 
 /// Gestiona estado reactivo del carrito conectado a [ServicioCaja].
 class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
-	static const int _columnasGrillaBusqueda = 3;
-
 	String _categoriaSeleccionadaId = CATEGORIA_TODOS_ID;
 	String _textoBusqueda = '';
 	List<Producto>? _catalogoCompleto;
@@ -350,11 +348,8 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 		);
 	}
 
-	/// Mueve el resaltado de busqueda en la grilla (flechas del teclado).
-	void moverSeleccionBusqueda({
-		required int deltaColumna,
-		required int deltaFila,
-	}) {
+	/// Mueve el resaltado de busqueda en la lista (flechas arriba/abajo).
+	void moverSeleccionBusqueda({required int delta}) {
 		if (_textoBusqueda.isEmpty) {
 			return;
 		}
@@ -362,23 +357,11 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 		if (actual == null || actual.productos.isEmpty) {
 			return;
 		}
-		final columnas = _columnasGrillaBusqueda;
 		final indiceActual = actual.indiceBusquedaSeleccionado.clamp(
 			0,
 			actual.productos.length - 1,
 		);
-		var fila = indiceActual ~/ columnas;
-		var columna = indiceActual % columnas;
-		fila = fila + deltaFila;
-		columna = columna + deltaColumna;
-		if (columna < 0) {
-			columna = columnas - 1;
-			fila = fila - 1;
-		} else if (columna >= columnas) {
-			columna = 0;
-			fila = fila + 1;
-		}
-		var nuevoIndice = fila * columnas + columna;
+		var nuevoIndice = indiceActual + delta;
 		if (nuevoIndice < 0) {
 			nuevoIndice = actual.productos.length - 1;
 		} else if (nuevoIndice >= actual.productos.length) {
@@ -392,7 +375,7 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 		);
 	}
 
-	/// Limpia el texto de busqueda y restaura la grilla.
+	/// Limpia el texto de busqueda y restaura la lista.
 	void limpiarBusqueda() {
 		establecerBusqueda('');
 	}
@@ -414,7 +397,7 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 
 	/// Agrega producto al carrito y actualiza estado UI.
 	///
-	/// [producto] Producto seleccionado en grilla.
+	/// [producto] Producto seleccionado en lista.
 	/// [cantidad] Unidades a agregar; default 1.0.
 	Future<void> agregarProducto(
 		Producto producto, {
