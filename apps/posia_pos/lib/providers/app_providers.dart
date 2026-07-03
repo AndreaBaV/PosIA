@@ -20,6 +20,10 @@ import '../services/impresora_documentos_marca.dart';
 import '../bootstrap/inicializador_app.dart';
 import '../sync/sincronizador_automatico.dart';
 import '../services/gestor_sesion_persistente.dart';
+import '../util/plataforma_util.dart';
+import '../utils/imprimir_ticket_digital_util.dart';
+import '../utils/ticket_credito_util.dart';
+import '../utils/ticket_venta_util.dart';
 
 /// Estado de inicializacion de la aplicacion.
 final estadoInicializacionProvider = FutureProvider<void>((ref) async {
@@ -97,6 +101,8 @@ final contenedorServiciosProvider = FutureProvider<ContenedorServicios>((ref) as
 /// Sincronizador automatico activo mientras vive la app.
 final sincronizadorAutomaticoProvider = FutureProvider<SincronizadorAutomatico>((ref) async {
 	final contenedor = await ref.watch(contenedorServiciosProvider.future);
+	contenedor.syncOrchestrator.alAplicarEventoRemoto =
+		(evento) => _imprimirVentaRemotaTrasSync(ref, evento);
 	final sincronizador = SincronizadorAutomatico(
 		orquestador: contenedor.syncOrchestrator,
 	);
@@ -132,7 +138,7 @@ final hardwareRegistryProvider = FutureProvider<HardwareRegistry>((ref) async {
 	final contenedor = await ref.watch(contenedorServiciosProvider.future);
 	final configImpresora = await contenedor.servicioAdmin.obtenerConfigImpresora();
 	final directorioTickets = await _resolverDirectorioTickets();
-	final modo = _resolverModoImpresora(configImpresora.modo);
+	final modo = _resolverModoImpresoraParaPlataforma(configImpresora);
 	final cajon = _construirCajon(configImpresora, modo);
 	return HardwareRegistry(
 		scanner: TecladoBarcodeScanner(),
@@ -143,6 +149,10 @@ final hardwareRegistryProvider = FutureProvider<HardwareRegistry>((ref) async {
 			directorioArchivo: directorioTickets,
 			nombreImpresoraUsb: configImpresora.nombreImpresoraUsb,
 			anchoRolloMm: configImpresora.anchoRolloMm,
+			permitirRespaldoArchivo: _permitirRespaldoArchivoEnPlataforma(
+				configImpresora,
+				modo,
+			),
 		),
 		cajon: cajon,
 	);
@@ -181,6 +191,96 @@ ModoImpresora _resolverModoImpresora(String modo) {
 		default:
 			return ModoImpresora.ambos;
 	}
+}
+
+/// En movil no hay spooler USB de Windows; prioriza impresora de red si hay IP.
+ModoImpresora _resolverModoImpresoraParaPlataforma(ConfigImpresora config) {
+	final base = _resolverModoImpresora(config.modo);
+	if (!esPlataformaMovilNativa()) {
+		return base;
+	}
+	final host = config.hostRed.trim();
+	if (base == ModoImpresora.usbWindows) {
+		return host.isNotEmpty ? ModoImpresora.red : ModoImpresora.archivo;
+	}
+	if (base == ModoImpresora.ambos && host.isNotEmpty) {
+		return ModoImpresora.red;
+	}
+	return base;
+}
+
+/// En movil con IP configurada, no guardar PNG local si falla la red.
+bool _permitirRespaldoArchivoEnPlataforma(
+	ConfigImpresora config,
+	ModoImpresora modo,
+) {
+	if (!esPlataformaMovilNativa()) {
+		return true;
+	}
+	if (modo == ModoImpresora.red && config.hostRed.trim().isNotEmpty) {
+		return false;
+	}
+	return true;
+}
+
+Future<void> _imprimirVentaRemotaTrasSync(Ref ref, SyncEvent evento) async {
+	if (evento.tipo != TipoSyncEvento.saleCompleted) {
+		return;
+	}
+	if (esPlataformaMovilNativa()) {
+		return;
+	}
+	try {
+		final contenedor = await ref.read(contenedorServiciosProvider.future);
+		final servicio = contenedor.servicioAdmin;
+		final configImpresora = await servicio.obtenerConfigImpresora();
+		if (!_dispositivoPuedeImprimirFisicamente(configImpresora)) {
+			return;
+		}
+		final ventaId = evento.payload['ventaId'] as String? ?? '';
+		if (ventaId.isEmpty) {
+			return;
+		}
+		final venta = await servicio.obtenerVenta(ventaId);
+		if (venta == null) {
+			return;
+		}
+		final config = await servicio.obtenerConfigDispositivo();
+		final hardware = await ref.read(hardwareRegistryProvider.future);
+		final impresora = hardware.obtenerImpresora();
+		if (venta.metodoPago == MetodoPago.credito) {
+			final pagares = await obtenerTicketsDigitalesPagareCredito(
+				venta: venta,
+				servicioAdmin: servicio,
+			);
+			await imprimirTicketsDigitales(
+				impresora: impresora,
+				contenidos: pagares,
+			);
+			return;
+		}
+		final digital = await obtenerTicketDigitalVenta(
+			venta: venta,
+			servicioAdmin: servicio,
+			config: config,
+		);
+		await imprimirTicketDigital(
+			impresora: impresora,
+			contenido: digital,
+		);
+	} on Object {
+		// La venta ya quedó en SQLite; no bloquear el ciclo de sync.
+	}
+}
+
+bool _dispositivoPuedeImprimirFisicamente(ConfigImpresora config) {
+	if (config.modo == 'archivo') {
+		return false;
+	}
+	if (config.modo == 'usb_windows') {
+		return config.nombreImpresoraUsb.trim().isNotEmpty;
+	}
+	return config.hostRed.trim().isNotEmpty;
 }
 
 Future<String> _resolverDirectorioTickets() async {

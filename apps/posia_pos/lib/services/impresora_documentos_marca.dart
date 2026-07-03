@@ -40,6 +40,7 @@ class ImpresoraDocumentosMarca implements ReceiptPrinter {
 		required String directorioArchivo,
 		String nombreImpresoraUsb = '',
 		int anchoRolloMm = 80,
+		bool permitirRespaldoArchivo = true,
 	}) {
 		final delegado = ImpresoraConfigurable(
 			modo: modo,
@@ -49,6 +50,7 @@ class ImpresoraDocumentosMarca implements ReceiptPrinter {
 			nombreImpresoraUsb: nombreImpresoraUsb,
 			anchoRolloMm: anchoRolloMm,
 			escribirTicketArchivo: escribirTicketArchivoConMarca,
+			permitirRespaldoArchivo: permitirRespaldoArchivo,
 		);
 		return ImpresoraDocumentosMarca(delegado: delegado);
 	}
