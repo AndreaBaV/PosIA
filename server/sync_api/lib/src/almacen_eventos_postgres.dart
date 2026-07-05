@@ -97,13 +97,19 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 	}
 
 	Future<AlmacenUsuariosPostgres> obtenerAlmacenUsuarios() async {
-		return AlmacenUsuariosPostgres(await _abrirConexion());
+		// Proveedor en lugar de Connection fija: Neon cierra conexiones idle y
+		// auth debe reutilizar _abrirConexion() como el resto del almacen.
+		return AlmacenUsuariosPostgres(_abrirConexion);
 	}
 
 	Future<Connection> _abrirConexion() async {
 		final existente = _conexion;
-		if (existente != null && existente.isOpen) {
-			return existente;
+		if (existente != null && !existente.isOpen) {
+			_conexion = null;
+		}
+		final activa = _conexion;
+		if (activa != null && activa.isOpen) {
+			return activa;
 		}
 		final uri = Uri.parse(_urlConexion);
 		final infoUsuario = uri.userInfo.split(':');

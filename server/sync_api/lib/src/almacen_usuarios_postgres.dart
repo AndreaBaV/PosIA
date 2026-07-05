@@ -5,16 +5,17 @@ import 'package:posia_core/posia_core.dart';
 import 'package:postgres/postgres.dart';
 
 class AlmacenUsuariosPostgres {
-	AlmacenUsuariosPostgres(this._conexion);
+	AlmacenUsuariosPostgres(this._obtenerConexion);
 
-	final Connection _conexion;
+	final Future<Connection> Function() _obtenerConexion;
 
 	Future<Map<String, Object?>?> obtenerPerfilPorCodigo(String codigo) async {
 		final limpio = ValidadorCodigoUsuario.normalizar(codigo);
 		if (limpio.isEmpty) {
 			return null;
 		}
-		final filas = await _conexion.execute(
+		final conexion = await _obtenerConexion();
+		final filas = await conexion.execute(
 			Sql.named('''
 				SELECT id, nombre, codigo, rol, tienda_id, activo
 				FROM users
@@ -37,7 +38,8 @@ class AlmacenUsuariosPostgres {
 		if (limpio.isEmpty || pin.isEmpty) {
 			return null;
 		}
-		final filas = await _conexion.execute(
+		final conexion = await _obtenerConexion();
+		final filas = await conexion.execute(
 			Sql.named('''
 				SELECT id, nombre, codigo, rol, tienda_id, activo,
 					pin_credencial, creado_en, actualizado_en
@@ -75,7 +77,8 @@ class AlmacenUsuariosPostgres {
 	}
 
 	Future<List<Map<String, Object?>>> listarTiendasActivas() async {
-		final filas = await _conexion.execute('''
+		final conexion = await _obtenerConexion();
+		final filas = await conexion.execute('''
 			SELECT id, nombre, direccion, activa
 			FROM stores
 			WHERE activa = 1
@@ -97,7 +100,8 @@ class AlmacenUsuariosPostgres {
 
 	/// Lista todas las cuentas del tenant para replicar en dispositivos POS.
 	Future<List<Map<String, Object?>>> listarUsuarios() async {
-		final filas = await _conexion.execute('''
+		final conexion = await _obtenerConexion();
+		final filas = await conexion.execute('''
 			SELECT id, nombre, codigo, rol, tienda_id, activo,
 				pin_credencial, creado_en, actualizado_en
 			FROM users
