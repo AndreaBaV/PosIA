@@ -2578,7 +2578,7 @@ class ServicioAdmin {
       if (!tienda.activa) {
         continue;
       }
-      await _tiendaRepository.guardar(tienda);
+      await _tiendaRepository.fusionarRemota(tienda);
     }
   }
 
@@ -2613,6 +2613,9 @@ class ServicioAdmin {
               nombre: t.nombre,
               direccion: t.direccion,
               activa: t.activa,
+              latitud: t.latitud,
+              longitud: t.longitud,
+              radioMetrosAsistencia: t.radioMetrosAsistencia,
             ),
           )
           .toList(),
@@ -2660,6 +2663,9 @@ class ServicioAdmin {
       nombre: tienda.nombre,
       direccion: tienda.direccion,
       activa: false,
+      latitud: tienda.latitud,
+      longitud: tienda.longitud,
+      radioMetrosAsistencia: tienda.radioMetrosAsistencia,
     );
     await _tiendaRepository.guardar(inactiva);
     await _registrarEventoTienda(inactiva);
@@ -3784,6 +3790,9 @@ class ServicioAdmin {
         'nombre': tienda.nombre,
         'direccion': tienda.direccion,
         'activa': tienda.activa,
+        'latitud': tienda.latitud,
+        'longitud': tienda.longitud,
+        'radioMetrosAsistencia': tienda.radioMetrosAsistencia,
       },
       creadoEn: DateTime.now().toUtc(),
       estado: EstadoSyncEvento.pendiente,

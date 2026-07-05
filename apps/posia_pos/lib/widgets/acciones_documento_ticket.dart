@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:posia_core/posia_core.dart';
 
 import '../utils/compartir_ticket_digital_util.dart';
-import '../utils/compartir_whatsapp_util.dart';
 
 /// Fila de acciones para compartir, imprimir y cerrar un documento.
 class AccionesDocumentoTicket extends StatelessWidget {
@@ -48,7 +47,7 @@ class AccionesDocumentoTicket extends StatelessWidget {
 	}
 }
 
-/// Comparte ticket digital por WhatsApp (imagen + texto).
+/// Comparte ticket digital por WhatsApp (PDF o PNG).
 Future<void> compartirTicketDigital(
 	BuildContext context, {
 	required TicketDigitalContenido contenido,
@@ -61,15 +60,15 @@ Future<void> compartirTicketDigital(
 	);
 }
 
-/// Comparte texto plano por WhatsApp (documentos sin formato digital).
+/// Comparte documento digital por WhatsApp (PDF o PNG).
 Future<void> compartirDocumentoWhatsApp(
 	BuildContext context, {
-	required String texto,
+	required TicketDigitalContenido contenido,
 	String? telefono,
 }) {
-	return compartirTextoWhatsAppConAviso(
+	return compartirTicketDigitalWhatsApp(
 		context,
-		texto: texto,
+		contenido: contenido,
 		telefono: telefono,
 	);
 }

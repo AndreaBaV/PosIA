@@ -360,6 +360,10 @@ class HubSyncClient {
           nombre: map['nombre'] as String? ?? '',
           direccion: map['direccion'] as String? ?? '',
           activa: _leerActiva(map['activa']),
+          latitud: (map['latitud'] as num?)?.toDouble(),
+          longitud: (map['longitud'] as num?)?.toDouble(),
+          radioMetrosAsistencia:
+              (map['radioMetrosAsistencia'] as num?)?.toDouble() ?? 150,
         ),
       );
     }

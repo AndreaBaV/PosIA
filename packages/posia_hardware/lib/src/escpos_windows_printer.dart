@@ -6,10 +6,9 @@
 /// Autor: Equipo POSIA
 /// Matricula: POSIA-2026-001
 /// Fecha creacion: 2026-07-02 09:20:00 (UTC-6)
-/// Ultima modificacion: 2026-07-02 16:10:00 (UTC-6)
+/// Ultima modificacion: 2026-07-05 09:55:00 (UTC-6)
 library;
 
-import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io' show Platform;
 import 'dart:typed_data';
@@ -34,10 +33,8 @@ class EscPosWindowsPrinter implements ReceiptPrinter {
 	final int anchoRolloMm;
 
 	@override
-	Future<void> imprimirTicket(
-		String contenido, {
-		Uint8List? logoPng,
-		Uint8List? imagenTicketPng,
+	Future<void> imprimirTicket({
+		required Uint8List imagenTicketPng,
 	}) async {
 		if (!Platform.isWindows) {
 			throw UnsupportedError(
@@ -49,11 +46,8 @@ class EscPosWindowsPrinter implements ReceiptPrinter {
 		}
 
 		final bytes = construirBytesEscPosTicket(
-			contenido: contenido,
-			logoPng: logoPng,
 			imagenTicketPng: imagenTicketPng,
 			anchoRolloMm: anchoRolloMm,
-			codificarTexto: _codificarTexto,
 		);
 
 		enviarBytesCrudos(
@@ -61,14 +55,6 @@ class EscPosWindowsPrinter implements ReceiptPrinter {
 			nombreDocumento: 'POSIA ticket',
 			datos: Uint8List.fromList(bytes),
 		);
-	}
-
-	List<int> _codificarTexto(String texto) {
-		try {
-			return latin1.encode(texto);
-		} catch (_) {
-			return utf8.encode(texto);
-		}
 	}
 }
 

@@ -256,7 +256,7 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		if (id.isEmpty) {
 			return;
 		}
-		await repo.guardar(
+		await repo.fusionarRemota(
 			Tienda(
 				id: id,
 				nombre: payload['nombre'] as String? ?? '',

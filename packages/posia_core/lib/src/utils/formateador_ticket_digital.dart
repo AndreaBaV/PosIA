@@ -2,10 +2,15 @@
 library;
 
 import '../constants/posia_constants.dart';
+import '../enums/estado_pedido.dart';
 import '../enums/metodo_pago.dart';
+import '../models/compra.dart';
 import '../models/cotizacion.dart';
 import '../models/linea_venta.dart';
+import '../models/pedido.dart';
 import '../models/ticket_digital.dart';
+import '../models/traspaso.dart';
+import '../models/turno_caja.dart';
 import '../models/venta.dart';
 import 'cliente_credito_util.dart';
 import 'moneda_util.dart';
@@ -295,6 +300,251 @@ TicketDigitalContenido construirTicketDigitalLiquidacionCredito({
       '$NOMBRE_COMERCIAL_APP · ${nombreTienda.trim()}',
     ],
     etiquetaTotal: 'MONTO LIQUIDADO',
+  );
+}
+
+/// Resumen de corte al cerrar turno de caja.
+TicketDigitalContenido construirTicketDigitalCorteCaja({
+  required TurnoCaja turno,
+  required String nombreTienda,
+  String? direccionTienda,
+}) {
+  final campos = <String, String>{
+    'Turno': turno.id.substring(0, 8).toUpperCase(),
+    'Apertura': _formatearFechaTicket(turno.abiertoEn),
+    'Cierre': turno.cerradoEn != null
+        ? _formatearFechaTicket(turno.cerradoEn!)
+        : '-',
+    'Fondo inicial': formatearMoneda(turno.fondoInicial),
+    'Ventas efectivo': formatearMoneda(turno.totalEfectivo),
+    'Ventas tarjeta': formatearMoneda(turno.totalTarjeta),
+    'Ventas transferencia': formatearMoneda(turno.totalTransferencia),
+    'Total ventas': formatearMoneda(turno.totalVentas),
+    'Tickets': '${turno.cantidadVentas}',
+  };
+  return TicketDigitalContenido(
+    tipo: TipoDocumentoTicketDigital.corteCaja,
+    folio: turno.id.substring(0, 8).toUpperCase(),
+    fecha: turno.cerradoEn ?? turno.abiertoEn,
+    nombreTienda: nombreTienda,
+    direccionTienda: direccionTienda,
+    lineas: const [],
+    total: turno.calcularEfectivoEsperado(),
+    campos: campos,
+    notasPie: [
+      'Documento de control interno',
+      '$NOMBRE_COMERCIAL_APP · ${nombreTienda.trim()}',
+    ],
+    etiquetaTotal: 'EFECTIVO ESPERADO',
+  );
+}
+
+List<LineaTicketDigital> _lineasDesdeTraspaso(List<LineaTraspaso> lineas) {
+  return lineas
+      .map(
+        (l) => LineaTicketDigital(
+          descripcion: l.nombreProducto,
+          cantidad: l.cantidadSolicitada,
+          precioUnitario: 0,
+          subtotal: 0,
+        ),
+      )
+      .toList();
+}
+
+/// Ticket resumido de productos enviados en traspaso.
+TicketDigitalContenido construirTicketDigitalTraspaso({
+  required Traspaso traspaso,
+  required String nombreTiendaOrigen,
+  required String nombreTiendaDestino,
+  String? nombreOperador,
+  String? direccionTienda,
+}) {
+  final campos = <String, String>{
+    'Origen': nombreTiendaOrigen,
+    'Destino': nombreTiendaDestino,
+  };
+  if (nombreOperador != null && nombreOperador.trim().isNotEmpty) {
+    campos['Operador'] = nombreOperador.trim();
+  }
+  if (traspaso.notas.trim().isNotEmpty) {
+    campos['Notas'] = traspaso.notas.trim();
+  }
+  final totalUnidades = traspaso.lineas.fold<double>(
+    0,
+    (suma, linea) => suma + linea.cantidadSolicitada,
+  );
+  final notasPie = <String>[
+    'Total unidades: ${_formatearCantidadLinea(totalUnidades)}',
+    'Documento de control interno',
+    '$NOMBRE_COMERCIAL_APP',
+  ];
+  return TicketDigitalContenido(
+    tipo: TipoDocumentoTicketDigital.traspaso,
+    folio: traspaso.id.substring(0, 8).toUpperCase(),
+    fecha: traspaso.solicitadoEn,
+    nombreTienda: nombreTiendaOrigen,
+    direccionTienda: direccionTienda,
+    lineas: _lineasDesdeTraspaso(traspaso.lineas),
+    total: totalUnidades,
+    campos: campos,
+    notasPie: notasPie,
+    etiquetaTotal: 'UNIDADES',
+  );
+}
+
+/// Comprobante formal con seccion de recepcion y firmas.
+TicketDigitalContenido construirTicketDigitalComprobanteTraspaso({
+  required Traspaso traspaso,
+  required String nombreTiendaOrigen,
+  required String nombreTiendaDestino,
+  String? nombreOperadorEnvio,
+  String? direccionTienda,
+}) {
+  final campos = <String, String>{
+    'Origen': nombreTiendaOrigen,
+    'Destino': nombreTiendaDestino,
+  };
+  if (traspaso.notas.trim().isNotEmpty) {
+    campos['Notas'] = traspaso.notas.trim();
+  }
+  final notasPie = <String>[
+    'PRODUCTOS RECIBIDOS (confirmar al recibir)',
+    ...traspaso.lineas.map(
+      (l) =>
+          '${l.nombreProducto}: Env ${_formatearCantidadLinea(l.cantidadSolicitada)} · Rec ________',
+    ),
+    'ENVIA:',
+    'Nombre: ${nombreOperadorEnvio?.trim().isNotEmpty == true ? nombreOperadorEnvio!.trim() : '________________________'}',
+    'Firma: ______________________________',
+    'RECIBE:',
+    'Nombre: ________________________',
+    'Firma: ______________________________',
+    'Fecha recepcion: _______________',
+    '$NOMBRE_COMERCIAL_APP',
+  ];
+  return TicketDigitalContenido(
+    tipo: TipoDocumentoTicketDigital.comprobanteTraspaso,
+    folio: traspaso.id.substring(0, 8).toUpperCase(),
+    fecha: traspaso.solicitadoEn,
+    nombreTienda: nombreTiendaOrigen,
+    direccionTienda: direccionTienda,
+    lineas: _lineasDesdeTraspaso(traspaso.lineas),
+    total: traspaso.lineas.fold<double>(
+      0,
+      (suma, linea) => suma + linea.cantidadSolicitada,
+    ),
+    campos: campos,
+    notasPie: notasPie,
+    etiquetaTotal: 'UNIDADES ENVIADAS',
+  );
+}
+
+String _etiquetaMetodoPagoPedido(MetodoPago metodo) {
+  return switch (metodo) {
+    MetodoPago.efectivo => 'Efectivo',
+    MetodoPago.tarjeta => 'Tarjeta',
+    MetodoPago.mixto => 'Mixto',
+    MetodoPago.credito => 'Crédito / Fiado',
+    MetodoPago.transferencia => 'Transferencia',
+  };
+}
+
+String _etiquetaEstadoPedido(EstadoPedido estado) {
+  return switch (estado) {
+    EstadoPedido.recibido => 'Recibido',
+    EstadoPedido.asignado => 'Asignado',
+    EstadoPedido.entregado => 'Entregado',
+    EstadoPedido.cancelado => 'Cancelado',
+  };
+}
+
+/// Ticket de compra a proveedor.
+TicketDigitalContenido construirTicketDigitalCompra({
+  required Compra compra,
+  required String nombreProveedor,
+  required String nombreTienda,
+  String? direccionTienda,
+}) {
+  final campos = <String, String>{
+    'Proveedor': nombreProveedor,
+    'Fecha compra': _formatearFechaTicket(compra.fechaCompra),
+    'Registrado': _formatearFechaTicket(compra.creadaEn),
+  };
+  if (compra.notas.trim().isNotEmpty) {
+    campos['Notas'] = compra.notas.trim();
+  }
+  return TicketDigitalContenido(
+    tipo: TipoDocumentoTicketDigital.compra,
+    folio: compra.id.substring(0, 8).toUpperCase(),
+    fecha: compra.fechaCompra,
+    nombreTienda: nombreTienda,
+    direccionTienda: direccionTienda,
+    lineas: compra.lineas
+        .map(
+          (l) => LineaTicketDigital(
+            descripcion: l.nombreProducto,
+            cantidad: l.cantidad,
+            precioUnitario: l.costoUnitario,
+            subtotal: l.subtotal,
+          ),
+        )
+        .toList(),
+    total: compra.total,
+    campos: campos,
+    notasPie: [
+      'Documento de control interno',
+      '$NOMBRE_COMERCIAL_APP · ${nombreTienda.trim()}',
+    ],
+  );
+}
+
+/// Resumen de pedido para entrega.
+TicketDigitalContenido construirTicketDigitalPedido({
+  required Pedido pedido,
+  required String nombreTienda,
+  String? direccionTienda,
+}) {
+  final campos = <String, String>{
+    'Estado': _etiquetaEstadoPedido(pedido.estado),
+    'Teléfono': pedido.telefonoEntrega,
+    'Dirección': pedido.direccionEntrega,
+    'Pago': _etiquetaMetodoPagoPedido(pedido.metodoPago),
+  };
+  if (pedido.esCredito) {
+    campos['Crédito'] =
+        '${pedido.creditoDias ?? '?'} día(s)'
+        '${pedido.creditoVenceEn != null ? ' · vence ${_formatearFechaTicket(pedido.creditoVenceEn!)}' : ''}';
+  }
+  if (pedido.asignadoAUsuarioNombre != null &&
+      pedido.asignadoAUsuarioNombre!.trim().isNotEmpty) {
+    campos['Asignado a'] = pedido.asignadoAUsuarioNombre!.trim();
+  }
+  if (pedido.notas.trim().isNotEmpty) {
+    campos['Notas'] = pedido.notas.trim();
+  }
+  return TicketDigitalContenido(
+    tipo: TipoDocumentoTicketDigital.pedido,
+    folio: pedido.id.substring(0, 8).toUpperCase(),
+    fecha: pedido.creadoEn,
+    nombreTienda: nombreTienda,
+    direccionTienda: direccionTienda,
+    nombreCliente: pedido.nombreEntrega,
+    lineas: pedido.lineas
+        .map(
+          (l) => LineaTicketDigital(
+            descripcion: l.nombreProducto,
+            cantidad: l.cantidad,
+            precioUnitario: l.precioUnitario,
+            subtotal: l.subtotal,
+          ),
+        )
+        .toList(),
+    total: pedido.total,
+    campos: campos,
+    notasPie: [
+      '$NOMBRE_COMERCIAL_APP · ${nombreTienda.trim()}',
+    ],
   );
 }
 

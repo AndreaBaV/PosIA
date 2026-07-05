@@ -22,17 +22,13 @@ class EscPosNetworkPrinter implements ReceiptPrinter {
 	final int anchoRolloMm;
 
 	@override
-	Future<void> imprimirTicket(
-		String contenido, {
-		Uint8List? logoPng,
-		Uint8List? imagenTicketPng,
+	Future<void> imprimirTicket({
+		required Uint8List imagenTicketPng,
 	}) async {
 		if (host.trim().isEmpty) {
 			throw StateError('Host de impresora no configurado');
 		}
 		final bytes = construirBytesEscPosTicket(
-			contenido: contenido,
-			logoPng: logoPng,
 			imagenTicketPng: imagenTicketPng,
 			anchoRolloMm: anchoRolloMm,
 		);

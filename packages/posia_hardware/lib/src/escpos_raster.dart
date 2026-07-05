@@ -48,9 +48,6 @@ List<int> pngAEscPosRaster(
 					continue;
 				}
 				final pixel = resized.getPixel(x, y);
-				// Umbral generoso: cualquier pixel que NO sea casi blanco imprime.
-				// Necesario para thermal, donde grises intermedios se pierden y
-				// los bordes anti-aliased hacen que las letras se vean huecas.
 				final luminancia = img.getLuminance(pixel);
 				final alpha = pixel.a.toInt();
 				final oscuro = alpha > 8 && luminancia < 0.85;
@@ -75,41 +72,30 @@ List<int> pngAEscPosRaster(
 	];
 }
 
-/// Arma el buffer ESC/POS para ticket completo (imagen estilo WhatsApp o texto).
+/// Arma el buffer ESC/POS raster a partir de un ticket PNG completo.
 List<int> construirBytesEscPosTicket({
-	required String contenido,
-	Uint8List? logoPng,
-	Uint8List? imagenTicketPng,
+	required Uint8List imagenTicketPng,
 	int anchoRolloMm = 80,
-	List<int> Function(String texto)? codificarTexto,
 }) {
-	final bytes = <int>[0x1B, 0x40];
+	if (imagenTicketPng.isEmpty) {
+		throw ArgumentError('imagenTicketPng no puede estar vacio');
+	}
 	final anchoPx = anchoMaximoTicketEscPos(anchoRolloMm);
-	final codificar = codificarTexto ?? (texto) => texto.codeUnits;
-
-	if (imagenTicketPng != null && imagenTicketPng.isNotEmpty) {
-		bytes
-			..addAll(const [0x1B, 0x61, 0x01])
-			..addAll(
-				pngAEscPosRaster(imagenTicketPng, anchoMaximo: anchoPx),
-			)
-			..addAll(const [0x1B, 0x61, 0x00])
-			..addAll(const [0x0A, 0x0A, 0x0A])
-			..addAll(const [0x1D, 0x56, 0x00]);
-		return bytes;
-	}
-
-	bytes.addAll(const [0x1B, 0x74, 0x10]);
-	if (logoPng != null && logoPng.isNotEmpty) {
-		bytes
-			..addAll(const [0x1B, 0x61, 0x01])
-			..addAll(pngAEscPosRaster(logoPng, anchoMaximo: anchoPx))
-			..add(0x0A)
-			..addAll(const [0x1B, 0x61, 0x00]);
-	}
-	bytes
-		..addAll(codificar(contenido))
-		..addAll(const [0x0A, 0x0A, 0x0A, 0x0A])
-		..addAll(const [0x1D, 0x56, 0x00]);
-	return bytes;
+	return [
+		0x1B,
+		0x40,
+		0x1B,
+		0x61,
+		0x01,
+		...pngAEscPosRaster(imagenTicketPng, anchoMaximo: anchoPx),
+		0x1B,
+		0x61,
+		0x00,
+		0x0A,
+		0x0A,
+		0x0A,
+		0x1D,
+		0x56,
+		0x00,
+	];
 }

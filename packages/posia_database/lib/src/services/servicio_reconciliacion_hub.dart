@@ -91,12 +91,15 @@ class ServicioReconciliacionHub {
 
 		if (tiendasRemotas.isNotEmpty) {
 			for (final remota in tiendasRemotas) {
-				await _tiendaRepository.guardar(
+				await _tiendaRepository.fusionarRemota(
 					Tienda(
 						id: remota.id,
 						nombre: remota.nombre,
 						direccion: remota.direccion,
 						activa: remota.activa,
+						latitud: remota.latitud,
+						longitud: remota.longitud,
+						radioMetrosAsistencia: remota.radioMetrosAsistencia,
 					),
 				);
 			}

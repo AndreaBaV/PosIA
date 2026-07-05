@@ -1,41 +1,52 @@
-/// Impresion de tickets y comprobantes de traspaso.
+/// Impresion y comparticion de tickets de traspaso.
 library;
 
 import 'package:posia_core/posia_core.dart';
 import 'package:posia_hardware/posia_hardware.dart';
 
+import 'imprimir_ticket_digital_util.dart';
+
+/// Imprime ticket o comprobante de traspaso como PNG completo.
 Future<void> imprimirDocumentoTraspaso({
 	required ReceiptPrinter impresora,
-	required String contenido,
+	required TicketDigitalContenido contenido,
+	int anchoRolloMm = 80,
 }) async {
-	await impresora.imprimirTicket(contenido);
+	await imprimirTicketDigital(
+		impresora: impresora,
+		contenido: contenido,
+		anchoRolloMm: anchoRolloMm,
+	);
 }
 
-String construirTicketTraspaso({
+TicketDigitalContenido construirTicketDigitalTraspasoImpresion({
 	required Traspaso traspaso,
 	required String nombreTiendaOrigen,
 	required String nombreTiendaDestino,
 	String? nombreOperador,
+	String? direccionTienda,
 }) {
-	return generarTextoTicketTraspaso(
+	return construirTicketDigitalTraspaso(
 		traspaso: traspaso,
 		nombreTiendaOrigen: nombreTiendaOrigen,
 		nombreTiendaDestino: nombreTiendaDestino,
 		nombreOperador: nombreOperador,
-		conLogoImpreso: true,
+		direccionTienda: direccionTienda,
 	);
 }
 
-String construirComprobanteTraspaso({
+TicketDigitalContenido construirTicketDigitalComprobanteTraspasoImpresion({
 	required Traspaso traspaso,
 	required String nombreTiendaOrigen,
 	required String nombreTiendaDestino,
 	String? nombreOperadorEnvio,
+	String? direccionTienda,
 }) {
-	return generarTextoComprobanteTraspaso(
+	return construirTicketDigitalComprobanteTraspaso(
 		traspaso: traspaso,
 		nombreTiendaOrigen: nombreTiendaOrigen,
 		nombreTiendaDestino: nombreTiendaDestino,
 		nombreOperadorEnvio: nombreOperadorEnvio,
+		direccionTienda: direccionTienda,
 	);
 }

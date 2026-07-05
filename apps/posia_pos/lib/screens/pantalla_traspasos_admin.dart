@@ -9,7 +9,7 @@ import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
-import '../utils/compartir_whatsapp_util.dart';
+import '../utils/compartir_ticket_digital_util.dart';
 import '../utils/traspaso_impresion_util.dart';
 
 class PantallaTraspasosAdmin extends ConsumerStatefulWidget {
@@ -564,13 +564,13 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 					),
 					TextButton(
 						onPressed: () async {
-							final texto = construirTicketTraspaso(
+							final digital = construirTicketDigitalTraspasoImpresion(
 								traspaso: traspaso,
 								nombreTiendaOrigen: datos.nombreUbicacion(traspaso.tiendaOrigenId),
 								nombreTiendaDestino: datos.nombreUbicacion(traspaso.tiendaDestinoId),
 								nombreOperador: nombreOperador,
 							);
-							await compartirTextoWhatsAppConAviso(ctx, texto: texto);
+							await compartirTicketDigitalWhatsApp(ctx, contenido: digital);
 						},
 						child: const Text('WhatsApp ticket'),
 					),
@@ -684,12 +684,15 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 								children: [
 									TextButton.icon(
 										onPressed: () async {
-											final texto = construirTicketTraspaso(
+											final digital = construirTicketDigitalTraspasoImpresion(
 												traspaso: traspaso,
 												nombreTiendaOrigen: origen,
 												nombreTiendaDestino: destino,
 											);
-											await compartirTextoWhatsAppConAviso(context, texto: texto);
+											await compartirTicketDigitalWhatsApp(
+												context,
+												contenido: digital,
+											);
 										},
 										icon: const Icon(Icons.chat),
 										label: const Text('WhatsApp'),
@@ -731,7 +734,7 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 	}) async {
 		try {
 			final hardware = await ref.read(hardwareRegistryProvider.future);
-			final texto = construirTicketTraspaso(
+			final digital = construirTicketDigitalTraspasoImpresion(
 				traspaso: traspaso,
 				nombreTiendaOrigen: datos.nombreUbicacion(traspaso.tiendaOrigenId),
 				nombreTiendaDestino: datos.nombreUbicacion(traspaso.tiendaDestinoId),
@@ -739,7 +742,7 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 			);
 			await imprimirDocumentoTraspaso(
 				impresora: hardware.obtenerImpresora(),
-				contenido: texto,
+				contenido: digital,
 			);
 			if (!mounted) {
 				return;
@@ -767,7 +770,7 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 	}) async {
 		try {
 			final hardware = await ref.read(hardwareRegistryProvider.future);
-			final texto = construirComprobanteTraspaso(
+			final digital = construirTicketDigitalComprobanteTraspasoImpresion(
 				traspaso: traspaso,
 				nombreTiendaOrigen: datos.nombreUbicacion(traspaso.tiendaOrigenId),
 				nombreTiendaDestino: datos.nombreUbicacion(traspaso.tiendaDestinoId),
@@ -775,7 +778,7 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 			);
 			await imprimirDocumentoTraspaso(
 				impresora: hardware.obtenerImpresora(),
-				contenido: texto,
+				contenido: digital,
 			);
 			if (!mounted) {
 				return;

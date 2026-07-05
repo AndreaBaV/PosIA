@@ -79,7 +79,7 @@ class AlmacenUsuariosPostgres {
 	Future<List<Map<String, Object?>>> listarTiendasActivas() async {
 		final conexion = await _obtenerConexion();
 		final filas = await conexion.execute('''
-			SELECT id, nombre, direccion, activa
+			SELECT id, nombre, direccion, activa, latitud, longitud, radio_metros
 			FROM stores
 			WHERE activa = 1
 			ORDER BY nombre
@@ -92,6 +92,9 @@ class AlmacenUsuariosPostgres {
 					'nombre': cols['nombre'] as String? ?? '',
 					'direccion': cols['direccion'] as String? ?? '',
 					'activa': (cols['activa'] as int? ?? 0) == 1,
+					'latitud': cols['latitud'],
+					'longitud': cols['longitud'],
+					'radioMetrosAsistencia': cols['radio_metros'] ?? 150,
 				};
 			})
 			.where((t) => (t['id'] as String).isNotEmpty)

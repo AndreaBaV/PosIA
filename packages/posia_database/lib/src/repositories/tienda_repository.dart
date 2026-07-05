@@ -77,6 +77,30 @@ class TiendaRepository {
 		);
 	}
 
+	/// Fusiona datos remotos preservando ubicacion local si la remota no la trae.
+	Future<void> fusionarRemota(Tienda remota) async {
+		final existente = await obtenerPorId(remota.id);
+		if (existente == null) {
+			await guardar(remota);
+			return;
+		}
+		final tieneUbicacionRemota =
+			remota.latitud != null && remota.longitud != null;
+		await guardar(
+			Tienda(
+				id: remota.id,
+				nombre: remota.nombre,
+				direccion: remota.direccion,
+				activa: remota.activa,
+				latitud: remota.latitud ?? existente.latitud,
+				longitud: remota.longitud ?? existente.longitud,
+				radioMetrosAsistencia: tieneUbicacionRemota
+					? remota.radioMetrosAsistencia
+					: existente.radioMetrosAsistencia,
+			),
+		);
+	}
+
 	/// Elimina tienda fisicamente (solo si no tiene ventas).
 	Future<void> eliminar(String tiendaId) async {
 		await _baseDatos.delete(

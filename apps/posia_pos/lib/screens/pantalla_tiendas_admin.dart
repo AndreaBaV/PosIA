@@ -180,6 +180,9 @@ class _PantallaTiendasAdminState extends ConsumerState<PantallaTiendasAdmin> {
 					nombre: tienda.nombre,
 					direccion: tienda.direccion,
 					activa: true,
+					latitud: tienda.latitud,
+					longitud: tienda.longitud,
+					radioMetrosAsistencia: tienda.radioMetrosAsistencia,
 				),
 			);
 		} else {

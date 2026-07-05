@@ -138,52 +138,82 @@ Uint8List renderizarTicketDigitalPng({
 	_dibujarSeparador(image, y, ancho: ancho);
 	y += 12;
 
-	// Encabezado tabla
-	final xProd = _padding;
-	final xImp = ancho - _padding;
-	_dibujarTexto(image, 'PRODUCTO',
-		x: xProd, y: y, font: img.arial24);
-	final wImporte = _medirTexto('IMPORTE', img.arial24);
-	_dibujarTexto(image, 'IMPORTE',
-		x: xImp - wImporte, y: y, font: img.arial24);
-	y += _altoLinea(img.arial24) + 4;
-
-	for (final linea in contenido.lineas) {
-		final descripcion = _normalizar(linea.descripcion);
-		final importeStr = formatearMoneda(linea.subtotal);
-		final wImpLinea = _medirTexto(importeStr, img.arial24);
-		final xTopeDescripcion = xImp - wImpLinea - 12;
-		final anchoDescripcion = xTopeDescripcion - xProd;
-		final lineasDescripcion = _envolverTexto(
-			descripcion,
-			font: img.arial24,
-			anchoMax: anchoDescripcion,
-		);
-		final yInicioLinea = y;
-		for (final l in lineasDescripcion) {
-			_dibujarTexto(image, l,
-				x: xProd, y: y, font: img.arial24);
-			y += _altoLinea(img.arial24);
-		}
-		_dibujarTexto(image, importeStr,
-			x: xImp - _medirTexto(importeStr, img.arial24),
-			y: yInicioLinea,
-			font: img.arial24);
-		final sub = '${_formatearCantidad(linea.cantidad)} x ${formatearMoneda(linea.precioUnitario)}';
-		_dibujarTexto(image, sub,
+	if (contenido.lineas.isNotEmpty) {
+		// Encabezado tabla
+		final xProd = _padding;
+		final xImp = ancho - _padding;
+		final etiquetaColumna = contenido.mostrarImportes ? 'IMPORTE' : 'CANT';
+		_dibujarTexto(image, 'PRODUCTO',
 			x: xProd, y: y, font: img.arial24);
-		y += _altoLinea(img.arial24);
-		if (linea.descuentoLinea > 0) {
-			_dibujarTexto(image, 'Desc. -${formatearMoneda(linea.descuentoLinea)}',
-				x: xProd, y: y, font: img.arial24);
-			y += _altoLinea(img.arial24);
+		final wColumna = _medirTexto(etiquetaColumna, img.arial24);
+		_dibujarTexto(image, etiquetaColumna,
+			x: xImp - wColumna, y: y, font: img.arial24);
+		y += _altoLinea(img.arial24) + 4;
+
+		for (final linea in contenido.lineas) {
+			final descripcion = _normalizar(linea.descripcion);
+			final yInicioLinea = y;
+			if (contenido.mostrarImportes) {
+				final importeStr = formatearMoneda(linea.subtotal);
+				final wImpLinea = _medirTexto(importeStr, img.arial24);
+				final xTopeDescripcion = xImp - wImpLinea - 12;
+				final anchoDescripcion = xTopeDescripcion - xProd;
+				final lineasDescripcion = _envolverTexto(
+					descripcion,
+					font: img.arial24,
+					anchoMax: anchoDescripcion,
+				);
+				for (final l in lineasDescripcion) {
+					_dibujarTexto(image, l,
+						x: xProd, y: y, font: img.arial24);
+					y += _altoLinea(img.arial24);
+				}
+				_dibujarTexto(image, importeStr,
+					x: xImp - _medirTexto(importeStr, img.arial24),
+					y: yInicioLinea,
+					font: img.arial24);
+				final sub = '${_formatearCantidad(linea.cantidad)} x ${formatearMoneda(linea.precioUnitario)}';
+				_dibujarTexto(image, sub,
+					x: xProd, y: y, font: img.arial24);
+				y += _altoLinea(img.arial24);
+			} else {
+				final cantidadStr = '${_formatearCantidad(linea.cantidad)} u.';
+				final wCant = _medirTexto(cantidadStr, img.arial24);
+				final xTopeDescripcion = xImp - wCant - 12;
+				final anchoDescripcion = xTopeDescripcion - xProd;
+				final lineasDescripcion = _envolverTexto(
+					descripcion,
+					font: img.arial24,
+					anchoMax: anchoDescripcion,
+				);
+				for (final l in lineasDescripcion) {
+					_dibujarTexto(image, l,
+						x: xProd, y: y, font: img.arial24);
+					y += _altoLinea(img.arial24);
+				}
+				_dibujarTexto(image, cantidadStr,
+					x: xImp - wCant,
+					y: yInicioLinea,
+					font: img.arial24);
+			}
+			if (linea.descuentoLinea > 0) {
+				_dibujarTexto(image, 'Desc. -${formatearMoneda(linea.descuentoLinea)}',
+					x: xProd, y: y, font: img.arial24);
+				y += _altoLinea(img.arial24);
+			}
+			y += 6;
 		}
-		y += 6;
+
+		y += 4;
+		_dibujarSeparador(image, y, ancho: ancho, grueso: true);
+		y += 12;
+	} else {
+		_dibujarSeparador(image, y, ancho: ancho, grueso: true);
+		y += 12;
 	}
 
-	y += 4;
-	_dibujarSeparador(image, y, ancho: ancho, grueso: true);
-	y += 12;
+	final xProd = _padding;
+	final xImp = ancho - _padding;
 
 	if (contenido.descuentoTicket > 0) {
 		_dibujarTexto(image, 'Descuento',
@@ -198,7 +228,9 @@ Uint8List renderizarTicketDigitalPng({
 
 	// TOTAL destacado
 	final etiquetaTotal = _normalizar(contenido.etiquetaTotal);
-	final totalStr = formatearMoneda(contenido.total);
+	final totalStr = contenido.mostrarImportes
+		? formatearMoneda(contenido.total)
+		: _formatearCantidad(contenido.total);
 	_dibujarTexto(image, etiquetaTotal,
 		x: xProd, y: y + 8, font: img.arial48);
 	_dibujarTexto(image, totalStr,

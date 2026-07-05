@@ -277,7 +277,7 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 							AccionesDocumentoTicket(
 								onWhatsApp: () async {
 									final servicio = await ref.read(servicioAdminProvider.future);
-									final texto = await construirTextoPedido(
+									final digital = await obtenerTicketDigitalPedido(
 										pedido: pedido,
 										servicio: servicio,
 									);
@@ -286,7 +286,7 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 									}
 									await compartirDocumentoWhatsApp(
 										context,
-										texto: texto,
+										contenido: digital,
 										telefono: pedido.telefonoEntrega,
 									);
 								},

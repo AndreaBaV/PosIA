@@ -7,6 +7,11 @@ enum TipoDocumentoTicketDigital {
 	cotizacion,
 	pagare,
 	liquidacionCredito,
+	corteCaja,
+	traspaso,
+	comprobanteTraspaso,
+	compra,
+	pedido,
 }
 
 /// Linea de producto en ticket digital.
@@ -67,6 +72,11 @@ class TicketDigitalContenido {
 		TipoDocumentoTicketDigital.cotizacion => 'COTIZACIÓN',
 		TipoDocumentoTicketDigital.pagare => 'PAGARÉ',
 		TipoDocumentoTicketDigital.liquidacionCredito => 'LIQUIDACIÓN DE CRÉDITO',
+		TipoDocumentoTicketDigital.corteCaja => 'CORTE DE CAJA',
+		TipoDocumentoTicketDigital.traspaso => 'TRASPASO',
+		TipoDocumentoTicketDigital.comprobanteTraspaso => 'COMPROBANTE TRASPASO',
+		TipoDocumentoTicketDigital.compra => 'COMPRA / ENTRADA',
+		TipoDocumentoTicketDigital.pedido => 'PEDIDO',
 	};
 
 	String get subtituloDocumento => switch (tipo) {
@@ -74,5 +84,17 @@ class TicketDigitalContenido {
 		TipoDocumentoTicketDigital.cotizacion => 'Documento informativo',
 		TipoDocumentoTicketDigital.pagare => 'Venta a crédito · una exhibición',
 		TipoDocumentoTicketDigital.liquidacionCredito => 'Comprobante de pago',
+		TipoDocumentoTicketDigital.corteCaja => 'Resumen de turno',
+		TipoDocumentoTicketDigital.traspaso => 'Documento de control interno',
+		TipoDocumentoTicketDigital.comprobanteTraspaso => 'Envío y recepción',
+		TipoDocumentoTicketDigital.compra => 'Entrada de mercancía',
+		TipoDocumentoTicketDigital.pedido => 'Resumen de entrega',
+	};
+
+	/// Si es false, la tabla muestra cantidades en lugar de importes.
+	bool get mostrarImportes => switch (tipo) {
+		TipoDocumentoTicketDigital.traspaso ||
+		TipoDocumentoTicketDigital.comprobanteTraspaso => false,
+		_ => true,
 	};
 }

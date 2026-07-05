@@ -21,7 +21,7 @@ Future<void> imprimirTicketDigital({
 		logoPng: logo,
 		anchoRolloMm: anchoRolloMm,
 	);
-	await impresora.imprimirTicket('', imagenTicketPng: png);
+	await impresora.imprimirTicket(imagenTicketPng: png);
 }
 
 /// Imprime varios tickets digitales en secuencia.

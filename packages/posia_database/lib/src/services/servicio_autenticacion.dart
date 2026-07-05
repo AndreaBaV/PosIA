@@ -228,6 +228,9 @@ class ServicioAutenticacion {
 						nombre: t.nombre,
 						direccion: t.direccion,
 						activa: t.activa,
+						latitud: t.latitud,
+						longitud: t.longitud,
+						radioMetrosAsistencia: t.radioMetrosAsistencia,
 					),
 				)
 				.toList(),

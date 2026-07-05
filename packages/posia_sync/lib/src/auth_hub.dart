@@ -8,12 +8,18 @@ class TiendaHub {
 		required this.nombre,
 		required this.direccion,
 		required this.activa,
+		this.latitud,
+		this.longitud,
+		this.radioMetrosAsistencia = 150,
 	});
 
 	final String id;
 	final String nombre;
 	final String direccion;
 	final bool activa;
+	final double? latitud;
+	final double? longitud;
+	final double radioMetrosAsistencia;
 }
 
 /// Perfil publico de usuario (sin credenciales).

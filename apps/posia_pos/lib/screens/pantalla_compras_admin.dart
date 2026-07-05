@@ -515,7 +515,7 @@ class _PantallaComprasAdminState extends ConsumerState<PantallaComprasAdmin>
 								child: AccionesDocumentoTicket(
 									onWhatsApp: () async {
 										final servicio = await ref.read(servicioAdminProvider.future);
-										final texto = await construirTextoCompra(
+										final digital = await obtenerTicketDigitalCompra(
 											compra: compra,
 											nombreProveedor: proveedor,
 											servicio: servicio,
@@ -523,7 +523,10 @@ class _PantallaComprasAdminState extends ConsumerState<PantallaComprasAdmin>
 										if (!context.mounted) {
 											return;
 										}
-										await compartirDocumentoWhatsApp(context, texto: texto);
+										await compartirDocumentoWhatsApp(
+											context,
+											contenido: digital,
+										);
 									},
 									onCerrar: () => Navigator.pop(ctx),
 								),

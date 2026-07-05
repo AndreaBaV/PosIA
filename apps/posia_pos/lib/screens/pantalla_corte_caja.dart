@@ -8,7 +8,8 @@ import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
-import '../utils/compartir_whatsapp_util.dart';
+import '../utils/compartir_ticket_digital_util.dart';
+import '../utils/imprimir_ticket_digital_util.dart';
 
 class PantallaCorteCaja extends ConsumerStatefulWidget {
 	const PantallaCorteCaja({super.key});
@@ -143,13 +144,16 @@ class _PantallaCorteCajaState extends ConsumerState<PantallaCorteCaja> {
 		if (turnoCerrado != null) {
 			final tienda = await servicio.obtenerTiendaActiva();
 			final hardware = await ref.read(hardwareRegistryProvider.future);
-			final textoCorte = generarTextoCorteCaja(
+			final digital = construirTicketDigitalCorteCaja(
 				turno: turnoCerrado,
 				nombreTienda: tienda?.nombre ?? 'Tienda',
-				conLogoImpreso: true,
+				direccionTienda: tienda?.direccion,
 			);
 			try {
-				await hardware.obtenerImpresora().imprimirTicket(textoCorte);
+				await imprimirTicketDigital(
+					impresora: hardware.obtenerImpresora(),
+					contenido: digital,
+				);
 			} catch (_) {
 				if (mounted) {
 					PosiaNotificaciones.mostrarSnackBar(context, 
@@ -170,9 +174,9 @@ class _PantallaCorteCajaState extends ConsumerState<PantallaCorteCaja> {
 							),
 							FilledButton.icon(
 								onPressed: () async {
-									await compartirTextoWhatsAppConAviso(
+									await compartirTicketDigitalWhatsApp(
 										dialogContext,
-										texto: textoCorte,
+										contenido: digital,
 									);
 									if (dialogContext.mounted) {
 										Navigator.pop(dialogContext);

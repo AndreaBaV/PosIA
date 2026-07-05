@@ -25,7 +25,6 @@ class ImpresoraConfigurable implements ReceiptPrinter {
 		required this.directorioArchivo,
 		this.nombreImpresoraUsb = '',
 		this.anchoRolloMm = 80,
-		this.escribirTicketArchivo,
 		this.permitirRespaldoArchivo = true,
 	});
 
@@ -40,39 +39,23 @@ class ImpresoraConfigurable implements ReceiptPrinter {
 	/// Ancho del rollo termico en mm (58 o 80).
 	final int anchoRolloMm;
 
-	/// Permite guardar PDF u otro formato en modo archivo (p. ej. con logo).
-	final Future<void> Function(
-		String contenido,
-		Uint8List? logoPng,
-		String directorio,
-	)? escribirTicketArchivo;
-
 	/// Si es false, un fallo de red no guarda copia local (util en movil con IP).
 	final bool permitirRespaldoArchivo;
 
 	@override
-	Future<void> imprimirTicket(
-		String contenido, {
-		Uint8List? logoPng,
-		Uint8List? imagenTicketPng,
+	Future<void> imprimirTicket({
+		required Uint8List imagenTicketPng,
 	}) async {
 		if (modo == ModoImpresora.archivo) {
-			await _escribirArchivo(
-				contenido,
-				logoPng,
-				imagenTicketPng: imagenTicketPng,
-			);
+			await ArchivoReceiptPrinter(directorio: directorioArchivo)
+				.imprimirTicket(imagenTicketPng: imagenTicketPng);
 			return;
 		}
 		if (modo == ModoImpresora.usbWindows) {
 			await EscPosWindowsPrinter(
 				nombreImpresora: nombreImpresoraUsb,
 				anchoRolloMm: anchoRolloMm,
-			).imprimirTicket(
-				contenido,
-				logoPng: logoPng,
-				imagenTicketPng: imagenTicketPng,
-			);
+			).imprimirTicket(imagenTicketPng: imagenTicketPng);
 			return;
 		}
 		if (modo == ModoImpresora.red || modo == ModoImpresora.ambos) {
@@ -81,11 +64,7 @@ class ImpresoraConfigurable implements ReceiptPrinter {
 					host: hostRed,
 					port: puertoRed,
 					anchoRolloMm: anchoRolloMm,
-				).imprimirTicket(
-					contenido,
-					logoPng: logoPng,
-					imagenTicketPng: imagenTicketPng,
-				);
+				).imprimirTicket(imagenTicketPng: imagenTicketPng);
 				if (modo == ModoImpresora.red) {
 					return;
 				}
@@ -98,28 +77,7 @@ class ImpresoraConfigurable implements ReceiptPrinter {
 		if (!permitirRespaldoArchivo) {
 			throw StateError('No se pudo imprimir en la impresora de red');
 		}
-		await _escribirArchivo(
-			contenido,
-			logoPng,
-			imagenTicketPng: imagenTicketPng,
-		);
-	}
-
-	Future<void> _escribirArchivo(
-		String contenido,
-		Uint8List? logoPng, {
-		Uint8List? imagenTicketPng,
-	}) async {
-		if (imagenTicketPng != null && imagenTicketPng.isNotEmpty) {
-			await ArchivoReceiptPrinter(directorio: directorioArchivo)
-				.imprimirTicket('', imagenTicketPng: imagenTicketPng);
-			return;
-		}
-		if (escribirTicketArchivo != null) {
-			await escribirTicketArchivo!(contenido, logoPng, directorioArchivo);
-			return;
-		}
 		await ArchivoReceiptPrinter(directorio: directorioArchivo)
-			.imprimirTicket(contenido, logoPng: logoPng);
+			.imprimirTicket(imagenTicketPng: imagenTicketPng);
 	}
 }

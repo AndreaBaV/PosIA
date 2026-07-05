@@ -540,18 +540,27 @@ class ProyectorEventosPostgres {
 		}
 		await _sesion.execute(
 			Sql.named('''
-				INSERT INTO stores (id, nombre, direccion, activa)
-				VALUES (@id, @nombre, @direccion, @activa)
+				INSERT INTO stores (id, nombre, direccion, activa, latitud, longitud, radio_metros)
+				VALUES (@id, @nombre, @direccion, @activa, @lat, @lon, @radio)
 				ON CONFLICT (id) DO UPDATE SET
 					nombre = EXCLUDED.nombre,
 					direccion = EXCLUDED.direccion,
-					activa = EXCLUDED.activa
+					activa = EXCLUDED.activa,
+					latitud = COALESCE(EXCLUDED.latitud, stores.latitud),
+					longitud = COALESCE(EXCLUDED.longitud, stores.longitud),
+					radio_metros = CASE
+						WHEN EXCLUDED.latitud IS NOT NULL THEN EXCLUDED.radio_metros
+						ELSE stores.radio_metros
+					END
 			'''),
 			parameters: {
 				'id': id,
 				'nombre': p['nombre'] ?? '',
 				'direccion': p['direccion'] ?? '',
 				'activa': (p['activa'] as bool? ?? true) ? 1 : 0,
+				'lat': p['latitud'],
+				'lon': p['longitud'],
+				'radio': (p['radioMetrosAsistencia'] as num?)?.toDouble() ?? 150,
 			},
 		);
 	}

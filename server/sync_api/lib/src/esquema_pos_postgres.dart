@@ -209,6 +209,15 @@ class EsquemaPosPostgres {
 			ALTER TABLE sale_lines ADD COLUMN IF NOT EXISTS descuento_linea DOUBLE PRECISION NOT NULL DEFAULT 0
 		''');
 		await conexion.execute('''
+			ALTER TABLE stores ADD COLUMN IF NOT EXISTS latitud DOUBLE PRECISION
+		''');
+		await conexion.execute('''
+			ALTER TABLE stores ADD COLUMN IF NOT EXISTS longitud DOUBLE PRECISION
+		''');
+		await conexion.execute('''
+			ALTER TABLE stores ADD COLUMN IF NOT EXISTS radio_metros DOUBLE PRECISION DEFAULT 150
+		''');
+		await conexion.execute('''
 			CREATE TABLE IF NOT EXISTS wholesale_tiers (
 				id SERIAL PRIMARY KEY,
 				producto_id TEXT NOT NULL,
