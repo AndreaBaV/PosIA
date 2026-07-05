@@ -219,7 +219,7 @@ class _PantallaFichaProveedorState extends ConsumerState<PantallaFichaProveedor>
 				activo: true,
 			),
 		);
-		ref.invalidate(proveedoresAdminProvider);
+		invalidarProveedores(ref);
 		if (!mounted) {
 			return;
 		}
@@ -257,6 +257,7 @@ class _PantallaFichaProveedorState extends ConsumerState<PantallaFichaProveedor>
 		try {
 			final servicio = await ref.read(servicioAdminProvider.future);
 			await servicio.eliminarProveedor(widget.proveedor.id);
+			invalidarProveedores(ref);
 			if (!mounted) {
 				return;
 			}

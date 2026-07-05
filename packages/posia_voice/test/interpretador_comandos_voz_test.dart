@@ -59,6 +59,23 @@ void main() {
 		),
 	];
 
+	final clientes = [
+		const Cliente(
+			id: 'cli-juan',
+			nombre: 'Juan Perez',
+			listaPreciosId: null,
+			creditoHabilitado: false,
+			activo: true,
+		),
+		const Cliente(
+			id: 'cli-maria',
+			nombre: 'Maria Garcia',
+			listaPreciosId: null,
+			creditoHabilitado: false,
+			activo: true,
+		),
+	];
+
 	test('interpreta ticket completo del ejemplo', () {
 		final resultado = motor.procesar(
 			texto:
@@ -92,5 +109,47 @@ void main() {
 	test('detecta cobrar', () {
 		final resultado = motor.procesar(texto: 'cobrar en efectivo', catalogo: catalogo);
 		expect(resultado.intencion, IntencionComandoVoz.cobrar);
+	});
+
+	test('divide varios productos sin conectores', () {
+		final resultado = motor.procesar(
+			texto: '2 arroz 3 leche 1 caja de atun',
+			catalogo: catalogo,
+		);
+		expect(resultado.intencion, IntencionComandoVoz.agregarProductos);
+		expect(resultado.lineas.length, 3);
+		expect(resultado.lineas[0].cantidad, 2.0);
+		expect(resultado.lineas[1].cantidad, 3.0);
+	});
+
+	test('resuelve cliente y productos en un solo comando', () {
+		final resultado = motor.procesar(
+			texto:
+				'genera el ticket para el cliente juan perez: '
+				'dos arroz y una leche',
+			catalogo: catalogo,
+			clientes: clientes,
+		);
+		expect(resultado.cliente?.nombre, 'Juan Perez');
+		expect(resultado.lineas.length, 2);
+		expect(resultado.noEncontrados, isEmpty);
+	});
+
+	test('cliente a nombre de y mostrador', () {
+		final conCliente = motor.procesar(
+			texto: 'a nombre de maria garcia un arroz',
+			catalogo: catalogo,
+			clientes: clientes,
+		);
+		expect(conCliente.cliente?.nombre, 'Maria Garcia');
+		expect(conCliente.lineas.single.producto.nombre, 'Arroz 1kg');
+
+		final mostrador = motor.procesar(
+			texto: 'mostrador dos arroz',
+			catalogo: catalogo,
+			clientes: clientes,
+		);
+		expect(mostrador.usarMostrador, isTrue);
+		expect(mostrador.lineas.single.cantidad, 2.0);
 	});
 }

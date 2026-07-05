@@ -75,8 +75,9 @@ class _PantallaComprasAdminState extends ConsumerState<PantallaComprasAdmin>
 
 	@override
 	Widget build(BuildContext context) {
-		final datosAsync = ref.watch(_comprasDatosProvider(_tiendaOperacionId));
+		final datosAsync = ref.watch(comprasDatosAdminProvider(_tiendaOperacionId));
 		return Scaffold(
+			resizeToAvoidBottomInset: true,
 			appBar: AppBar(
 				title: const Text('Compras'),
 				bottom: TabBar(
@@ -101,8 +102,8 @@ class _PantallaComprasAdminState extends ConsumerState<PantallaComprasAdmin>
 		);
 	}
 
-	Widget _buildNuevaCompra(_DatosCompras datos) {
-		final proveedorId = _proveedorId ?? datos.proveedores.firstOrNull?.id;
+	Widget _buildNuevaCompra(DatosComprasAdmin datos) {
+		final proveedorId = _proveedorIdSeleccionado(datos.proveedores);
 		final productos = _productosFiltrados(datos.productos, proveedorId);
 		final productosVisibles = productos.where((p) {
 			if (_filtroProducto.isEmpty) {
@@ -112,190 +113,231 @@ class _PantallaComprasAdminState extends ConsumerState<PantallaComprasAdmin>
 			return p.nombre.toLowerCase().contains(q) ||
 				p.codigoBarras.toLowerCase().contains(q);
 		}).toList();
+		final margenTeclado = _margenInferiorTeclado(context);
 
 		return Column(
 			children: [
-				Padding(
-					padding: const EdgeInsets.fromLTRB(12.0, 12.0, 12.0, 0.0),
-					child: Column(
-						children: [
-							if (datos.tiendas.length > 1)
-								DropdownButtonFormField<String>(
-									initialValue: datos.tiendaId,
-									decoration: const InputDecoration(
-										labelText: 'Tienda',
-										border: OutlineInputBorder(),
-									),
-									items: datos.tiendas
-										.map(
-											(t) => DropdownMenuItem(
-												value: t.id,
-												child: Text(t.nombre),
+				Expanded(
+					child: CustomScrollView(
+						keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+						slivers: [
+							SliverPadding(
+								padding: const EdgeInsets.fromLTRB(12.0, 12.0, 12.0, 0.0),
+								sliver: SliverList(
+									delegate: SliverChildListDelegate([
+										if (datos.tiendas.length > 1)
+											DropdownButtonFormField<String>(
+												initialValue: datos.tiendaId,
+												decoration: const InputDecoration(
+													labelText: 'Tienda',
+													border: OutlineInputBorder(),
+												),
+												items: datos.tiendas
+													.map(
+														(t) => DropdownMenuItem(
+															value: t.id,
+															child: Text(t.nombre),
+														),
+													)
+													.toList(),
+												onChanged: (v) => setState(() {
+													_tiendaOperacionId = v;
+													_seleccionados.clear();
+												}),
 											),
-										)
-										.toList(),
-									onChanged: (v) => setState(() {
-										_tiendaOperacionId = v;
-										_seleccionados.clear();
-									}),
-								),
-							if (datos.tiendas.length > 1) const SizedBox(height: 8.0),
-							DropdownButtonFormField<String>(
-								initialValue: proveedorId,
-								decoration: const InputDecoration(
-									labelText: 'Proveedor *',
-									border: OutlineInputBorder(),
-								),
-								items: datos.proveedores
-									.map(
-										(p) => DropdownMenuItem(
-											value: p.id,
-											child: Text(p.nombre),
+										if (datos.tiendas.length > 1) const SizedBox(height: 8.0),
+										DropdownButtonFormField<String>(
+											key: ValueKey(
+												datos.proveedores.map((p) => p.id).join(','),
+											),
+											initialValue: proveedorId,
+											decoration: const InputDecoration(
+												labelText: 'Proveedor *',
+												border: OutlineInputBorder(),
+											),
+											items: datos.proveedores
+												.map(
+													(p) => DropdownMenuItem(
+														value: p.id,
+														child: Text(p.nombre),
+													),
+												)
+												.toList(),
+											onChanged: datos.proveedores.isEmpty
+												? null
+												: (v) => setState(() {
+													_proveedorId = v;
+													_seleccionados.clear();
+												}),
 										),
-									)
-									.toList(),
-								onChanged: datos.proveedores.isEmpty
-									? null
-									: (v) => setState(() {
-										_proveedorId = v;
-										_seleccionados.clear();
-									}),
-							),
-							const SizedBox(height: 8.0),
-							Row(
-								children: [
-									Expanded(
-										child: OutlinedButton.icon(
+										const SizedBox(height: 8.0),
+										OutlinedButton.icon(
 											onPressed: () => _elegirFecha(context),
 											icon: const Icon(Icons.calendar_today),
 											label: Text(_formatearFecha(_fechaCompra)),
 										),
-									),
-								],
-							),
-						],
-					),
-				),
-				Padding(
-					padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-					child: Row(
-						children: [
-							Expanded(
-								child: Text(
-									'${_seleccionados.length} producto(s) · '
-									'Total est.: ${formatearMoneda(_calcularTotalEstimado(productosVisibles))}',
-									style: const TextStyle(fontWeight: FontWeight.w600),
+									]),
 								),
 							),
-							if (_seleccionados.isNotEmpty)
-								TextButton(
-									onPressed: () => setState(_seleccionados.clear),
-									child: const Text('Limpiar'),
-								),
-						],
-					),
-				),
-				CampoBusqueda(
-					controlador: _busquedaProductoController,
-					sugerencia: 'Buscar producto...',
-					alCambiar: (v) => setState(() => _filtroProducto = v.trim()),
-				),
-				Expanded(
-					child: datos.proveedores.isEmpty
-						? const Center(child: Text('Registre proveedores primero'))
-						: productosVisibles.isEmpty
-							? const Center(child: Text('Sin productos disponibles'))
-							: ListView.builder(
-								itemCount: productosVisibles.length,
-								itemBuilder: (_, i) {
-									final producto = productosVisibles[i];
-									final seleccionado = _seleccionados.contains(producto.id);
-									final cantCtrl = _controllerCantidad(producto.id, producto);
-									final costoCtrl = _controllerCosto(producto.id, producto);
-									return CheckboxListTile(
-										value: seleccionado,
-										onChanged: (v) {
-											setState(() {
-												if (v == true) {
-													_seleccionados.add(producto.id);
-												} else {
-													_seleccionados.remove(producto.id);
-												}
-											});
-										},
-										title: Text(producto.nombre),
-										subtitle: seleccionado
-											? Row(
-												children: [
-													SizedBox(
-														width: 72.0,
-														child: TextField(
-															controller: cantCtrl,
-															keyboardType: TextInputType.number,
-															decoration: const InputDecoration(
-																labelText: 'Cant.',
-																isDense: true,
-																border: OutlineInputBorder(),
-															),
-															onChanged: (_) => setState(() {}),
-														),
-													),
-													const SizedBox(width: 8.0),
-													Expanded(
-														child: TextField(
-															controller: costoCtrl,
-															keyboardType: const TextInputType.numberWithOptions(
-																decimal: true,
-															),
-															decoration: const InputDecoration(
-																labelText: 'Costo u.',
-																isDense: true,
-																border: OutlineInputBorder(),
-																prefixText: '\$ ',
-															),
-															onChanged: (_) => setState(() {}),
-														),
-													),
-												],
-											)
-											: Text(
-												'Costo actual: ${formatearMoneda(producto.costoUnitario)}',
-												style: const TextStyle(fontSize: 12.0),
+							SliverPadding(
+								padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+								sliver: SliverToBoxAdapter(
+									child: Row(
+										children: [
+											Expanded(
+												child: Text(
+													'${_seleccionados.length} producto(s) · '
+													'Total est.: ${formatearMoneda(_calcularTotalEstimado(productosVisibles))}',
+													style: const TextStyle(fontWeight: FontWeight.w600),
+												),
 											),
-									);
-								},
+											if (_seleccionados.isNotEmpty)
+												TextButton(
+													onPressed: () => setState(_seleccionados.clear),
+													child: const Text('Limpiar'),
+												),
+										],
+									),
+								),
 							),
+							SliverToBoxAdapter(
+								child: CampoBusqueda(
+									controlador: _busquedaProductoController,
+									sugerencia: 'Buscar producto...',
+									alCambiar: (v) => setState(() => _filtroProducto = v.trim()),
+								),
+							),
+							if (datos.proveedores.isEmpty)
+								const SliverFillRemaining(
+									hasScrollBody: false,
+									child: Center(child: Text('Registre proveedores primero')),
+								)
+							else if (productosVisibles.isEmpty)
+								const SliverFillRemaining(
+									hasScrollBody: false,
+									child: Center(child: Text('Sin productos disponibles')),
+								)
+							else
+								SliverList(
+									delegate: SliverChildBuilderDelegate(
+										(_, i) => _tileProductoCompra(productosVisibles[i]),
+										childCount: productosVisibles.length,
+									),
+								),
+							SliverPadding(
+								padding: const EdgeInsets.fromLTRB(12.0, 8.0, 12.0, 0.0),
+								sliver: SliverToBoxAdapter(
+									child: TextField(
+										controller: _notasController,
+										onTap: () => _desplazarCampoEnfocado(),
+										decoration: const InputDecoration(
+											labelText: 'Notas (opcional)',
+											border: OutlineInputBorder(),
+										),
+									),
+								),
+							),
+							SliverPadding(
+								padding: EdgeInsets.only(bottom: margenTeclado),
+							),
+						],
+					),
 				),
 				const Divider(height: 1.0),
-				Padding(
-					padding: const EdgeInsets.all(12.0),
-					child: Column(
-						crossAxisAlignment: CrossAxisAlignment.stretch,
-						children: [
-							TextField(
-								controller: _notasController,
-								decoration: const InputDecoration(
-									labelText: 'Notas (opcional)',
-									border: OutlineInputBorder(),
-								),
+				SafeArea(
+					top: false,
+					child: Padding(
+						padding: const EdgeInsets.all(12.0),
+						child: FilledButton.icon(
+							onPressed: proveedorId != null && _seleccionados.isNotEmpty
+								? () => _registrarCompra(datos, proveedorId)
+								: null,
+							icon: const Icon(Icons.shopping_cart),
+							label: Text(
+								_seleccionados.isEmpty
+									? 'Seleccione productos'
+									: 'Registrar compra (${_seleccionados.length})',
 							),
-							const SizedBox(height: 8.0),
-							FilledButton.icon(
-								onPressed: proveedorId != null && _seleccionados.isNotEmpty
-									? () => _registrarCompra(datos, proveedorId)
-									: null,
-								icon: const Icon(Icons.shopping_cart),
-								label: Text(
-									_seleccionados.isEmpty
-										? 'Seleccione productos'
-										: 'Registrar compra (${_seleccionados.length})',
-								),
-							),
-						],
+						),
 					),
 				),
 			],
 		);
+	}
+
+	Widget _tileProductoCompra(Producto producto) {
+		final seleccionado = _seleccionados.contains(producto.id);
+		final cantCtrl = _controllerCantidad(producto.id, producto);
+		final costoCtrl = _controllerCosto(producto.id, producto);
+		return CheckboxListTile(
+			value: seleccionado,
+			onChanged: (v) {
+				setState(() {
+					if (v == true) {
+						_seleccionados.add(producto.id);
+					} else {
+						_seleccionados.remove(producto.id);
+					}
+				});
+			},
+			title: Text(producto.nombre),
+			subtitle: seleccionado
+				? Row(
+					children: [
+						SizedBox(
+							width: 72.0,
+							child: TextField(
+								controller: cantCtrl,
+								keyboardType: TextInputType.number,
+								onTap: () => _desplazarCampoEnfocado(),
+								decoration: const InputDecoration(
+									labelText: 'Cant.',
+									isDense: true,
+									border: OutlineInputBorder(),
+								),
+								onChanged: (_) => setState(() {}),
+							),
+						),
+						const SizedBox(width: 8.0),
+						Expanded(
+							child: TextField(
+								controller: costoCtrl,
+								keyboardType: const TextInputType.numberWithOptions(
+									decimal: true,
+								),
+								onTap: () => _desplazarCampoEnfocado(),
+								decoration: const InputDecoration(
+									labelText: 'Costo u.',
+									isDense: true,
+									border: OutlineInputBorder(),
+									prefixText: '\$ ',
+								),
+								onChanged: (_) => setState(() {}),
+							),
+						),
+					],
+				)
+				: Text(
+					'Costo actual: ${formatearMoneda(producto.costoUnitario)}',
+					style: const TextStyle(fontSize: 12.0),
+				),
+		);
+	}
+
+	double _margenInferiorTeclado(BuildContext context) {
+		if (MediaQuery.viewInsetsOf(context).bottom <= 0) {
+			return 12.0;
+		}
+		return AccesorioTecladoMovil.alturaBarraListo +
+			AccesorioTecladoMovil.margenInferiorDesplazamiento;
+	}
+
+	void _desplazarCampoEnfocado() {
+		WidgetsBinding.instance.addPostFrameCallback((_) {
+			if (mounted) {
+				AccesorioTecladoMovil.desplazarCampoEnfocado(context);
+			}
+		});
 	}
 
 	List<Producto> _productosFiltrados(List<Producto> todos, String? proveedorId) {
@@ -320,7 +362,17 @@ class _PantallaComprasAdminState extends ConsumerState<PantallaComprasAdmin>
 		return redondearMonto(total);
 	}
 
-	Widget _buildHistorial(_DatosCompras datos) {
+	String? _proveedorIdSeleccionado(List<Proveedor> proveedores) {
+		if (proveedores.isEmpty) {
+			return null;
+		}
+		if (_proveedorId != null && proveedores.any((p) => p.id == _proveedorId)) {
+			return _proveedorId;
+		}
+		return proveedores.first.id;
+	}
+
+	Widget _buildHistorial(DatosComprasAdmin datos) {
 		final filtradas = datos.compras.where((c) {
 			if (_filtroHistorial.isEmpty) {
 				return true;
@@ -413,7 +465,7 @@ class _PantallaComprasAdminState extends ConsumerState<PantallaComprasAdmin>
 		}).toList();
 	}
 
-	Future<void> _registrarCompra(_DatosCompras datos, String proveedorId) async {
+	Future<void> _registrarCompra(DatosComprasAdmin datos, String proveedorId) async {
 		try {
 			final lineasPrecio = _seleccionados.map((productoId) {
 				final producto = datos.productos.firstWhere((p) => p.id == productoId);
@@ -437,7 +489,7 @@ class _PantallaComprasAdminState extends ConsumerState<PantallaComprasAdmin>
 				tiendaId: datos.tiendaId,
 				operador: operador,
 			);
-			ref.invalidate(_comprasDatosProvider(_tiendaOperacionId));
+			ref.invalidate(comprasDatosAdminProvider(_tiendaOperacionId));
 			setState(_seleccionados.clear);
 			_notasController.clear();
 			if (!mounted) {
@@ -454,7 +506,7 @@ class _PantallaComprasAdminState extends ConsumerState<PantallaComprasAdmin>
 			if (!mounted) {
 				return;
 			}
-			ref.invalidate(_comprasDatosProvider(_tiendaOperacionId));
+			ref.invalidate(comprasDatosAdminProvider(_tiendaOperacionId));
 			_tabs.animateTo(1);
 		} catch (error) {
 			if (!mounted) {
@@ -466,7 +518,7 @@ class _PantallaComprasAdminState extends ConsumerState<PantallaComprasAdmin>
 		}
 	}
 
-	void _mostrarDetalle(Compra compra, _DatosCompras datos) {
+	void _mostrarDetalle(Compra compra, DatosComprasAdmin datos) {
 		final proveedor = datos.nombresProveedor[compra.proveedorId] ?? '?';
 		showModalBottomSheet<void>(
 			context: context,
@@ -538,41 +590,3 @@ class _PantallaComprasAdminState extends ConsumerState<PantallaComprasAdmin>
 		);
 	}
 }
-
-class _DatosCompras {
-	const _DatosCompras({
-		required this.compras,
-		required this.proveedores,
-		required this.productos,
-		required this.tiendas,
-		required this.tiendaId,
-		required this.nombresProveedor,
-	});
-
-	final List<Compra> compras;
-	final List<Proveedor> proveedores;
-	final List<Producto> productos;
-	final List<Tienda> tiendas;
-	final String tiendaId;
-	final Map<String, String> nombresProveedor;
-}
-
-final _comprasDatosProvider = FutureProvider.family<_DatosCompras, String?>(
-	(ref, tiendaOperacionId) async {
-		final servicio = await ref.watch(servicioAdminProvider.future);
-		final operador = ref.watch(sesionUsuarioProvider);
-		final tiendas = await servicio.obtenerTiendasPermitidas(operador: operador);
-		final tiendaId = tiendaOperacionId ?? operador?.tiendaId ?? servicio.tiendaActivaId;
-		final compras = await servicio.listarCompras(tiendaId: tiendaId, operador: operador);
-		final proveedores = await servicio.listarProveedores();
-		final productos = await servicio.listarProductosActivosPorTienda(tiendaId);
-		return _DatosCompras(
-			compras: compras,
-			proveedores: proveedores.where((p) => p.activo).toList(),
-			productos: productos,
-			tiendas: tiendas,
-			tiendaId: tiendaId,
-			nombresProveedor: {for (final p in proveedores) p.id: p.nombre},
-		);
-	},
-);

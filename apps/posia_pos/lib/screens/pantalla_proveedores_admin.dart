@@ -29,7 +29,7 @@ class _PantallaProveedoresAdminState extends ConsumerState<PantallaProveedoresAd
 	}
 
 	Future<void> _refrescar() async {
-		ref.invalidate(proveedoresAdminProvider);
+		invalidarProveedores(ref);
 		await ref.read(proveedoresAdminProvider.future);
 	}
 
@@ -252,7 +252,7 @@ class _PantallaProveedoresAdminState extends ConsumerState<PantallaProveedoresAd
 			contacto: contacto,
 			telefono: telefono,
 		);
-		ref.invalidate(proveedoresAdminProvider);
+		invalidarProveedores(ref);
 		if (!mounted) {
 			return;
 		}
@@ -265,7 +265,7 @@ class _PantallaProveedoresAdminState extends ConsumerState<PantallaProveedoresAd
 				builder: (_) => PantallaFichaProveedor(proveedor: proveedor),
 			),
 		);
-		ref.invalidate(proveedoresAdminProvider);
+		invalidarProveedores(ref);
 	}
 
 	Future<void> _confirmarEliminar(Proveedor proveedor) async {
@@ -298,7 +298,7 @@ class _PantallaProveedoresAdminState extends ConsumerState<PantallaProveedoresAd
 		try {
 			final servicio = await ref.read(servicioAdminProvider.future);
 			await servicio.eliminarProveedor(proveedor.id);
-			ref.invalidate(proveedoresAdminProvider);
+			invalidarProveedores(ref);
 			if (!mounted) {
 				return;
 			}

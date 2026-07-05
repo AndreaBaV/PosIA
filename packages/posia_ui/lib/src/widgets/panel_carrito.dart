@@ -133,84 +133,98 @@ class PanelCarrito extends StatelessWidget {
 										color: PosiaColors.tarjeta,
 										borderRadius: BorderRadius.circular(12.0),
 										elevation: 0.5,
-										child: InkWell(
-											borderRadius: BorderRadius.circular(12.0),
-											onTap: alTocarLinea != null
-												? () => alTocarLinea!(indice)
-												: null,
-											child: Padding(
-												padding: const EdgeInsets.symmetric(
-													horizontal: 10.0,
-													vertical: 8.0,
-												),
-												child: Row(
-													crossAxisAlignment: CrossAxisAlignment.center,
-													children: [
-														CircleAvatar(
-															backgroundColor: PosiaColors.cobrar,
-															radius: 18.0,
-															child: Text(
-																linea.cantidad.toStringAsFixed(
-																	linea.cantidad ==
-																			linea.cantidad.roundToDouble()
-																		? 0
-																		: 1,
+										child: Padding(
+											padding: const EdgeInsets.symmetric(
+												horizontal: 6.0,
+												vertical: 4.0,
+											),
+											child: Row(
+												crossAxisAlignment: CrossAxisAlignment.center,
+												children: [
+													Expanded(
+														child: InkWell(
+															borderRadius: BorderRadius.circular(10.0),
+															onTap: alTocarLinea != null
+																? () => alTocarLinea!(indice)
+																: null,
+															child: Padding(
+																padding: const EdgeInsets.symmetric(
+																	horizontal: 6.0,
+																	vertical: 8.0,
 																),
-																style: const TextStyle(
-																	color: Colors.white,
-																	fontSize: 12.0,
-																	fontWeight: FontWeight.bold,
+																child: Row(
+																	children: [
+																		CircleAvatar(
+																			backgroundColor: PosiaColors.cobrar,
+																			radius: 18.0,
+																			child: Text(
+																				linea.cantidad.toStringAsFixed(
+																					linea.cantidad ==
+																							linea.cantidad.roundToDouble()
+																						? 0
+																						: 1,
+																				),
+																				style: const TextStyle(
+																					color: Colors.white,
+																					fontSize: 12.0,
+																					fontWeight: FontWeight.bold,
+																				),
+																			),
+																		),
+																		const SizedBox(width: 10.0),
+																		Expanded(
+																			child: Column(
+																				crossAxisAlignment: CrossAxisAlignment.start,
+																				mainAxisSize: MainAxisSize.min,
+																				children: [
+																					Text(
+																						linea.producto.nombre,
+																						maxLines: 2,
+																						overflow: TextOverflow.ellipsis,
+																						style: const TextStyle(
+																							fontWeight: FontWeight.w600,
+																						),
+																					),
+																					const SizedBox(height: 2.0),
+																					Text(
+																						_construirSubtituloLinea(linea),
+																						maxLines: 1,
+																						overflow: TextOverflow.ellipsis,
+																						style: TextStyle(
+																							fontSize: 12.0,
+																							color: Colors.grey.shade600,
+																						),
+																					),
+																				],
+																			),
+																		),
+																		const SizedBox(width: 6.0),
+																		Text(
+																			formatearMoneda(subtotal),
+																			style: const TextStyle(
+																				fontWeight: FontWeight.bold,
+																				color: PosiaColors.cobrar,
+																			),
+																		),
+																	],
 																),
 															),
 														),
-														const SizedBox(width: 10.0),
-														Expanded(
-															child: Column(
-																crossAxisAlignment: CrossAxisAlignment.start,
-																mainAxisSize: MainAxisSize.min,
-																children: [
-																	Text(
-																		linea.producto.nombre,
-																		maxLines: 2,
-																		overflow: TextOverflow.ellipsis,
-																		style: const TextStyle(
-																			fontWeight: FontWeight.w600,
-																		),
-																	),
-																	const SizedBox(height: 2.0),
-																	Text(
-																		_construirSubtituloLinea(linea),
-																		maxLines: 1,
-																		overflow: TextOverflow.ellipsis,
-																		style: TextStyle(
-																			fontSize: 12.0,
-																			color: Colors.grey.shade600,
-																		),
-																	),
-																],
-															),
-														),
-														const SizedBox(width: 6.0),
-														Text(
-															formatearMoneda(subtotal),
-															style: const TextStyle(
-																fontWeight: FontWeight.bold,
-																color: PosiaColors.cobrar,
-															),
-														),
-														IconButton(
-															icon: const Icon(Icons.close, size: 18.0),
+													),
+													Material(
+														color: Colors.transparent,
+														child: IconButton(
+															icon: const Icon(Icons.close, size: 20.0),
 															color: PosiaColors.cancelar,
-															padding: const EdgeInsets.all(4.0),
-															constraints: const BoxConstraints(
-																minWidth: 32.0,
-																minHeight: 32.0,
+															style: IconButton.styleFrom(
+																minimumSize: const Size(44.0, 44.0),
+																tapTargetSize: MaterialTapTargetSize.shrinkWrap,
 															),
 															tooltip: 'Quitar',
 															onPressed: () => alEliminarLinea(indice),
 														),
-													],
-												),
+													),
+												],
 											),
 										),
 									);

@@ -321,6 +321,7 @@ class EstadoCarrito {
 		required this.total,
 		required this.nombreTienda,
 		this.nombreVendedor,
+		this.nombreCliente,
 		this.turnoAbierto = false,
 		this.favoritos = const [],
 		this.ticketsEnEspera = 0,
@@ -349,6 +350,9 @@ class EstadoCarrito {
 	/// Nombre del vendedor activo.
 	final String? nombreVendedor;
 
+	/// Cliente asignado al ticket activo (null = mostrador).
+	final String? nombreCliente;
+
 	/// Indica si hay turno de caja abierto.
 	final bool turnoAbierto;
 
@@ -373,6 +377,7 @@ class EstadoCarrito {
 		double? total,
 		String? nombreTienda,
 		String? nombreVendedor,
+		String? nombreCliente,
 		bool? turnoAbierto,
 		List<Producto>? favoritos,
 		int? ticketsEnEspera,
@@ -388,6 +393,7 @@ class EstadoCarrito {
 			total: total ?? this.total,
 			nombreTienda: nombreTienda ?? this.nombreTienda,
 			nombreVendedor: nombreVendedor ?? this.nombreVendedor,
+			nombreCliente: nombreCliente ?? this.nombreCliente,
 			turnoAbierto: turnoAbierto ?? this.turnoAbierto,
 			favoritos: favoritos ?? this.favoritos,
 			ticketsEnEspera: ticketsEnEspera ?? this.ticketsEnEspera,
@@ -579,6 +585,7 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 				productos: _filtrarProductos(_catalogoCompleto!, _categoriaSeleccionadaId, _textoBusqueda),
 				turnoAbierto: turno != null,
 				nombreVendedor: servicio.obtenerVendedorActivo()?.nombre,
+				nombreCliente: servicio.obtenerClienteActivo()?.nombre,
 				favoritos: await servicio.listarFavoritosCaja(),
 				ticketsEnEspera: await servicio.contarTicketsEnEspera(),
 				stockLocalPorProducto: stockLocal,
@@ -652,6 +659,7 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 			total: servicio.calcularTotalCarrito(),
 			nombreTienda: tienda?.nombre ?? 'Tienda',
 			nombreVendedor: vendedor?.nombre,
+			nombreCliente: servicio.obtenerClienteActivo()?.nombre,
 			turnoAbierto: turno != null,
 			favoritos: favoritos,
 			ticketsEnEspera: await servicio.contarTicketsEnEspera(),

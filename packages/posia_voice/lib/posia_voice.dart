@@ -6,4 +6,5 @@ export 'src/interpretador_comandos_voz.dart';
 export 'src/linea_comando_voz.dart';
 export 'src/motor_comandos_voz.dart';
 export 'src/resolvedor_cantidad_voz.dart';
+export 'src/resolvedor_producto_voz.dart';
 export 'src/resultado_comando_voz.dart';

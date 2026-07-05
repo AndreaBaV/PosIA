@@ -45,10 +45,11 @@ class ServicioVozDispositivo {
 			},
 			listenOptions: SpeechListenOptions(
 				localeId: 'es_MX',
-				listenMode: ListenMode.confirmation,
+				listenMode: ListenMode.dictation,
 				partialResults: true,
-				listenFor: const Duration(seconds: 45),
-				pauseFor: const Duration(seconds: 2),
+				listenFor: const Duration(seconds: 120),
+				pauseFor: const Duration(seconds: 5),
+				cancelOnError: false,
 			),
 		);
 	}

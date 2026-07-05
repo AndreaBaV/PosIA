@@ -1,6 +1,7 @@
 /// Caja movil con catalogo tactil, categorias y carrito deslizable.
 library;
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -15,6 +16,8 @@ import '../providers/app_providers.dart';
 import '../util/teclado_util.dart';
 import '../utils/existencias_caja_util.dart';
 import '../voz/servicio_voz_dispositivo.dart';
+import '../widgets/resolucion_lineas_voz.dart';
+import '../widgets/selector_cliente_caja.dart';
 import 'pantalla_caja.dart'
 	show
 		confirmarVaciarCarritoCaja,
@@ -47,8 +50,12 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 	final _busquedaFocus = FocusNode();
 
 	bool _escuchando = false;
+	bool _procesandoVoz = false;
 	bool _vozInicializada = false;
 	bool _ocultarAvisoTurno = false;
+	String _transcripcionVoz = '';
+	bool _finalizandoVoz = false;
+	List<Producto>? _catalogoVozCache;
 
 	@override
 	void dispose() {
@@ -128,11 +135,17 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 					const SizedBox(width: 8.0),
 				],
 			),
-			body: GestureDetector(
-				onTap: () => ocultarTeclado(context),
-				child: esHorizontal
-					? _layoutHorizontal(context, estado, columnasGrilla)
-					: _layoutVertical(context, estado, columnasGrilla),
+			body: Stack(
+				children: [
+					GestureDetector(
+						onTap: () => ocultarTeclado(context),
+						child: esHorizontal
+							? _layoutHorizontal(context, estado, columnasGrilla)
+							: _layoutVertical(context, estado, columnasGrilla),
+					),
+					if (_escuchando || _procesandoVoz)
+						_overlayVoz(context),
+				],
 			),
 			bottomNavigationBar: esHorizontal
 				? null
@@ -198,6 +211,51 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 			mainAxisSize: MainAxisSize.min,
 			children: [
 				_avisoTurnoCerrado(estado),
+				Padding(
+					padding: const EdgeInsets.fromLTRB(12.0, 4.0, 12.0, 0.0),
+					child: Material(
+						color: PosiaColors.tarjeta,
+						borderRadius: BorderRadius.circular(12.0),
+						child: InkWell(
+							borderRadius: BorderRadius.circular(12.0),
+							onTap: () => mostrarSelectorClienteCaja(context, ref),
+							child: Padding(
+								padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
+								child: Row(
+									children: [
+										Icon(
+											estado.nombreCliente != null
+												? Icons.person
+												: Icons.storefront_outlined,
+											size: 20.0,
+											color: estado.nombreCliente != null
+												? PosiaColors.cobrar
+												: Colors.grey.shade600,
+										),
+										const SizedBox(width: 8.0),
+										Expanded(
+											child: Text(
+												estado.nombreCliente ?? 'Mostrador · toque para cliente',
+												maxLines: 1,
+												overflow: TextOverflow.ellipsis,
+												style: TextStyle(
+													fontWeight: estado.nombreCliente != null
+														? FontWeight.w600
+														: FontWeight.normal,
+													color: estado.nombreCliente != null
+														? null
+														: Colors.grey.shade700,
+												),
+											),
+										),
+										const Icon(Icons.chevron_right, size: 20.0),
+									],
+								),
+							),
+						),
+					),
+				),
+				const SizedBox(height: 6.0),
 				if (estado.categorias.isNotEmpty)
 					BarraCategorias(
 						categorias: estado.categorias,
@@ -349,89 +407,158 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 				initialChildSize: estado.lineas.isEmpty ? 0.35 : 0.55,
 				minChildSize: 0.3,
 				maxChildSize: 0.9,
-				builder: (_, scrollController) => Column(
-					children: [
-						Expanded(
-							child: PanelCarrito(
-								lineas: estado.lineas,
-								total: estado.total,
-								alEliminarLinea: (indice) {
-									ref.read(carritoNotifierProvider.notifier).eliminarLinea(indice);
-								},
-							),
-						),
-						Padding(
-							padding: const EdgeInsets.fromLTRB(16.0, 0.0, 16.0, 16.0),
-							child: Column(
-								mainAxisSize: MainAxisSize.min,
-								children: [
-									Row(
-										mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+				builder: (_, scrollController) => Consumer(
+					builder: (context, ref, _) {
+						final estadoActual = ref.watch(carritoNotifierProvider).value ?? estado;
+						return Column(
+							children: [
+								Expanded(
+									child: PanelCarrito(
+										lineas: estadoActual.lineas,
+										total: estadoActual.total,
+										alEliminarLinea: (indice) {
+											ref.read(carritoNotifierProvider.notifier).eliminarLinea(indice);
+										},
+									),
+								),
+								Padding(
+									padding: const EdgeInsets.fromLTRB(16.0, 0.0, 16.0, 16.0),
+									child: Column(
+										mainAxisSize: MainAxisSize.min,
 										children: [
-											IconButton.filledTonal(
-												tooltip: 'Poner en espera',
-												onPressed: estado.lineas.isNotEmpty
-													? () {
-														Navigator.pop(sheetContext);
-														ejecutarPonerEnEspera(context, ref);
-													}
-													: null,
-												icon: const Icon(Icons.pause_circle_outline),
+											Row(
+												mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+												children: [
+													IconButton.filledTonal(
+														tooltip: 'Cliente',
+														onPressed: () {
+															Navigator.pop(sheetContext);
+															mostrarSelectorClienteCaja(context, ref);
+														},
+														icon: const Icon(Icons.person_outline),
+													),
+													IconButton.filledTonal(
+														tooltip: 'Poner en espera',
+														onPressed: estadoActual.lineas.isNotEmpty
+															? () {
+																Navigator.pop(sheetContext);
+																ejecutarPonerEnEspera(context, ref);
+															}
+															: null,
+														icon: const Icon(Icons.pause_circle_outline),
+													),
+													Badge(
+														isLabelVisible: estadoActual.ticketsEnEspera > 0,
+														label: Text('${estadoActual.ticketsEnEspera}'),
+														child: IconButton.filledTonal(
+															tooltip: 'Recuperar ticket',
+															onPressed: estadoActual.ticketsEnEspera > 0
+																? () {
+																	Navigator.pop(sheetContext);
+																	mostrarTicketsEnEspera(context, ref);
+																}
+																: null,
+															icon: const Icon(Icons.playlist_play),
+														),
+													),
+													IconButton.filledTonal(
+														tooltip: 'Cotización',
+														onPressed: estadoActual.lineas.isNotEmpty
+															? () {
+																Navigator.pop(sheetContext);
+																ejecutarCotizacionCaja(context, ref);
+															}
+															: null,
+														icon: const Icon(Icons.request_quote),
+													),
+													IconButton.filledTonal(
+														tooltip: 'Vaciar carrito',
+														onPressed: estadoActual.lineas.isNotEmpty
+															? () {
+																Navigator.pop(sheetContext);
+																confirmarVaciarCarritoCaja(context, ref);
+															}
+															: null,
+														icon: const Icon(Icons.delete_sweep),
+													),
+												],
 											),
-											Badge(
-												isLabelVisible: estado.ticketsEnEspera > 0,
-												label: Text('${estado.ticketsEnEspera}'),
-												child: IconButton.filledTonal(
-													tooltip: 'Recuperar ticket',
-													onPressed: estado.ticketsEnEspera > 0
+											const SizedBox(height: 8.0),
+											SizedBox(
+												width: double.infinity,
+												height: 48.0,
+												child: FilledButton(
+													onPressed: estadoActual.turnoAbierto &&
+															estadoActual.lineas.isNotEmpty
 														? () {
 															Navigator.pop(sheetContext);
-															mostrarTicketsEnEspera(context, ref);
+															ejecutarCobroCaja(context, ref);
 														}
 														: null,
-													icon: const Icon(Icons.playlist_play),
+													child: Text(
+														'COBRAR ${formatearMoneda(estadoActual.total)}',
+													),
 												),
-											),
-											IconButton.filledTonal(
-												tooltip: 'Cotización',
-												onPressed: estado.lineas.isNotEmpty
-													? () {
-														Navigator.pop(sheetContext);
-														ejecutarCotizacionCaja(context, ref);
-													}
-													: null,
-												icon: const Icon(Icons.request_quote),
-											),
-											IconButton.filledTonal(
-												tooltip: 'Vaciar carrito',
-												onPressed: estado.lineas.isNotEmpty
-													? () {
-														Navigator.pop(sheetContext);
-														confirmarVaciarCarritoCaja(context, ref);
-													}
-													: null,
-												icon: const Icon(Icons.delete_sweep),
 											),
 										],
 									),
-									const SizedBox(height: 8.0),
-									SizedBox(
-										width: double.infinity,
-										height: 48.0,
-										child: FilledButton(
-											onPressed: estado.turnoAbierto && estado.lineas.isNotEmpty
-												? () {
-													Navigator.pop(sheetContext);
-													ejecutarCobroCaja(context, ref);
-												}
-												: null,
-											child: Text('COBRAR ${formatearMoneda(estado.total)}'),
+								),
+							],
+						);
+					},
+				),
+			),
+		);
+	}
+
+	Widget _overlayVoz(BuildContext context) {
+		return Positioned(
+			left: 12.0,
+			right: 12.0,
+			bottom: 88.0,
+			child: Material(
+				elevation: 8.0,
+				borderRadius: BorderRadius.circular(16.0),
+				color: Theme.of(context).colorScheme.surface,
+				child: Padding(
+					padding: const EdgeInsets.all(14.0),
+					child: Column(
+						mainAxisSize: MainAxisSize.min,
+						crossAxisAlignment: CrossAxisAlignment.stretch,
+						children: [
+							Row(
+								children: [
+									Icon(
+										_procesandoVoz ? Icons.hourglass_top : Icons.mic,
+										color: _procesandoVoz ? Colors.orange : PosiaColors.cobrar,
+									),
+									const SizedBox(width: 8.0),
+									Expanded(
+										child: Text(
+											_procesandoVoz
+												? 'Procesando ticket…'
+												: 'Escuchando — cliente y productos en un solo dictado',
+											style: const TextStyle(fontWeight: FontWeight.w600),
 										),
 									),
+									if (_escuchando)
+										TextButton(
+											onPressed: _finalizarEscuchaVoz,
+											child: const Text('Listo'),
+										),
 								],
 							),
-						),
-					],
+							if (_transcripcionVoz.isNotEmpty) ...[
+								const SizedBox(height: 8.0),
+								Text(
+									_transcripcionVoz,
+									maxLines: 4,
+									overflow: TextOverflow.ellipsis,
+									style: TextStyle(color: Colors.grey.shade700, fontSize: 13.0),
+								),
+							],
+						],
+					),
 				),
 			),
 		);
@@ -502,10 +629,7 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 
 	Future<void> _alternarEscucha() async {
 		if (_escuchando) {
-			await _servicioVoz.detener();
-			if (mounted) {
-				setState(() => _escuchando = false);
-			}
+			await _finalizarEscuchaVoz();
 			return;
 		}
 		if (!Platform.isIOS) {
@@ -538,26 +662,63 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 		if (!mounted) {
 			return;
 		}
-		setState(() => _escuchando = true);
+		setState(() {
+			_escuchando = true;
+			_transcripcionVoz = '';
+		});
+		final servicio = await ref.read(servicioCajaProvider.future);
+		unawaited(_expandirCatalogo(servicio));
 		await _servicioVoz.escuchar(
 			onTranscripcion: (texto, esFinal) {
 				if (!mounted) {
 					return;
 				}
+				setState(() => _transcripcionVoz = texto);
 				if (esFinal && texto.trim().isNotEmpty) {
-					_procesarComandoVoz(texto);
+					unawaited(_finalizarEscuchaVoz(procesarTexto: texto));
 				}
 			},
 		);
 	}
 
+	Future<void> _finalizarEscuchaVoz({String? procesarTexto}) async {
+		if (_finalizandoVoz) {
+			return;
+		}
+		_finalizandoVoz = true;
+		try {
+			final texto = (procesarTexto ?? _transcripcionVoz).trim();
+			await _servicioVoz.detener();
+			if (!mounted) {
+				return;
+			}
+			setState(() {
+				_escuchando = false;
+				_transcripcionVoz = texto;
+			});
+			if (texto.isNotEmpty) {
+				await _procesarComandoVoz(texto);
+			} else if (mounted) {
+				setState(() => _transcripcionVoz = '');
+			}
+		} finally {
+			_finalizandoVoz = false;
+		}
+	}
+
 	Future<List<Producto>> _expandirCatalogo(ServicioCaja servicio) async {
+		if (_catalogoVozCache != null) {
+			return _catalogoVozCache!;
+		}
 		final catalogo = await servicio.listarProductos();
+		final variantesPorProducto = await Future.wait(
+			catalogo.map((producto) => servicio.listarVariantesActivas(producto.id)),
+		);
 		final expandido = <Producto>[];
-		for (final producto in catalogo) {
+		for (var i = 0; i < catalogo.length; i++) {
+			final producto = catalogo[i];
 			expandido.add(producto);
-			final variantes = await servicio.listarVariantesActivas(producto.id);
-			for (final variante in variantes) {
+			for (final variante in variantesPorProducto[i]) {
 				expandido.add(
 					producto.copiarCon(
 						id: variante.id,
@@ -568,6 +729,7 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 				);
 			}
 		}
+		_catalogoVozCache = expandido;
 		return expandido;
 	}
 
@@ -603,45 +765,115 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 		if (limpio.isEmpty) {
 			return;
 		}
-		final servicio = await ref.read(servicioCajaProvider.future);
-		final catalogo = await _expandirCatalogo(servicio);
-		final resultado = _motorVoz.procesar(texto: limpio, catalogo: catalogo);
-		final mensajes = <String>[];
-
-		if (resultado.intencion == IntencionComandoVoz.cobrar) {
-			if (!mounted) {
-				return;
-			}
-			await ejecutarCobroCaja(context, ref);
-			return;
-		}
-		if (resultado.intencion == IntencionComandoVoz.vaciarCarrito) {
-			servicio.vaciarCarrito();
-			mensajes.add('Carrito vaciado');
-		} else if (resultado.intencion == IntencionComandoVoz.agregarProductos) {
-			for (final linea in resultado.lineas) {
-				final error = await _agregarLineaVoz(servicio, linea);
-				if (error.isNotEmpty) {
-					mensajes.add(error);
-				} else {
-					mensajes.add(linea.descripcion);
-				}
-			}
-			for (final nombre in resultado.noEncontrados) {
-				mensajes.add('No encontrado: $nombre');
-			}
-		}
-
-		await ref.read(carritoNotifierProvider.notifier).recargar();
-		await _servicioVoz.detener();
 		if (!mounted) {
 			return;
 		}
-		setState(() => _escuchando = false);
-		if (mensajes.isNotEmpty) {
-			PosiaNotificaciones.mostrarSnackBar(context, 
-				SnackBar(content: Text(mensajes.join(' · '))),
+		setState(() => _procesandoVoz = true);
+		try {
+			final servicio = await ref.read(servicioCajaProvider.future);
+			final catalogo = await _expandirCatalogo(servicio);
+			final clientes = await servicio.listarClientes();
+			final resultado = _motorVoz.procesar(
+				texto: limpio,
+				catalogo: catalogo,
+				clientes: clientes,
 			);
+			final mensajes = <String>[];
+
+			if (resultado.intencion == IntencionComandoVoz.cobrar) {
+				if (!mounted) {
+					return;
+				}
+				await ejecutarCobroCaja(context, ref);
+				return;
+			}
+			if (resultado.intencion == IntencionComandoVoz.vaciarCarrito) {
+				servicio.vaciarCarrito();
+				mensajes.add('Carrito vaciado');
+			} else if (resultado.intencion == IntencionComandoVoz.agregarProductos) {
+				if (resultado.usarMostrador) {
+					await servicio.seleccionarCliente(null);
+					mensajes.add('Cliente: mostrador');
+				} else if (resultado.cliente != null) {
+					await servicio.seleccionarCliente(resultado.cliente);
+					mensajes.add('Cliente: ${resultado.cliente!.nombre}');
+				} else if (resultado.clienteNoEncontrado != null) {
+					mensajes.add('Cliente no encontrado: ${resultado.clienteNoEncontrado}');
+				}
+				var agregadasAuto = 0;
+				for (final linea in resultado.lineas) {
+					final error = await _agregarLineaVoz(servicio, linea);
+					if (error.isNotEmpty) {
+						mensajes.add(error);
+					} else {
+						agregadasAuto++;
+					}
+				}
+				if (agregadasAuto > 0) {
+					mensajes.add('$agregadasAuto producto(s) agregado(s)');
+				}
+
+				if (resultado.requiereConfirmacion && mounted) {
+					final resolucion = await resolverLineasPendientesVoz(
+						context,
+						ambiguas: resultado.lineasAmbiguas,
+						sinCoincidencia: resultado.lineasSinCoincidencia,
+						catalogoCompleto: catalogo,
+						motor: _motorVoz,
+					);
+					var agregadasManual = 0;
+					for (final linea in resolucion.lineas) {
+						final error = await _agregarLineaVoz(servicio, linea);
+						if (error.isNotEmpty) {
+							mensajes.add(error);
+						} else {
+							agregadasManual++;
+						}
+					}
+					if (agregadasManual > 0) {
+						mensajes.add('$agregadasManual corregido(s) manualmente');
+					}
+					if (resolucion.omitidas > 0) {
+						mensajes.add('${resolucion.omitidas} línea(s) omitida(s)');
+					}
+				} else {
+					for (final nombre in resultado.noEncontrados) {
+						mensajes.add('No encontrado: $nombre');
+					}
+				}
+				if (resultado.lineas.isEmpty &&
+					!resultado.requiereConfirmacion &&
+					resultado.cliente == null &&
+					!resultado.usarMostrador &&
+					resultado.clienteNoEncontrado == null) {
+					mensajes.add('No entendí productos en: "$limpio"');
+				}
+			}
+
+			await ref.read(carritoNotifierProvider.notifier).recargar(
+				invalidarCatalogo: true,
+			);
+			if (!mounted) {
+				return;
+			}
+			if (mensajes.isNotEmpty) {
+				PosiaNotificaciones.mostrarSnackBar(
+					context,
+					SnackBar(
+						content: Text(mensajes.join('\n')),
+						duration: Duration(
+							seconds: mensajes.length > 3 ? 8 : 5,
+						),
+					),
+				);
+			}
+		} finally {
+			if (mounted) {
+				setState(() {
+					_procesandoVoz = false;
+					_transcripcionVoz = '';
+				});
+			}
 		}
 	}
 }

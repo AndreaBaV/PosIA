@@ -16,7 +16,7 @@ import 'package:posia_hardware/posia_hardware.dart';
 import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
-import '../widgets/dialogo_completar_datos_credito.dart';
+import '../widgets/selector_cliente_caja.dart';
 import '../providers/app_providers.dart';
 import '../utils/compartir_ticket_digital_util.dart';
 import '../utils/existencias_caja_util.dart';
@@ -1323,7 +1323,7 @@ class _BarraAccionesCaja extends ConsumerWidget {
 									icono: Icons.person,
 									etiqueta: 'Cliente',
 									colorFondo: PosiaColors.neutro,
-									alPresionar: () => _mostrarSelectorCliente(context, ref),
+									alPresionar: () => mostrarSelectorClienteCaja(context, ref),
 								),
 							),
 							Expanded(
@@ -1375,100 +1375,6 @@ class _BarraAccionesCaja extends ConsumerWidget {
 					),
 				),
 			),
-		);
-	}
-
-	/// Muestra dialogo simplificado de seleccion de cliente.
-	///
-	/// [context] Contexto de navegacion.
-	/// [ref] Referencia Riverpod.
-	Future<void> _mostrarSelectorCliente(BuildContext context, WidgetRef ref) async {
-		final servicio = await ref.read(servicioCajaProvider.future);
-		final clientes = await servicio.listarClientes();
-		if (!context.mounted) {
-			return;
-		}
-		await showDialog<void>(
-			context: context,
-			builder: (dialogContext) {
-				return AlertDialog(
-					title: const Text('Seleccionar cliente'),
-					content: SizedBox(
-						width: 320.0,
-						child: ListView(
-							shrinkWrap: true,
-							children: [
-								ListTile(
-									leading: const Icon(Icons.storefront),
-									title: const Text('Mostrador'),
-									onTap: () async {
-										await servicio.seleccionarCliente(null);
-										if (dialogContext.mounted) {
-											Navigator.of(dialogContext).pop();
-										}
-										await ref.read(carritoNotifierProvider.notifier).recargar(
-											invalidarCatalogo: true,
-										);
-									},
-								),
-								...clientes.map(
-									(cliente) => ListTile(
-										leading: Icon(
-											Icons.person,
-											color: clientePuedeRecibirCredito(cliente)
-												? PosiaColors.cobrar
-												: null,
-										),
-										title: Text(cliente.nombre),
-										subtitle: cliente.creditoHabilitado
-											? Text(
-												clientePuedeRecibirCredito(cliente)
-													? 'Crédito · ${cliente.diasCredito} días'
-													: 'Crédito: faltan datos',
-												style: TextStyle(
-													fontSize: 12.0,
-													color: clientePuedeRecibirCredito(cliente)
-														? Colors.grey
-														: PosiaColors.cancelar,
-												),
-											)
-											: null,
-										onTap: () async {
-											var seleccion = cliente;
-											if (cliente.creditoHabilitado &&
-												!clienteTieneDatosCredito(cliente)) {
-												if (!dialogContext.mounted) {
-													return;
-												}
-												final actualizado = await mostrarDialogoCompletarDatosCredito(
-													context: dialogContext,
-													cliente: cliente,
-												);
-												if (actualizado == null) {
-													return;
-												}
-												final contenedor =
-													await ref.read(contenedorServiciosProvider.future);
-												await contenedor.servicioAdmin.actualizarCliente(
-													actualizado,
-												);
-												seleccion = actualizado;
-											}
-											await servicio.seleccionarCliente(seleccion);
-											if (dialogContext.mounted) {
-												Navigator.of(dialogContext).pop();
-											}
-											await ref.read(carritoNotifierProvider.notifier).recargar(
-												invalidarCatalogo: true,
-											);
-										},
-									),
-								),
-							],
-						),
-					),
-				);
-			},
 		);
 	}
 }
