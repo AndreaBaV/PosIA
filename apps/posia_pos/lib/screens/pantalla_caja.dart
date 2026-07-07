@@ -44,6 +44,9 @@ class _PantallaCajaState extends ConsumerState<PantallaCaja> {
 	late final FocusNode _busquedaFocus;
 	String? _ultimoCodigoProcesado;
 	DateTime? _ultimoCodigoProcesadoEn;
+	Timer? _timerEscaneoBarras;
+	DateTime? _ultimoCambioBusquedaEn;
+	bool _escaneoRapidoEnCurso = false;
 
 	@override
 	void initState() {
@@ -57,6 +60,7 @@ class _PantallaCajaState extends ConsumerState<PantallaCaja> {
 
 	@override
 	void dispose() {
+		_timerEscaneoBarras?.cancel();
 		_suscripcionEscaner?.cancel();
 		_scanner?.detener();
 		_busquedaController.dispose();
@@ -87,9 +91,55 @@ class _PantallaCajaState extends ConsumerState<PantallaCaja> {
 		await _intentarAgregarCodigo(codigo);
 	}
 
+	void _alCambiarBusqueda(String texto) {
+		ref.read(carritoNotifierProvider.notifier).establecerBusqueda(texto);
+		_programarProcesamientoEscaneo(texto);
+	}
+
+	void _programarProcesamientoEscaneo(String texto) {
+		final ahora = DateTime.now();
+		if (_ultimoCambioBusquedaEn != null &&
+			ahora.difference(_ultimoCambioBusquedaEn!) <
+				const Duration(milliseconds: 80)) {
+			_escaneoRapidoEnCurso = true;
+		}
+		_ultimoCambioBusquedaEn = ahora;
+		_timerEscaneoBarras?.cancel();
+
+		final normalizado = texto.trim();
+		if (normalizado.isEmpty) {
+			_escaneoRapidoEnCurso = false;
+			return;
+		}
+		if (!pareceCodigoBarrasEscaneado(normalizado)) {
+			return;
+		}
+		final longitudTipica = normalizado.length >= 8;
+		if (!_escaneoRapidoEnCurso && !longitudTipica) {
+			return;
+		}
+
+		_timerEscaneoBarras = Timer(const Duration(milliseconds: 120), () {
+			_escaneoRapidoEnCurso = false;
+			if (!mounted) {
+				return;
+			}
+			if (_busquedaController.text.trim() == normalizado) {
+				unawaited(_procesarEntradaBusqueda(normalizado));
+			}
+		});
+	}
+
 	Future<void> _procesarEntradaBusqueda(String texto) async {
 		final agregado = await _intentarAgregarCodigo(texto);
 		if (agregado) {
+			return;
+		}
+		final normalizado = texto.trim();
+		if (pareceCodigoBarrasEscaneado(normalizado)) {
+			_busquedaController.clear();
+			ref.read(carritoNotifierProvider.notifier).limpiarBusqueda();
+			_enfocarBusqueda();
 			return;
 		}
 		final estado = ref.read(carritoNotifierProvider).value;
@@ -170,6 +220,16 @@ class _PantallaCajaState extends ConsumerState<PantallaCaja> {
 		)) {
 			return KeyEventResult.handled;
 		}
+		if (event.logicalKey == LogicalKeyboardKey.enter ||
+			event.logicalKey == LogicalKeyboardKey.numpadEnter) {
+			final texto = _busquedaController.text.trim();
+			if (texto.isNotEmpty) {
+				_timerEscaneoBarras?.cancel();
+				_escaneoRapidoEnCurso = false;
+				unawaited(_procesarEntradaBusqueda(texto));
+				return KeyEventResult.handled;
+			}
+		}
 		if (_busquedaController.text.trim().isNotEmpty) {
 			final productos = ref.read(carritoNotifierProvider).value?.productos ?? [];
 			if (productos.isNotEmpty) {
@@ -196,8 +256,7 @@ class _PantallaCajaState extends ConsumerState<PantallaCaja> {
 				estado: estado,
 				busquedaController: _busquedaController,
 				busquedaFocus: _busquedaFocus,
-				alCambiarBusqueda: (texto) =>
-					ref.read(carritoNotifierProvider.notifier).establecerBusqueda(texto),
+				alCambiarBusqueda: _alCambiarBusqueda,
 				alEnviarBusqueda: _procesarEntradaBusqueda,
 				alEnfocarBusqueda: _enfocarBusqueda,
 			);
@@ -207,8 +266,7 @@ class _PantallaCajaState extends ConsumerState<PantallaCaja> {
 				estado: data,
 				busquedaController: _busquedaController,
 				busquedaFocus: _busquedaFocus,
-				alCambiarBusqueda: (texto) =>
-					ref.read(carritoNotifierProvider.notifier).establecerBusqueda(texto),
+				alCambiarBusqueda: _alCambiarBusqueda,
 				alEnviarBusqueda: _procesarEntradaBusqueda,
 				alEnfocarBusqueda: _enfocarBusqueda,
 			),
@@ -1002,32 +1060,43 @@ Future<void> _mostrarOpcionesPostVenta(
 }) async {
 	await showDialog<void>(
 		context: context,
-		builder: (dialogContext) => AlertDialog(
-			title: const Text('Venta completada'),
-			content: const Text(
-				'¿Desea enviar el ticket digital por WhatsApp?\n'
-				'Se adjuntará una imagen con el logo de la tienda.',
+		builder: (dialogContext) => CallbackShortcuts(
+			bindings: {
+				const SingleActivator(LogicalKeyboardKey.enter): () {
+					Navigator.of(dialogContext).pop();
+				},
+				const SingleActivator(LogicalKeyboardKey.numpadEnter): () {
+					Navigator.of(dialogContext).pop();
+				},
+			},
+			child: AlertDialog(
+				title: const Text('Venta completada'),
+				content: const Text(
+					'¿Desea enviar el ticket digital por WhatsApp?\n'
+					'Se adjuntará una imagen con el logo de la tienda.',
+				),
+				actions: [
+					TextButton.icon(
+						onPressed: () async {
+							await compartirTicketDigitalWhatsApp(
+								context,
+								contenido: ticketDigital,
+								telefono: telefonoCliente,
+							);
+							if (dialogContext.mounted) {
+								Navigator.of(dialogContext).pop();
+							}
+						},
+						icon: const Icon(Icons.chat),
+						label: const Text('WhatsApp'),
+					),
+					FilledButton(
+						autofocus: true,
+						onPressed: () => Navigator.of(dialogContext).pop(),
+						child: const Text('Cerrar'),
+					),
+				],
 			),
-			actions: [
-				TextButton(
-					onPressed: () => Navigator.of(dialogContext).pop(),
-					child: const Text('Cerrar'),
-				),
-				FilledButton.icon(
-					onPressed: () async {
-						await compartirTicketDigitalWhatsApp(
-							context,
-							contenido: ticketDigital,
-							telefono: telefonoCliente,
-						);
-						if (dialogContext.mounted) {
-							Navigator.of(dialogContext).pop();
-						}
-					},
-					icon: const Icon(Icons.chat),
-					label: const Text('WhatsApp'),
-				),
-			],
 		),
 	);
 }
@@ -1039,31 +1108,42 @@ Future<void> _mostrarOpcionesPostCredito(
 }) async {
 	await showDialog<void>(
 		context: context,
-		builder: (dialogContext) => AlertDialog(
-			title: const Text('Crédito registrado'),
-			content: const Text(
-				'¿Desea enviar el pagaré digital por WhatsApp al cliente?',
+		builder: (dialogContext) => CallbackShortcuts(
+			bindings: {
+				const SingleActivator(LogicalKeyboardKey.enter): () {
+					Navigator.of(dialogContext).pop();
+				},
+				const SingleActivator(LogicalKeyboardKey.numpadEnter): () {
+					Navigator.of(dialogContext).pop();
+				},
+			},
+			child: AlertDialog(
+				title: const Text('Crédito registrado'),
+				content: const Text(
+					'¿Desea enviar el pagaré digital por WhatsApp al cliente?',
+				),
+				actions: [
+					TextButton.icon(
+						onPressed: () async {
+							await compartirTicketDigitalWhatsApp(
+								context,
+								contenido: pagareDigital,
+								telefono: telefonoCliente,
+							);
+							if (dialogContext.mounted) {
+								Navigator.of(dialogContext).pop();
+							}
+						},
+						icon: const Icon(Icons.chat),
+						label: const Text('WhatsApp'),
+					),
+					FilledButton(
+						autofocus: true,
+						onPressed: () => Navigator.of(dialogContext).pop(),
+						child: const Text('Cerrar'),
+					),
+				],
 			),
-			actions: [
-				TextButton(
-					onPressed: () => Navigator.of(dialogContext).pop(),
-					child: const Text('Cerrar'),
-				),
-				FilledButton.icon(
-					onPressed: () async {
-						await compartirTicketDigitalWhatsApp(
-							context,
-							contenido: pagareDigital,
-							telefono: telefonoCliente,
-						);
-						if (dialogContext.mounted) {
-							Navigator.of(dialogContext).pop();
-						}
-					},
-					icon: const Icon(Icons.chat),
-					label: const Text('WhatsApp'),
-				),
-			],
 		),
 	);
 }

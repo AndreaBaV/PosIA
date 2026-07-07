@@ -48,6 +48,18 @@ int puntajeBusquedaProducto(Producto producto, String consulta) {
 	return acumulado;
 }
 
+/// Indica si el texto parece un codigo escaneado (no una busqueda por nombre).
+bool pareceCodigoBarrasEscaneado(String texto) {
+	final t = texto.trim();
+	if (t.length < 4) {
+		return false;
+	}
+	if (RegExp(r'^\d{4,}$').hasMatch(t)) {
+		return true;
+	}
+	return RegExp(r'^[A-Za-z0-9\-]*\d[A-Za-z0-9\-]{3,}$').hasMatch(t);
+}
+
 /// Filtra y ordena productos por relevancia de busqueda.
 List<Producto> filtrarProductosPorBusqueda(
 	List<Producto> productos,

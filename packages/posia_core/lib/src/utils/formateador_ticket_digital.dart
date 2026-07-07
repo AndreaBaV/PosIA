@@ -116,10 +116,7 @@ TicketDigitalContenido construirTicketDigitalVenta({
     }
   }
 
-  final notasPie = <String>[
-    'Gracias por su compra',
-    '$NOMBRE_COMERCIAL_APP · ${nombreTienda.trim()}',
-  ];
+  final notasPie = <String>['Gracias por su compra - 722 652 7751'];
 
   return TicketDigitalContenido(
     tipo: TipoDocumentoTicketDigital.venta,
@@ -542,9 +539,7 @@ TicketDigitalContenido construirTicketDigitalPedido({
         .toList(),
     total: pedido.total,
     campos: campos,
-    notasPie: [
-      '$NOMBRE_COMERCIAL_APP · ${nombreTienda.trim()}',
-    ],
+    notasPie: ['$NOMBRE_COMERCIAL_APP · ${nombreTienda.trim()}'],
   );
 }
 

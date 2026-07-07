@@ -47,10 +47,6 @@ class _CampoBusquedaCajaState extends State<CampoBusquedaCaja> {
 		setState(() {});
 	}
 
-	void _ocultarTeclado() {
-		widget.focusNode.unfocus();
-	}
-
 	@override
 	Widget build(BuildContext context) {
 		return Padding(
@@ -104,10 +100,7 @@ class _CampoBusquedaCajaState extends State<CampoBusquedaCaja> {
 					contentPadding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 14.0),
 				),
 				onChanged: widget.alCambiar,
-				onSubmitted: (texto) {
-					_ocultarTeclado();
-					widget.alEnviar(texto);
-				},
+				onSubmitted: widget.alEnviar,
 			),
 		);
 	}

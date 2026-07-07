@@ -40,4 +40,11 @@ void main() {
 		final productos = [_producto('1', 'A')];
 		expect(filtrarProductosPorBusqueda(productos, ''), productos);
 	});
+
+	test('pareceCodigoBarrasEscaneado detecta EAN y rechaza nombres', () {
+		expect(pareceCodigoBarrasEscaneado('7501234567890'), isTrue);
+		expect(pareceCodigoBarrasEscaneado('ABC-1234'), isTrue);
+		expect(pareceCodigoBarrasEscaneado('arroz'), isFalse);
+		expect(pareceCodigoBarrasEscaneado('123'), isFalse);
+	});
 }
