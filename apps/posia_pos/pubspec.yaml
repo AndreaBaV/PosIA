@@ -1,7 +1,7 @@
 name: posia_pos
 description: Aplicacion de caja POSIA para Windows, iOS y Android.
 publish_to: none
-version: 1.1.2+42
+version: 1.1.2+43
 
 environment:
   sdk: ^3.11.0
@@ -11,6 +11,7 @@ dependencies:
   # 7.1.x usa NWPath.isUltraConstrained (SDK iOS reciente); rompe archive en CI.
   connectivity_plus: ">=7.0.0 <7.1.0"
   flutter:
+  
     sdk: flutter
   flutter_riverpod: ^3.0.3
   path_provider: ^2.1.5
