@@ -33,7 +33,7 @@ TicketDigitalContenido _contenidoPrueba({required int cantidadLineas}) {
 bool _contieneTextoPie(Uint8List pngBytes, String texto) {
   final ticket = img.decodePng(pngBytes);
   expect(ticket, isNotNull);
-  final objetivo = texto.toUpperCase();
+  expect(texto, isNotEmpty);
   final filas = ticket!.height;
   final columnas = ticket.width;
 
