@@ -56,6 +56,7 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 	String _transcripcionVoz = '';
 	bool _finalizandoVoz = false;
 	List<Producto>? _catalogoVozCache;
+	Map<String, String>? _nombresCategoriaVozCache;
 
 	@override
 	void dispose() {
@@ -733,6 +734,17 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 		return expandido;
 	}
 
+	Future<Map<String, String>> _mapaNombresCategoria(ServicioCaja servicio) async {
+		if (_nombresCategoriaVozCache != null) {
+			return _nombresCategoriaVozCache!;
+		}
+		final categorias = await servicio.listarCategorias();
+		_nombresCategoriaVozCache = {
+			for (final categoria in categorias) categoria.id: categoria.nombre,
+		};
+		return _nombresCategoriaVozCache!;
+	}
+
 	Future<String> _agregarLineaVoz(ServicioCaja servicio, LineaVozResuelta linea) async {
 		if (linea.usarPeso) {
 			return servicio.agregarProductoConPeso(linea.producto, linea.cantidad);
@@ -772,11 +784,13 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 		try {
 			final servicio = await ref.read(servicioCajaProvider.future);
 			final catalogo = await _expandirCatalogo(servicio);
+			final nombresCategoria = await _mapaNombresCategoria(servicio);
 			final clientes = await servicio.listarClientes();
 			final resultado = _motorVoz.procesar(
 				texto: limpio,
 				catalogo: catalogo,
 				clientes: clientes,
+				nombresCategoria: nombresCategoria,
 			);
 			final mensajes = <String>[];
 

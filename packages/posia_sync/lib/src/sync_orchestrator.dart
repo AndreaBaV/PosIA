@@ -103,20 +103,16 @@ class SyncOrchestrator {
         await almacenCursor.guardarCursorHub(0);
       }
     }
+    // No abortar el ciclo si /health falla: tras offline el hub puede despertar
+    // lento, pero POST/GET /v1/events aún pueden funcionar. Un return temprano
+    // dejaba la cola local sin enviar mientras el pull de otra caja sí llegaba.
     final hubOk = await clienteHub.verificarSalud();
-    if (!hubOk) {
-      return const ResultadoSync(
-        eventosEnviados: 0,
-        eventosRecibidos: 0,
-        hubDisponible: false,
-      );
-    }
     final enviados = await sincronizarPendientes();
     final recibidos = await _ejecutarPull(clienteHub);
     return ResultadoSync(
       eventosEnviados: enviados,
       eventosRecibidos: recibidos,
-      hubDisponible: true,
+      hubDisponible: hubOk || enviados > 0 || recibidos > 0,
     );
   }
 
@@ -168,9 +164,21 @@ class SyncOrchestrator {
     }
     final clienteHub = _clienteHub;
     if (clienteHub != null) {
+      // El hub exige storeId/deviceId no vacíos. Preferir los del evento (que
+      // se fijaron al guardar localmente) por si el orquestador se construyó
+      // antes de seleccionar tienda o con identidad incompleta.
+      final tiendaId = evento.tiendaId.trim().isNotEmpty
+          ? evento.tiendaId
+          : _tiendaId;
+      final dispositivoId = evento.dispositivoId.trim().isNotEmpty
+          ? evento.dispositivoId
+          : _dispositivoId;
+      if (tiendaId.trim().isEmpty || dispositivoId.trim().isEmpty) {
+        return false;
+      }
       exitoHub = await clienteHub.enviarEventos(
-        dispositivoId: _dispositivoId,
-        tiendaId: _tiendaId,
+        dispositivoId: dispositivoId,
+        tiendaId: tiendaId,
         eventos: [evento],
       );
     }

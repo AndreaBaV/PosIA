@@ -686,9 +686,37 @@ class ServicioAdmin {
 
   /// Ejecuta ciclo completo de sincronizacion con el hub.
   ///
+  /// Si la cola esta vacia, reencola el catalogo local (categorias y productos)
+  /// para recuperar altas hechas offline que nunca quedaron pendientes.
   /// Retorna resultado con eventos enviados y recibidos.
   Future<ResultadoSync> sincronizarManual() async {
+    final pendientes = await _syncEventRepository.obtenerPendientes();
+    if (pendientes.isEmpty) {
+      await _reencolarCatalogoLocalPendiente();
+    }
     return _syncOrchestrator.sincronizarCompleto();
+  }
+
+  /// Encola de nuevo categorias y productos locales para subirlos al hub.
+  ///
+  /// Solo se invoca cuando no hay pendientes/errores: evita duplicar envios en
+  /// cada sync manual y repara el caso "catalogo local sin cola".
+  Future<int> _reencolarCatalogoLocalPendiente() async {
+    if (_tiendaActivaId.trim().isEmpty || _cajaId.trim().isEmpty) {
+      return 0;
+    }
+    var encolados = 0;
+    final categorias = await listarCategorias();
+    for (final categoria in categorias) {
+      await _registrarEventoCategoria(categoria);
+      encolados = encolados + 1;
+    }
+    final productos = await listarProductosCatalogo();
+    for (final producto in productos) {
+      await _registrarEventoProducto(producto);
+      encolados = encolados + 1;
+    }
+    return encolados;
   }
 
   /// Limpia placeholders, compara con la nube y descarga datos si hace falta.

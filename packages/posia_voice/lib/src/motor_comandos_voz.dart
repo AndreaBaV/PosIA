@@ -25,10 +25,14 @@ class MotorComandosVoz {
 	final ResolvedorProductoVoz _resolvedorProducto;
 
 	/// Procesa texto hablado contra catalogo activo.
+	///
+	/// [nombresCategoria] mapa `categoriaId` → nombre para resolucion por
+	/// categoria hablada (ej. "bebidas alpura").
 	ResultadoComandoVoz procesar({
 		required String texto,
 		required List<Producto> catalogo,
 		List<Cliente> clientes = const [],
+		Map<String, String> nombresCategoria = const {},
 	}) {
 		final interpretacion = _interpretador.interpretar(texto);
 		if (interpretacion.intencion != IntencionComandoVoz.agregarProductos) {
@@ -59,6 +63,7 @@ class MotorComandosVoz {
 			final resolucion = _resolvedorProducto.resolver(
 				consulta: linea.nombreProducto,
 				catalogo: catalogo,
+				nombresCategoria: nombresCategoria,
 			);
 			switch (resolucion.estado) {
 				case EstadoResolucionProductoVoz.unico:

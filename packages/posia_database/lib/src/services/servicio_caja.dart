@@ -857,6 +857,29 @@ class ServicioCaja {
         if (lineaActual.factorABase == factorABase &&
             lineaActual.productoStockId == productoStockId) {
           final cantidadNueva = lineaActual.cantidad + cantidad;
+          final vendePorPeso = producto.requierePeso() ||
+              producto.moduloVertical == ModuloVertical.carniceria;
+          if (vendePorPeso) {
+            // Conserva el total de cada pesaje: no reaplicar tramo del kilo
+            // cuando dos fracciones suman >= 1 kg.
+            final totalPrevio = redondearMonto(
+              lineaActual.cantidad * lineaActual.precioUnitario,
+            );
+            final totalAgregar = redondearMonto(
+              cantidad * resultado.precioUnitario,
+            );
+            final precioPromedio = cantidadNueva > 0.0
+                ? redondearMonto((totalPrevio + totalAgregar) / cantidadNueva)
+                : resultado.precioUnitario;
+            _lineasCarrito[indiceExistente] = lineaActual.copiarCon(
+              cantidad: cantidadNueva,
+              precioUnitario: precioPromedio,
+              reglaPrecio: resultado.reglaAplicada,
+              etiquetaLote: _etiquetaLoteFusionada(producto, cantidadNueva) ??
+                  lineaActual.etiquetaLote,
+            );
+            return;
+          }
           final contextoActualizado = ContextoPrecio(
             producto: producto,
             cantidad: cantidadNueva,

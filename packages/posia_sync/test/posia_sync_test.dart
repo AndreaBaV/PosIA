@@ -6,6 +6,10 @@
 /// Ultima modificacion: 2026-06-11 16:10:00 (UTC-6)
 library;
 
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:posia_core/posia_core.dart';
 import 'package:posia_sync/posia_sync.dart';
 import 'package:test/test.dart';
@@ -128,5 +132,87 @@ void main() {
 		final pendientes = await cola.obtenerPendientes();
 		expect(pendientes.length, 1);
 		expect(pendientes.first.id, 'ev-1');
+	});
+
+	test('sincronizarCompleto empuja pendientes aunque /health falle', () async {
+		final cola = ColaEventosMemoria();
+		await cola.encolar(crearEvento('ev-offline'));
+		final cliente = HubSyncClient(
+			urlBase: 'https://hub.test',
+			clienteHttp: MockClient((request) async {
+				if (request.url.path.endsWith('/v1/health')) {
+					return http.Response('down', 503);
+				}
+				if (request.method == 'POST' && request.url.path.endsWith('/v1/events')) {
+					return http.Response(
+						'{"accepted":1,"received":1}',
+						200,
+						headers: {'Content-Type': 'application/json'},
+					);
+				}
+				if (request.method == 'GET' && request.url.path.endsWith('/v1/events')) {
+					return http.Response(
+						'{"events":[],"lastSeq":0}',
+						200,
+						headers: {'Content-Type': 'application/json'},
+					);
+				}
+				return http.Response('not found', 404);
+			}),
+		);
+		final orquestador = SyncOrchestrator(
+			colaLocal: cola,
+			clienteHub: cliente,
+			clienteLan: null,
+			aplicadorRemoto: AplicadorMemoria(),
+			almacenCursor: CursorMemoria(),
+			tiendaId: 'tienda-1',
+			dispositivoId: 'caja-1',
+		);
+		final resultado = await orquestador.sincronizarCompleto();
+		expect(resultado.eventosEnviados, 1);
+		expect(resultado.hubDisponible, isTrue);
+		expect(await cola.obtenerPendientes(), isEmpty);
+	});
+
+	test('push usa storeId del evento si el orquestador tiene tienda vacia', () async {
+		final cola = ColaEventosMemoria();
+		await cola.encolar(crearEvento('ev-tienda'));
+		String? storeIdEnviado;
+		final cliente = HubSyncClient(
+			urlBase: 'https://hub.test',
+			clienteHttp: MockClient((request) async {
+				if (request.url.path.endsWith('/v1/health')) {
+					return http.Response('{"ok":true}', 200);
+				}
+				if (request.method == 'POST') {
+					final cuerpo =
+						jsonDecode(request.body) as Map<String, Object?>;
+					storeIdEnviado = cuerpo['storeId'] as String?;
+					return http.Response(
+						'{"accepted":1,"received":1}',
+						200,
+						headers: {'Content-Type': 'application/json'},
+					);
+				}
+				return http.Response(
+					'{"events":[],"lastSeq":0}',
+					200,
+					headers: {'Content-Type': 'application/json'},
+				);
+			}),
+		);
+		final orquestador = SyncOrchestrator(
+			colaLocal: cola,
+			clienteHub: cliente,
+			clienteLan: null,
+			aplicadorRemoto: AplicadorMemoria(),
+			almacenCursor: CursorMemoria(),
+			tiendaId: '',
+			dispositivoId: 'caja-1',
+		);
+		final resultado = await orquestador.sincronizarCompleto();
+		expect(resultado.eventosEnviados, 1);
+		expect(storeIdEnviado, 'tienda-1');
 	});
 }

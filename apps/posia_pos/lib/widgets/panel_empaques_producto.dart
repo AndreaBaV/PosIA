@@ -332,6 +332,38 @@ class _PanelEmpaquesProductoState extends ConsumerState<PanelEmpaquesProducto> {
 			tipoInicial ??
 			_tipos.firstOrNull?.id;
 
+		// Solo auto-actualizar precio mientras coincida con el sugerido anterior;
+		// si el usuario lo edita a mano, ya no se sobrescribe.
+		String? ultimoPrecioSugerido;
+		final factorInicialParseado =
+			parsearPrecioTexto(factorController.text) ?? 0.0;
+		if (factorInicialParseado > 0) {
+			final sugeridoInicial = _precioSugerido(factorInicialParseado);
+			if (sugeridoInicial != null &&
+				precioController.text.trim() == sugeridoInicial.toStringAsFixed(2)) {
+				ultimoPrecioSugerido = sugeridoInicial.toStringAsFixed(2);
+			}
+		}
+
+		void sincronizarPrecioSugerido() {
+			final f = parsearPrecioTexto(factorController.text) ?? 0.0;
+			if (f <= 0) {
+				return;
+			}
+			final sugerido = _precioSugerido(f);
+			if (sugerido == null) {
+				return;
+			}
+			final textoSugerido = sugerido.toStringAsFixed(2);
+			final precioActual = precioController.text.trim();
+			final esSugeridoPrevio = ultimoPrecioSugerido != null &&
+				precioActual == ultimoPrecioSugerido;
+			if (precioActual.isEmpty || esSugeridoPrevio) {
+				precioController.text = textoSugerido;
+				ultimoPrecioSugerido = textoSugerido;
+			}
+		}
+
 		final guardado = await showDialog<bool>(
 			context: context,
 			builder: (ctx) => StatefulBuilder(
@@ -370,15 +402,7 @@ class _PanelEmpaquesProductoState extends ConsumerState<PanelEmpaquesProducto> {
 												: 'Ej. 12 = caja de 12 piezas',
 										),
 										onChanged: (_) {
-											final f =
-												parsearPrecioTexto(factorController.text) ?? 0.0;
-											if (f > 0 && precioController.text.trim().isEmpty) {
-												final sugerido = _precioSugerido(f);
-												if (sugerido != null) {
-													precioController.text =
-														sugerido.toStringAsFixed(2);
-												}
-											}
+											sincronizarPrecioSugerido();
 											setLocal(() {});
 										},
 									),

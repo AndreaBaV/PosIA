@@ -146,6 +146,113 @@ void main() {
 		});
 	});
 
+	group('precios de corte por peso', () {
+		test('construye escalas desde kilo, medio y cuarto', () {
+			final escalas = construirEscalasDesdePreciosCorte(
+				precioKilo: 30.0,
+				precioMedio: 20.0,
+				precioCuarto: 22.0,
+			);
+			expect(escalas, hasLength(3));
+			expect(
+				resolverPrecioConEscalas(
+					precioBase: 30.0,
+					cantidad: 0.25,
+					escalas: escalas,
+				),
+				88.0,
+			);
+			expect(
+				redondearMonto(
+					resolverPrecioConEscalas(
+						precioBase: 30.0,
+						cantidad: 0.25,
+						escalas: escalas,
+					) *
+						0.25,
+				),
+				22.0,
+			);
+			expect(
+				redondearMonto(
+					resolverPrecioConEscalas(
+						precioBase: 30.0,
+						cantidad: 0.5,
+						escalas: escalas,
+					) *
+						0.5,
+				),
+				20.0,
+			);
+			expect(
+				resolverPrecioConEscalas(
+					precioBase: 30.0,
+					cantidad: 1.0,
+					escalas: escalas,
+				),
+				30.0,
+			);
+		});
+
+		test('solo medio kilo aplica el mismo rate a cualquier fraccion', () {
+			final escalas = construirEscalasDesdePreciosCorte(
+				precioKilo: 30.0,
+				precioMedio: 20.0,
+			);
+			expect(
+				redondearMonto(
+					resolverPrecioConEscalas(
+						precioBase: 30.0,
+						cantidad: 0.25,
+						escalas: escalas,
+					) *
+						0.25,
+				),
+				10.0,
+			);
+			expect(
+				redondearMonto(
+					resolverPrecioConEscalas(
+						precioBase: 30.0,
+						cantidad: 0.5,
+						escalas: escalas,
+					) *
+						0.5,
+				),
+				20.0,
+			);
+		});
+
+		test('extrae precios de corte desde escalas almacenadas', () {
+			final escalas = construirEscalasDesdePreciosCorte(
+				precioKilo: 30.0,
+				precioMedio: 20.0,
+				precioCuarto: 22.0,
+			);
+			final cortes = extraerPreciosCorteDesdeEscalas(
+				escalas: escalas,
+				precioBase: 30.0,
+			);
+			expect(cortes.precioKilo, 30.0);
+			expect(cortes.precioMedio, 20.0);
+			expect(cortes.precioCuarto, 22.0);
+		});
+
+		test('extrae solo medio cuando no hay tramo de cuarto', () {
+			final escalas = construirEscalasDesdePreciosCorte(
+				precioKilo: 30.0,
+				precioMedio: 20.0,
+			);
+			final cortes = extraerPreciosCorteDesdeEscalas(
+				escalas: escalas,
+				precioBase: 30.0,
+			);
+			expect(cortes.precioKilo, 30.0);
+			expect(cortes.precioMedio, 20.0);
+			expect(cortes.precioCuarto, isNull);
+		});
+	});
+
 	test('errorPrecioVentaDesdeTexto interpreta coma decimal', () {
 		expect(
 			errorPrecioVentaDesdeTexto('101,00', costoUnitario: 100.0),

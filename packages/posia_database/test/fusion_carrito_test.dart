@@ -95,5 +95,41 @@ void main() {
 			expect(lineaLeche.cantidad, 12.0);
 			await fixture.cerrar();
 		});
+
+		test('dos medios kilos con sobrecargo conservan total de cada pesaje', () async {
+			final fixture = await FixtureAdmin.abrir();
+			final servicioAdmin = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
+			final escalas = construirEscalasDesdePreciosCorte(
+				precioKilo: 30.0,
+				precioMedio: 20.0,
+				precioCuarto: 22.0,
+			)
+				.map(
+					(e) => EscalaMayoreo(
+						productoId: '',
+						cantidadMinima: e.cantidadMinima,
+						precioUnitario: e.precioUnitario,
+					),
+				)
+				.toList();
+			final producto = await servicioAdmin.registrarProductoCompleto(
+				AltaProductoRequest(
+					nombre: 'Arroz a granel',
+					codigoBarras: '88004',
+					precioBase: 30.0,
+					categoriaId: fixture.categoriaId,
+					unidadMedida: UnidadMedida.kilogramo,
+					stockInicial: 100.0,
+					escalasMayoreo: escalas,
+				),
+			);
+			final servicio = await _crearServicioCaja(fixture);
+			expect(await servicio.agregarProductoConPeso(producto, 0.5), isEmpty);
+			expect(await servicio.agregarProductoConPeso(producto, 0.5), isEmpty);
+			final linea = servicio.obtenerCarrito().single;
+			expect(linea.cantidad, closeTo(1.0, 0.001));
+			expect(redondearMonto(linea.cantidad * linea.precioUnitario), 40.0);
+			await fixture.cerrar();
+		});
 	});
 }

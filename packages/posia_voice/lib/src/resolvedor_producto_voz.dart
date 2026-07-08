@@ -45,6 +45,9 @@ class ResolucionProductoVoz {
 }
 
 /// Empareja texto hablado con productos evitando falsos positivos genericos.
+///
+/// Acepta consultas que mezclan nombre y categoria
+/// (ej. "bebidas alpura" o "leche de lacteos").
 class ResolvedorProductoVoz {
 	const ResolvedorProductoVoz({
 		this.maxCandidatosAmbiguos = 12,
@@ -54,9 +57,14 @@ class ResolvedorProductoVoz {
 	final int maxCandidatosAmbiguos;
 	final int minimaVentajaPuntaje;
 
+	/// Resuelve [consulta] contra [catalogo].
+	///
+	/// [nombresCategoria] mapa `categoriaId` → nombre visible para
+	/// permitir coincidencias habladas por categoria.
 	ResolucionProductoVoz resolver({
 		required String consulta,
 		required List<Producto> catalogo,
+		Map<String, String> nombresCategoria = const {},
 	}) {
 		final tokens = _tokens(consulta);
 		if (tokens.isEmpty) {
@@ -68,7 +76,8 @@ class ResolvedorProductoVoz {
 
 		final candidatos = <CandidatoProductoVoz>[];
 		for (final producto in catalogo) {
-			final puntaje = _puntaje(tokens, producto.nombre);
+			final nombreCategoria = _nombreCategoriaDe(producto, nombresCategoria);
+			final puntaje = _puntaje(tokens, producto.nombre, nombreCategoria);
 			if (puntaje > 0) {
 				candidatos.add(CandidatoProductoVoz(producto: producto, puntaje: puntaje));
 			}
@@ -115,7 +124,11 @@ class ResolvedorProductoVoz {
 		if (candidatos.length > 1) {
 			final segundo = candidatos[1];
 			final ventaja = mejor.puntaje - segundo.puntaje;
-			final cubreTodosLosTokens = _cubreTodosLosTokens(tokens, mejor.producto.nombre);
+			final cubreTodosLosTokens = _cubreTodosLosTokens(
+				tokens,
+				mejor.producto.nombre,
+				_nombreCategoriaDe(mejor.producto, nombresCategoria),
+			);
 			if (ventaja < minimaVentajaPuntaje && !cubreTodosLosTokens) {
 				return ResolucionProductoVoz(
 					estado: EstadoResolucionProductoVoz.ambiguo,
@@ -125,7 +138,11 @@ class ResolvedorProductoVoz {
 			}
 		}
 
-		if (!_cubreTodosLosTokens(tokens, mejor.producto.nombre) &&
+		if (!_cubreTodosLosTokens(
+				tokens,
+				mejor.producto.nombre,
+				_nombreCategoriaDe(mejor.producto, nombresCategoria),
+			) &&
 			candidatos.length > 1) {
 			return ResolucionProductoVoz(
 				estado: EstadoResolucionProductoVoz.ambiguo,
@@ -142,10 +159,28 @@ class ResolvedorProductoVoz {
 		);
 	}
 
-	bool _cubreTodosLosTokens(List<String> tokens, String nombreProducto) {
-		final nombre = _tokens(nombreProducto);
+	String? _nombreCategoriaDe(
+		Producto producto,
+		Map<String, String> nombresCategoria,
+	) {
+		final id = producto.categoriaId;
+		if (id == null || id.isEmpty) {
+			return null;
+		}
+		return nombresCategoria[id];
+	}
+
+	bool _cubreTodosLosTokens(
+		List<String> tokens,
+		String nombreProducto,
+		String? nombreCategoria,
+	) {
+		final vocabulario = <String>[
+			..._tokens(nombreProducto),
+			if (nombreCategoria != null) ..._tokens(nombreCategoria),
+		];
 		for (final token in tokens) {
-			final coincide = nombre.any(
+			final coincide = vocabulario.any(
 				(n) => n == token || n.contains(token) || token.contains(n),
 			);
 			if (!coincide) {
@@ -155,21 +190,43 @@ class ResolvedorProductoVoz {
 		return true;
 	}
 
-	int _puntaje(List<String> tokens, String nombreProducto) {
+	int _puntaje(
+		List<String> tokens,
+		String nombreProducto,
+		String? nombreCategoria,
+	) {
 		final nombre = _tokens(nombreProducto);
+		final categoria = nombreCategoria != null
+			? _tokens(nombreCategoria)
+			: const <String>[];
 		var puntaje = 0;
 		for (final token in tokens) {
 			if (token.length < 3) {
 				continue;
 			}
-			for (final palabra in nombre) {
-				if (palabra == token) {
-					puntaje += 12;
-				} else if (palabra.startsWith(token) || token.startsWith(palabra)) {
-					puntaje += 8;
-				} else if (palabra.contains(token) || token.contains(palabra)) {
-					puntaje += 4;
-				}
+			puntaje += _puntajeTokenEnPalabras(token, nombre, pesoExacto: 12, pesoPrefijo: 8, pesoParcial: 4);
+			// Categoria aporta un poco menos para que el nombre del producto
+			// gane cuando ambos coinciden con el mismo token.
+			puntaje += _puntajeTokenEnPalabras(token, categoria, pesoExacto: 10, pesoPrefijo: 6, pesoParcial: 3);
+		}
+		return puntaje;
+	}
+
+	int _puntajeTokenEnPalabras(
+		String token,
+		List<String> palabras, {
+		required int pesoExacto,
+		required int pesoPrefijo,
+		required int pesoParcial,
+	}) {
+		var puntaje = 0;
+		for (final palabra in palabras) {
+			if (palabra == token) {
+				puntaje += pesoExacto;
+			} else if (palabra.startsWith(token) || token.startsWith(palabra)) {
+				puntaje += pesoPrefijo;
+			} else if (palabra.contains(token) || token.contains(palabra)) {
+				puntaje += pesoParcial;
 			}
 		}
 		return puntaje;
@@ -201,5 +258,7 @@ class ResolvedorProductoVoz {
 		'pzas',
 		'pieza',
 		'piezas',
+		'categoria',
+		'seccion',
 	};
 }

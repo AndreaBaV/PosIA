@@ -235,6 +235,185 @@ double resolverPrecioConEscalas({
 	return redondearMonto(precioBase);
 }
 
+/// Peso de un cuarto de kilo.
+const double pesoCuartoKilo = 0.25;
+
+/// Peso de medio kilo.
+const double pesoMedioKilo = 0.5;
+
+/// Peso de un kilo completo.
+const double pesoKiloCompleto = 1.0;
+
+/// Convierte el precio que paga el cliente por un corte a precio por kg.
+double precioPorKgDesdePrecioCorte({
+	required double precioCorte,
+	required double pesoKg,
+}) {
+	if (pesoKg <= 0.0) {
+		return 0.0;
+	}
+	return redondearMonto(precioCorte / pesoKg);
+}
+
+/// Precio que paga el cliente por un corte a partir del precio por kg.
+double precioCorteDesdePrecioPorKg({
+	required double precioPorKg,
+	required double pesoKg,
+}) {
+	if (pesoKg <= 0.0) {
+		return 0.0;
+	}
+	return redondearMonto(precioPorKg * pesoKg);
+}
+
+/// Construye escalas internas ($/kg) a partir de precios de corte del negocio.
+///
+/// [precioKilo] Es lo que se cobra por 1 kg completo.
+/// [precioMedio] Opcional: lo que paga el cliente por medio kilo (ej. $20).
+/// [precioCuarto] Opcional: lo que paga el cliente por un cuarto (ej. $22).
+List<EscalaMayoreoRef> construirEscalasDesdePreciosCorte({
+	required double precioKilo,
+	double? precioMedio,
+	double? precioCuarto,
+}) {
+	final escalas = <EscalaMayoreoRef>[];
+	final medio = precioMedio != null && precioMedio > 0.0 ? precioMedio : null;
+	final cuarto = precioCuarto != null && precioCuarto > 0.0 ? precioCuarto : null;
+
+	if (cuarto != null && medio != null) {
+		escalas.add((
+			cantidadMinima: 0.0,
+			precioUnitario: precioPorKgDesdePrecioCorte(
+				precioCorte: cuarto,
+				pesoKg: pesoCuartoKilo,
+			),
+		));
+		escalas.add((
+			cantidadMinima: pesoMedioKilo,
+			precioUnitario: precioPorKgDesdePrecioCorte(
+				precioCorte: medio,
+				pesoKg: pesoMedioKilo,
+			),
+		));
+	} else if (cuarto != null) {
+		escalas.add((
+			cantidadMinima: 0.0,
+			precioUnitario: precioPorKgDesdePrecioCorte(
+				precioCorte: cuarto,
+				pesoKg: pesoCuartoKilo,
+			),
+		));
+	} else if (medio != null) {
+		escalas.add((
+			cantidadMinima: 0.0,
+			precioUnitario: precioPorKgDesdePrecioCorte(
+				precioCorte: medio,
+				pesoKg: pesoMedioKilo,
+			),
+		));
+	}
+
+	if (precioKilo > 0.0) {
+		escalas.add((
+			cantidadMinima: pesoKiloCompleto,
+			precioUnitario: redondearMonto(precioKilo),
+		));
+	}
+	return escalas;
+}
+
+/// Precios de corte legibles a partir de escalas almacenadas ($/kg).
+({double? precioKilo, double? precioMedio, double? precioCuarto})
+	extraerPreciosCorteDesdeEscalas({
+	required Iterable<EscalaMayoreoRef> escalas,
+	required double precioBase,
+}) {
+	final lista = escalas.toList()
+		..sort((a, b) => a.cantidadMinima.compareTo(b.cantidadMinima));
+	final precioPorKgKilo = resolverPrecioConEscalas(
+		precioBase: precioBase,
+		cantidad: pesoKiloCompleto,
+		escalas: lista,
+	);
+	final precioKilo = precioPorKgKilo > 0.0 ? precioPorKgKilo : null;
+
+	final tramosFraccion =
+		lista.where((e) => e.cantidadMinima < pesoKiloCompleto).toList();
+	if (tramosFraccion.isEmpty) {
+		return (precioKilo: precioKilo ?? precioBase, precioMedio: null, precioCuarto: null);
+	}
+
+	final tramoDesdeCero = tramosFraccion.cast<EscalaMayoreoRef?>().firstWhere(
+		(e) => e!.cantidadMinima <= 0.001,
+		orElse: () => null,
+	);
+	final tramoDesdeMedio = tramosFraccion.cast<EscalaMayoreoRef?>().firstWhere(
+		(e) => (e!.cantidadMinima - pesoMedioKilo).abs() < 0.001,
+		orElse: () => null,
+	);
+
+	double? precioMedio;
+	double? precioCuarto;
+
+	if (tramoDesdeCero != null && tramoDesdeMedio != null) {
+		precioCuarto = precioCorteDesdePrecioPorKg(
+			precioPorKg: tramoDesdeCero.precioUnitario,
+			pesoKg: pesoCuartoKilo,
+		);
+		precioMedio = precioCorteDesdePrecioPorKg(
+			precioPorKg: tramoDesdeMedio.precioUnitario,
+			pesoKg: pesoMedioKilo,
+		);
+	} else if (tramoDesdeCero != null) {
+		// Un solo tramo de fraccion: se interpreta como precio del medio kilo.
+		precioMedio = precioCorteDesdePrecioPorKg(
+			precioPorKg: tramoDesdeCero.precioUnitario,
+			pesoKg: pesoMedioKilo,
+		);
+	} else if (tramoDesdeMedio != null) {
+		precioMedio = precioCorteDesdePrecioPorKg(
+			precioPorKg: tramoDesdeMedio.precioUnitario,
+			pesoKg: pesoMedioKilo,
+		);
+	}
+
+	return (
+		precioKilo: precioKilo ?? precioBase,
+		precioMedio: (precioMedio != null && precioMedio > 0.0) ? precioMedio : null,
+		precioCuarto:
+			(precioCuarto != null && precioCuarto > 0.0) ? precioCuarto : null,
+	);
+}
+
+/// Texto de vista previa de cobros por peso habituales.
+String describirVistaPreviaPreciosPeso({
+	required double precioKilo,
+	double? precioMedio,
+	double? precioCuarto,
+}) {
+	final escalas = construirEscalasDesdePreciosCorte(
+		precioKilo: precioKilo,
+		precioMedio: precioMedio,
+		precioCuarto: precioCuarto,
+	);
+	String linea(double peso) {
+		final porKg = resolverPrecioConEscalas(
+			precioBase: precioKilo,
+			cantidad: peso,
+			escalas: escalas,
+		);
+		final total = redondearMonto(porKg * peso);
+		return '${_formatearCantidadTramo(peso)} kg → ${formatearMoneda(total)} '
+			'(${formatearMoneda(porKg)}/kg)';
+	}
+
+	return [
+		if (precioCuarto != null && precioCuarto > 0.0) linea(pesoCuartoKilo),
+		if (precioMedio != null && precioMedio > 0.0) linea(pesoMedioKilo),
+		if (precioKilo > 0.0) linea(pesoKiloCompleto),
+	].join('\n');
+}
+
 /// Etiqueta legible de un tramo de precio por peso o cantidad.
 String describirTramoPrecio({
 	required double cantidadMinima,
@@ -244,6 +423,18 @@ String describirTramoPrecio({
 	final precio = formatearMoneda(precioUnitario);
 	if (unidadMedida == UnidadMedida.kilogramo) {
 		final desde = _formatearCantidadTramo(cantidadMinima);
+		final medio = precioCorteDesdePrecioPorKg(
+			precioPorKg: precioUnitario,
+			pesoKg: pesoMedioKilo,
+		);
+		final cuarto = precioCorteDesdePrecioPorKg(
+			precioPorKg: precioUnitario,
+			pesoKg: pesoCuartoKilo,
+		);
+		if (cantidadMinima < pesoKiloCompleto) {
+			return 'Desde $desde kg: $precio/kg '
+				'(½ kg = ${formatearMoneda(medio)}, ¼ kg = ${formatearMoneda(cuarto)})';
+		}
 		return 'Desde $desde kg: $precio/kg';
 	}
 	final desde = _formatearCantidadTramo(cantidadMinima);

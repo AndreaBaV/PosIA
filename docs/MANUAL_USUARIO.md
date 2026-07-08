@@ -144,10 +144,34 @@ Para volver a caja, toca la pestaña **Caja**. Para cerrar sesión, usa **Cerrar
 | Opción | Qué hace |
 |--------|----------|
 | **Categorías** | Crear y activar categorías para la grilla de caja |
-| **Productos** | Catálogo completo; variantes (icono capas); etiquetas PDF |
+| **Productos** | Catálogo completo; variantes; etiquetas PDF; **alta por voz** en móvil |
 | **Listas de precios** | Precios por lista y por cliente |
 
 Carnicería y farmacia se configuran como categorías de producto (peso y lotes).
+
+### Alta de producto por voz (iPhone / Android)
+
+En **Admin → Productos → nuevo o editar**, toca el micrófono de la barra superior.
+
+1. Dicta el producto en una sola frase.
+2. Revisa el resumen y confirma **Aplicar al formulario**.
+3. Corrige lo que falte y guarda.
+
+Ejemplos:
+
+```
+Coca Cola precio 25 costo 18 categoría refrescos stock 40
+```
+
+```
+Jitomate por kilo a 35 pesos medio kilo 20 cuarto 12
+```
+
+```
+Arroz código 750123 precio 28.50 mayoreo desde 10 a 25
+```
+
+Puedes dictar: nombre, código, categoría, proveedor, unidad, costo, precio, medio/cuarto kilo, stock, mínimo, mayoreo y notas. Si la categoría o el proveedor no existen en el catálogo, el resto se aplica y te avisa para elegirlos a mano. En Windows el micrófono indica que el dictado solo está en móvil.
 
 ### Inventario
 
@@ -501,6 +525,8 @@ Al compilar el release se embeben hub y API key (ver manual técnico §11). Cada
 | PIN incorrecto | Verifica usuario y contraseña con el administrador del negocio |
 | Productos no aparecen | Verifica categoria asignada y que esten activos |
 | Voz no reconoce producto | Nombre debe parecerse al del catalogo; prueba por texto |
+| Dictado de alta no aplica categoría | La categoría debe existir y estar activa; elígela en el formulario |
+| Micrófono en productos (Windows) | El dictado de alta solo funciona en iPhone/Android |
 | "1 caja" agrega cantidad incorrecta | Revisa `piezas_por_caja` del producto en catalogo |
 | Sync no funciona | Revisa URL, API Key y que el servidor este activo |
 | No imprime en red | Verifica IP y puerto 9100; usa modo "ambos" como respaldo |

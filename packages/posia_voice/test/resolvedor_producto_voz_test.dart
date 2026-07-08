@@ -2,33 +2,44 @@ import 'package:posia_core/posia_core.dart';
 import 'package:posia_voice/posia_voice.dart';
 import 'package:test/test.dart';
 
-Producto _leche(String id, String nombre) {
+Producto _producto(
+	String id,
+	String nombre, {
+	String? categoriaId,
+	UnidadMedida unidad = UnidadMedida.litro,
+}) {
 	return Producto(
 		id: id,
 		nombre: nombre,
 		codigoBarras: '',
 		precioBase: 26.00,
-		unidadMedida: UnidadMedida.litro,
+		unidadMedida: unidad,
 		rutaImagen: '',
 		activo: true,
 		tiendaId: 'tienda-test',
+		categoriaId: categoriaId,
 	);
 }
 
 void main() {
 	final resolver = const ResolvedorProductoVoz();
 	final leches = [
-		_leche('l1', 'Leche Alpura Entera 1L'),
-		_leche('l2', 'Leche Alpura Deslactosada 1L'),
-		_leche('l3', 'Leche Lala Entera 1L'),
-		_leche('l4', 'Leche Lala Light 1L'),
-		_leche('l5', 'Leche Santa Clara Entera 1L'),
-		_leche('l6', 'Leche Santa Clara Deslactosada 1L'),
-		_leche('l7', 'Leche Nutri Entera 1L'),
-		_leche('l8', 'Leche Nutri Deslactosada 1L'),
-		_leche('l9', 'Leche Choco Lala 1L'),
-		_leche('l10', 'Leche Alpura Protein 1L'),
+		_producto('l1', 'Leche Alpura Entera 1L', categoriaId: 'cat-lacteos'),
+		_producto('l2', 'Leche Alpura Deslactosada 1L', categoriaId: 'cat-lacteos'),
+		_producto('l3', 'Leche Lala Entera 1L', categoriaId: 'cat-lacteos'),
+		_producto('l4', 'Leche Lala Light 1L', categoriaId: 'cat-lacteos'),
+		_producto('l5', 'Leche Santa Clara Entera 1L', categoriaId: 'cat-lacteos'),
+		_producto('l6', 'Leche Santa Clara Deslactosada 1L', categoriaId: 'cat-lacteos'),
+		_producto('l7', 'Leche Nutri Entera 1L', categoriaId: 'cat-lacteos'),
+		_producto('l8', 'Leche Nutri Deslactosada 1L', categoriaId: 'cat-lacteos'),
+		_producto('l9', 'Leche Choco Lala 1L', categoriaId: 'cat-lacteos'),
+		_producto('l10', 'Leche Alpura Protein 1L', categoriaId: 'cat-lacteos'),
 	];
+	const nombresCategoria = {
+		'cat-lacteos': 'Lacteos',
+		'cat-bebidas': 'Bebidas',
+		'cat-abarrotes': 'Abarrotes',
+	};
 
 	test('leche generica es ambigua con muchas opciones', () {
 		final resultado = resolver.resolver(consulta: 'leche', catalogo: leches);
@@ -45,21 +56,74 @@ void main() {
 		expect(resultado.producto?.nombre, 'Leche Alpura Deslactosada 1L');
 	});
 
+	test('categoria + marca desambigua entre categorias', () {
+		final catalogo = [
+			_producto('b1', 'Jugo Alpura Naranja', categoriaId: 'cat-bebidas'),
+			_producto('l1', 'Leche Alpura Entera 1L', categoriaId: 'cat-lacteos'),
+			_producto('a1', 'Arroz Saman 1kg', categoriaId: 'cat-abarrotes', unidad: UnidadMedida.pieza),
+		];
+		final resultado = resolver.resolver(
+			consulta: 'bebidas alpura',
+			catalogo: catalogo,
+			nombresCategoria: nombresCategoria,
+		);
+		expect(resultado.estado, EstadoResolucionProductoVoz.unico);
+		expect(resultado.producto?.id, 'b1');
+	});
+
+	test('solo categoria queda ambigua si hay varios productos', () {
+		final catalogo = [
+			_producto('b1', 'Jugo Alpura Naranja', categoriaId: 'cat-bebidas'),
+			_producto('b2', 'Refresco Cola', categoriaId: 'cat-bebidas'),
+			_producto('a1', 'Arroz Saman 1kg', categoriaId: 'cat-abarrotes', unidad: UnidadMedida.pieza),
+		];
+		final resultado = resolver.resolver(
+			consulta: 'bebidas',
+			catalogo: catalogo,
+			nombresCategoria: nombresCategoria,
+		);
+		expect(resultado.estado, EstadoResolucionProductoVoz.ambiguo);
+		expect(resultado.candidatos.every((c) => c.producto.categoriaId == 'cat-bebidas'), isTrue);
+	});
+
+	test('nombre + categoria resuelve leche de lacteos', () {
+		final catalogo = [
+			_producto('l2', 'Leche Alpura Deslactosada 1L', categoriaId: 'cat-lacteos'),
+			_producto('b1', 'Bebida de avena', categoriaId: 'cat-bebidas'),
+		];
+		final resultado = resolver.resolver(
+			consulta: 'leche de lacteos',
+			catalogo: catalogo,
+			nombresCategoria: nombresCategoria,
+		);
+		expect(resultado.estado, EstadoResolucionProductoVoz.unico);
+		expect(resultado.producto?.id, 'l2');
+	});
+
+	test('motor usa nombres de categoria al procesar', () {
+		final motor = MotorComandosVoz();
+		final resultado = motor.procesar(
+			texto: 'una bebidas alpura',
+			catalogo: [
+				_producto('b1', 'Jugo Alpura Naranja', categoriaId: 'cat-bebidas'),
+				_producto('l1', 'Leche Alpura Entera 1L', categoriaId: 'cat-lacteos'),
+			],
+			nombresCategoria: nombresCategoria,
+		);
+		expect(resultado.lineas.single.producto.id, 'b1');
+		expect(resultado.lineasAmbiguas, isEmpty);
+	});
+
 	test('motor marca leche generica como ambigua', () {
 		final motor = MotorComandosVoz();
 		final resultado = motor.procesar(
 			texto: 'dos leche y un arroz',
 			catalogo: [
 				...leches,
-				const Producto(
-					id: 'arroz',
-					nombre: 'Arroz 1kg',
-					codigoBarras: '',
-					precioBase: 24.5,
-					unidadMedida: UnidadMedida.pieza,
-					rutaImagen: '',
-					activo: true,
-					tiendaId: 'tienda-test',
+				_producto(
+					'arroz',
+					'Arroz 1kg',
+					unidad: UnidadMedida.pieza,
 				),
 			],
 		);

@@ -26,6 +26,31 @@ void main() {
 		expect(resultado.first.nombre, contains('Saman'));
 	});
 
+	test('filtrarProductosPorBusqueda encuentra multi-token sam 1k', () {
+		final productos = [
+			_producto('1', 'saman arroz 1kg'),
+			_producto('2', 'Arroz Verde 5kg'),
+			_producto('3', 'Sal de mesa'),
+		];
+		final resultado = filtrarProductosPorBusqueda(productos, 'sam 1k');
+		expect(resultado, isNotEmpty);
+		expect(resultado.first.id, '1');
+	});
+
+	test('filtrarProductosPorBusqueda ignora acentos í vs i', () {
+		final productos = [
+			_producto('1', 'Aceite de maíz 1L'),
+			_producto('2', 'Frijol Negro'),
+		];
+		final resultado = filtrarProductosPorBusqueda(productos, 'maiz');
+		expect(resultado, isNotEmpty);
+		expect(resultado.first.id, '1');
+
+		final resultadoAcento = filtrarProductosPorBusqueda(productos, 'ací');
+		expect(resultadoAcento, isNotEmpty);
+		expect(resultadoAcento.first.id, '1');
+	});
+
 	test('filtrarProductosPorBusqueda prioriza codigo exacto', () {
 		final productos = [
 			_producto('1', 'Producto A', codigo: '750123'),
@@ -46,5 +71,10 @@ void main() {
 		expect(pareceCodigoBarrasEscaneado('ABC-1234'), isTrue);
 		expect(pareceCodigoBarrasEscaneado('arroz'), isFalse);
 		expect(pareceCodigoBarrasEscaneado('123'), isFalse);
+	});
+
+	test('normalizarTextoBusqueda quita acentos', () {
+		expect(normalizarTextoBusqueda('Café Maíz'), 'cafe maiz');
+		expect(normalizarTextoBusqueda('SAMAN'), 'saman');
 	});
 }

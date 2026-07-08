@@ -66,11 +66,11 @@ class EntradaMenuAdmin {
 	].join(' ');
 
 	bool coincideCon(String consulta) {
-		final q = _normalizar(consulta);
+		final q = normalizarTextoBusqueda(consulta);
 		if (q.isEmpty) {
 			return true;
 		}
-		return _normalizar(_textoBusqueda).contains(q);
+		return normalizarTextoBusqueda(_textoBusqueda).contains(q);
 	}
 }
 
@@ -437,18 +437,3 @@ Map<String, List<EntradaMenuAdmin>> agruparPorSeccion(
 	return mapa;
 }
 
-String _normalizar(String texto) {
-	const acentos = {
-		'á': 'a', 'à': 'a', 'ä': 'a', 'â': 'a',
-		'é': 'e', 'è': 'e', 'ë': 'e', 'ê': 'e',
-		'í': 'i', 'ì': 'i', 'ï': 'i', 'î': 'i',
-		'ó': 'o', 'ò': 'o', 'ö': 'o', 'ô': 'o',
-		'ú': 'u', 'ù': 'u', 'ü': 'u', 'û': 'u',
-		'ñ': 'n',
-	};
-	var s = texto.toLowerCase();
-	for (final entry in acentos.entries) {
-		s = s.replaceAll(entry.key, entry.value);
-	}
-	return s;
-}
