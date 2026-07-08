@@ -20,6 +20,7 @@ export 'src/models/item_lista_precios.dart';
 export 'src/models/resumen_precios_producto.dart';
 export 'src/models/resumen_vendedor.dart';
 export 'src/models/resumen_ventas_dia.dart';
+export 'src/models/resultado_importacion_productos.dart';
 export 'src/models/resultado_reconciliacion_hub.dart';
 export 'src/models/stock_por_tienda.dart';
 export 'src/models/stock_por_almacen.dart';

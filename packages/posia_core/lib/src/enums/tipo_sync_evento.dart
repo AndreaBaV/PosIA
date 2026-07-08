@@ -79,4 +79,7 @@ enum TipoSyncEvento {
 
 	/// Escalas de mayoreo reemplazadas para un producto.
 	wholesaleTiersReplaced,
+
+	/// Presentaciones de empaque reemplazadas para un producto.
+	productPresentationsReplaced,
 }

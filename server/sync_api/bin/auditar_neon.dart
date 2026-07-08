@@ -88,6 +88,8 @@ Future<void> main() async {
 		'quotes',
 		'orders',
 		'wholesale_tiers',
+		'product_presentations',
+		'tipos_presentacion',
 		'registros_asistencia',
 	];
 	for (final nombre in tablasClave) {

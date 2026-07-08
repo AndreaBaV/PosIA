@@ -59,7 +59,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 	@override
 	void initState() {
 		super.initState();
-		_tabs = TabController(length: 4, vsync: this);
+		_tabs = TabController(length: 3, vsync: this);
 		final p = widget.productoExistente;
 		if (p != null) {
 			_nombreController.text = p.nombre;
@@ -180,19 +180,27 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 		return Column(
 			crossAxisAlignment: CrossAxisAlignment.start,
 			children: [
+				const Text(
+					'Mayoreo por cantidad (opcional)',
+					style: TextStyle(fontWeight: FontWeight.bold),
+				),
+				const SizedBox(height: 4.0),
+				Text(
+					'Descuento al vender muchas unidades sueltas. '
+					'Para vender en caja o bulto con precio fijo, use empaques más abajo.',
+					style: TextStyle(color: Colors.grey.shade600, fontSize: 12.0),
+				),
+				const SizedBox(height: 8.0),
 				Row(
 					mainAxisAlignment: MainAxisAlignment.spaceBetween,
 					children: [
-						const Text(
-							'Escalas de mayoreo',
-							style: TextStyle(fontWeight: FontWeight.bold),
-						),
+						const SizedBox.shrink(),
 						TextButton.icon(
 							onPressed: () => setState(
 								() => _escalas.add(_EscalaEditable.vacia()),
 							),
 							icon: const Icon(Icons.add),
-							label: const Text('Agregar'),
+							label: const Text('Agregar tramo'),
 						),
 					],
 				),
@@ -379,8 +387,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 					isScrollable: true,
 					tabs: const [
 						Tab(text: 'General'),
-						Tab(text: 'Precios'),
-						Tab(text: 'Empaque'),
+						Tab(text: 'Precios y venta'),
 						Tab(text: 'Inventario'),
 					],
 				),
@@ -395,8 +402,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 								controller: _tabs,
 								children: [
 									_pestanaGeneral(categorias, proveedoresAsync),
-									_pestanaPrecios(),
-									_pestanaEmpaque(),
+									_pestanaPreciosYVenta(),
 									_pestanaInventario(),
 								],
 							);
@@ -572,8 +578,13 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 		);
 	}
 
-	Widget _pestanaPrecios() {
-		final costo = parsearPrecioTexto(_costoController.text) ?? 0.0;
+	Widget _pestanaPreciosYVenta() {
+		final costo = parsearPrecioTexto(_costoController.text) ??
+			widget.productoExistente?.costoUnitario ??
+			0.0;
+		final precio = parsearPrecioTexto(_precioController.text) ??
+			widget.productoExistente?.precioBase ??
+			0.0;
 		return ListView(
 			padding: const EdgeInsets.all(16.0),
 			children: [
@@ -601,8 +612,8 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 					Padding(
 						padding: const EdgeInsets.only(top: 4.0),
 						child: Text(
-							'Lo que paga el cliente por 1 kg. Abajo puede fijar precios distintos '
-							'para medio kilo o un cuarto (suelen salir más caros por kg).',
+							'Precio por 1 kg. Abajo puede fijar medio/cuarto de kilo '
+							'o empaques (bulto 25 kg, etc.).',
 							style: TextStyle(color: Colors.grey.shade600, fontSize: 12.0),
 						),
 					),
@@ -614,26 +625,19 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 				),
 				const SizedBox(height: 16.0),
 				_buildSeccionEscalas(costo),
+				const Divider(height: 32.0),
+				PanelEmpaquesProducto(
+					incrustado: true,
+					productoId: widget.productoExistente?.id,
+					costoUnitario: costo,
+					precioMenudeo: precio,
+					unidadMedida: _unidad,
+					escalasMayoreo: _escalasMayoreoActuales(),
+					empaquesPendientes: _empaquesPendientes,
+					alCambiarEmpaquesPendientes: (lista) =>
+						setState(() => _empaquesPendientes = lista),
+				),
 			],
-		);
-	}
-
-	Widget _pestanaEmpaque() {
-		final costo = parsearPrecioTexto(_costoController.text) ??
-			widget.productoExistente?.costoUnitario ??
-			0.0;
-		final precio = parsearPrecioTexto(_precioController.text) ??
-			widget.productoExistente?.precioBase ??
-			0.0;
-		return PanelEmpaquesProducto(
-			productoId: widget.productoExistente?.id,
-			costoUnitario: costo,
-			precioMenudeo: precio,
-			unidadMedida: _unidad,
-			escalasMayoreo: _escalasMayoreoActuales(),
-			empaquesPendientes: _empaquesPendientes,
-			alCambiarEmpaquesPendientes: (lista) =>
-				setState(() => _empaquesPendientes = lista),
 		);
 	}
 
@@ -859,6 +863,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 					actualizado,
 					escalasMayoreo: _parseEscalas(actualizado.id),
 				);
+				await servicio.sincronizarPresentacionesProducto(actualizado.id);
 				final minimo = double.tryParse(_minimoController.text) ?? 0.0;
 				await servicio.configurarStockMinimo(actualizado.id, minimo);
 			} else {

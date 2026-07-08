@@ -47,6 +47,8 @@ class ProyectorEventosPostgres {
 				await _pedido(evento);
 			case 'wholesaleTiersReplaced':
 				await _escalasMayoreo(evento);
+			case 'productPresentationsReplaced':
+				await _presentacionesProducto(evento);
 			case 'attendanceChallengeCreated':
 				await _desafioAsistencia(evento);
 			case 'attendanceCheckedIn':
@@ -861,6 +863,47 @@ class ProyectorEventosPostgres {
 					'producto': productoId,
 					'cantidad': _dbl(escala['cantidadMinima']),
 					'precio': _dbl(escala['precioUnitario']),
+				},
+			);
+		}
+	}
+
+	Future<void> _presentacionesProducto(EventoHub evento) async {
+		final p = evento.payload;
+		final productoId = p['productoId'] as String? ?? '';
+		if (productoId.isEmpty) {
+			return;
+		}
+		await _sesion.execute(
+			Sql.named(
+				'DELETE FROM product_presentations WHERE producto_id = @producto',
+			),
+			parameters: {'producto': productoId},
+		);
+		for (final presentacion in _listaMapas(p['presentaciones'])) {
+			final id = presentacion['id'] as String? ?? '';
+			if (id.isEmpty) {
+				continue;
+			}
+			await _sesion.execute(
+				Sql.named('''
+					INSERT INTO product_presentations (
+						id, producto_id, tipo_presentacion_id, nombre, factor_a_base,
+						es_presentacion_base, codigo_barras, precio, activo
+					) VALUES (
+						@id, @producto, @tipo, @nombre, @factor, @base, @codigo, @precio, @activo
+					)
+				'''),
+				parameters: {
+					'id': id,
+					'producto': productoId,
+					'tipo': presentacion['tipoPresentacionId'],
+					'nombre': presentacion['nombre'] ?? '',
+					'factor': (presentacion['factorABase'] as num?)?.toDouble() ?? 1.0,
+					'base': _boolInt(presentacion['esPresentacionBase']),
+					'codigo': presentacion['codigoBarras'] ?? '',
+					'precio': (presentacion['precio'] as num?)?.toDouble(),
+					'activo': _boolInt(presentacion['activo'], defaultValue: true),
 				},
 			);
 		}

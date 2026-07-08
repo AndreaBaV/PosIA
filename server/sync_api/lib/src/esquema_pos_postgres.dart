@@ -230,6 +230,39 @@ class EsquemaPosPostgres {
 			ON wholesale_tiers(producto_id)
 		''');
 		await conexion.execute('''
+			CREATE TABLE IF NOT EXISTS tipos_presentacion (
+				id TEXT PRIMARY KEY,
+				nombre TEXT NOT NULL,
+				unidad TEXT NOT NULL,
+				activo INTEGER NOT NULL DEFAULT 1
+			)
+		''');
+		await conexion.execute('''
+			INSERT INTO tipos_presentacion (id, nombre, unidad, activo)
+			VALUES
+				('tp-caja', 'Caja', 'caja', 1),
+				('tp-bulto', 'Bulto', 'pieza', 1),
+				('tp-kg', 'Kilogramo', 'kilogramo', 1)
+			ON CONFLICT (id) DO NOTHING
+		''');
+		await conexion.execute('''
+			CREATE TABLE IF NOT EXISTS product_presentations (
+				id TEXT PRIMARY KEY,
+				producto_id TEXT NOT NULL,
+				tipo_presentacion_id TEXT,
+				nombre TEXT NOT NULL,
+				factor_a_base DOUBLE PRECISION NOT NULL DEFAULT 1,
+				es_presentacion_base INTEGER NOT NULL DEFAULT 0,
+				codigo_barras TEXT NOT NULL DEFAULT '',
+				precio DOUBLE PRECISION,
+				activo INTEGER NOT NULL DEFAULT 1
+			)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_product_presentations_producto
+			ON product_presentations(producto_id)
+		''');
+		await conexion.execute('''
 			CREATE TABLE IF NOT EXISTS quotes (
 				id TEXT PRIMARY KEY,
 				tienda_id TEXT NOT NULL,

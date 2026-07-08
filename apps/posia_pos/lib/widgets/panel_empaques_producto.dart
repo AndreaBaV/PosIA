@@ -127,6 +127,7 @@ class PanelEmpaquesProducto extends ConsumerStatefulWidget {
 		this.escalasMayoreo = const [],
 		this.empaquesPendientes = const [],
 		this.alCambiarEmpaquesPendientes,
+		this.incrustado = false,
 		super.key,
 	});
 
@@ -137,6 +138,7 @@ class PanelEmpaquesProducto extends ConsumerStatefulWidget {
 	final List<EscalaMayoreoRef> escalasMayoreo;
 	final List<EmpaqueProductoDraft> empaquesPendientes;
 	final ValueChanged<List<EmpaqueProductoDraft>>? alCambiarEmpaquesPendientes;
+	final bool incrustado;
 
 	@override
 	ConsumerState<PanelEmpaquesProducto> createState() =>
@@ -623,17 +625,28 @@ class _PanelEmpaquesProductoState extends ConsumerState<PanelEmpaquesProducto> {
 		return Stack(
 			children: [
 				ListView(
-					padding: const EdgeInsets.all(16.0),
+					padding: widget.incrustado
+						? EdgeInsets.zero
+						: const EdgeInsets.all(16.0),
+					shrinkWrap: widget.incrustado,
+					physics: widget.incrustado
+						? const NeverScrollableScrollPhysics()
+						: null,
 					children: [
 						Text(
-							'Presentaciones de empaque',
+							widget.incrustado
+								? 'Empaques (caja, bulto…)'
+								: 'Presentaciones de empaque',
 							style: Theme.of(context).textTheme.titleMedium?.copyWith(
 								fontWeight: FontWeight.bold,
 							),
 						),
 						const SizedBox(height: 4.0),
 						Text(
-							'Configure cómo llega y se vende el producto: cajas, bultos, kg, etc.',
+							widget.incrustado
+								? 'Opcional. Precio fijo al vender en caja, bulto u otro empaque. '
+									'En caja se cobra al elegir el empaque o escanear su código.'
+								: 'Configure cómo llega y se vende el producto: cajas, bultos, kg, etc.',
 							style: TextStyle(color: Colors.grey.shade700, fontSize: 13.0),
 						),
 						if (_esProductoNuevo) ...[
@@ -644,7 +657,9 @@ class _PanelEmpaquesProductoState extends ConsumerState<PanelEmpaquesProducto> {
 									const SizedBox(width: 8.0),
 									Expanded(
 										child: Text(
-											'Los empaques se guardarán al crear el producto.',
+											widget.incrustado
+												? 'Los empaques se guardan al pulsar Guardar producto.'
+												: 'Los empaques se guardarán al crear el producto.',
 											style: TextStyle(
 												color: Colors.grey.shade600,
 												fontSize: 12.0,
@@ -851,6 +866,10 @@ Future<void> guardarEmpaquesPendientes({
 			tipoPresentacionId: e.tipoPresentacionId,
 			codigoBarras: e.codigoBarras,
 			precio: e.precio,
+			sincronizar: false,
 		);
+	}
+	if (empaques.isNotEmpty) {
+		await servicio.sincronizarPresentacionesProducto(productoId);
 	}
 }

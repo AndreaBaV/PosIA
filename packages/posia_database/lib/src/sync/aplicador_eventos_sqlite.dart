@@ -18,6 +18,7 @@ import '../repositories/cliente_repository.dart';
 import '../repositories/cotizacion_repository.dart';
 import '../repositories/pedido_repository.dart';
 import '../repositories/precio_repository.dart';
+import '../repositories/presentacion_repository.dart';
 import '../repositories/tienda_repository.dart';
 import '../repositories/traspaso_repository.dart';
 import '../repositories/inventario_repository.dart';
@@ -52,6 +53,7 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		CotizacionRepository? cotizacionRepository,
 		PedidoRepository? pedidoRepository,
 		PrecioRepository? precioRepository,
+		PresentacionRepository? presentacionRepository,
 		AsistenciaRepository? asistenciaRepository,
 	}) : _baseDatos = baseDatos,
 	     _productoRepository = productoRepository,
@@ -68,6 +70,7 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 	     _cotizacionRepository = cotizacionRepository,
 	     _pedidoRepository = pedidoRepository,
 	     _precioRepository = precioRepository,
+	     _presentacionRepository = presentacionRepository,
 	     _asistenciaRepository = asistenciaRepository;
 
 	final Database _baseDatos;
@@ -85,6 +88,7 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 	final CotizacionRepository? _cotizacionRepository;
 	final PedidoRepository? _pedidoRepository;
 	final PrecioRepository? _precioRepository;
+	final PresentacionRepository? _presentacionRepository;
 	final AsistenciaRepository? _asistenciaRepository;
 
 	/// Eventos cuya aplicacion no es idempotente por si sola (mutan stock con
@@ -197,6 +201,8 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 				await _aplicarPedidoRemoto(evento);
 			case TipoSyncEvento.wholesaleTiersReplaced:
 				await _aplicarEscalasMayoreoRemotas(evento);
+			case TipoSyncEvento.productPresentationsReplaced:
+				await _aplicarPresentacionesRemotas(evento);
 			case TipoSyncEvento.attendanceChallengeCreated:
 				await _aplicarDesafioAsistenciaRemoto(evento);
 			case TipoSyncEvento.attendanceCheckedIn:
@@ -860,6 +866,38 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			})
 			.toList();
 		await repo.reemplazarEscalasMayoreo(productoId, escalas);
+	}
+
+	Future<void> _aplicarPresentacionesRemotas(SyncEvent evento) async {
+		final repo = _presentacionRepository;
+		if (repo == null) {
+			return;
+		}
+		final productoId = evento.payload['productoId'] as String? ?? '';
+		if (productoId.isEmpty) {
+			return;
+		}
+		final presentacionesCrudas =
+			evento.payload['presentaciones'] as List<Object?>? ?? [];
+		final presentaciones = presentacionesCrudas
+			.whereType<Map<Object?, Object?>>()
+			.map((cruda) {
+				final mapa = Map<String, Object?>.from(cruda);
+				return PresentacionProducto(
+					id: mapa['id'] as String? ?? '',
+					productoId: productoId,
+					tipoPresentacionId: mapa['tipoPresentacionId'] as String?,
+					nombre: mapa['nombre'] as String? ?? '',
+					factorABase: (mapa['factorABase'] as num?)?.toDouble() ?? 1.0,
+					esPresentacionBase: mapa['esPresentacionBase'] == true,
+					codigoBarras: mapa['codigoBarras'] as String? ?? '',
+					precio: (mapa['precio'] as num?)?.toDouble(),
+					activo: mapa['activo'] != false,
+				);
+			})
+			.where((p) => p.id.isNotEmpty)
+			.toList();
+		await repo.reemplazarPresentacionesProducto(productoId, presentaciones);
 	}
 
 	Future<void> _aplicarDesafioAsistenciaRemoto(SyncEvent evento) async {

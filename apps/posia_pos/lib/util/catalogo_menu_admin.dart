@@ -17,6 +17,7 @@ import '../screens/pantalla_cotizaciones_admin.dart';
 import '../screens/pantalla_creditos_pendientes.dart';
 import '../screens/pantalla_etiquetas_admin.dart';
 import '../screens/pantalla_historial_ventas.dart';
+import '../screens/pantalla_importar_productos_admin.dart';
 import '../screens/pantalla_inventario_admin.dart';
 import '../screens/pantalla_listas_precios_admin.dart';
 import '../screens/pantalla_mi_cuenta.dart';
@@ -230,6 +231,19 @@ List<EntradaMenuAdmin> construirCatalogoMenuAdmin(Usuario? usuario) {
 				'producto', 'catalogo', 'articulo', 'sku', 'codigo barras',
 				'precio', 'costo', 'empaque', 'mayoreo', 'presentacion', 'stock',
 				'nuevo producto', 'editar producto',
+			],
+		),
+		EntradaMenuAdmin(
+			clave: 'importar_productos',
+			seccion: 'Catálogo',
+			titulo: 'Importar productos',
+			subtitulo: 'Carga masiva CSV / Excel',
+			icono: Icons.upload_file,
+			color: Colors.teal,
+			destino: PantallaImportarProductosAdmin(),
+			palabrasClave: [
+				'importar', 'excel', 'csv', 'xlsx', 'lote', 'masivo', 'bulk',
+				'plantilla', 'carga', 'archivo', 'productos',
 			],
 		),
 		EntradaMenuAdmin(

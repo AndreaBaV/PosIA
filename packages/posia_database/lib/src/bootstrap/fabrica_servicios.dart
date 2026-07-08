@@ -124,6 +124,7 @@ class FabricaServicios {
 			cotizacionRepository: cotizacionRepo,
 			pedidoRepository: pedidoRepo,
 			precioRepository: precioRepo,
+			presentacionRepository: presentacionRepo,
 			asistenciaRepository: asistenciaRepo,
 		);
 		final clienteHub = await _crearClienteHub(configRepo);

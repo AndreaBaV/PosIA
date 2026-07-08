@@ -4,6 +4,8 @@ library;
 import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../utils/transaccion_sqlite.dart';
+
 /// Persiste catalogo de presentaciones comerciales.
 class PresentacionRepository {
 	PresentacionRepository({required Database baseDatos}) : _baseDatos = baseDatos;
@@ -115,6 +117,39 @@ class PresentacionRepository {
 			},
 			conflictAlgorithm: ConflictAlgorithm.replace,
 		);
+	}
+
+	/// Reemplaza todas las presentaciones de un producto (sync remoto).
+	Future<void> reemplazarPresentacionesProducto(
+		String productoId,
+		List<PresentacionProducto> presentaciones, {
+		DatabaseExecutor? db,
+	}) async {
+		await ejecutarEscrituraTransaccional(_baseDatos, db, (transaccion) async {
+			await transaccion.delete(
+				'presentaciones_producto',
+				where: 'producto_id = ?',
+				whereArgs: [productoId],
+			);
+			for (final presentacion in presentaciones) {
+				await transaccion.insert(
+					'presentaciones_producto',
+					{
+						'id': presentacion.id,
+						'producto_id': productoId,
+						'tipo_presentacion_id': presentacion.tipoPresentacionId,
+						'nombre': presentacion.nombre,
+						'factor_a_base': presentacion.factorABase,
+						'es_presentacion_base':
+							presentacion.esPresentacionBase ? 1 : 0,
+						'codigo_barras': presentacion.codigoBarras,
+						'precio': presentacion.precio,
+						'activo': presentacion.activo ? 1 : 0,
+					},
+					conflictAlgorithm: ConflictAlgorithm.replace,
+				);
+			}
+		});
 	}
 
 	TipoPresentacion _mapearTipo(Map<String, Object?> fila) {

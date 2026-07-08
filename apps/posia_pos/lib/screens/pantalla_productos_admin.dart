@@ -9,6 +9,7 @@ import 'package:posia_ui/posia_ui.dart';
 import '../providers/admin_providers.dart';
 import '../widgets/dialogo_actualizar_precio_venta.dart';
 import 'pantalla_formulario_producto.dart';
+import 'pantalla_importar_productos_admin.dart';
 import 'pantalla_variantes_admin.dart';
 
 class PantallaProductosAdmin extends ConsumerStatefulWidget {
@@ -38,6 +39,11 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 			appBar: AppBar(
 				title: const Text('Productos'),
 				actions: [
+					IconButton(
+						icon: const Icon(Icons.upload_file),
+						tooltip: 'Importar por lote',
+						onPressed: () => _abrirImportacion(context),
+					),
 					IconButton(
 						icon: const Icon(Icons.add_circle, color: PosiaColors.cobrar),
 						iconSize: 32.0,
@@ -229,6 +235,16 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 		if (ok == true) {
 			ref.invalidate(productosCatalogoAdminProvider);
 		}
+	}
+
+	Future<void> _abrirImportacion(BuildContext context) async {
+		await Navigator.push<void>(
+			context,
+			MaterialPageRoute<void>(
+				builder: (_) => const PantallaImportarProductosAdmin(),
+			),
+		);
+		ref.invalidate(productosCatalogoAdminProvider);
 	}
 
 	Future<void> _accionProducto(

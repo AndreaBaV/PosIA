@@ -24,6 +24,7 @@ import '../models/linea_pedido_solicitud.dart';
 import '../models/linea_traspaso_solicitud.dart';
 import '../models/item_lista_precios.dart';
 import '../models/resumen_precios_producto.dart';
+import '../models/resultado_importacion_productos.dart';
 import '../models/resumen_vendedor.dart';
 import '../models/resumen_ventas_dia.dart';
 import '../models/stock_por_tienda.dart';
@@ -384,7 +385,38 @@ class ServicioAdmin {
             .toList(),
       );
     }
+    await sincronizarPresentacionesProducto(producto.id);
     return producto;
+  }
+
+  /// Importa varios productos en secuencia reutilizando validaciones de alta individual.
+  Future<ResultadoImportacionProductos> importarProductosLote(
+    List<({int numeroFila, AltaProductoRequest solicitud})> filas, {
+    void Function(int actual, int total)? alProgreso,
+  }) async {
+    final errores = <ErrorImportacionProducto>[];
+    var importados = 0;
+    final total = filas.length;
+    for (var i = 0; i < total; i++) {
+      alProgreso?.call(i + 1, total);
+      final fila = filas[i];
+      try {
+        await registrarProductoCompleto(fila.solicitud);
+        importados++;
+      } catch (e) {
+        errores.add(
+          ErrorImportacionProducto(
+            numeroFila: fila.numeroFila,
+            nombre: fila.solicitud.nombre,
+            mensaje: e is StateError ? e.message : e.toString(),
+          ),
+        );
+      }
+    }
+    return ResultadoImportacionProductos(
+      importados: importados,
+      errores: errores,
+    );
   }
 
   Future<Producto> actualizarProducto(
@@ -429,6 +461,20 @@ class ServicioAdmin {
               .toList(),
           db: tx,
         );
+      }
+      await asegurarPresentacionBase(actualizado, db: tx);
+      final repo = _presentacionRepository;
+      if (repo != null) {
+        final presentaciones = await repo.listarPorProducto(actualizado.id, db: tx);
+        final base = presentaciones
+            .where((p) => p.esPresentacionBase && p.activo)
+            .firstOrNull;
+        if (base != null) {
+          await repo.guardarPresentacion(
+            base.copiarWith(precio: actualizado.precioBase),
+            db: tx,
+          );
+        }
       }
     });
     await _registrarEventoProducto(actualizado);
@@ -3609,6 +3655,50 @@ class ServicioAdmin {
     await _syncOrchestrator.registrarEvento(evento);
   }
 
+  Future<void> sincronizarPresentacionesProducto(String productoId) async {
+    final repo = _presentacionRepository;
+    if (repo == null) {
+      return;
+    }
+    final presentaciones = await repo.listarPorProducto(productoId);
+    await _registrarEventoPresentacionesReemplazadas(
+      productoId,
+      presentaciones,
+    );
+  }
+
+  Future<void> _registrarEventoPresentacionesReemplazadas(
+    String productoId,
+    List<PresentacionProducto> presentaciones,
+  ) async {
+    final evento = SyncEvent(
+      id: _generadorId.v4(),
+      tiendaId: _tiendaActivaId,
+      dispositivoId: _cajaId,
+      tipo: TipoSyncEvento.productPresentationsReplaced,
+      payload: {
+        'productoId': productoId,
+        'presentaciones': presentaciones
+            .map(
+              (p) => {
+                'id': p.id,
+                'tipoPresentacionId': p.tipoPresentacionId,
+                'nombre': p.nombre,
+                'factorABase': p.factorABase,
+                'esPresentacionBase': p.esPresentacionBase,
+                'codigoBarras': p.codigoBarras,
+                'precio': p.precio,
+                'activo': p.activo,
+              },
+            )
+            .toList(),
+      },
+      creadoEn: DateTime.now().toUtc(),
+      estado: EstadoSyncEvento.pendiente,
+    );
+    await _syncOrchestrator.registrarEvento(evento);
+  }
+
   Future<void> _registrarEventoVentaCompletada(Venta venta) async {
     final evento = SyncEvent(
       id: _generadorId.v4(),
@@ -4363,6 +4453,7 @@ class ServicioAdmin {
     String? codigoBarras,
     double? precio,
     bool esPresentacionBase = false,
+    bool sincronizar = true,
   }) async {
     final repo = _presentacionRepository;
     if (repo == null) {
@@ -4405,6 +4496,9 @@ class ServicioAdmin {
       activo: true,
     );
     await repo.guardarPresentacion(presentacion);
+    if (sincronizar) {
+      await sincronizarPresentacionesProducto(productoId);
+    }
     return presentacion;
   }
 
@@ -4421,6 +4515,7 @@ class ServicioAdmin {
       throw StateError('No se puede eliminar la unidad base');
     }
     await repo.guardarPresentacion(existente.copiarWith(activo: false));
+    await sincronizarPresentacionesProducto(existente.productoId);
   }
 
   Future<void> asegurarPresentacionBase(
