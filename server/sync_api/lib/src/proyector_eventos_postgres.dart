@@ -757,13 +757,14 @@ class ProyectorEventosPostgres {
 		await _sesion.execute(
 			Sql.named('''
 				INSERT INTO quotes (
-					id, tienda_id, cliente_id, nombre_cliente, total, notas,
+					id, tienda_id, nombre, cliente_id, nombre_cliente, total, notas,
 					vigencia_dias, creada_en, caja_id, vendedor_id
 				) VALUES (
-					@id, @tienda, @cliente, @nombreCliente, @total, @notas,
+					@id, @tienda, @nombre, @cliente, @nombreCliente, @total, @notas,
 					@vigencia, @creada, @caja, @vendedor
 				)
 				ON CONFLICT (id) DO UPDATE SET
+					nombre = EXCLUDED.nombre,
 					cliente_id = EXCLUDED.cliente_id,
 					nombre_cliente = EXCLUDED.nombre_cliente,
 					total = EXCLUDED.total,
@@ -773,6 +774,7 @@ class ProyectorEventosPostgres {
 			parameters: {
 				'id': id,
 				'tienda': p['tiendaId'] ?? evento.tiendaId,
+				'nombre': p['nombre'] ?? '',
 				'cliente': p['clienteId'],
 				'nombreCliente': p['nombreCliente'],
 				'total': _dbl(p['total']),

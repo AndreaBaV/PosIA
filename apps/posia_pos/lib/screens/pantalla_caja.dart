@@ -1319,11 +1319,69 @@ Future<void> ejecutarCotizacionCaja(BuildContext context, WidgetRef ref) async {
 		}
 		return;
 	}
+	final nombreController = TextEditingController();
+	final notasController = TextEditingController();
+	final datos = await showDialog<({String nombre, String notas})>(
+		context: context,
+		builder: (ctx) => AlertDialog(
+			title: const Text('Guardar cotización'),
+			content: SizedBox(
+				width: 360.0,
+				child: Column(
+					mainAxisSize: MainAxisSize.min,
+					children: [
+						TextField(
+							controller: nombreController,
+							textCapitalization: TextCapitalization.sentences,
+							autofocus: true,
+							decoration: const InputDecoration(
+								labelText: 'Nombre de la cotización',
+								border: OutlineInputBorder(),
+								helperText: 'Opcional: ej. Mostrador, Pedido urgente',
+							),
+						),
+						const SizedBox(height: 12.0),
+						TextField(
+							controller: notasController,
+							maxLines: 2,
+							decoration: const InputDecoration(
+								labelText: 'Notas (opcional)',
+								border: OutlineInputBorder(),
+							),
+						),
+					],
+				),
+			),
+			actions: [
+				TextButton(
+					onPressed: () => Navigator.pop(ctx),
+					child: const Text('Cancelar'),
+				),
+				FilledButton(
+					onPressed: () => Navigator.pop(
+						ctx,
+						(
+							nombre: nombreController.text.trim(),
+							notas: notasController.text.trim(),
+						),
+					),
+					child: const Text('Guardar'),
+				),
+			],
+		),
+	);
+	nombreController.dispose();
+	notasController.dispose();
+	if (datos == null || !context.mounted) {
+		return;
+	}
 	try {
 		final contenedor = await ref.read(contenedorServiciosProvider.future);
 		final resultado = await registrarCotizacionDesdeCarrito(
 			servicioCaja: servicio,
 			servicioAdmin: contenedor.servicioAdmin,
+			nombre: datos.nombre,
+			notas: datos.notas.isEmpty ? null : datos.notas,
 		);
 		final hardware = await ref.read(hardwareRegistryProvider.future);
 		await imprimirTicketDigital(
@@ -1341,6 +1399,7 @@ Future<void> ejecutarCotizacionCaja(BuildContext context, WidgetRef ref) async {
 				icon: const Icon(Icons.request_quote, color: PosiaColors.neutro, size: 56.0),
 				title: const Text('Cotización guardada'),
 				content: Text(
+					'${resultado.cotizacion.nombre.isNotEmpty ? '${resultado.cotizacion.nombre}\n' : ''}'
 					'Folio ${resultado.cotizacion.id.substring(0, 8).toUpperCase()}\n'
 					'${formatearMoneda(resultado.cotizacion.total)}',
 					style: Theme.of(context).textTheme.headlineSmall,

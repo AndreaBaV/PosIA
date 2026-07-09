@@ -23,6 +23,7 @@ class PantallaRegistrarCotizacion extends ConsumerStatefulWidget {
 
 class _PantallaRegistrarCotizacionState extends ConsumerState<PantallaRegistrarCotizacion> {
 	final _busquedaController = TextEditingController();
+	final _nombreController = TextEditingController();
 	final _notasController = TextEditingController();
 	final _vigenciaController = TextEditingController();
 	final _cantidadControllers = <String, TextEditingController>{};
@@ -41,6 +42,7 @@ class _PantallaRegistrarCotizacionState extends ConsumerState<PantallaRegistrarC
 	@override
 	void dispose() {
 		_busquedaController.dispose();
+		_nombreController.dispose();
 		_notasController.dispose();
 		_vigenciaController.dispose();
 		for (final ctrl in _cantidadControllers.values) {
@@ -138,6 +140,16 @@ class _PantallaRegistrarCotizacionState extends ConsumerState<PantallaRegistrarC
 						error: (e, _) => Text('$e'),
 					),
 					const SizedBox(height: 16.0),
+					TextField(
+						controller: _nombreController,
+						textCapitalization: TextCapitalization.sentences,
+						decoration: const InputDecoration(
+							labelText: 'Nombre de la cotización',
+							border: OutlineInputBorder(),
+							helperText: 'Opcional: ej. Remodelación cocina, Pedido marzo',
+						),
+					),
+					const SizedBox(height: 12.0),
 					TextField(
 						controller: _vigenciaController,
 						keyboardType: TextInputType.number,
@@ -333,6 +345,7 @@ class _PantallaRegistrarCotizacionState extends ConsumerState<PantallaRegistrarC
 			final cotizacion = await servicio.registrarCotizacion(
 				lineas: lineas,
 				clienteId: _clienteId,
+				nombre: _nombreController.text,
 				notas: _notasController.text,
 				vigenciaDias: vigencia,
 			);
@@ -365,6 +378,7 @@ class _PantallaRegistrarCotizacionState extends ConsumerState<PantallaRegistrarC
 					icon: const Icon(Icons.request_quote, color: PosiaColors.neutro, size: 56.0),
 					title: const Text('Cotización guardada'),
 					content: Text(
+						'${cotizacion.nombre.isNotEmpty ? '${cotizacion.nombre}\n' : ''}'
 						'Folio ${cotizacion.id.substring(0, 8).toUpperCase()}\n'
 						'${formatearMoneda(cotizacion.total)}',
 						style: Theme.of(context).textTheme.headlineSmall,

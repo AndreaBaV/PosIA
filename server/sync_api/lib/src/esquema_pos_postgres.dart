@@ -187,7 +187,7 @@ class EsquemaPosPostgres {
 			)
 		''');
 		await conexion.execute('''
-			ALTER TABLE products ADD COLUMN IF NOT EXISTS permite_stock_negativo INTEGER NOT NULL DEFAULT 0
+			ALTER TABLE products ADD COLUMN IF NOT EXISTS permite_stock_negativo INTEGER NOT NULL DEFAULT 1
 		''');
 		await conexion.execute('''
 			ALTER TABLE products ADD COLUMN IF NOT EXISTS costo_unitario DOUBLE PRECISION NOT NULL DEFAULT 0
@@ -311,6 +311,7 @@ class EsquemaPosPostgres {
 			CREATE TABLE IF NOT EXISTS quotes (
 				id TEXT PRIMARY KEY,
 				tienda_id TEXT NOT NULL,
+				nombre TEXT NOT NULL DEFAULT '',
 				cliente_id TEXT,
 				nombre_cliente TEXT,
 				total DOUBLE PRECISION NOT NULL,
@@ -324,6 +325,9 @@ class EsquemaPosPostgres {
 		await conexion.execute('''
 			CREATE INDEX IF NOT EXISTS idx_quotes_tienda_fecha
 			ON quotes(tienda_id, creada_en DESC)
+		''');
+		await conexion.execute('''
+			ALTER TABLE quotes ADD COLUMN IF NOT EXISTS nombre TEXT NOT NULL DEFAULT ''
 		''');
 		await conexion.execute('''
 			CREATE TABLE IF NOT EXISTS quote_lines (

@@ -122,6 +122,7 @@ class CotizacionRepository {
 		return Cotizacion(
 			id: cotizacionId,
 			tiendaId: fila['tienda_id'] as String,
+			nombre: fila['nombre'] as String? ?? '',
 			clienteId: fila['cliente_id'] as String?,
 			nombreCliente: fila['nombre_cliente'] as String?,
 			total: (fila['total'] as num).toDouble(),
@@ -138,6 +139,7 @@ class CotizacionRepository {
 		return {
 			'id': cotizacion.id,
 			'tienda_id': cotizacion.tiendaId,
+			'nombre': cotizacion.nombre.trim(),
 			'cliente_id': cotizacion.clienteId,
 			'nombre_cliente': cotizacion.nombreCliente,
 			'total': cotizacion.total,

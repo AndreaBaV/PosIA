@@ -41,7 +41,7 @@ class _PantallaFormularioProductoState extends ConsumerState<PantallaFormularioP
 	UnidadMedida _unidad = UnidadMedida.pieza;
 	String? _proveedorId;
 	bool _activo = true;
-	bool _permiteStockNegativo = false;
+	bool _permiteStockNegativo = true;
 	final _escalas = <_EscalaEditable>[];
 	final _precioMedioController = TextEditingController();
 	final _precioCuartoController = TextEditingController();

@@ -2199,6 +2199,7 @@ class ServicioAdmin {
   Future<Cotizacion> registrarCotizacion({
     required List<LineaCotizacion> lineas,
     String? clienteId,
+    String nombre = '',
     String notas = '',
     int vigenciaDias = VIGENCIA_COTIZACION_DIAS,
     String? vendedorId,
@@ -2246,6 +2247,7 @@ class ServicioAdmin {
     final cotizacion = Cotizacion(
       id: _generadorId.v4(),
       tiendaId: _tiendaActivaId,
+      nombre: nombre.trim(),
       clienteId: clienteId,
       nombreCliente: nombreCliente,
       total: Cotizacion.calcularTotalDesdeLineas(lineasResueltas),
@@ -3865,6 +3867,7 @@ class ServicioAdmin {
       payload: {
         'id': cotizacion.id,
         'tiendaId': cotizacion.tiendaId,
+        'nombre': cotizacion.nombre,
         'clienteId': cotizacion.clienteId,
         'nombreCliente': cotizacion.nombreCliente,
         'total': cotizacion.total,

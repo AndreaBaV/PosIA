@@ -815,6 +815,7 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			Cotizacion(
 				id: id,
 				tiendaId: payload['tiendaId'] as String? ?? evento.tiendaId,
+				nombre: payload['nombre'] as String? ?? '',
 				clienteId: payload['clienteId'] as String?,
 				nombreCliente: payload['nombreCliente'] as String?,
 				total: (payload['total'] as num?)?.toDouble() ?? 0.0,

@@ -13,6 +13,7 @@ class Cotizacion {
 		required this.total,
 		required this.creadaEn,
 		required this.lineas,
+		this.nombre = '',
 		this.clienteId,
 		this.nombreCliente,
 		this.notas = '',
@@ -23,6 +24,9 @@ class Cotizacion {
 
 	final String id;
 	final String tiendaId;
+
+	/// Nombre descriptivo opcional (ej. "Remodelación cocina").
+	final String nombre;
 	final String? clienteId;
 	final String? nombreCliente;
 	final double total;

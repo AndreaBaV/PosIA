@@ -443,7 +443,8 @@ class MigracionesEsquema {
 				unidades_por_bulto INTEGER,
 				notas TEXT NOT NULL DEFAULT '',
 				costo_unitario REAL NOT NULL DEFAULT 0,
-				favorito_caja INTEGER NOT NULL DEFAULT 0
+				favorito_caja INTEGER NOT NULL DEFAULT 0,
+				permite_stock_negativo INTEGER NOT NULL DEFAULT 1
 			)
 		''');
 		await base.execute('''
@@ -739,6 +740,7 @@ class MigracionesEsquema {
 			CREATE TABLE IF NOT EXISTS quotes (
 				id TEXT PRIMARY KEY,
 				tienda_id TEXT NOT NULL,
+				nombre TEXT NOT NULL DEFAULT '',
 				cliente_id TEXT,
 				nombre_cliente TEXT,
 				total REAL NOT NULL,
@@ -1060,6 +1062,16 @@ class MigracionesEsquema {
 				PRIMARY KEY (cliente_id, producto_id)
 			)
 		''');
+	}
+
+	/// v6.28: nombre descriptivo en cotizaciones.
+	static Future<void> migrarVersion27A28(Database base) async {
+		await _agregarColumnaSiNoExiste(
+			base,
+			'quotes',
+			'nombre',
+			"TEXT NOT NULL DEFAULT ''",
+		);
 	}
 
 	/// v6.23: codigo de barras unico por tienda entre productos activos.

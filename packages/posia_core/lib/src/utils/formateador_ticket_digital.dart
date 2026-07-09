@@ -144,6 +144,7 @@ TicketDigitalContenido construirTicketDigitalCotizacion({
   required List<LineaVenta> lineas,
   required double total,
   required DateTime creadaEn,
+  String? nombreCotizacion,
   String? nombreCliente,
   String? notas,
   String? direccionTienda,
@@ -157,6 +158,10 @@ TicketDigitalContenido construirTicketDigitalCotizacion({
   if (notas != null && notas.trim().isNotEmpty) {
     notasPie.insert(0, 'Notas: ${notas.trim()}');
   }
+  final campos = <String, String>{};
+  if (nombreCotizacion != null && nombreCotizacion.trim().isNotEmpty) {
+    campos['Nombre'] = nombreCotizacion.trim();
+  }
 
   return TicketDigitalContenido(
     tipo: TipoDocumentoTicketDigital.cotizacion,
@@ -167,6 +172,7 @@ TicketDigitalContenido construirTicketDigitalCotizacion({
     nombreCliente: nombreCliente?.trim().isNotEmpty == true
         ? nombreCliente!.trim()
         : null,
+    campos: campos,
     lineas: lineas
         .map(
           (l) => LineaTicketDigital(
@@ -206,6 +212,7 @@ TicketDigitalContenido construirTicketDigitalDesdeCotizacion({
     lineas: lineasVenta,
     total: cotizacion.total,
     creadaEn: cotizacion.creadaEn,
+    nombreCotizacion: cotizacion.nombre.isEmpty ? null : cotizacion.nombre,
     nombreCliente: cotizacion.nombreCliente,
     notas: cotizacion.notas.isEmpty ? null : cotizacion.notas,
     direccionTienda: direccionTienda,

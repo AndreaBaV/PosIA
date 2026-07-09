@@ -327,6 +327,7 @@ class ImportadorProductos {
 
 				final permiteNegativo = _parsearBool(
 					valores['permite_stock_negativo'],
+					valorPorDefecto: true,
 				);
 
 				AltaProductoRequest? solicitud;
@@ -531,9 +532,9 @@ class ImportadorProductos {
 		return valor;
 	}
 
-	static bool _parsearBool(String? texto) {
+	static bool _parsearBool(String? texto, {bool valorPorDefecto = false}) {
 		if (texto == null || texto.trim().isEmpty) {
-			return false;
+			return valorPorDefecto;
 		}
 		final norm = normalizarTextoBusqueda(texto.trim());
 		return {'si', 's', 'true', '1', 'yes', 'verdadero'}.contains(norm);

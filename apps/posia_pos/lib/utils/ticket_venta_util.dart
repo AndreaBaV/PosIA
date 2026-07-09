@@ -87,6 +87,7 @@ String construirTextoCotizacionGuardada({
     lineas: _lineasCotizacionComoVenta(cotizacion.lineas),
     total: cotizacion.total,
     creadaEn: cotizacion.creadaEn,
+    nombreCotizacion: cotizacion.nombre.isEmpty ? null : cotizacion.nombre,
     nombreCliente: cotizacion.nombreCliente,
     notas: cotizacion.notas.isEmpty ? null : cotizacion.notas,
     direccionTienda: direccionTienda,
@@ -100,9 +101,11 @@ Future<({Cotizacion cotizacion, String texto, TicketDigitalContenido digital})>
 registrarCotizacionDesdeCarrito({
   required ServicioCaja servicioCaja,
   required ServicioAdmin servicioAdmin,
+  String nombre = '',
   String? notas,
 }) async {
   final cotizacion = await servicioCaja.registrarCotizacionCarrito(
+    nombre: nombre,
     notas: notas,
   );
   final tienda = await servicioAdmin.obtenerTiendaActiva();

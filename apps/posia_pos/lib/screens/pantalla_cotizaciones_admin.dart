@@ -68,7 +68,7 @@ class _PantallaCotizacionesAdminState extends ConsumerState<PantallaCotizaciones
           ),
           CampoBusqueda(
             controlador: _busquedaController,
-            sugerencia: 'Buscar por cliente, folio o monto...',
+            sugerencia: 'Buscar por nombre, cliente, folio o monto...',
             alCambiar: (v) => setState(() => _filtro = v.trim().toLowerCase()),
           ),
           Expanded(
@@ -79,6 +79,9 @@ class _PantallaCotizacionesAdminState extends ConsumerState<PantallaCotizaciones
                     return true;
                   }
                   if (c.id.toLowerCase().contains(_filtro)) {
+                    return true;
+                  }
+                  if (c.nombre.toLowerCase().contains(_filtro)) {
                     return true;
                   }
                   if ((c.nombreCliente ?? '').toLowerCase().contains(_filtro)) {
@@ -121,10 +124,13 @@ class _PantallaCotizacionesAdminState extends ConsumerState<PantallaCotizaciones
                       child: ListTile(
                         leading: const Icon(Icons.request_quote, color: PosiaColors.neutro),
                         title: Text(
-                          formatearMoneda(cotizacion.total),
+                          cotizacion.nombre.isNotEmpty
+                              ? cotizacion.nombre
+                              : formatearMoneda(cotizacion.total),
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
+                          '${formatearMoneda(cotizacion.total)} · '
                           '${cotizacion.lineas.length} productos · '
                           '${cotizacion.nombreCliente ?? 'Mostrador'} · '
                           '${cotizacion.creadaEn.toLocal().toString().substring(0, 16)}',
@@ -176,7 +182,9 @@ class _PantallaCotizacionesAdminState extends ConsumerState<PantallaCotizaciones
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    'Cotización ${cotizacion.id.substring(0, 8).toUpperCase()}',
+                    cotizacion.nombre.isNotEmpty
+                        ? cotizacion.nombre
+                        : 'Cotización ${cotizacion.id.substring(0, 8).toUpperCase()}',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 8.0),

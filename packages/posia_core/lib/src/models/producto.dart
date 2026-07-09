@@ -23,7 +23,7 @@ class Producto {
 		this.notas = '',
 		this.costoUnitario = 0.0,
 		this.favoritoCaja = false,
-		this.permiteStockNegativo = false,
+		this.permiteStockNegativo = true,
 	});
 
 	final String id;

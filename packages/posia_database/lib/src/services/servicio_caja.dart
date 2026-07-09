@@ -891,6 +891,7 @@ class ServicioCaja {
 
   /// Registra cotizacion persistida desde el carrito actual.
   Future<Cotizacion> registrarCotizacionCarrito({
+    String nombre = '',
     String? notas,
     int vigenciaDias = VIGENCIA_COTIZACION_DIAS,
   }) async {
@@ -917,6 +918,7 @@ class ServicioCaja {
     final cotizacion = Cotizacion(
       id: _generadorId.v4(),
       tiendaId: _tiendaId,
+      nombre: nombre.trim(),
       clienteId: _clienteActivo?.id,
       nombreCliente: _clienteActivo?.nombre,
       total: calcularTotalCarrito(),
@@ -937,6 +939,7 @@ class ServicioCaja {
         payload: {
           'id': cotizacion.id,
           'tiendaId': cotizacion.tiendaId,
+          'nombre': cotizacion.nombre,
           'clienteId': cotizacion.clienteId,
           'nombreCliente': cotizacion.nombreCliente,
           'total': cotizacion.total,

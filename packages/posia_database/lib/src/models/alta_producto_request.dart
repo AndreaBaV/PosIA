@@ -21,7 +21,7 @@ class AltaProductoRequest {
 		this.stockMinimo = 0.0,
 		this.escalasMayoreo = const [],
 		this.costoUnitario = 0.0,
-		this.permiteStockNegativo = false,
+		this.permiteStockNegativo = true,
 	});
 
 	final String nombre;

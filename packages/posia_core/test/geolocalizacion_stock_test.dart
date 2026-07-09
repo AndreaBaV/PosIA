@@ -28,7 +28,7 @@ void main() {
 	});
 
 	group('Producto.permiteStockNegativo', () {
-		test('default es false', () {
+		test('default es true', () {
 			const p = Producto(
 				id: '1',
 				nombre: 'Test',
@@ -39,7 +39,7 @@ void main() {
 				activo: true,
 				tiendaId: 't1',
 			);
-			expect(p.permiteStockNegativo, isFalse);
+			expect(p.permiteStockNegativo, isTrue);
 		});
 	});
 
