@@ -1,7 +1,7 @@
 name: posia_pos
 description: Aplicacion de caja POSIA para Windows, iOS y Android.
 publish_to: none
-version: 1.1.2+55
+version: 1.1.2+56
 
 environment:
   sdk: ^3.11.0
