@@ -8,7 +8,6 @@ library;
 
 import 'package:posia_core/posia_core.dart';
 
-import 'models/escala_mayoreo.dart';
 import 'repositorio_precio.dart';
 
 /// Resuelve precio unitario aplicando reglas de prioridad comercial.
