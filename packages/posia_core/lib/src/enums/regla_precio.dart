@@ -19,4 +19,7 @@ enum ReglaPrecio {
 
 	/// Precio base del producto en la tienda.
 	precioBase,
+
+	/// Precio fijado manualmente en caja por un administrador.
+	precioManual,
 }

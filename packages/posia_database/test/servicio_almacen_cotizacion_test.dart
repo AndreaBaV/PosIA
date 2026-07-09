@@ -158,6 +158,38 @@ void main() {
 			await fixture.cerrar();
 		});
 
+		test('eliminarCotizacion borra del historial', () async {
+			final fixture = await FixtureAdmin.abrir();
+			final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
+			final producto = await servicio.registrarProductoCompleto(
+				AltaProductoRequest(
+					nombre: 'Cemento',
+					codigoBarras: 'cot-del-001',
+					precioBase: 150.0,
+					categoriaId: fixture.categoriaId,
+				),
+			);
+			final cotizacion = await servicio.registrarCotizacion(
+				lineas: [
+					LineaCotizacion(
+						productoId: producto.id,
+						nombreProducto: producto.nombre,
+						cantidad: 1.0,
+						precioUnitario: 150.0,
+					),
+				],
+			);
+			final ok = await servicio.eliminarCotizacion(cotizacion.id);
+			expect(ok, isTrue);
+			expect(await servicio.obtenerCotizacion(cotizacion.id), isNull);
+			expect(
+				(await servicio.listarCotizaciones(dias: 1))
+					.any((c) => c.id == cotizacion.id),
+				isFalse,
+			);
+			await fixture.cerrar();
+		});
+
 		test('registrarCotizacionCarrito desde caja persiste folio', () async {
 			final fixture = await FixtureAdmin.abrir();
 			final servicioAdmin = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);

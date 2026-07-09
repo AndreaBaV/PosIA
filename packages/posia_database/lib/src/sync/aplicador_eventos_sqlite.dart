@@ -203,10 +203,24 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 				await _aplicarTurnoRemoto(evento);
 			case TipoSyncEvento.quoteUpserted:
 				await _aplicarCotizacionRemota(evento);
+			case TipoSyncEvento.quoteDeleted:
+				await _aplicarCotizacionEliminadaRemota(evento);
 			case TipoSyncEvento.orderUpserted:
 				await _aplicarPedidoRemoto(evento);
 			case TipoSyncEvento.wholesaleTiersReplaced:
 				await _aplicarEscalasMayoreoRemotas(evento);
+			case TipoSyncEvento.priceListUpserted:
+				await _aplicarListaPreciosRemota(evento);
+			case TipoSyncEvento.priceListDeleted:
+				await _aplicarListaPreciosEliminadaRemota(evento);
+			case TipoSyncEvento.priceListItemUpserted:
+				await _aplicarItemListaPreciosRemoto(evento);
+			case TipoSyncEvento.priceListItemDeleted:
+				await _aplicarItemListaPreciosEliminadoRemoto(evento);
+			case TipoSyncEvento.customerProductPriceUpserted:
+				await _aplicarPrecioClienteProductoRemoto(evento);
+			case TipoSyncEvento.customerProductPriceDeleted:
+				await _aplicarPrecioClienteProductoEliminadoRemoto(evento);
 			case TipoSyncEvento.productPresentationsReplaced:
 				await _aplicarPresentacionesRemotas(evento);
 			case TipoSyncEvento.attendanceChallengeCreated:
@@ -817,6 +831,18 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		);
 	}
 
+	Future<void> _aplicarCotizacionEliminadaRemota(SyncEvent evento) async {
+		final repo = _cotizacionRepository;
+		if (repo == null) {
+			return;
+		}
+		final id = evento.payload['id'] as String? ?? '';
+		if (id.isEmpty) {
+			return;
+		}
+		await repo.eliminar(id);
+	}
+
 	Future<void> _aplicarPedidoRemoto(SyncEvent evento) async {
 		final repo = _pedidoRepository;
 		if (repo == null) {
@@ -902,6 +928,103 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			})
 			.toList();
 		await repo.reemplazarEscalasMayoreo(productoId, escalas);
+	}
+
+	Future<void> _aplicarListaPreciosRemota(SyncEvent evento) async {
+		final repo = _precioRepository;
+		if (repo == null) {
+			return;
+		}
+		final payload = evento.payload;
+		final id = payload['id'] as String? ?? '';
+		if (id.isEmpty) {
+			return;
+		}
+		await repo.guardarLista(
+			ListaPrecios(
+				id: id,
+				nombre: payload['nombre'] as String? ?? '',
+				activa: payload['activa'] as bool? ?? true,
+			),
+		);
+	}
+
+	Future<void> _aplicarListaPreciosEliminadaRemota(SyncEvent evento) async {
+		final repo = _precioRepository;
+		if (repo == null) {
+			return;
+		}
+		final id = evento.payload['id'] as String? ?? '';
+		if (id.isEmpty) {
+			return;
+		}
+		await repo.eliminarLista(id);
+	}
+
+	Future<void> _aplicarItemListaPreciosRemoto(SyncEvent evento) async {
+		final repo = _precioRepository;
+		if (repo == null) {
+			return;
+		}
+		final payload = evento.payload;
+		final listaId = payload['listaPreciosId'] as String? ?? '';
+		final productoId = payload['productoId'] as String? ?? '';
+		if (listaId.isEmpty || productoId.isEmpty) {
+			return;
+		}
+		await repo.guardarPrecioLista(
+			listaId,
+			productoId,
+			(payload['precioUnitario'] as num?)?.toDouble() ?? 0.0,
+		);
+	}
+
+	Future<void> _aplicarItemListaPreciosEliminadoRemoto(SyncEvent evento) async {
+		final repo = _precioRepository;
+		if (repo == null) {
+			return;
+		}
+		final payload = evento.payload;
+		final listaId = payload['listaPreciosId'] as String? ?? '';
+		final productoId = payload['productoId'] as String? ?? '';
+		if (listaId.isEmpty || productoId.isEmpty) {
+			return;
+		}
+		await repo.eliminarPrecioDeLista(listaId, productoId);
+	}
+
+	Future<void> _aplicarPrecioClienteProductoRemoto(SyncEvent evento) async {
+		final repo = _precioRepository;
+		if (repo == null) {
+			return;
+		}
+		final payload = evento.payload;
+		final clienteId = payload['clienteId'] as String? ?? '';
+		final productoId = payload['productoId'] as String? ?? '';
+		if (clienteId.isEmpty || productoId.isEmpty) {
+			return;
+		}
+		await repo.guardarPrecioClienteProducto(
+			PrecioClienteProducto(
+				clienteId: clienteId,
+				productoId: productoId,
+				precioUnitario: (payload['precioUnitario'] as num?)?.toDouble() ?? 0.0,
+			),
+		);
+	}
+
+	Future<void> _aplicarPrecioClienteProductoEliminadoRemoto(SyncEvent evento) async {
+		final repo = _precioRepository;
+		if (repo == null) {
+			return;
+		}
+		final payload = evento.payload;
+		final clienteId = payload['clienteId'] as String? ?? '';
+		final productoId = payload['productoId'] as String? ?? '';
+		if (clienteId.isEmpty || productoId.isEmpty) {
+			return;
+		}
+		await repo.eliminarPrecioClienteProducto(clienteId, productoId);
 	}
 
 	Future<void> _aplicarPresentacionesRemotas(SyncEvent evento) async {

@@ -244,6 +244,37 @@ class EsquemaPosPostgres {
 			ON wholesale_tiers(producto_id)
 		''');
 		await conexion.execute('''
+			CREATE TABLE IF NOT EXISTS price_lists (
+				id TEXT PRIMARY KEY,
+				nombre TEXT NOT NULL,
+				activa INTEGER NOT NULL DEFAULT 1
+			)
+		''');
+		await conexion.execute('''
+			CREATE TABLE IF NOT EXISTS price_list_items (
+				lista_precios_id TEXT NOT NULL,
+				producto_id TEXT NOT NULL,
+				precio_unitario DOUBLE PRECISION NOT NULL,
+				PRIMARY KEY (lista_precios_id, producto_id)
+			)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_price_list_items_producto
+			ON price_list_items(producto_id)
+		''');
+		await conexion.execute('''
+			CREATE TABLE IF NOT EXISTS customer_product_prices (
+				cliente_id TEXT NOT NULL,
+				producto_id TEXT NOT NULL,
+				precio_unitario DOUBLE PRECISION NOT NULL,
+				PRIMARY KEY (cliente_id, producto_id)
+			)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_customer_product_prices_producto
+			ON customer_product_prices(producto_id)
+		''');
+		await conexion.execute('''
 			CREATE TABLE IF NOT EXISTS tipos_presentacion (
 				id TEXT PRIMARY KEY,
 				nombre TEXT NOT NULL,

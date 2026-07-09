@@ -131,15 +131,6 @@ String generarTextoPagareCredito({
     buffer.writeln('PAGARE');
   }
   buffer.write(formatearTicketDigitalImpresion(digital));
-  buffer
-    ..writeln('----------------------------')
-    ..writeln('FIRMA DEL DEUDOR')
-    ..writeln('')
-    ..writeln('Nombre: $nombreCliente')
-    ..writeln('Firma:')
-    ..writeln('')
-    ..writeln('______________________________')
-    ..writeln('Fecha: ________________________');
   return buffer.toString();
 }
 

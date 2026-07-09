@@ -1042,6 +1042,26 @@ class MigracionesEsquema {
 		);
 	}
 
+	/// v6.27: tablas de listas de precios faltantes en bases actualizadas.
+	static Future<void> migrarVersion26A27(Database base) async {
+		await base.execute('''
+			CREATE TABLE IF NOT EXISTS price_list_items (
+				lista_precios_id TEXT NOT NULL,
+				producto_id TEXT NOT NULL,
+				precio_unitario REAL NOT NULL,
+				PRIMARY KEY (lista_precios_id, producto_id)
+			)
+		''');
+		await base.execute('''
+			CREATE TABLE IF NOT EXISTS customer_product_prices (
+				cliente_id TEXT NOT NULL,
+				producto_id TEXT NOT NULL,
+				precio_unitario REAL NOT NULL,
+				PRIMARY KEY (cliente_id, producto_id)
+			)
+		''');
+	}
+
 	/// v6.23: codigo de barras unico por tienda entre productos activos.
 	static Future<void> migrarVersion22A23(Database base) async {
 		await _resolverDuplicadosCodigoBarras(base);

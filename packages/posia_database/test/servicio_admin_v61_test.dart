@@ -383,6 +383,53 @@ void main() {
 			await fixture.cerrar();
 		});
 
+		test('registrarListaPrecios encola evento de sincronizacion', () async {
+			final fixture = await FixtureAdmin.abrir();
+			final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
+			final cola = SyncEventRepository(baseDatos: fixture.base);
+			final lista = await servicio.registrarListaPrecios('Mayoreo');
+			final pendientes = await cola.obtenerPendientes();
+			expect(
+				pendientes.any(
+					(e) =>
+						e.tipo == TipoSyncEvento.priceListUpserted &&
+						e.payload['id'] == lista.id,
+				),
+				isTrue,
+			);
+			await fixture.cerrar();
+		});
+
+		test('guardarPrecioLista encola evento de sincronizacion', () async {
+			final fixture = await FixtureAdmin.abrir();
+			final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
+			final cola = SyncEventRepository(baseDatos: fixture.base);
+			final producto = await servicio.registrarProductoCompleto(
+				AltaProductoRequest(
+					nombre: 'Con lista',
+					codigoBarras: 'lista-001',
+					precioBase: 10.0,
+					categoriaId: fixture.categoriaId,
+				),
+			);
+			final lista = await servicio.registrarListaPrecios('Distribuidor');
+			for (final evento in await cola.obtenerPendientes()) {
+				await cola.marcarEnviado(evento.id);
+			}
+			await servicio.guardarPrecioLista(lista.id, producto.id, 8.5);
+			final pendientes = await cola.obtenerPendientes();
+			expect(
+				pendientes.any(
+					(e) =>
+						e.tipo == TipoSyncEvento.priceListItemUpserted &&
+						e.payload['listaPreciosId'] == lista.id &&
+						e.payload['productoId'] == producto.id,
+				),
+				isTrue,
+			);
+			await fixture.cerrar();
+		});
+
 		test('listarClientesPorLista devuelve clientes asignados', () async {
 			final fixture = await FixtureAdmin.abrir();
 			final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);

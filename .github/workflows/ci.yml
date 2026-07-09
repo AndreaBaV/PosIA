@@ -25,6 +25,7 @@ jobs:
           - packages/posia_core
           - packages/posia_database
           - packages/posia_hardware
+          - packages/posia_pricing
           - packages/posia_sync
           - packages/posia_ui
           - apps/posia_pos

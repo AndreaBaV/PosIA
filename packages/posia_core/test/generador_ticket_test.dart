@@ -170,6 +170,8 @@ void main() {
       anyOf(contains('UNA SOLA EXHIBICION'), contains('una sola exhibición')),
     );
     expect(texto, contains('FIRMA DEL DEUDOR'));
+    expect(texto, contains('Plazo: 15 día(s)'));
+    expect(texto, contains('Vence:'));
   });
 
   test('generarTextoCotizacion incluye folio y total', () {

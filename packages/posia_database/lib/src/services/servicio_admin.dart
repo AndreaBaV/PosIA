@@ -1275,6 +1275,11 @@ class ServicioAdmin {
         precioUnitario: redondearMonto(precioUnitario),
       ),
     );
+    await _registrarEventoPrecioClienteProducto(
+      clienteId: clienteId,
+      productoId: productoId,
+      precioUnitario: redondearMonto(precioUnitario),
+    );
   }
 
   Future<void> eliminarPrecioEspecialCliente(
@@ -1284,6 +1289,10 @@ class ServicioAdmin {
     await _precioRepository?.eliminarPrecioClienteProducto(
       clienteId,
       productoId,
+    );
+    await _registrarEventoPrecioClienteProductoEliminado(
+      clienteId: clienteId,
+      productoId: productoId,
     );
   }
 
@@ -2136,6 +2145,20 @@ class ServicioAdmin {
 
   Future<Cotizacion?> obtenerCotizacion(String cotizacionId) async {
     return _cotizacionRepository?.obtenerPorId(cotizacionId);
+  }
+
+  Future<bool> eliminarCotizacion(String cotizacionId) async {
+    final repo = _cotizacionRepository;
+    if (repo == null) {
+      return false;
+    }
+    final cotizacion = await repo.obtenerPorId(cotizacionId);
+    if (cotizacion == null) {
+      return false;
+    }
+    await repo.eliminar(cotizacionId);
+    await _registrarEventoCotizacionEliminada(cotizacionId);
+    return true;
   }
 
   /// Registra cotizacion desde administracion (sin carrito de caja).
@@ -3569,6 +3592,7 @@ class ServicioAdmin {
     }
     final lista = ListaPrecios(id: _generadorId.v4(), nombre: nombre.trim());
     await repo.guardarLista(lista);
+    await _registrarEventoListaPrecios(lista);
     return lista;
   }
 
@@ -3582,10 +3606,16 @@ class ServicioAdmin {
       throw StateError('Producto no encontrado');
     }
     _validarPrecioVenta(precio, producto.costoUnitario);
+    final precioRedondeado = redondearMonto(precio);
     await _precioRepository?.guardarPrecioLista(
       listaId,
       productoId,
-      redondearMonto(precio),
+      precioRedondeado,
+    );
+    await _registrarEventoItemListaPrecios(
+      listaId: listaId,
+      productoId: productoId,
+      precioUnitario: precioRedondeado,
     );
   }
 
@@ -3684,6 +3714,7 @@ class ServicioAdmin {
 
   Future<void> eliminarListaPrecios(String listaId) async {
     await _precioRepository?.eliminarLista(listaId);
+    await _registrarEventoListaPreciosEliminada(listaId);
   }
 
   Future<List<Cliente>> listarClientesPorLista(String listaId) async {
@@ -3712,6 +3743,10 @@ class ServicioAdmin {
 
   Future<void> eliminarProductoDeLista(String listaId, String productoId) async {
     await _precioRepository?.eliminarPrecioDeLista(listaId, productoId);
+    await _registrarEventoItemListaPreciosEliminado(
+      listaId: listaId,
+      productoId: productoId,
+    );
   }
 
   Future<void> establecerFavoritoProducto(
@@ -3823,6 +3858,19 @@ class ServicioAdmin {
     await _syncOrchestrator.registrarEvento(evento);
   }
 
+  Future<void> _registrarEventoCotizacionEliminada(String cotizacionId) async {
+    final evento = SyncEvent(
+      id: _generadorId.v4(),
+      tiendaId: _tiendaActivaId,
+      dispositivoId: _cajaId,
+      tipo: TipoSyncEvento.quoteDeleted,
+      payload: {'id': cotizacionId},
+      creadoEn: DateTime.now().toUtc(),
+      estado: EstadoSyncEvento.pendiente,
+    );
+    await _syncOrchestrator.registrarEvento(evento);
+  }
+
   Future<void> _registrarEventoPedido(Pedido pedido) async {
     final evento = SyncEvent(
       id: _generadorId.v4(),
@@ -3886,6 +3934,116 @@ class ServicioAdmin {
               },
             )
             .toList(),
+      },
+      creadoEn: DateTime.now().toUtc(),
+      estado: EstadoSyncEvento.pendiente,
+    );
+    await _syncOrchestrator.registrarEvento(evento);
+  }
+
+  Future<void> _registrarEventoListaPrecios(ListaPrecios lista) async {
+    final evento = SyncEvent(
+      id: _generadorId.v4(),
+      tiendaId: _tiendaActivaId,
+      dispositivoId: _cajaId,
+      tipo: TipoSyncEvento.priceListUpserted,
+      payload: {
+        'id': lista.id,
+        'nombre': lista.nombre,
+        'activa': lista.activa,
+      },
+      creadoEn: DateTime.now().toUtc(),
+      estado: EstadoSyncEvento.pendiente,
+    );
+    await _syncOrchestrator.registrarEvento(evento);
+  }
+
+  Future<void> _registrarEventoListaPreciosEliminada(String listaId) async {
+    final evento = SyncEvent(
+      id: _generadorId.v4(),
+      tiendaId: _tiendaActivaId,
+      dispositivoId: _cajaId,
+      tipo: TipoSyncEvento.priceListDeleted,
+      payload: {'id': listaId},
+      creadoEn: DateTime.now().toUtc(),
+      estado: EstadoSyncEvento.pendiente,
+    );
+    await _syncOrchestrator.registrarEvento(evento);
+  }
+
+  Future<void> _registrarEventoItemListaPrecios({
+    required String listaId,
+    required String productoId,
+    required double precioUnitario,
+  }) async {
+    final evento = SyncEvent(
+      id: _generadorId.v4(),
+      tiendaId: _tiendaActivaId,
+      dispositivoId: _cajaId,
+      tipo: TipoSyncEvento.priceListItemUpserted,
+      payload: {
+        'listaPreciosId': listaId,
+        'productoId': productoId,
+        'precioUnitario': precioUnitario,
+      },
+      creadoEn: DateTime.now().toUtc(),
+      estado: EstadoSyncEvento.pendiente,
+    );
+    await _syncOrchestrator.registrarEvento(evento);
+  }
+
+  Future<void> _registrarEventoItemListaPreciosEliminado({
+    required String listaId,
+    required String productoId,
+  }) async {
+    final evento = SyncEvent(
+      id: _generadorId.v4(),
+      tiendaId: _tiendaActivaId,
+      dispositivoId: _cajaId,
+      tipo: TipoSyncEvento.priceListItemDeleted,
+      payload: {
+        'listaPreciosId': listaId,
+        'productoId': productoId,
+      },
+      creadoEn: DateTime.now().toUtc(),
+      estado: EstadoSyncEvento.pendiente,
+    );
+    await _syncOrchestrator.registrarEvento(evento);
+  }
+
+  Future<void> _registrarEventoPrecioClienteProducto({
+    required String clienteId,
+    required String productoId,
+    required double precioUnitario,
+  }) async {
+    final evento = SyncEvent(
+      id: _generadorId.v4(),
+      tiendaId: _tiendaActivaId,
+      dispositivoId: _cajaId,
+      tipo: TipoSyncEvento.customerProductPriceUpserted,
+      payload: {
+        'clienteId': clienteId,
+        'productoId': productoId,
+        'precioUnitario': precioUnitario,
+      },
+      creadoEn: DateTime.now().toUtc(),
+      estado: EstadoSyncEvento.pendiente,
+    );
+    await _syncOrchestrator.registrarEvento(evento);
+  }
+
+  Future<void> _registrarEventoPrecioClienteProductoEliminado({
+    required String clienteId,
+    required String productoId,
+  }) async {
+    final evento = SyncEvent(
+      id: _generadorId.v4(),
+      tiendaId: _tiendaActivaId,
+      dispositivoId: _cajaId,
+      tipo: TipoSyncEvento.customerProductPriceDeleted,
+      payload: {
+        'clienteId': clienteId,
+        'productoId': productoId,
       },
       creadoEn: DateTime.now().toUtc(),
       estado: EstadoSyncEvento.pendiente,

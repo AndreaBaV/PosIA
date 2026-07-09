@@ -47,10 +47,24 @@ class ProyectorEventosPostgres {
 				await _rolPersonalizado(evento);
 			case 'quoteUpserted':
 				await _cotizacion(evento);
+			case 'quoteDeleted':
+				await _cotizacionEliminada(evento);
 			case 'orderUpserted':
 				await _pedido(evento);
 			case 'wholesaleTiersReplaced':
 				await _escalasMayoreo(evento);
+			case 'priceListUpserted':
+				await _listaPrecios(evento);
+			case 'priceListDeleted':
+				await _listaPreciosEliminada(evento);
+			case 'priceListItemUpserted':
+				await _itemListaPrecios(evento);
+			case 'priceListItemDeleted':
+				await _itemListaPreciosEliminado(evento);
+			case 'customerProductPriceUpserted':
+				await _precioClienteProducto(evento);
+			case 'customerProductPriceDeleted':
+				await _precioClienteProductoEliminado(evento);
 			case 'productPresentationsReplaced':
 				await _presentacionesProducto(evento);
 			case 'attendanceChallengeCreated':
@@ -797,6 +811,21 @@ class ProyectorEventosPostgres {
 		}
 	}
 
+	Future<void> _cotizacionEliminada(EventoHub evento) async {
+		final id = evento.payload['id'] as String? ?? '';
+		if (id.isEmpty) {
+			return;
+		}
+		await _sesion.execute(
+			Sql.named('DELETE FROM quote_lines WHERE cotizacion_id = @id'),
+			parameters: {'id': id},
+		);
+		await _sesion.execute(
+			Sql.named('DELETE FROM quotes WHERE id = @id'),
+			parameters: {'id': id},
+		);
+	}
+
 	Future<void> _pedido(EventoHub evento) async {
 		final p = evento.payload;
 		final id = p['id'] as String? ?? '';
@@ -907,6 +936,127 @@ class ProyectorEventosPostgres {
 				},
 			);
 		}
+	}
+
+	Future<void> _listaPrecios(EventoHub evento) async {
+		final p = evento.payload;
+		final id = p['id'] as String? ?? '';
+		if (id.isEmpty) {
+			return;
+		}
+		await _sesion.execute(
+			Sql.named('''
+				INSERT INTO price_lists (id, nombre, activa)
+				VALUES (@id, @nombre, @activa)
+				ON CONFLICT (id) DO UPDATE SET
+					nombre = EXCLUDED.nombre,
+					activa = EXCLUDED.activa
+			'''),
+			parameters: {
+				'id': id,
+				'nombre': p['nombre'] ?? '',
+				'activa': _boolInt(p['activa'], defaultValue: true),
+			},
+		);
+	}
+
+	Future<void> _listaPreciosEliminada(EventoHub evento) async {
+		final id = evento.payload['id'] as String? ?? '';
+		if (id.isEmpty) {
+			return;
+		}
+		await _sesion.execute(
+			Sql.named('DELETE FROM price_list_items WHERE lista_precios_id = @id'),
+			parameters: {'id': id},
+		);
+		await _sesion.execute(
+			Sql.named(
+				'UPDATE customers SET lista_precios_id = NULL WHERE lista_precios_id = @id',
+			),
+			parameters: {'id': id},
+		);
+		await _sesion.execute(
+			Sql.named('DELETE FROM price_lists WHERE id = @id'),
+			parameters: {'id': id},
+		);
+	}
+
+	Future<void> _itemListaPrecios(EventoHub evento) async {
+		final p = evento.payload;
+		final listaId = p['listaPreciosId'] as String? ?? '';
+		final productoId = p['productoId'] as String? ?? '';
+		if (listaId.isEmpty || productoId.isEmpty) {
+			return;
+		}
+		await _sesion.execute(
+			Sql.named('''
+				INSERT INTO price_list_items (
+					lista_precios_id, producto_id, precio_unitario
+				) VALUES (@lista, @producto, @precio)
+				ON CONFLICT (lista_precios_id, producto_id) DO UPDATE SET
+					precio_unitario = EXCLUDED.precio_unitario
+			'''),
+			parameters: {
+				'lista': listaId,
+				'producto': productoId,
+				'precio': _dbl(p['precioUnitario']),
+			},
+		);
+	}
+
+	Future<void> _itemListaPreciosEliminado(EventoHub evento) async {
+		final p = evento.payload;
+		final listaId = p['listaPreciosId'] as String? ?? '';
+		final productoId = p['productoId'] as String? ?? '';
+		if (listaId.isEmpty || productoId.isEmpty) {
+			return;
+		}
+		await _sesion.execute(
+			Sql.named('''
+				DELETE FROM price_list_items
+				WHERE lista_precios_id = @lista AND producto_id = @producto
+			'''),
+			parameters: {'lista': listaId, 'producto': productoId},
+		);
+	}
+
+	Future<void> _precioClienteProducto(EventoHub evento) async {
+		final p = evento.payload;
+		final clienteId = p['clienteId'] as String? ?? '';
+		final productoId = p['productoId'] as String? ?? '';
+		if (clienteId.isEmpty || productoId.isEmpty) {
+			return;
+		}
+		await _sesion.execute(
+			Sql.named('''
+				INSERT INTO customer_product_prices (
+					cliente_id, producto_id, precio_unitario
+				) VALUES (@cliente, @producto, @precio)
+				ON CONFLICT (cliente_id, producto_id) DO UPDATE SET
+					precio_unitario = EXCLUDED.precio_unitario
+			'''),
+			parameters: {
+				'cliente': clienteId,
+				'producto': productoId,
+				'precio': _dbl(p['precioUnitario']),
+			},
+		);
+	}
+
+	Future<void> _precioClienteProductoEliminado(EventoHub evento) async {
+		final p = evento.payload;
+		final clienteId = p['clienteId'] as String? ?? '';
+		final productoId = p['productoId'] as String? ?? '';
+		if (clienteId.isEmpty || productoId.isEmpty) {
+			return;
+		}
+		await _sesion.execute(
+			Sql.named('''
+				DELETE FROM customer_product_prices
+				WHERE cliente_id = @cliente AND producto_id = @producto
+			'''),
+			parameters: {'cliente': clienteId, 'producto': productoId},
+		);
 	}
 
 	Future<void> _presentacionesProducto(EventoHub evento) async {

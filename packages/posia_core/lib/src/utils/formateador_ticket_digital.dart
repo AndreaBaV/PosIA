@@ -225,16 +225,11 @@ TicketDigitalContenido construirTicketDigitalPagare({
   String? rfcCliente,
 }) {
   final campos = <String, String>{
-    'Documento': etiquetaCopia,
     'Teléfono': telefonoCliente,
     'Dirección': direccionCliente,
   };
   if (rfcCliente != null && rfcCliente.trim().isNotEmpty) {
     campos['RFC'] = rfcCliente.trim();
-  }
-  if (venta.creditoDias != null && venta.creditoVenceEn != null) {
-    campos['Plazo'] = '${venta.creditoDias} día(s)';
-    campos['Vence'] = formatearFechaCredito(venta.creditoVenceEn!.toLocal());
   }
   final notasPie = <String>[
     if (venta.creditoDias != null && venta.creditoVenceEn != null)
@@ -244,8 +239,14 @@ TicketDigitalContenido construirTicketDigitalPagare({
         fechaVencimiento: venta.creditoVenceEn!.toLocal(),
         nombreCliente: nombreCliente,
       ),
-    'Pago en una sola exhibición',
+    'Pago en una sola exhibición.',
     'El deudor se obliga a pagar en la fecha de vencimiento.',
+    '',
+    'FIRMA DEL DEUDOR',
+    'Acepto el adeudo y el plazo indicado.',
+    'Nombre: $nombreCliente',
+    'Firma: ______________________________',
+    'Fecha: ________________________',
     '$NOMBRE_COMERCIAL_APP · ${nombreTienda.trim()}',
   ];
   return TicketDigitalContenido(
@@ -259,8 +260,10 @@ TicketDigitalContenido construirTicketDigitalPagare({
     total: venta.total,
     campos: campos,
     notasPie: notasPie,
-    etiquetaTotal: 'MONTO ADEUDADO',
+    etiquetaTotal: 'ADEUDO',
     etiquetaSecundaria: etiquetaCopia,
+    creditoPlazoDias: venta.creditoDias,
+    creditoVenceEn: venta.creditoVenceEn,
   );
 }
 
@@ -577,6 +580,10 @@ String formatearTicketDigitalImpresion(TicketDigitalContenido contenido) {
   if (contenido.nombreCliente != null) {
     buffer.writeln('Cliente: ${contenido.nombreCliente}');
   }
+  if (contenido.etiquetaSecundaria != null &&
+      contenido.etiquetaSecundaria!.trim().isNotEmpty) {
+    buffer.writeln('Copia: ${contenido.etiquetaSecundaria!.trim()}');
+  }
   for (final entry in contenido.campos.entries) {
     buffer.writeln('${entry.key}: ${entry.value}');
   }
@@ -599,6 +606,14 @@ String formatearTicketDigitalImpresion(TicketDigitalContenido contenido) {
   buffer.writeln(
     '${contenido.etiquetaTotal}: ${formatearMoneda(contenido.total)}',
   );
+  if (contenido.creditoPlazoDias != null && contenido.creditoVenceEn != null) {
+    buffer
+      ..writeln('----------------------------')
+      ..writeln('Plazo: ${contenido.creditoPlazoDias} día(s)')
+      ..writeln(
+        'Vence: ${formatearFechaCredito(contenido.creditoVenceEn!.toLocal())}',
+      );
+  }
   if (contenido.montoRecibido != null) {
     buffer.writeln('Recibido: ${formatearMoneda(contenido.montoRecibido!)}');
   }

@@ -8,7 +8,6 @@ environment:
   flutter: ">=3.41.0"
 
 dependencies:
-  # 7.1.x usa NWPath.isUltraConstrained (SDK iOS reciente); rompe archive en CI.
   connectivity_plus: ">=7.0.0 <7.1.0"
   flutter:
   

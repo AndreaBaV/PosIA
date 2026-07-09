@@ -49,6 +49,8 @@ class TicketDigitalContenido {
     this.cambio,
     this.etiquetaTotal = 'TOTAL',
     this.etiquetaSecundaria,
+    this.creditoPlazoDias,
+    this.creditoVenceEn,
   });
 
   final TipoDocumentoTicketDigital tipo;
@@ -66,6 +68,10 @@ class TicketDigitalContenido {
   final double? cambio;
   final String etiquetaTotal;
   final String? etiquetaSecundaria;
+  /// Plazo en dias para pagares y documentos de credito.
+  final int? creditoPlazoDias;
+  /// Fecha limite de pago del credito.
+  final DateTime? creditoVenceEn;
 
   String get tituloDocumento => switch (tipo) {
     TipoDocumentoTicketDigital.venta => 'TICKET DE VENTA',

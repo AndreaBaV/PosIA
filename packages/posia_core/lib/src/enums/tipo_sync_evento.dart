@@ -74,6 +74,9 @@ enum TipoSyncEvento {
 	/// Cotizacion creada o actualizada.
 	quoteUpserted,
 
+	/// Cotizacion eliminada.
+	quoteDeleted,
+
 	/// Pedido creado o actualizado.
 	orderUpserted,
 
@@ -85,4 +88,22 @@ enum TipoSyncEvento {
 
 	/// Rol personalizado creado o actualizado.
 	customRoleUpserted,
+
+	/// Lista de precios creada o actualizada.
+	priceListUpserted,
+
+	/// Lista de precios eliminada.
+	priceListDeleted,
+
+	/// Precio de producto en lista comercial creado o actualizado.
+	priceListItemUpserted,
+
+	/// Precio de producto eliminado de una lista comercial.
+	priceListItemDeleted,
+
+	/// Precio preferencial cliente-producto creado o actualizado.
+	customerProductPriceUpserted,
+
+	/// Precio preferencial cliente-producto eliminado.
+	customerProductPriceDeleted,
 }

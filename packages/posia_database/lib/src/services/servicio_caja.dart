@@ -110,6 +110,7 @@ class ServicioCaja {
   final List<LineaCarrito> _lineasCarrito = [];
   Cliente? _clienteActivo;
   Vendedor? _vendedorActivo;
+  double _descuentoTicket = 0.0;
   final Uuid _generadorId = const Uuid();
 
   /// Expone servicio de carniceria para UI especializada.
@@ -477,12 +478,163 @@ class ServicioCaja {
       return;
     }
     _lineasCarrito.removeAt(indice);
+    _ajustarDescuentoTicketAlCarrito();
+  }
+
+  /// Descuento global aplicado al ticket activo (MXN).
+  double obtenerDescuentoTicket() => _descuentoTicket;
+
+  /// Aplica descuento absoluto a una linea del carrito.
+  ///
+  /// Retorna mensaje de error o null si se aplico correctamente.
+  String? aplicarDescuentoLinea(int indice, double descuento) {
+    if (indice < 0 || indice >= _lineasCarrito.length) {
+      return 'Línea no encontrada';
+    }
+    final linea = _lineasCarrito[indice];
+    final descuentoRedondeado = redondearMonto(descuento);
+    if (descuentoRedondeado == 0.0) {
+      _lineasCarrito[indice] = linea.copiarCon(descuentoLinea: 0.0);
+      _ajustarDescuentoTicketAlCarrito();
+      return null;
+    }
+    final error = errorDescuentoLinea(linea, descuentoRedondeado);
+    if (error != null) {
+      return error;
+    }
+    _lineasCarrito[indice] =
+        linea.copiarCon(descuentoLinea: descuentoRedondeado);
+    _ajustarDescuentoTicketAlCarrito();
+    return null;
+  }
+
+  /// Aplica descuento porcentual a una linea del carrito.
+  String? aplicarDescuentoLineaPorcentaje(int indice, double porcentaje) {
+    if (indice < 0 || indice >= _lineasCarrito.length) {
+      return 'Línea no encontrada';
+    }
+    final linea = _lineasCarrito[indice];
+    final monto = calcularDescuentoLineaDesdePorcentaje(linea, porcentaje);
+    return aplicarDescuentoLinea(indice, monto);
+  }
+
+  /// Aplica descuento global al ticket activo.
+  String? aplicarDescuentoTicket(double descuento) {
+    final descuentoRedondeado = redondearMonto(descuento);
+    if (descuentoRedondeado == 0.0) {
+      _descuentoTicket = 0.0;
+      return null;
+    }
+    final error = errorDescuentoTicket(_lineasCarrito, descuentoRedondeado);
+    if (error != null) {
+      return error;
+    }
+    _descuentoTicket = descuentoRedondeado;
+    return null;
+  }
+
+  /// Aplica descuento porcentual global al ticket activo.
+  String? aplicarDescuentoTicketPorcentaje(double porcentaje) {
+    final monto = calcularDescuentoTicketDesdePorcentaje(_lineasCarrito, porcentaje);
+    return aplicarDescuentoTicket(monto);
+  }
+
+  /// Actualiza cantidad de una linea y recalcula precio si aplica.
+  Future<String?> actualizarCantidadLinea(int indice, double cantidad) async {
+    if (indice < 0 || indice >= _lineasCarrito.length) {
+      return 'Línea no encontrada';
+    }
+    final linea = _lineasCarrito[indice];
+    final errorCantidad = await _validarCantidadLinea(linea, cantidad);
+    if (errorCantidad != null) {
+      return errorCantidad;
+    }
+    final errorStock = await _validarStockParaCambioCantidad(indice, cantidad);
+    if (errorStock != null) {
+      return errorStock;
+    }
+
+    var precioUnitario = linea.precioUnitario;
+    var reglaPrecio = linea.reglaPrecio;
+    if (reglaPrecio != ReglaPrecio.precioManual) {
+      final contexto = ContextoPrecio(
+        producto: linea.producto,
+        cantidad: cantidad,
+        tiendaId: _tiendaId,
+        cliente: _clienteActivo,
+        canal: _canalVentaProducto(linea.producto),
+        productoIdEscalas: linea.productoStockId ?? linea.producto.id,
+      );
+      final resultado = await _motorPrecio.resolverPrecio(contexto);
+      precioUnitario = resultado.precioUnitario;
+      reglaPrecio = resultado.reglaAplicada;
+    }
+
+    var lineaActualizada = linea.copiarCon(
+      cantidad: cantidad,
+      precioUnitario: precioUnitario,
+      reglaPrecio: reglaPrecio,
+      etiquetaLote: linea.producto.requierePeso() ||
+              linea.producto.moduloVertical == ModuloVertical.carniceria
+          ? formatearPesoKg(cantidad)
+          : linea.etiquetaLote,
+    );
+    final maxDescuento = calcularDescuentoMaximoLinea(lineaActualizada);
+    final descuentoAjustado = redondearMonto(
+      lineaActualizada.descuentoLinea.clamp(0.0, maxDescuento),
+    );
+    _lineasCarrito[indice] = lineaActualizada.copiarCon(
+      descuentoLinea: descuentoAjustado,
+    );
+    _ajustarDescuentoTicketAlCarrito();
+    return null;
+  }
+
+  /// Fija precio unitario manual en una linea (solo administradores).
+  String? actualizarPrecioLinea(int indice, double precioUnitario) {
+    if (indice < 0 || indice >= _lineasCarrito.length) {
+      return 'Línea no encontrada';
+    }
+    final precio = redondearMonto(precioUnitario);
+    if (precio <= 0.0) {
+      return 'Ingrese un precio válido';
+    }
+    final linea = _lineasCarrito[indice];
+    final costo = linea.producto.costoUnitario;
+    final String? errorPrecio;
+    if (linea.factorABase > 1.0) {
+      errorPrecio = precioPresentacionEsValido(precio, costo, linea.factorABase)
+          ? null
+          : mensajePrecioMinimoPresentacionInvalido(costo, linea.factorABase);
+    } else {
+      errorPrecio = precioVentaEsValido(precio, costo)
+          ? null
+          : mensajePrecioMinimoInvalido(costo);
+    }
+    if (errorPrecio != null) {
+      return errorPrecio;
+    }
+
+    var lineaActualizada = linea.copiarCon(
+      precioUnitario: precio,
+      reglaPrecio: ReglaPrecio.precioManual,
+    );
+    final maxDescuento = calcularDescuentoMaximoLinea(lineaActualizada);
+    final descuentoAjustado = redondearMonto(
+      lineaActualizada.descuentoLinea.clamp(0.0, maxDescuento),
+    );
+    _lineasCarrito[indice] = lineaActualizada.copiarCon(
+      descuentoLinea: descuentoAjustado,
+    );
+    _ajustarDescuentoTicketAlCarrito();
+    return null;
   }
 
   /// Vacia el carrito activo sin persistir venta.
   void vaciarCarrito() {
     _lineasCarrito.clear();
     _clienteActivo = null;
+    _descuentoTicket = 0.0;
   }
 
   /// Lista tickets apartados en esta tienda y caja.
@@ -520,7 +672,7 @@ class ServicioCaja {
       nombreCliente: _clienteActivo?.nombre,
       vendedorId: _vendedorActivo?.id,
       notas: notas.trim(),
-      descuentoTicket: 0.0,
+      descuentoTicket: _descuentoTicket,
       total: calcularTotalCarrito(),
       creadoEn: DateTime.now().toUtc(),
       lineas: _lineasCarrito
@@ -544,6 +696,7 @@ class ServicioCaja {
     }
     _lineasCarrito.clear();
     _clienteActivo = null;
+    _descuentoTicket = 0.0;
     if (ticket.clienteId != null) {
       _clienteActivo = await _clienteRepository.obtenerPorId(ticket.clienteId!);
     }
@@ -557,6 +710,8 @@ class ServicioCaja {
         linea.aLineaCarrito(producto ?? linea.productoRespaldo(_tiendaId)),
       );
     }
+    _descuentoTicket = redondearMonto(ticket.descuentoTicket);
+    _ajustarDescuentoTicketAlCarrito();
     await repo.eliminar(ticketId);
   }
 
@@ -576,11 +731,9 @@ class ServicioCaja {
   ///
   /// Retorna monto total redondeado en MXN.
   double calcularTotalCarrito() {
-    var acumulado = 0.0;
-    for (final linea in _lineasCarrito) {
-      acumulado = acumulado + linea.calcularSubtotal();
-    }
-    return redondearMonto(acumulado < 0.0 ? 0.0 : acumulado);
+    final subtotal = calcularSubtotalConDescuentosLinea(_lineasCarrito);
+    final neto = subtotal - _descuentoTicket;
+    return redondearMonto(neto < 0.0 ? 0.0 : neto);
   }
 
   /// Cierra venta, persiste, ajusta inventario y encola sync.
@@ -609,7 +762,10 @@ class ServicioCaja {
           ),
         )
         .toList();
-    final total = Venta.calcularTotalDesdeLineas(lineasVenta);
+    final total = Venta.calcularTotalDesdeLineas(
+      lineasVenta,
+      descuentoTicket: _descuentoTicket,
+    );
     double? montoEfectivo;
     double? montoTarjeta;
     double? montoTransferencia;
@@ -649,7 +805,7 @@ class ServicioCaja {
       creadaEn: DateTime.now().toUtc(),
       vendedorId: _vendedorActivo?.id,
       turnoCajaId: turno?.id,
-      descuentoTicket: 0.0,
+      descuentoTicket: _descuentoTicket,
       montoEfectivo: montoEfectivo,
       montoTarjeta: montoTarjeta,
       montoTransferencia: montoTransferencia,
@@ -932,6 +1088,16 @@ class ServicioCaja {
   Future<void> _recalcularPreciosCarrito() async {
     final lineasActualizadas = <LineaCarrito>[];
     for (final linea in _lineasCarrito) {
+      if (linea.reglaPrecio == ReglaPrecio.precioManual) {
+        final maxDescuento = calcularDescuentoMaximoLinea(linea);
+        final descuentoAjustado = redondearMonto(
+          linea.descuentoLinea.clamp(0.0, maxDescuento),
+        );
+        lineasActualizadas.add(
+          linea.copiarCon(descuentoLinea: descuentoAjustado),
+        );
+        continue;
+      }
       final contexto = ContextoPrecio(
         producto: linea.producto,
         cantidad: linea.cantidad,
@@ -943,16 +1109,32 @@ class ServicioCaja {
         productoIdEscalas: linea.productoStockId ?? linea.producto.id,
       );
       final resultado = await _motorPrecio.resolverPrecio(contexto);
-      lineasActualizadas.add(
-        linea.copiarCon(
-          precioUnitario: resultado.precioUnitario,
-          reglaPrecio: resultado.reglaAplicada,
-        ),
+      var lineaActualizada = linea.copiarCon(
+        precioUnitario: resultado.precioUnitario,
+        reglaPrecio: resultado.reglaAplicada,
       );
+      final maxDescuento = calcularDescuentoMaximoLinea(lineaActualizada);
+      final descuentoAjustado = redondearMonto(
+        lineaActualizada.descuentoLinea.clamp(0.0, maxDescuento),
+      );
+      lineaActualizada = lineaActualizada.copiarCon(
+        descuentoLinea: descuentoAjustado,
+      );
+      lineasActualizadas.add(lineaActualizada);
     }
     _lineasCarrito
       ..clear()
       ..addAll(lineasActualizadas);
+    _ajustarDescuentoTicketAlCarrito();
+  }
+
+  void _ajustarDescuentoTicketAlCarrito() {
+    if (_lineasCarrito.isEmpty) {
+      _descuentoTicket = 0.0;
+      return;
+    }
+    final maximo = calcularDescuentoMaximoTicket(_lineasCarrito);
+    _descuentoTicket = redondearMonto(_descuentoTicket.clamp(0.0, maximo));
   }
 
   /// Busca linea general fusionable sin lote asociado.
@@ -996,6 +1178,7 @@ class ServicioCaja {
       payload: {
         'ventaId': venta.id,
         'total': venta.total,
+        'descuentoTicket': venta.descuentoTicket,
         'metodoPago': venta.metodoPago.name,
         'clienteId': venta.clienteId,
         'creditoDias': venta.creditoDias,
@@ -1008,6 +1191,7 @@ class ServicioCaja {
                 'cantidad': linea.cantidad,
                 'precioUnitario': linea.precioUnitario,
                 'reglaPrecio': linea.reglaPrecio.name,
+                'descuentoLinea': linea.descuentoLinea,
                 'loteId': linea.loteId,
                 'etiquetaLote': linea.etiquetaLote,
               },
@@ -1079,6 +1263,70 @@ class ServicioCaja {
     );
     if (disponible < totalRequerido) {
       final nombre = productoStock?.nombre ?? producto.nombre;
+      return 'Stock insuficiente: $nombre '
+          '(disponible ${disponible.toStringAsFixed(1)})';
+    }
+    return null;
+  }
+
+  Future<String?> _validarCantidadLinea(
+    LineaCarrito linea,
+    double cantidad,
+  ) async {
+    if (cantidad <= 0.0) {
+      return 'Indique una cantidad mayor a cero';
+    }
+    if (linea.producto.moduloVertical == ModuloVertical.carniceria ||
+        linea.producto.requierePeso()) {
+      final servicioCarniceria = _servicioCarniceria;
+      if (servicioCarniceria != null) {
+        final resultado = servicioCarniceria.validarPesoParaVenta(cantidad);
+        if (!resultado.valido) {
+          return resultado.mensajeError;
+        }
+      } else if (!validarPesoMinimoKg(cantidad)) {
+        return 'Peso minimo: ${formatearPesoKg(convertirGramosAKilogramos(PESO_MINIMO_GRAMOS_CARNICERIA))}';
+      }
+    }
+    return null;
+  }
+
+  Future<String?> _validarStockParaCambioCantidad(
+    int indiceLinea,
+    double nuevaCantidad,
+  ) async {
+    final linea = _lineasCarrito[indiceLinea];
+    final stockId =
+        linea.productoStockId ?? await _resolverIdStock(linea.producto);
+    final productoStock = stockId == linea.producto.id
+        ? linea.producto
+        : await _productoRepository.obtenerPorId(stockId);
+    if (productoStock?.permiteStockNegativo == true) {
+      return null;
+    }
+    if (linea.producto.permiteStockNegativo && linea.productoStockId == null) {
+      return null;
+    }
+    var cantidadEnCarrito = 0.0;
+    for (var i = 0; i < _lineasCarrito.length; i++) {
+      if (i == indiceLinea) {
+        continue;
+      }
+      final otra = _lineasCarrito[i];
+      final otraStockId =
+          otra.productoStockId ?? await _resolverIdStock(otra.producto);
+      if (otraStockId == stockId) {
+        cantidadEnCarrito += otra.cantidad * otra.factorABase;
+      }
+    }
+    final totalRequerido =
+        cantidadEnCarrito + (nuevaCantidad * linea.factorABase);
+    final disponible = await _gestorInventario.obtenerCantidadDisponible(
+      stockId,
+      _tiendaId,
+    );
+    if (disponible < totalRequerido) {
+      final nombre = productoStock?.nombre ?? linea.producto.nombre;
       return 'Stock insuficiente: $nombre '
           '(disponible ${disponible.toStringAsFixed(1)})';
     }

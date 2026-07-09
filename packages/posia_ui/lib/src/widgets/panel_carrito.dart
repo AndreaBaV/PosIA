@@ -21,7 +21,8 @@ class PanelCarrito extends StatelessWidget {
 		required this.lineas,
 		required this.alEliminarLinea,
 		this.total = 0.0,
-		this.alTocarLinea,
+		this.descuentoTicket = 0.0,
+		this.alDobleClicLinea,
 		super.key,
 	});
 
@@ -31,11 +32,14 @@ class PanelCarrito extends StatelessWidget {
 	/// Total actual del carrito.
 	final double total;
 
+	/// Descuento global aplicado al ticket.
+	final double descuentoTicket;
+
 	/// Accion al eliminar linea por indice.
 	final ValueChanged<int> alEliminarLinea;
 
-	/// Accion al tocar linea (ej. descuento).
-	final ValueChanged<int>? alTocarLinea;
+	/// Accion al hacer doble clic en linea (editar cantidad/precio).
+	final ValueChanged<int>? alDobleClicLinea;
 
 	@override
 	Widget build(BuildContext context) {
@@ -72,12 +76,24 @@ class PanelCarrito extends StatelessWidget {
 									),
 								),
 								if (lineas.isNotEmpty)
-									Text(
-										formatearMoneda(total),
-										style: Theme.of(context).textTheme.titleMedium?.copyWith(
-											color: PosiaColors.cobrar,
-											fontWeight: FontWeight.bold,
-										),
+									Column(
+										crossAxisAlignment: CrossAxisAlignment.end,
+										children: [
+											if (descuentoTicket > 0.0)
+												Text(
+													'-${formatearMoneda(descuentoTicket)}',
+													style: Theme.of(context).textTheme.bodySmall?.copyWith(
+														color: PosiaColors.cancelar,
+													),
+												),
+											Text(
+												formatearMoneda(total),
+												style: Theme.of(context).textTheme.titleMedium?.copyWith(
+													color: PosiaColors.cobrar,
+													fontWeight: FontWeight.bold,
+												),
+											),
+										],
 									),
 							],
 						),
@@ -142,10 +158,9 @@ class PanelCarrito extends StatelessWidget {
 												crossAxisAlignment: CrossAxisAlignment.center,
 												children: [
 													Expanded(
-														child: InkWell(
-															borderRadius: BorderRadius.circular(10.0),
-															onTap: alTocarLinea != null
-																? () => alTocarLinea!(indice)
+														child: GestureDetector(
+															onDoubleTap: alDobleClicLinea != null
+																? () => alDobleClicLinea!(indice)
 																: null,
 															child: Padding(
 																padding: const EdgeInsets.symmetric(
@@ -154,7 +169,9 @@ class PanelCarrito extends StatelessWidget {
 																),
 																child: Row(
 																	children: [
-																		CircleAvatar(
+																		Tooltip(
+																			message: 'Doble clic para editar',
+																			child: CircleAvatar(
 																			backgroundColor: PosiaColors.cobrar,
 																			radius: 18.0,
 																			child: Text(
@@ -170,6 +187,7 @@ class PanelCarrito extends StatelessWidget {
 																					fontWeight: FontWeight.bold,
 																				),
 																			),
+																		),
 																		),
 																		const SizedBox(width: 10.0),
 																		Expanded(

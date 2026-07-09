@@ -83,4 +83,13 @@ class PoliticaAccesoAdmin {
 
 	static bool puedeGestionarRolesPersonalizados(Usuario usuario) =>
 		esAdministradorGlobal(usuario);
+
+	/// Indica si el usuario puede aplicar descuentos manuales en caja.
+	static bool puedeAplicarDescuentoEnCaja(Usuario usuario) =>
+		usuario.rol == RolUsuario.administrador ||
+		usuario.rol == RolUsuario.supervisor;
+
+	/// Indica si el usuario puede editar precios manualmente en caja.
+	static bool puedeEditarPrecioEnCaja(Usuario usuario) =>
+		usuario.rol == RolUsuario.administrador;
 }

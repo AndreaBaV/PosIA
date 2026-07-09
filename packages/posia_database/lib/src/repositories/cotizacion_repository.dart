@@ -45,6 +45,21 @@ class CotizacionRepository {
 		});
 	}
 
+	Future<void> eliminar(String cotizacionId) async {
+		await _baseDatos.transaction((transaccion) async {
+			await transaccion.delete(
+				'quote_lines',
+				where: 'cotizacion_id = ?',
+				whereArgs: [cotizacionId],
+			);
+			await transaccion.delete(
+				'quotes',
+				where: 'id = ?',
+				whereArgs: [cotizacionId],
+			);
+		});
+	}
+
 	Future<Cotizacion?> obtenerPorId(String cotizacionId) async {
 		final filas = await _baseDatos.query(
 			'quotes',
