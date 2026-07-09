@@ -1,6 +1,7 @@
 /// Lector minimo de hojas XLSX (primera hoja) sin dependencias incompatibles.
 library;
 
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
@@ -37,7 +38,7 @@ class LectorXlsx {
 		if (archivo == null) {
 			return const [];
 		}
-		final documento = XmlDocument.parse(String.fromCharCodes(archivo.content));
+		final documento = XmlDocument.parse(_decodificarUtf8(archivo.content));
 		final cadenas = <String>[];
 		for (final si in documento.findAllElements('si')) {
 			final partes = <String>[];
@@ -53,7 +54,7 @@ class LectorXlsx {
 		ArchiveFile hoja,
 		List<String> sharedStrings,
 	) {
-		final documento = XmlDocument.parse(String.fromCharCodes(hoja.content));
+		final documento = XmlDocument.parse(_decodificarUtf8(hoja.content));
 		final filasMapa = <int, Map<int, String>>{};
 
 		for (final fila in documento.findAllElements('row')) {
@@ -125,5 +126,17 @@ class LectorXlsx {
 			indice = indice * 26 + (letras.codeUnitAt(i) - 64);
 		}
 		return indice - 1;
+	}
+
+	/// Los XML internos de XLSX estan en UTF-8; fromCharCodes rompe acentos.
+	static String _decodificarUtf8(List<int> bytes) {
+		var data = bytes;
+		if (data.length >= 3 &&
+			data[0] == 0xEF &&
+			data[1] == 0xBB &&
+			data[2] == 0xBF) {
+			data = data.sublist(3);
+		}
+		return utf8.decode(data);
 	}
 }
