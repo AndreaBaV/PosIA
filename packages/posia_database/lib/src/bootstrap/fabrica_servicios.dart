@@ -15,6 +15,7 @@ import '../repositories/cotizacion_repository.dart';
 import '../repositories/config_repository.dart';
 import '../repositories/movimiento_inventario_repository.dart';
 import '../repositories/proveedor_repository.dart';
+import '../repositories/rol_personalizado_repository.dart';
 import '../repositories/inventario_repository.dart';
 import '../repositories/lote_farmacia_repository.dart';
 import '../repositories/precio_repository.dart';
