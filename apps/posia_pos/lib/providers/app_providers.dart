@@ -319,6 +319,7 @@ class EstadoCarrito {
 		required this.categoriaSeleccionadaId,
 		required this.lineas,
 		required this.total,
+		this.descuentoTicket = 0.0,
 		required this.nombreTienda,
 		this.nombreVendedor,
 		this.nombreCliente,
@@ -343,6 +344,9 @@ class EstadoCarrito {
 
 	/// Total actual del carrito.
 	final double total;
+
+	/// Descuento global aplicado al ticket activo.
+	final double descuentoTicket;
 
 	/// Nombre de tienda activa.
 	final String nombreTienda;
@@ -375,6 +379,7 @@ class EstadoCarrito {
 		String? categoriaSeleccionadaId,
 		List<LineaCarrito>? lineas,
 		double? total,
+		double? descuentoTicket,
 		String? nombreTienda,
 		String? nombreVendedor,
 		String? nombreCliente,
@@ -391,6 +396,7 @@ class EstadoCarrito {
 				categoriaSeleccionadaId ?? this.categoriaSeleccionadaId,
 			lineas: lineas ?? this.lineas,
 			total: total ?? this.total,
+			descuentoTicket: descuentoTicket ?? this.descuentoTicket,
 			nombreTienda: nombreTienda ?? this.nombreTienda,
 			nombreVendedor: nombreVendedor ?? this.nombreVendedor,
 			nombreCliente: nombreCliente ?? this.nombreCliente,
@@ -523,6 +529,69 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 		await _refrescarDespuesDeOperacionCarrito();
 	}
 
+	/// Aplica descuento absoluto a una linea del carrito.
+	Future<String?> aplicarDescuentoLinea(int indice, double descuento) async {
+		final servicio = await ref.read(servicioCajaProvider.future);
+		final error = servicio.aplicarDescuentoLinea(indice, descuento);
+		if (error == null) {
+			await _refrescarDespuesDeOperacionCarrito();
+		}
+		return error;
+	}
+
+	/// Aplica descuento porcentual a una linea del carrito.
+	Future<String?> aplicarDescuentoLineaPorcentaje(
+		int indice,
+		double porcentaje,
+	) async {
+		final servicio = await ref.read(servicioCajaProvider.future);
+		final error = servicio.aplicarDescuentoLineaPorcentaje(indice, porcentaje);
+		if (error == null) {
+			await _refrescarDespuesDeOperacionCarrito();
+		}
+		return error;
+	}
+
+	/// Aplica descuento global al ticket activo.
+	Future<String?> aplicarDescuentoTicket(double descuento) async {
+		final servicio = await ref.read(servicioCajaProvider.future);
+		final error = servicio.aplicarDescuentoTicket(descuento);
+		if (error == null) {
+			await _refrescarDespuesDeOperacionCarrito();
+		}
+		return error;
+	}
+
+	/// Aplica descuento porcentual global al ticket activo.
+	Future<String?> aplicarDescuentoTicketPorcentaje(double porcentaje) async {
+		final servicio = await ref.read(servicioCajaProvider.future);
+		final error = servicio.aplicarDescuentoTicketPorcentaje(porcentaje);
+		if (error == null) {
+			await _refrescarDespuesDeOperacionCarrito();
+		}
+		return error;
+	}
+
+	/// Actualiza cantidad de una linea del carrito.
+	Future<String?> actualizarCantidadLinea(int indice, double cantidad) async {
+		final servicio = await ref.read(servicioCajaProvider.future);
+		final error = await servicio.actualizarCantidadLinea(indice, cantidad);
+		if (error == null) {
+			await _refrescarDespuesDeOperacionCarrito();
+		}
+		return error;
+	}
+
+	/// Fija precio unitario manual en una linea del carrito.
+	Future<String?> actualizarPrecioLinea(int indice, double precioUnitario) async {
+		final servicio = await ref.read(servicioCajaProvider.future);
+		final error = servicio.actualizarPrecioLinea(indice, precioUnitario);
+		if (error == null) {
+			await _refrescarDespuesDeOperacionCarrito();
+		}
+		return error;
+	}
+
 	/// Vacia carrito activo.
 	Future<void> vaciarCarrito() async {
 		final servicio = await ref.read(servicioCajaProvider.future);
@@ -582,6 +651,7 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 			actual.copiarCon(
 				lineas: servicio.obtenerCarrito(),
 				total: servicio.calcularTotalCarrito(),
+				descuentoTicket: servicio.obtenerDescuentoTicket(),
 				productos: _filtrarProductos(_catalogoCompleto!, _categoriaSeleccionadaId, _textoBusqueda),
 				turnoAbierto: turno != null,
 				nombreVendedor: servicio.obtenerVendedorActivo()?.nombre,
@@ -657,6 +727,7 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 			categoriaSeleccionadaId: _categoriaSeleccionadaId,
 			lineas: servicio.obtenerCarrito(),
 			total: servicio.calcularTotalCarrito(),
+			descuentoTicket: servicio.obtenerDescuentoTicket(),
 			nombreTienda: tienda?.nombre ?? 'Tienda',
 			nombreVendedor: vendedor?.nombre,
 			nombreCliente: servicio.obtenerClienteActivo()?.nombre,

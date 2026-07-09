@@ -14,6 +14,8 @@ import 'package:posia_voice/posia_voice.dart';
 
 import '../providers/app_providers.dart';
 import '../util/teclado_util.dart';
+import '../utils/descuento_caja_util.dart';
+import '../utils/editar_linea_caja_util.dart';
 import '../utils/existencias_caja_util.dart';
 import '../voz/servicio_voz_dispositivo.dart';
 import '../widgets/resolucion_lineas_voz.dart';
@@ -334,9 +336,15 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 								child: PanelCarrito(
 									lineas: estado.lineas,
 									total: estado.total,
+									descuentoTicket: estado.descuentoTicket,
 									alEliminarLinea: (indice) {
 										ref.read(carritoNotifierProvider.notifier).eliminarLinea(indice);
 									},
+									alDobleClicLinea: (indice) => mostrarEditarLineaCaja(
+										context,
+										ref,
+										indice,
+									),
 								),
 							),
 							_BarraInferiorCajaMovil(
@@ -417,9 +425,15 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 									child: PanelCarrito(
 										lineas: estadoActual.lineas,
 										total: estadoActual.total,
+										descuentoTicket: estadoActual.descuentoTicket,
 										alEliminarLinea: (indice) {
 											ref.read(carritoNotifierProvider.notifier).eliminarLinea(indice);
 										},
+										alDobleClicLinea: (indice) => mostrarEditarLineaCaja(
+											context,
+											ref,
+											indice,
+										),
 									),
 								),
 								Padding(
@@ -472,6 +486,17 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 															: null,
 														icon: const Icon(Icons.request_quote),
 													),
+													if (puedeDescuentoEnCaja(ref))
+														IconButton.filledTonal(
+															tooltip: 'Descuento en nota',
+															onPressed: estadoActual.lineas.isNotEmpty
+																? () {
+																	Navigator.pop(sheetContext);
+																	mostrarDescuentoTicketCaja(context, ref);
+																}
+																: null,
+															icon: const Icon(Icons.discount_outlined),
+														),
 													IconButton.filledTonal(
 														tooltip: 'Vaciar carrito',
 														onPressed: estadoActual.lineas.isNotEmpty

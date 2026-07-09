@@ -227,6 +227,14 @@ class _PantallaCotizacionesAdminState extends ConsumerState<PantallaCotizaciones
                         label: const Text('WhatsApp'),
                       ),
                       const Spacer(),
+                      TextButton(
+                        style: TextButton.styleFrom(foregroundColor: PosiaColors.cancelar),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _confirmarEliminar(cotizacion);
+                        },
+                        child: const Text('Eliminar'),
+                      ),
                       FilledButton(
                         onPressed: () => Navigator.pop(ctx),
                         child: const Text('Cerrar'),
@@ -240,6 +248,59 @@ class _PantallaCotizacionesAdminState extends ConsumerState<PantallaCotizaciones
         );
       },
     );
+  }
+
+  Future<void> _confirmarEliminar(Cotizacion cotizacion) async {
+    final folio = cotizacion.id.substring(0, 8).toUpperCase();
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Eliminar cotización'),
+        content: Text(
+          'Se eliminará permanentemente la cotización $folio '
+          '(${formatearMoneda(cotizacion.total)}).',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: PosiaColors.cancelar),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmar != true) {
+      return;
+    }
+    try {
+      final servicio = await ref.read(servicioAdminProvider.future);
+      final ok = await servicio.eliminarCotizacion(cotizacion.id);
+      if (!mounted) {
+        return;
+      }
+      PosiaNotificaciones.mostrarSnackBar(
+        context,
+        SnackBar(
+          content: Text(ok ? 'Cotización eliminada' : 'No se pudo eliminar'),
+          backgroundColor: ok ? PosiaColors.cobrar : PosiaColors.cancelar,
+        ),
+      );
+      if (ok) {
+        ref.invalidate(cotizacionesAdminProvider(_dias));
+      }
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      PosiaNotificaciones.mostrarSnackBar(
+        context,
+        SnackBar(content: Text('$error'), backgroundColor: PosiaColors.cancelar),
+      );
+    }
   }
 
   Future<void> _compartirWhatsApp(String cotizacionId) async {

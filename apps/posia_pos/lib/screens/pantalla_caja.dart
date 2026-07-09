@@ -19,6 +19,8 @@ import '../providers/admin_providers.dart';
 import '../widgets/selector_cliente_caja.dart';
 import '../providers/app_providers.dart';
 import '../utils/compartir_ticket_digital_util.dart';
+import '../utils/descuento_caja_util.dart';
+import '../utils/editar_linea_caja_util.dart';
 import '../utils/existencias_caja_util.dart';
 import '../utils/imprimir_ticket_digital_util.dart';
 import '../utils/ticket_credito_util.dart';
@@ -445,9 +447,15 @@ class _ConstruirLayoutCaja extends ConsumerWidget {
 											child: PanelCarrito(
 												lineas: estado.lineas,
 												total: estado.total,
+												descuentoTicket: estado.descuentoTicket,
 												alEliminarLinea: (indice) {
 													ref.read(carritoNotifierProvider.notifier).eliminarLinea(indice);
 												},
+												alDobleClicLinea: (indice) => mostrarEditarLineaCaja(
+													context,
+													ref,
+													indice,
+												),
 											),
 										),
 									),
@@ -1381,6 +1389,7 @@ class _BarraAccionesCaja extends ConsumerWidget {
 	@override
 	Widget build(BuildContext context, WidgetRef ref) {
 		final puedeCobrar = total > 0.0;
+		final adminDescuento = puedeDescuentoEnCaja(ref);
 		return SafeArea(
 			top: false,
 			child: DecoratedBox(
@@ -1441,6 +1450,19 @@ class _BarraAccionesCaja extends ConsumerWidget {
 									alPresionar: () => ejecutarCotizacionCaja(context, ref),
 								),
 							),
+							if (adminDescuento)
+								Expanded(
+									child: BotonAccionCaja(
+										icono: Icons.discount_outlined,
+										etiqueta: estado.descuentoTicket > 0.0
+											? 'Nota ${formatearMoneda(estado.descuentoTicket)}'
+											: 'Desc. nota',
+										colorFondo: PosiaColors.neutro,
+										habilitado: puedeCobrar,
+										alPresionar: () =>
+											mostrarDescuentoTicketCaja(context, ref),
+									),
+								),
 							Expanded(
 								flex: 2,
 								child: BotonAccionCaja(
