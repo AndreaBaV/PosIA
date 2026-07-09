@@ -80,4 +80,43 @@ void main() {
     expect(ticket.height, greaterThan(900));
     expect(_contieneTextoPie(png, 'Gracias por su compra'), isTrue);
   });
+
+  test('pagare incluye bloque de plazo y vencimiento', () {
+    final venta = Venta(
+      id: 'venta-credito-001',
+      tiendaId: 'tienda-test',
+      cajaId: 'caja-1',
+      clienteId: 'cli-1',
+      total: 250.0,
+      metodoPago: MetodoPago.credito,
+      estado: EstadoVenta.completada,
+      creadaEn: DateTime.utc(2026, 6, 22, 10),
+      creditoDias: 15,
+      creditoVenceEn: DateTime.utc(2026, 7, 7),
+      lineas: const [
+        LineaVenta(
+          productoId: 'p1',
+          nombreProducto: 'Arroz 1kg',
+          cantidad: 2,
+          precioUnitario: 125.0,
+          reglaPrecio: ReglaPrecio.precioBase,
+        ),
+      ],
+    );
+    final contenido = construirTicketDigitalPagare(
+      venta: venta,
+      nombreTienda: 'Abarrotes Centro',
+      nombreCliente: 'Juan Lopez',
+      telefonoCliente: '5551234567',
+      direccionCliente: 'Calle 5 numero 10 colonia centro ciudad larga',
+      etiquetaCopia: 'COPIA CLIENTE',
+    );
+    final png = renderizarTicketDigitalPng(contenido: contenido);
+    final ticket = img.decodePng(png)!;
+
+    expect(contenido.creditoPlazoDias, 15);
+    expect(contenido.creditoVenceEn, isNotNull);
+    expect(ticket.height, greaterThan(700));
+    expect(_contieneTextoPie(png, 'FIRMA DEL DEUDOR'), isTrue);
+  });
 }

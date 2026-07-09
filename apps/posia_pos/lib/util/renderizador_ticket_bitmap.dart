@@ -246,18 +246,62 @@ Uint8List renderizarTicketDigitalPng({
       ancho,
     );
   }
+  if (contenido.creditoPlazoDias != null && contenido.creditoVenceEn != null) {
+    y += 6;
+    _dibujarSeparador(image, y, ancho: ancho);
+    y += 12;
+    y = _dibujarTextoCentrado(
+      image,
+      'PLAZO DE PAGO',
+      y: y,
+      font: img.arial24,
+    );
+    y += 4;
+    y = _dibujarFilaMeta(
+      image,
+      'Plazo',
+      '${contenido.creditoPlazoDias} día(s)',
+      y,
+      ancho,
+    );
+    y = _dibujarFilaMeta(
+      image,
+      'Vence',
+      formatearFechaCredito(contenido.creditoVenceEn!.toLocal()),
+      y,
+      ancho,
+    );
+  }
   y += 6;
   _dibujarSeparador(image, y, ancho: ancho);
   y += 12;
 
   for (final nota in contenido.notasPie) {
-    y = _dibujarTextoCentrado(
-      image,
-      _normalizar(nota),
-      y: y,
-      font: img.arial24,
-    );
-    y += 4;
+    if (nota.trim().isEmpty) {
+      y += 10;
+      continue;
+    }
+    if (contenido.tipo == TipoDocumentoTicketDigital.pagare ||
+        contenido.tipo == TipoDocumentoTicketDigital.comprobanteTraspaso) {
+      final anchoTexto = ancho - (_padding * 2);
+      y = _dibujarTextoEnColumna(
+        image,
+        _normalizar(nota),
+        x: _padding,
+        y: y,
+        anchoMax: anchoTexto,
+        font: img.arial24,
+      );
+      y += 4;
+    } else {
+      y = _dibujarTextoCentrado(
+        image,
+        _normalizar(nota),
+        y: y,
+        font: img.arial24,
+      );
+      y += 4;
+    }
   }
   y += _margenInferiorTicket;
 
@@ -329,9 +373,27 @@ int _estimarAltoTicket(
   if (contenido.cambio != null) {
     y += _altoLinea(img.arial24);
   }
+  if (contenido.creditoPlazoDias != null && contenido.creditoVenceEn != null) {
+    y += 18 + (_altoLinea(img.arial24) * 2);
+  }
   y += 18;
-  for (final _ in contenido.notasPie) {
-    y += _altoLinea(img.arial24) + 4;
+  for (final nota in contenido.notasPie) {
+    if (nota.trim().isEmpty) {
+      y += 10;
+      continue;
+    }
+    if (contenido.tipo == TipoDocumentoTicketDigital.pagare ||
+        contenido.tipo == TipoDocumentoTicketDigital.comprobanteTraspaso) {
+      final anchoTexto = ancho - (_padding * 2);
+      final lineas = _envolverTexto(
+        _normalizar(nota),
+        font: img.arial24,
+        anchoMax: anchoTexto,
+      );
+      y += _altoLinea(img.arial24) * lineas.length + 4;
+    } else {
+      y += _altoLinea(img.arial24) + 4;
+    }
   }
   y += _margenInferiorTicket;
 
@@ -401,6 +463,10 @@ int _estimarAltoMetaEncabezado(
 
   agregarCampo('Folio: ${_normalizar(contenido.folio)}');
   agregarCampo('Fecha: ${_formatearFecha(contenido.fecha)}');
+  if (contenido.etiquetaSecundaria != null &&
+      contenido.etiquetaSecundaria!.trim().isNotEmpty) {
+    agregarCampo('Copia: ${_normalizar(contenido.etiquetaSecundaria!.trim())}');
+  }
   if (contenido.nombreCliente != null &&
       contenido.nombreCliente!.trim().isNotEmpty) {
     agregarCampo(
@@ -511,6 +577,17 @@ int _dibujarDetallesEncabezado(
     xTexto,
     anchoTexto,
   );
+  if (contenido.etiquetaSecundaria != null &&
+      contenido.etiquetaSecundaria!.trim().isNotEmpty) {
+    yActual = _dibujarMetaEncabezado(
+      image,
+      'Copia',
+      contenido.etiquetaSecundaria!.trim(),
+      yActual,
+      xTexto,
+      anchoTexto,
+    );
+  }
   if (contenido.nombreCliente != null &&
       contenido.nombreCliente!.trim().isNotEmpty) {
     yActual = _dibujarMetaEncabezado(

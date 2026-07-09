@@ -79,8 +79,22 @@ double _calcularAltoPagina(TicketDigitalContenido contenido) {
   if (contenido.cambio != null) {
     alto += lineaPago;
   }
+  if (contenido.creditoPlazoDias != null && contenido.creditoVenceEn != null) {
+    alto += 42;
+  }
   alto += divisor;
-  alto += contenido.notasPie.length * notaPie;
+  for (final nota in contenido.notasPie) {
+    if (nota.trim().isEmpty) {
+      alto += 6;
+      continue;
+    }
+    if (contenido.tipo == TipoDocumentoTicketDigital.pagare ||
+        contenido.tipo == TipoDocumentoTicketDigital.comprobanteTraspaso) {
+      alto += nota.length > 48 ? notaPie * 2.4 : notaPie;
+    } else {
+      alto += notaPie;
+    }
+  }
   alto += margenExtra;
   // Margenes superior e inferior definidos en [pageFormat].
   return alto + 30;
@@ -160,6 +174,9 @@ List<pw.Widget> _construirContenido({
     pw.SizedBox(height: 4),
     _filaMeta('Folio', contenido.folio),
     _filaMeta('Fecha', _fechaLegible(contenido.fecha)),
+    if (contenido.etiquetaSecundaria != null &&
+        contenido.etiquetaSecundaria!.trim().isNotEmpty)
+      _filaMeta('Copia', contenido.etiquetaSecundaria!.trim()),
     if (contenido.nombreCliente != null)
       _filaMeta('Cliente', contenido.nombreCliente!),
     for (final entry in contenido.campos.entries)
@@ -307,16 +324,63 @@ List<pw.Widget> _construirContenido({
     ],
     if (contenido.cambio != null)
       _filaMeta('Cambio', formatearMoneda(contenido.cambio!)),
-    _lineaDivisora(),
-    for (final nota in contenido.notasPie)
-      pw.Padding(
-        padding: const pw.EdgeInsets.only(bottom: 2),
-        child: pw.Text(
-          nota,
-          textAlign: pw.TextAlign.center,
-          style: const pw.TextStyle(fontSize: 7.5, color: _grisTexto),
+    if (contenido.creditoPlazoDias != null &&
+        contenido.creditoVenceEn != null) ...[
+      pw.SizedBox(height: 6),
+      pw.Container(
+        padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+        decoration: pw.BoxDecoration(
+          color: const PdfColor.fromInt(0xFFFFF3E0),
+          border: pw.Border.all(color: _naranjaCredito, width: 0.8),
+          borderRadius: pw.BorderRadius.circular(4),
+        ),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+          children: [
+            pw.Text(
+              'PLAZO DE PAGO',
+              textAlign: pw.TextAlign.center,
+              style: pw.TextStyle(
+                fontSize: 8.5,
+                fontWeight: pw.FontWeight.bold,
+                color: _naranjaCredito,
+                letterSpacing: 0.3,
+              ),
+            ),
+            pw.SizedBox(height: 4),
+            _filaMeta('Plazo', '${contenido.creditoPlazoDias} día(s)'),
+            _filaMeta(
+              'Vence',
+              formatearFechaCredito(contenido.creditoVenceEn!.toLocal()),
+            ),
+          ],
         ),
       ),
+    ],
+    _lineaDivisora(),
+    for (final nota in contenido.notasPie)
+      if (nota.trim().isEmpty)
+        pw.SizedBox(height: 6)
+      else
+        pw.Padding(
+          padding: const pw.EdgeInsets.only(bottom: 3),
+          child: pw.Text(
+            nota,
+            textAlign:
+                contenido.tipo == TipoDocumentoTicketDigital.pagare ||
+                    contenido.tipo ==
+                        TipoDocumentoTicketDigital.comprobanteTraspaso
+                ? pw.TextAlign.left
+                : pw.TextAlign.center,
+            style: pw.TextStyle(
+              fontSize: 7.5,
+              color: _grisTexto,
+              fontWeight: nota == 'FIRMA DEL DEUDOR'
+                  ? pw.FontWeight.bold
+                  : pw.FontWeight.normal,
+            ),
+          ),
+        ),
   ];
 }
 
