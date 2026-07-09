@@ -1,6 +1,8 @@
 /// Acceso a usuarios en Postgres para autenticacion del hub.
 library;
 
+import 'dart:convert';
+
 import 'package:posia_core/posia_core.dart';
 import 'package:postgres/postgres.dart';
 
@@ -72,6 +74,7 @@ class AlmacenUsuariosPostgres {
 			'codigo': cols['codigo'] as String? ?? '',
 			'rol': cols['rol'] as String? ?? 'empleado',
 			'tiendaId': cols['tienda_id'] as String?,
+			'rolPersonalizadoId': cols['rol_personalizado_id'] as String?,
 			'activo': (cols['activo'] as int? ?? 0) == 1,
 		};
 	}
@@ -106,7 +109,7 @@ class AlmacenUsuariosPostgres {
 		final conexion = await _obtenerConexion();
 		final filas = await conexion.execute('''
 			SELECT id, nombre, codigo, rol, tienda_id, activo,
-				pin_credencial, creado_en, actualizado_en
+				pin_credencial, creado_en, actualizado_en, rol_personalizado_id
 			FROM users
 			ORDER BY nombre
 		''');
@@ -119,5 +122,49 @@ class AlmacenUsuariosPostgres {
 				'actualizadoEn': cols['actualizado_en'] as String? ?? '',
 			};
 		}).where((u) => (u['id'] as String).isNotEmpty).toList();
+	}
+
+	/// Lista roles personalizados del tenant para replicar en dispositivos POS.
+	Future<List<Map<String, Object?>>> listarRolesPersonalizados() async {
+		final conexion = await _obtenerConexion();
+		final filas = await conexion.execute('''
+			SELECT id, nombre, descripcion, permisos_json, categorias_json, activo, tienda_id
+			FROM custom_roles
+			ORDER BY nombre
+		''');
+		return filas.map((fila) {
+			final cols = fila.toColumnMap();
+			return {
+				'id': cols['id'] as String? ?? '',
+				'nombre': cols['nombre'] as String? ?? '',
+				'descripcion': cols['descripcion'] as String? ?? '',
+				'permisosAdmin': _decodificarListaJson(cols['permisos_json']),
+				'categoriasPermitidas': _decodificarListaJson(cols['categorias_json']),
+				'activo': (cols['activo'] as int? ?? 0) == 1,
+				'tiendaId': cols['tienda_id'] as String?,
+			};
+		}).where((r) => (r['id'] as String).isNotEmpty).toList();
+	}
+
+	List<String> _decodificarListaJson(Object? crudo) {
+		if (crudo == null) {
+			return [];
+		}
+		if (crudo is List) {
+			return crudo.map((e) => e.toString()).toList();
+		}
+		final texto = crudo.toString();
+		if (texto.isEmpty) {
+			return [];
+		}
+		try {
+			final lista = jsonDecode(texto);
+			if (lista is! List) {
+				return [];
+			}
+			return lista.map((e) => e.toString()).toList();
+		} on Object {
+			return [];
+		}
 	}
 }

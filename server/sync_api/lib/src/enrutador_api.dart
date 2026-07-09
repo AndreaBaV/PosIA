@@ -43,6 +43,7 @@ class EnrutadorApi {
 			..post('/v1/auth/login', _manejarLoginAuth)
 			..get('/v1/stores', _manejarListarTiendas)
 			..get('/v1/users', _manejarListarUsuarios)
+			..get('/v1/custom-roles', _manejarListarRolesPersonalizados)
 			..post('/v1/events', _manejarEnvioEventos)
 			..get('/v1/events', _manejarConsultaEventos);
 		return const Pipeline()
@@ -118,6 +119,15 @@ class EnrutadorApi {
 		}
 		final usuarios = await almacen.listarUsuarios();
 		return _respuestaJson({'usuarios': usuarios});
+	}
+
+	Future<Response> _manejarListarRolesPersonalizados(Request solicitud) async {
+		final almacen = _usuarios;
+		if (almacen == null) {
+			return _respuestaJson({'error': 'Auth no disponible sin Postgres'}, codigo: 503);
+		}
+		final roles = await almacen.listarRolesPersonalizados();
+		return _respuestaJson({'roles': roles});
 	}
 
 	/// Recibe lote de eventos de un dispositivo.

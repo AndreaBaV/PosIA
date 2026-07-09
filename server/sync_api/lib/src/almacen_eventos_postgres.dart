@@ -23,6 +23,7 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 	Future<void> inicializar() async {
 		final conexion = await _abrirConexion();
 		await EsquemaPosPostgres.crearEsquemaCompleto(conexion);
+		await _reproyectarEventosEspejoPendientes(conexion);
 	}
 
 	@override
@@ -50,7 +51,10 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 						},
 					);
 					if (resultado.affectedRows <= 0) {
-						return false;
+						// Id duplicado: el evento ya esta en sync_events pero la tabla
+						// espejo pudo no haberse actualizado (hub antiguo sin proyector).
+						await ProyectorEventosPostgres(tx).aplicar(evento);
+						return true;
 					}
 					await ProyectorEventosPostgres(tx).aplicar(evento);
 					return true;
@@ -151,6 +155,53 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 			tipo: columnas['type'] as String,
 			payload: payload,
 			creadoEn: (columnas['created_at'] as DateTime).toUtc(),
+		);
+	}
+
+	/// Reproyecta eventos de roles/usuarios que quedaron solo en sync_events.
+	Future<void> _reproyectarEventosEspejoPendientes(Connection conexion) async {
+		const claveMeta = 'mirror_backfill_roles_v1';
+		await conexion.execute('''
+			CREATE TABLE IF NOT EXISTS schema_meta (
+				clave TEXT PRIMARY KEY,
+				valor TEXT NOT NULL
+			)
+		''');
+		final existente = await conexion.execute(
+			Sql.named('SELECT valor FROM schema_meta WHERE clave = @clave'),
+			parameters: {'clave': claveMeta},
+		);
+		if (existente.isNotEmpty) {
+			return;
+		}
+		final filas = await conexion.execute('''
+			SELECT seq, id, store_id, device_id, type, payload, created_at
+			FROM sync_events
+			WHERE type IN ('customRoleUpserted', 'userUpserted')
+			ORDER BY seq ASC
+		''');
+		for (final fila in filas) {
+			try {
+				final evento = _mapearFila(fila);
+				await conexion.runTx((tx) async {
+					await ProyectorEventosPostgres(tx).aplicar(evento);
+				});
+			} on Object catch (error) {
+				stdout.writeln(
+					'Sync backfill: error en ${fila.toColumnMap()['type']}: $error',
+				);
+			}
+		}
+		await conexion.execute(
+			Sql.named('''
+				INSERT INTO schema_meta (clave, valor)
+				VALUES (@clave, @valor)
+				ON CONFLICT (clave) DO NOTHING
+			'''),
+			parameters: {
+				'clave': claveMeta,
+				'valor': DateTime.now().toUtc().toIso8601String(),
+			},
 		);
 	}
 }

@@ -155,6 +155,7 @@ class UsuarioHub {
 		required this.codigo,
 		required this.rol,
 		this.tiendaId,
+		this.rolPersonalizadoId,
 		required this.activo,
 		required this.pinCredencial,
 		required this.creadoEn,
@@ -166,8 +167,30 @@ class UsuarioHub {
 	final String codigo;
 	final String rol;
 	final String? tiendaId;
+	final String? rolPersonalizadoId;
 	final bool activo;
 	final String pinCredencial;
 	final String creadoEn;
 	final String actualizadoEn;
+}
+
+/// Rol personalizado replicado desde el hub Postgres.
+class RolPersonalizadoHub {
+	const RolPersonalizadoHub({
+		required this.id,
+		required this.nombre,
+		this.descripcion = '',
+		required this.permisosAdmin,
+		this.categoriasPermitidas = const [],
+		required this.activo,
+		this.tiendaId,
+	});
+
+	final String id;
+	final String nombre;
+	final String descripcion;
+	final List<String> permisosAdmin;
+	final List<String> categoriasPermitidas;
+	final bool activo;
+	final String? tiendaId;
 }

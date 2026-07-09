@@ -523,8 +523,9 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 						tiendaId: tiendaSeleccionada,
 						limpiarTiendaId: rolSeleccionado == RolUsuario.administrador,
 						rolPersonalizadoId: rolPersonalizadoId,
-						limpiarRolPersonalizado: rolSeleccionado == RolUsuario.administrador &&
-							rolPersonalizadoId == null,
+						limpiarRolPersonalizado: rolPersonalizadoId == null &&
+							(rolSeleccionado == RolUsuario.administrador ||
+								editando.rolPersonalizadoId != null),
 					),
 					operador: operador,
 					nuevoPin: _pinController.text,

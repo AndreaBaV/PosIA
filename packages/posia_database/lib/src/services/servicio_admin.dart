@@ -843,6 +843,7 @@ class ServicioAdmin {
       ),
     );
     await importarUsuariosDesdeHub();
+    await importarRolesPersonalizadosDesdeHub();
     final repo = _usuarioRepository;
     if (repo != null) {
       final activos = await repo.listarTodos();
@@ -889,6 +890,7 @@ class ServicioAdmin {
         codigo: remoto.codigo,
         rol: rol,
         tiendaId: remoto.tiendaId,
+        rolPersonalizadoId: remoto.rolPersonalizadoId,
         activo: remoto.activo,
         pinCredencial: remoto.pinCredencial,
         creadoEn: remoto.creadoEn.isNotEmpty ? remoto.creadoEn : ahora,
@@ -898,6 +900,38 @@ class ServicioAdmin {
       if (aplicado) {
         importados++;
       }
+    }
+    return importados;
+  }
+
+  /// Descarga roles personalizados del hub Postgres e importa en SQLite local.
+  Future<int> importarRolesPersonalizadosDesdeHub() async {
+    final repo = _rolPersonalizadoRepository;
+    if (repo == null) {
+      return 0;
+    }
+    final cliente = await _clienteHubOpcional();
+    if (cliente == null || !await cliente.tieneAuthHub()) {
+      return 0;
+    }
+    final remotos = await cliente.obtenerRolesPersonalizados();
+    if (remotos.isEmpty) {
+      return 0;
+    }
+    var importados = 0;
+    for (final remoto in remotos) {
+      await repo.guardar(
+        RolPersonalizado(
+          id: remoto.id,
+          nombre: remoto.nombre,
+          descripcion: remoto.descripcion,
+          permisosAdmin: remoto.permisosAdmin,
+          categoriasPermitidas: remoto.categoriasPermitidas,
+          activo: remoto.activo,
+          tiendaId: remoto.tiendaId,
+        ),
+      );
+      importados++;
     }
     return importados;
   }

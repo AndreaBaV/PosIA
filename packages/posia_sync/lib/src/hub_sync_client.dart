@@ -53,8 +53,9 @@ class HubSyncClient {
       }
       final json = jsonDecode(respuesta.body) as Map<String, Object?>;
       final aceptados = json['accepted'] as int? ?? 0;
-      final recibidos = json['received'] as int? ?? eventos.length;
-      return aceptados > 0 || recibidos > 0;
+      // Solo cuenta como exito si el hub persistio y proyecto el evento.
+      // Antes, received > 0 marcaba enviado aunque accepted = 0 (fallo en Neon).
+      return aceptados >= eventos.length;
     } on Object {
       return false;
     }
@@ -436,6 +437,7 @@ class HubSyncClient {
           codigo: map['codigo'] as String? ?? '',
           rol: map['rol'] as String? ?? 'empleado',
           tiendaId: map['tiendaId'] as String?,
+          rolPersonalizadoId: map['rolPersonalizadoId'] as String?,
           activo: _leerActiva(map['activo']),
           pinCredencial: pinCredencial,
           creadoEn: map['creadoEn'] as String? ?? '',
@@ -444,6 +446,58 @@ class HubSyncClient {
       );
     }
     return usuarios;
+  }
+
+  Future<List<RolPersonalizadoHub>> obtenerRolesPersonalizados() async {
+    final uri = Uri.parse('$_urlBase/v1/custom-roles');
+    try {
+      final respuesta = await _clienteHttp
+          .get(uri, headers: _construirCabeceras())
+          .timeout(const Duration(seconds: TIMEOUT_HUB_SYNC_SEGUNDOS));
+      if (respuesta.statusCode != 200) {
+        return const [];
+      }
+      final json = jsonDecode(respuesta.body) as Map<String, dynamic>;
+      return _mapearRolesPersonalizados(json['roles']);
+    } on Object {
+      return const [];
+    }
+  }
+
+  List<RolPersonalizadoHub> _mapearRolesPersonalizados(Object? crudo) {
+    if (crudo is! List) {
+      return const [];
+    }
+    final roles = <RolPersonalizadoHub>[];
+    for (final item in crudo) {
+      if (item is! Map) {
+        continue;
+      }
+      final map = Map<String, dynamic>.from(item);
+      final id = map['id'] as String? ?? '';
+      if (id.isEmpty) {
+        continue;
+      }
+      roles.add(
+        RolPersonalizadoHub(
+          id: id,
+          nombre: map['nombre'] as String? ?? '',
+          descripcion: map['descripcion'] as String? ?? '',
+          permisosAdmin: _leerListaTexto(map['permisosAdmin']),
+          categoriasPermitidas: _leerListaTexto(map['categoriasPermitidas']),
+          activo: _leerActiva(map['activo']),
+          tiendaId: map['tiendaId'] as String?,
+        ),
+      );
+    }
+    return roles;
+  }
+
+  List<String> _leerListaTexto(Object? crudo) {
+    if (crudo is! List) {
+      return const [];
+    }
+    return crudo.map((e) => e.toString()).toList();
   }
 
   Future<bool> mantenerHubVivo() async {
