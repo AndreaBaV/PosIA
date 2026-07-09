@@ -150,8 +150,20 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 										maxLines: 1,
 										overflow: TextOverflow.ellipsis,
 									),
-									const SizedBox(height: 6.0),
+									const SizedBox(height: 8.0),
 									InsigniaRol(rol: u.rol, compacto: true),
+									if (u.rolPersonalizadoId != null &&
+										datos.nombresRolPersonalizado[u.rolPersonalizadoId] != null)
+										Padding(
+											padding: const EdgeInsets.only(top: 4.0),
+											child: Text(
+												datos.nombresRolPersonalizado[u.rolPersonalizadoId]!,
+												style: Theme.of(context).textTheme.bodySmall?.copyWith(
+													color: Colors.indigo.shade700,
+													fontWeight: FontWeight.w500,
+												),
+											),
+										),
 									const SizedBox(height: 8.0),
 									Text(
 										'Código ${u.codigo} · $tiendaNombre',
@@ -238,6 +250,7 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 			operador.tiendaId ??
 			datos.tiendas.firstOrNull?.id;
 		var activo = editando?.activo ?? true;
+		String? rolPersonalizadoSeleccionado = editando?.rolPersonalizadoId;
 		final rolesDisponibles = _rolesDisponibles(operador, editando: editando);
 		if (!rolesDisponibles.contains(rolSeleccionado)) {
 			rolSeleccionado = rolesDisponibles.first;
@@ -310,6 +323,7 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 																	rolSeleccionado = v!;
 																	if (rolSeleccionado == RolUsuario.administrador) {
 																		tiendaSeleccionada = null;
+																		rolPersonalizadoSeleccionado = null;
 																	} else {
 																		tiendaSeleccionada ??=
 																			operador.tiendaId ?? datos.tiendas.firstOrNull?.id;
@@ -345,6 +359,37 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 																	helperText: operador.rol == RolUsuario.administrador
 																		? null
 																		: 'Solo su tienda asignada',
+																),
+															),
+														],
+														if (rolSeleccionado != RolUsuario.administrador &&
+															operador.rol == RolUsuario.administrador &&
+															datos.rolesPersonalizados.isNotEmpty) ...[
+															const SizedBox(height: 12.0),
+															DropdownButtonFormField<String?>(
+																initialValue: rolPersonalizadoSeleccionado,
+																items: [
+																	const DropdownMenuItem<String?>(
+																		value: null,
+																		child: Text('Sin rol personalizado'),
+																	),
+																	...datos.rolesPersonalizados.map(
+																		(r) => DropdownMenuItem<String?>(
+																			value: r.id,
+																			child: Text(r.nombre),
+																		),
+																	),
+																],
+																onChanged: puedeEditarRol
+																	? (v) => setLocal(
+																		() => rolPersonalizadoSeleccionado = v,
+																	)
+																	: null,
+																decoration: const InputDecoration(
+																	labelText: 'Rol personalizado',
+																	border: OutlineInputBorder(),
+																	helperText:
+																		'Opcional: limita secciones del panel admin',
 																),
 															),
 														],
@@ -417,6 +462,7 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 													rolSeleccionado: rolSeleccionado,
 													tiendaSeleccionada: tiendaSeleccionada,
 													activo: activo,
+													rolPersonalizadoId: rolPersonalizadoSeleccionado,
 												);
 												if (ctx.mounted && !ok) {
 													setLocal(() => guardando = false);
@@ -453,6 +499,7 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 		required RolUsuario rolSeleccionado,
 		required String? tiendaSeleccionada,
 		required bool activo,
+		String? rolPersonalizadoId,
 	}) async {
 		try {
 			final servicio = await ref.read(servicioAdminProvider.future);
@@ -463,6 +510,7 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 					rol: rolSeleccionado,
 					pin: _pinController.text,
 					tiendaId: tiendaSeleccionada,
+					rolPersonalizadoId: rolPersonalizadoId,
 					operador: operador,
 				);
 				usuarioId = creado.id;
@@ -474,6 +522,9 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 						activo: activo,
 						tiendaId: tiendaSeleccionada,
 						limpiarTiendaId: rolSeleccionado == RolUsuario.administrador,
+						rolPersonalizadoId: rolPersonalizadoId,
+						limpiarRolPersonalizado: rolSeleccionado == RolUsuario.administrador &&
+							rolPersonalizadoId == null,
 					),
 					operador: operador,
 					nuevoPin: _pinController.text,
@@ -481,6 +532,11 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 				usuarioId = actualizado.id;
 				if (actualizado.id == ref.read(sesionUsuarioProvider)?.id) {
 					ref.read(sesionUsuarioProvider.notifier).iniciar(actualizado);
+					if (actualizado.rolPersonalizadoId != null) {
+						ref.invalidate(
+							rolPersonalizadoPorIdProvider(actualizado.rolPersonalizadoId!),
+						);
+					}
 				}
 			}
 			if (rolSeleccionado != RolUsuario.administrador) {
@@ -565,11 +621,15 @@ class _DatosUsuarios {
 		required this.usuarios,
 		required this.tiendas,
 		required this.nombresTienda,
+		required this.rolesPersonalizados,
+		required this.nombresRolPersonalizado,
 	});
 
 	final List<Usuario> usuarios;
 	final List<Tienda> tiendas;
 	final Map<String, String> nombresTienda;
+	final List<RolPersonalizado> rolesPersonalizados;
+	final Map<String, String> nombresRolPersonalizado;
 }
 
 final _usuariosAdminProvider = FutureProvider<_DatosUsuarios>((ref) async {
@@ -581,9 +641,14 @@ final _usuariosAdminProvider = FutureProvider<_DatosUsuarios>((ref) async {
 	final operador = ref.watch(sesionUsuarioProvider);
 	final usuarios = await servicio.listarUsuarios(operador: operador);
 	final tiendas = await servicio.obtenerTiendasPermitidas(operador: operador);
+	final rolesPersonalizados = await servicio.listarRolesPersonalizadosActivos();
 	return _DatosUsuarios(
 		usuarios: usuarios,
 		tiendas: tiendas,
 		nombresTienda: {for (final t in tiendas) t.id: t.nombre},
+		rolesPersonalizados: rolesPersonalizados,
+		nombresRolPersonalizado: {
+			for (final r in rolesPersonalizados) r.id: r.nombre,
+		},
 	);
 });

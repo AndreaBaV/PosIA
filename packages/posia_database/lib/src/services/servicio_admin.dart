@@ -50,6 +50,7 @@ import '../repositories/vendedor_repository.dart';
 import '../repositories/venta_repository.dart';
 import '../repositories/almacen_repository.dart';
 import '../repositories/presentacion_repository.dart';
+import '../repositories/rol_personalizado_repository.dart';
 import '../repositories/sync_state_repository.dart';
 import '../utils/limpiador_base_local.dart';
 import '../utils/sincronizador_vendedor_usuario.dart';
@@ -93,6 +94,7 @@ class ServicioAdmin {
     VarianteRepository? varianteRepository,
     AlmacenRepository? almacenRepository,
     PresentacionRepository? presentacionRepository,
+    RolPersonalizadoRepository? rolPersonalizadoRepository,
     ServicioCorteCaja? servicioCorteCaja,
     required Database baseDatos,
     required String tiendaActivaId,
@@ -119,6 +121,7 @@ class ServicioAdmin {
        _varianteRepository = varianteRepository,
        _almacenRepository = almacenRepository,
        _presentacionRepository = presentacionRepository,
+       _rolPersonalizadoRepository = rolPersonalizadoRepository,
        _servicioCorteCaja = servicioCorteCaja,
        _baseDatos = baseDatos,
        _tiendaActivaId = tiendaActivaId,
@@ -146,6 +149,7 @@ class ServicioAdmin {
   final VarianteRepository? _varianteRepository;
   final AlmacenRepository? _almacenRepository;
   final PresentacionRepository? _presentacionRepository;
+  final RolPersonalizadoRepository? _rolPersonalizadoRepository;
   final ServicioCorteCaja? _servicioCorteCaja;
   final Database _baseDatos;
   final String _tiendaActivaId;
@@ -735,38 +739,87 @@ class ServicioAdmin {
   /// Si la cola esta vacia, reencola el catalogo local (categorias y productos)
   /// para recuperar altas hechas offline que nunca quedaron pendientes.
   /// Retorna resultado con eventos enviados y recibidos.
-  Future<ResultadoSync> sincronizarManual() async {
+  Future<ResultadoSync> sincronizarManual({ReporteProgresoSync? alProgreso}) async {
+    alProgreso?.call(
+      const ProgresoSync(
+        fase: FaseProgresoSync.preparar,
+        indice: 0,
+        total: 0,
+        mensaje: 'Verificando cola de sincronización…',
+      ),
+    );
     final pendientes = await _syncEventRepository.obtenerPendientes();
     if (pendientes.isEmpty) {
-      await _reencolarCatalogoLocalPendiente();
+      await _reencolarCatalogoLocalPendiente(alProgreso: alProgreso);
     }
-    return _syncOrchestrator.sincronizarCompleto();
+    return _syncOrchestrator.sincronizarCompleto(alProgreso: alProgreso);
   }
 
-  /// Encola de nuevo categorias y productos locales para subirlos al hub.
+  /// Encola de nuevo categorias, productos y roles locales para subirlos al hub.
   ///
   /// Solo se invoca cuando no hay pendientes/errores: evita duplicar envios en
   /// cada sync manual y repara el caso "catalogo local sin cola".
-  Future<int> _reencolarCatalogoLocalPendiente() async {
+  Future<int> _reencolarCatalogoLocalPendiente({
+    ReporteProgresoSync? alProgreso,
+  }) async {
     if (_tiendaActivaId.trim().isEmpty || _cajaId.trim().isEmpty) {
       return 0;
     }
-    var encolados = 0;
     final categorias = await listarCategorias();
+    final productos = await listarProductosCatalogo();
+    final roles = await _rolPersonalizadoRepository?.listarTodos() ?? [];
+    final total = categorias.length + productos.length + roles.length;
+    var encolados = 0;
+    alProgreso?.call(
+      ProgresoSync(
+        fase: FaseProgresoSync.preparar,
+        indice: 0,
+        total: total,
+        mensaje: total == 0
+            ? 'Preparando datos locales…'
+            : 'Preparando catálogo local (0 de $total)…',
+      ),
+    );
     for (final categoria in categorias) {
       await _registrarEventoCategoria(categoria);
       encolados = encolados + 1;
+      _reportarPreparacionLocal(alProgreso, encolados, total);
     }
-    final productos = await listarProductosCatalogo();
     for (final producto in productos) {
       await _registrarEventoProducto(producto);
       encolados = encolados + 1;
+      _reportarPreparacionLocal(alProgreso, encolados, total);
+    }
+    for (final rol in roles) {
+      await _registrarEventoRolPersonalizado(rol);
+      encolados = encolados + 1;
+      _reportarPreparacionLocal(alProgreso, encolados, total);
     }
     return encolados;
   }
 
+  void _reportarPreparacionLocal(
+    ReporteProgresoSync? alProgreso,
+    int indice,
+    int total,
+  ) {
+    if (total <= 0) {
+      return;
+    }
+    alProgreso?.call(
+      ProgresoSync(
+        fase: FaseProgresoSync.preparar,
+        indice: indice,
+        total: total,
+        mensaje: 'Preparando catálogo local ($indice de $total)…',
+      ),
+    );
+  }
+
   /// Limpia placeholders, compara con la nube y descarga datos si hace falta.
-  Future<ResultadoReconciliacionHub> reconciliarConHub() async {
+  Future<ResultadoReconciliacionHub> reconciliarConHub({
+    ReporteProgresoSync? alProgreso,
+  }) async {
     final servicio = ServicioReconciliacionHub(
       baseDatos: _baseDatos,
       configRepository: _configRepository,
@@ -774,11 +827,21 @@ class ServicioAdmin {
       syncStateRepository: SyncStateRepository(baseDatos: _baseDatos),
       tiendaRepository: _tiendaRepository,
     );
-    return servicio.reconciliar();
+    return servicio.reconciliar(alProgreso: alProgreso);
   }
 
-  /// Empuja cambios locales y descarga usuarios del hub (reparacion).
-  Future<ResultadoSync> repararSincronizacionUsuarios() async {
+  /// Empuja cambios locales y descarga usuarios y roles del hub (reparacion).
+  Future<ResultadoSync> repararSincronizacionUsuarios({
+    ReporteProgresoSync? alProgreso,
+  }) async {
+    alProgreso?.call(
+      const ProgresoSync(
+        fase: FaseProgresoSync.preparar,
+        indice: 0,
+        total: 0,
+        mensaje: 'Descargando equipo desde la nube…',
+      ),
+    );
     await importarUsuariosDesdeHub();
     final repo = _usuarioRepository;
     if (repo != null) {
@@ -787,7 +850,14 @@ class ServicioAdmin {
         await _registrarEventoUsuario(usuario);
       }
     }
-    return sincronizarManual();
+    final rolesRepo = _rolPersonalizadoRepository;
+    if (rolesRepo != null) {
+      final roles = await rolesRepo.listarTodos();
+      for (final rol in roles) {
+        await _registrarEventoRolPersonalizado(rol);
+      }
+    }
+    return sincronizarManual(alProgreso: alProgreso);
   }
 
   /// Descarga cuentas del hub Postgres e importa en SQLite local.
@@ -1357,6 +1427,135 @@ class ServicioAdmin {
         .toList();
   }
 
+  Future<List<RolPersonalizado>> listarRolesPersonalizados({Usuario? operador}) async {
+    final repo = _rolPersonalizadoRepository;
+    if (repo == null) {
+      return [];
+    }
+    if (operador != null &&
+        !PoliticaAccesoAdmin.puedeGestionarRolesPersonalizados(operador)) {
+      return [];
+    }
+    return repo.listarTodos();
+  }
+
+  Future<List<RolPersonalizado>> listarRolesPersonalizadosActivos() async {
+    final repo = _rolPersonalizadoRepository;
+    if (repo == null) {
+      return [];
+    }
+    return repo.listarActivos();
+  }
+
+  Future<RolPersonalizado?> obtenerRolPersonalizado(String id) async {
+    return _rolPersonalizadoRepository?.obtenerPorId(id);
+  }
+
+  Future<RolPersonalizado> guardarRolPersonalizado(
+    RolPersonalizado rol, {
+    Usuario? operador,
+  }) async {
+    final repo = _rolPersonalizadoRepository;
+    if (repo == null) {
+      throw StateError('Repositorio de roles personalizados no configurado');
+    }
+    if (operador != null &&
+        !PoliticaAccesoAdmin.puedeGestionarRolesPersonalizados(operador)) {
+      throw StateError('Sin permiso para gestionar roles personalizados');
+    }
+    final nombre = rol.nombre.trim();
+    if (nombre.isEmpty) {
+      throw StateError('El nombre del rol es obligatorio');
+    }
+    if (rol.permisosAdmin.isEmpty) {
+      throw StateError('Seleccione al menos un permiso de administración');
+    }
+    for (final clave in rol.permisosAdmin) {
+      if (!PermisosAdmin.asignables.contains(clave)) {
+        throw StateError('Permiso no válido: $clave');
+      }
+    }
+    await repo.guardar(rol);
+    await _registrarEventoRolPersonalizado(rol);
+    await _sincronizarInmediatoConHub();
+    return rol;
+  }
+
+  Future<RolPersonalizado> crearRolPersonalizado({
+    required String nombre,
+    String descripcion = '',
+    required List<String> permisosAdmin,
+    List<String> categoriasPermitidas = const [],
+    String? tiendaId,
+    Usuario? operador,
+  }) async {
+    final rol = RolPersonalizado(
+      id: _generadorId.v4(),
+      nombre: nombre,
+      descripcion: descripcion,
+      permisosAdmin: permisosAdmin,
+      categoriasPermitidas: categoriasPermitidas,
+      activo: true,
+      tiendaId: tiendaId,
+    );
+    return guardarRolPersonalizado(rol, operador: operador);
+  }
+
+  Future<void> desactivarRolPersonalizado(String id, {Usuario? operador}) async {
+    final repo = _rolPersonalizadoRepository;
+    if (repo == null) {
+      throw StateError('Repositorio de roles personalizados no configurado');
+    }
+    if (operador != null &&
+        !PoliticaAccesoAdmin.puedeGestionarRolesPersonalizados(operador)) {
+      throw StateError('Sin permiso para gestionar roles personalizados');
+    }
+    final existente = await repo.obtenerPorId(id);
+    if (existente == null) {
+      throw StateError('Rol personalizado no encontrado');
+    }
+    await repo.guardar(existente.copiarCon(activo: false));
+    await _registrarEventoRolPersonalizado(existente.copiarCon(activo: false));
+    await _sincronizarInmediatoConHub();
+  }
+
+  Future<List<Producto>> listarProductosCatalogoFiltrados({
+    Usuario? operador,
+    RolPersonalizado? rolPersonalizado,
+  }) async {
+    final productos = await listarProductosCatalogo();
+    if (operador == null) {
+      return productos;
+    }
+    final permitidas = PoliticaAccesoAdmin.categoriasProductoPermitidas(
+      operador,
+      rolPersonalizado,
+    );
+    if (permitidas == null) {
+      return productos;
+    }
+    return productos
+        .where(
+          (p) =>
+              p.categoriaId != null && permitidas.contains(p.categoriaId),
+        )
+        .toList();
+  }
+
+  void validarAccesoProductoEnCategoria({
+    required Usuario operador,
+    RolPersonalizado? rolPersonalizado,
+    String? categoriaId,
+  }) {
+    if (!PoliticaAccesoAdmin.puedeEditarProductoEnCategoria(
+      operador,
+      rolPersonalizado,
+      categoriaId,
+    )) {
+      throw StateError('Sin permiso para editar productos de esta categoría');
+    }
+  }
+
   Future<List<Tienda>> obtenerTiendasPermitidas({Usuario? operador}) async {
     if (operador != null &&
         PermisosUsuario.puedeGestionarTodasLasTiendas(operador) &&
@@ -1380,6 +1579,7 @@ class ServicioAdmin {
     required RolUsuario rol,
     required String pin,
     String? tiendaId,
+    String? rolPersonalizadoId,
     Usuario? operador,
   }) async {
     final repo = _usuarioRepository;
@@ -1414,6 +1614,11 @@ class ServicioAdmin {
       );
     }
     final codigo = await _resolverCodigoUsuarioDisponible(repo, rol);
+    final rolPersonalizadoFinal = await _resolverRolPersonalizadoAsignado(
+      rol: rol,
+      rolPersonalizadoId: rolPersonalizadoId,
+      limpiarSiAdministrador: true,
+    );
     final usuario = Usuario(
       id: IdPosia.usuario(codigo),
       nombre: nombreLimpio,
@@ -1421,6 +1626,7 @@ class ServicioAdmin {
       pin: pin.trim(),
       rol: rol,
       tiendaId: rol == RolUsuario.administrador ? null : tiendaDestino,
+      rolPersonalizadoId: rolPersonalizadoFinal,
       activo: true,
     );
     if (operador != null &&
@@ -1499,6 +1705,14 @@ class ServicioAdmin {
       esPropiaCuenta: esPropiaCuenta,
     );
 
+    final rolPersonalizadoFinal = await _resolverRolPersonalizadoAsignado(
+      rol: rolFinal,
+      rolPersonalizadoId: esPropiaCuenta
+          ? existente.rolPersonalizadoId
+          : usuario.rolPersonalizadoId,
+      limpiarSiAdministrador: true,
+    );
+
     final actualizado = existente.copiarCon(
       nombre: nombreLimpio,
       codigo: codigoFinal,
@@ -1507,6 +1721,9 @@ class ServicioAdmin {
       activo: usuario.activo,
       tiendaId: tiendaFinal,
       limpiarTiendaId: limpiarTiendaId,
+      rolPersonalizadoId: rolPersonalizadoFinal,
+      limpiarRolPersonalizado:
+          rolFinal == RolUsuario.administrador && rolPersonalizadoFinal == null,
     );
     await repo.guardar(actualizado);
     await _registrarEventoUsuario(actualizado);
@@ -3524,6 +3741,27 @@ class ServicioAdmin {
     await _syncOrchestrator.registrarEvento(evento);
   }
 
+  Future<void> _registrarEventoRolPersonalizado(RolPersonalizado rol) async {
+    final evento = SyncEvent(
+      id: _generadorId.v4(),
+      tiendaId: _tiendaActivaId,
+      dispositivoId: _cajaId,
+      tipo: TipoSyncEvento.customRoleUpserted,
+      payload: {
+        'id': rol.id,
+        'nombre': rol.nombre,
+        'descripcion': rol.descripcion,
+        'permisosAdmin': rol.permisosAdmin,
+        'categoriasPermitidas': rol.categoriasPermitidas,
+        'activo': rol.activo,
+        'tiendaId': rol.tiendaId,
+      },
+      creadoEn: DateTime.now().toUtc(),
+      estado: EstadoSyncEvento.pendiente,
+    );
+    await _syncOrchestrator.registrarEvento(evento);
+  }
+
   Future<void> _registrarEventoCliente(Cliente cliente) async {
     final evento = SyncEvent(
       id: _generadorId.v4(),
@@ -3962,6 +4200,28 @@ class ServicioAdmin {
     throw StateError('No hay codigos de usuario disponibles');
   }
 
+  Future<String?> _resolverRolPersonalizadoAsignado({
+    required RolUsuario rol,
+    String? rolPersonalizadoId,
+    bool limpiarSiAdministrador = false,
+  }) async {
+    if (limpiarSiAdministrador && rol == RolUsuario.administrador) {
+      return null;
+    }
+    if (rolPersonalizadoId == null || rolPersonalizadoId.isEmpty) {
+      return null;
+    }
+    final repo = _rolPersonalizadoRepository;
+    if (repo == null) {
+      throw StateError('Repositorio de roles personalizados no configurado');
+    }
+    final rolPersonalizado = await repo.obtenerPorId(rolPersonalizadoId);
+    if (rolPersonalizado == null || !rolPersonalizado.activo) {
+      throw StateError('Rol personalizado no encontrado o inactivo');
+    }
+    return rolPersonalizado.id;
+  }
+
   Future<void> _registrarEventoUsuario(Usuario usuario) async {
     final repo = _usuarioRepository;
     if (repo == null) {
@@ -3982,6 +4242,7 @@ class ServicioAdmin {
         'codigo': usuario.codigo,
         'rol': usuario.rol.name,
         'tiendaId': usuario.tiendaId,
+        'rolPersonalizadoId': usuario.rolPersonalizadoId,
         'activo': usuario.activo,
         'pinCredencial': snapshot.pinCredencial,
         'creadoEn': snapshot.creadoEn,

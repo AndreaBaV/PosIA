@@ -2,22 +2,24 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:posia_core/posia_core.dart';
 import 'package:posia_ui/posia_ui.dart';
 
+import '../providers/admin_providers.dart';
 import '../util/catalogo_menu_admin.dart';
 
 /// Panel admin organizado por secciones operativas.
-class PantallaAdmin extends StatefulWidget {
+class PantallaAdmin extends ConsumerStatefulWidget {
 	const PantallaAdmin({required this.usuario, super.key});
 
 	final Usuario usuario;
 
 	@override
-	State<PantallaAdmin> createState() => _PantallaAdminState();
+	ConsumerState<PantallaAdmin> createState() => _PantallaAdminState();
 }
 
-class _PantallaAdminState extends State<PantallaAdmin> {
+class _PantallaAdminState extends ConsumerState<PantallaAdmin> {
 	final _busquedaController = TextEditingController();
 	String _filtro = '';
 
@@ -29,7 +31,11 @@ class _PantallaAdminState extends State<PantallaAdmin> {
 
 	@override
 	Widget build(BuildContext context) {
-		final catalogo = construirCatalogoMenuAdmin(widget.usuario);
+		final rolPersonalizado = ref.watch(rolPersonalizadoSesionProvider);
+		final catalogo = construirCatalogoMenuAdmin(
+			widget.usuario,
+			rolPersonalizado: rolPersonalizado,
+		);
 		final filtradas = filtrarCatalogoMenuAdmin(catalogo, _filtro);
 		final colorRol = PresentacionRol.color(widget.usuario.rol);
 		final compacto = LayoutResponsivo.de(context) == TipoPantalla.compacto;
@@ -122,7 +128,10 @@ class _PantallaAdminState extends State<PantallaAdmin> {
 																InsigniaRol(rol: widget.usuario.rol),
 																const SizedBox(height: 6.0),
 																Text(
-																	PermisosUsuario.descripcionRol(widget.usuario.rol),
+																	rolPersonalizado?.nombre ??
+																		PermisosUsuario.descripcionRol(
+																			widget.usuario.rol,
+																		),
 																	style: Theme.of(context).textTheme.bodySmall?.copyWith(
 																		color: Colors.grey.shade700,
 																	),

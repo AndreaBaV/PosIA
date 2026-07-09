@@ -27,6 +27,7 @@ import '../screens/pantalla_pedidos_admin.dart';
 import '../screens/pantalla_productos_admin.dart';
 import '../screens/pantalla_proveedores_admin.dart';
 import '../screens/pantalla_reportes_admin.dart';
+import '../screens/pantalla_roles_personalizados_admin.dart';
 import '../screens/pantalla_sync_admin.dart';
 import '../screens/pantalla_tipos_presentacion_admin.dart';
 import '../screens/pantalla_tiendas_admin.dart';
@@ -56,7 +57,14 @@ class EntradaMenuAdmin {
 	final Widget destino;
 	final List<String> palabrasClave;
 
-	bool visiblePara(Usuario? usuario) => tileAdminVisible(usuario, clave);
+	bool visiblePara(
+		Usuario? usuario, {
+		RolPersonalizado? rolPersonalizado,
+	}) => tileAdminVisible(
+		usuario,
+		clave,
+		rolPersonalizado: rolPersonalizado,
+	);
 
 	String get _textoBusqueda => [
 		seccion,
@@ -76,7 +84,10 @@ class EntradaMenuAdmin {
 }
 
 /// Entradas del panel admin visibles para el usuario, con palabras clave.
-List<EntradaMenuAdmin> construirCatalogoMenuAdmin(Usuario? usuario) {
+List<EntradaMenuAdmin> construirCatalogoMenuAdmin(
+	Usuario? usuario, {
+	RolPersonalizado? rolPersonalizado,
+}) {
 	const todas = [
 		EntradaMenuAdmin(
 			clave: 'mi_cuenta',
@@ -129,6 +140,19 @@ List<EntradaMenuAdmin> construirCatalogoMenuAdmin(Usuario? usuario) {
 			palabrasClave: [
 				'nomina', 'sueldo', 'pago', 'horas', 'tarifa', 'salario',
 				'empleado', 'trabajo',
+			],
+		),
+		EntradaMenuAdmin(
+			clave: 'roles_personalizados',
+			seccion: 'Cuenta',
+			titulo: 'Roles personalizados',
+			subtitulo: 'Permisos granulares de admin',
+			icono: Icons.admin_panel_settings,
+			color: Colors.indigo,
+			destino: PantallaRolesPersonalizadosAdmin(),
+			palabrasClave: [
+				'rol', 'permiso', 'acceso', 'pre-supervisor', 'personalizado',
+				'categorias', 'restriccion', 'equipo',
 			],
 		),
 		EntradaMenuAdmin(
@@ -425,7 +449,9 @@ List<EntradaMenuAdmin> construirCatalogoMenuAdmin(Usuario? usuario) {
 		),
 	];
 
-	return todas.where((e) => e.visiblePara(usuario)).toList();
+	return todas
+		.where((e) => e.visiblePara(usuario, rolPersonalizado: rolPersonalizado))
+		.toList();
 }
 
 /// Filtra entradas del catalogo por consulta de texto.

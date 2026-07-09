@@ -19,6 +19,7 @@ import '../repositories/cotizacion_repository.dart';
 import '../repositories/pedido_repository.dart';
 import '../repositories/precio_repository.dart';
 import '../repositories/presentacion_repository.dart';
+import '../repositories/rol_personalizado_repository.dart';
 import '../repositories/tienda_repository.dart';
 import '../repositories/traspaso_repository.dart';
 import '../repositories/inventario_repository.dart';
@@ -54,6 +55,7 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		PedidoRepository? pedidoRepository,
 		PrecioRepository? precioRepository,
 		PresentacionRepository? presentacionRepository,
+		RolPersonalizadoRepository? rolPersonalizadoRepository,
 		AsistenciaRepository? asistenciaRepository,
 	}) : _baseDatos = baseDatos,
 	     _productoRepository = productoRepository,
@@ -71,6 +73,7 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 	     _pedidoRepository = pedidoRepository,
 	     _precioRepository = precioRepository,
 	     _presentacionRepository = presentacionRepository,
+	     _rolPersonalizadoRepository = rolPersonalizadoRepository,
 	     _asistenciaRepository = asistenciaRepository;
 
 	final Database _baseDatos;
@@ -89,6 +92,7 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 	final PedidoRepository? _pedidoRepository;
 	final PrecioRepository? _precioRepository;
 	final PresentacionRepository? _presentacionRepository;
+	final RolPersonalizadoRepository? _rolPersonalizadoRepository;
 	final AsistenciaRepository? _asistenciaRepository;
 
 	/// Eventos cuya aplicacion no es idempotente por si sola (mutan stock con
@@ -193,6 +197,8 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 				await _aplicarTiendaRemota(evento);
 			case TipoSyncEvento.userUpserted:
 				await _aplicarUsuarioRemoto(evento);
+			case TipoSyncEvento.customRoleUpserted:
+				await _aplicarRolPersonalizadoRemoto(evento);
 			case TipoSyncEvento.cashShiftUpserted:
 				await _aplicarTurnoRemoto(evento);
 			case TipoSyncEvento.quoteUpserted:
@@ -298,6 +304,7 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			codigo: payload['codigo'] as String? ?? '',
 			rol: rol,
 			tiendaId: payload['tiendaId'] as String?,
+			rolPersonalizadoId: payload['rolPersonalizadoId'] as String?,
 			activo: payload['activo'] as bool? ?? true,
 			pinCredencial: pinCredencial,
 			creadoEn: payload['creadoEn'] as String? ?? evento.creadoEn.toIso8601String(),
@@ -431,6 +438,35 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			return;
 		}
 		await repo.guardar(categoria);
+	}
+
+	Future<void> _aplicarRolPersonalizadoRemoto(SyncEvent evento) async {
+		final repo = _rolPersonalizadoRepository;
+		if (repo == null) {
+			return;
+		}
+		final payload = evento.payload;
+		final id = payload['id'] as String? ?? '';
+		if (id.isEmpty) {
+			return;
+		}
+		final permisos = payload['permisosAdmin'];
+		final categorias = payload['categoriasPermitidas'];
+		await repo.guardar(
+			RolPersonalizado(
+				id: id,
+				nombre: payload['nombre'] as String? ?? '',
+				descripcion: payload['descripcion'] as String? ?? '',
+				permisosAdmin: permisos is List
+					? permisos.map((e) => e.toString()).toList()
+					: [],
+				categoriasPermitidas: categorias is List
+					? categorias.map((e) => e.toString()).toList()
+					: [],
+				activo: payload['activo'] as bool? ?? true,
+				tiendaId: payload['tiendaId'] as String?,
+			),
+		);
 	}
 
 	Future<void> _aplicarTraspasoSolicitado(

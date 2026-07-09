@@ -35,15 +35,30 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 	Widget build(BuildContext context) {
 		final productosAsync = ref.watch(productosCatalogoAdminProvider);
 		final categoriasAsync = ref.watch(_categoriasProductosProvider);
+		final usuario = ref.watch(sesionUsuarioProvider);
+		final rolPersonalizado = ref.watch(rolPersonalizadoSesionProvider);
+		final puedeImportar = usuario != null &&
+			tileAdminVisible(
+				usuario,
+				PermisosAdmin.importarProductos,
+				rolPersonalizado: rolPersonalizado,
+			);
+		final categoriasPermitidas = usuario == null
+			? null
+			: PoliticaAccesoAdmin.categoriasProductoPermitidas(
+				usuario,
+				rolPersonalizado,
+			);
 		return Scaffold(
 			appBar: AppBar(
 				title: const Text('Productos'),
 				actions: [
-					IconButton(
-						icon: const Icon(Icons.upload_file),
-						tooltip: 'Importar por lote',
-						onPressed: () => _abrirImportacion(context),
-					),
+					if (puedeImportar)
+						IconButton(
+							icon: const Icon(Icons.upload_file),
+							tooltip: 'Importar por lote',
+							onPressed: () => _abrirImportacion(context),
+						),
 					IconButton(
 						icon: const Icon(Icons.add_circle, color: PosiaColors.cobrar),
 						iconSize: 32.0,
@@ -53,7 +68,13 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 			),
 			body: productosAsync.when(
 				data: (productos) {
-					final categorias = categoriasAsync.value ?? [];
+					final categorias = (categoriasAsync.value ?? [])
+						.where(
+							(c) =>
+								categoriasPermitidas == null ||
+								categoriasPermitidas.contains(c.id),
+						)
+						.toList();
 					final nombresCat = {for (final c in categorias) c.id: c.nombre};
 					final filtrados = productos.where((p) {
 						if (_estadoFiltro == _FiltroEstadoProducto.activos && !p.activo) {
@@ -226,6 +247,24 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 	}
 
 	Future<void> _abrirFormulario(BuildContext context, [Producto? producto]) async {
+		final usuario = ref.read(sesionUsuarioProvider);
+		final rolPersonalizado = ref.read(rolPersonalizadoSesionProvider);
+		if (usuario != null &&
+			producto != null &&
+			!PoliticaAccesoAdmin.puedeEditarProductoEnCategoria(
+				usuario,
+				rolPersonalizado,
+				producto.categoriaId,
+			)) {
+			PosiaNotificaciones.mostrarSnackBar(
+				context,
+				const SnackBar(
+					content: Text('Sin permiso para editar productos de esta categoría'),
+					backgroundColor: PosiaColors.cancelar,
+				),
+			);
+			return;
+		}
 		final ok = await Navigator.push<bool>(
 			context,
 			MaterialPageRoute<bool>(

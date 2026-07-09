@@ -8,6 +8,7 @@ import 'aplicador_eventos_remotos.dart';
 import 'hub_sync_client.dart';
 import 'lan_sync_client.dart';
 import 'local_event_queue.dart';
+import 'progreso_sync.dart';
 
 class ResultadoSync {
   const ResultadoSync({
@@ -60,13 +61,22 @@ class SyncOrchestrator {
     await _colaLocal.encolar(evento);
   }
 
-  Future<int> sincronizarPendientes() async {
+  Future<int> sincronizarPendientes({ReporteProgresoSync? alProgreso}) async {
     final pendientes = await _colaLocal.obtenerPendientes();
     if (pendientes.isEmpty) {
       return 0;
     }
+    final total = pendientes.length;
     var enviados = 0;
     for (final evento in pendientes) {
+      alProgreso?.call(
+        ProgresoSync(
+          fase: FaseProgresoSync.enviar,
+          indice: enviados,
+          total: total,
+          mensaje: 'Enviando cambios (${enviados + 1} de $total)…',
+        ),
+      );
       final exito = await _transmitirEvento(evento);
       if (exito) {
         await _colaLocal.marcarEnviado(evento.id);
@@ -75,19 +85,28 @@ class SyncOrchestrator {
         await _colaLocal.marcarError(evento.id);
       }
     }
+    alProgreso?.call(
+      ProgresoSync(
+        fase: FaseProgresoSync.enviar,
+        indice: total,
+        total: total,
+        mensaje: 'Envío completado ($enviados de $total)',
+      ),
+    );
     return enviados;
   }
 
-  Future<ResultadoSync> sincronizarCompleto() async {
-    return _sincronizarInterno(reiniciarCursor: false);
+  Future<ResultadoSync> sincronizarCompleto({ReporteProgresoSync? alProgreso}) async {
+    return _sincronizarInterno(reiniciarCursor: false, alProgreso: alProgreso);
   }
 
-  Future<ResultadoSync> sincronizarDesdeOrigen() async {
-    return _sincronizarInterno(reiniciarCursor: true);
+  Future<ResultadoSync> sincronizarDesdeOrigen({ReporteProgresoSync? alProgreso}) async {
+    return _sincronizarInterno(reiniciarCursor: true, alProgreso: alProgreso);
   }
 
   Future<ResultadoSync> _sincronizarInterno({
     required bool reiniciarCursor,
+    ReporteProgresoSync? alProgreso,
   }) async {
     final clienteHub = _clienteHub;
     if (clienteHub == null) {
@@ -107,8 +126,24 @@ class SyncOrchestrator {
     // lento, pero POST/GET /v1/events aún pueden funcionar. Un return temprano
     // dejaba la cola local sin enviar mientras el pull de otra caja sí llegaba.
     final hubOk = await clienteHub.verificarSalud();
-    final enviados = await sincronizarPendientes();
-    final recibidos = await _ejecutarPull(clienteHub);
+    alProgreso?.call(
+      const ProgresoSync(
+        fase: FaseProgresoSync.enviar,
+        indice: 0,
+        total: 0,
+        mensaje: 'Conectando con la nube…',
+      ),
+    );
+    final enviados = await sincronizarPendientes(alProgreso: alProgreso);
+    final recibidos = await _ejecutarPull(clienteHub, alProgreso: alProgreso);
+    alProgreso?.call(
+      ProgresoSync(
+        fase: FaseProgresoSync.listo,
+        indice: enviados + recibidos,
+        total: enviados + recibidos,
+        mensaje: 'Sincronización completada',
+      ),
+    );
     return ResultadoSync(
       eventosEnviados: enviados,
       eventosRecibidos: recibidos,
@@ -116,7 +151,10 @@ class SyncOrchestrator {
     );
   }
 
-  Future<int> _ejecutarPull(HubSyncClient clienteHub) async {
+  Future<int> _ejecutarPull(
+    HubSyncClient clienteHub, {
+    ReporteProgresoSync? alProgreso,
+  }) async {
     final aplicador = _aplicadorRemoto;
     final almacenCursor = _almacenCursor;
     if (aplicador == null || almacenCursor == null) {
@@ -139,6 +177,14 @@ class SyncOrchestrator {
         await aplicador.aplicarEvento(evento);
         await alAplicarEventoRemoto?.call(evento);
         aplicados = aplicados + 1;
+        alProgreso?.call(
+          ProgresoSync(
+            fase: FaseProgresoSync.recibir,
+            indice: aplicados,
+            total: 0,
+            mensaje: 'Recibiendo cambios ($aplicados eventos)…',
+          ),
+        );
       }
       // Guarda de seguridad: si el cursor no avanza, detener el pull para no
       // repetir la misma pagina indefinidamente (evita bloquear la BD y la UI).

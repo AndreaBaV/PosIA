@@ -146,6 +146,63 @@ void main() {
 		});
 	});
 
+	group('empaque y fusion por peso', () {
+		test('empaque gana sobre escala manual en mismo umbral', () {
+			final fusionadas = fusionarEscalasMayoreo(
+				escalasMayoreo: const [
+					(cantidadMinima: 20.0, precioUnitario: 27.0),
+				],
+				escalasEmpaque: const [
+					(cantidadMinima: 20.0, precioUnitario: 25.0),
+				],
+			);
+			expect(fusionadas, hasLength(1));
+			expect(fusionadas.first.precioUnitario, 25.0);
+		});
+
+		test('26 kg califica tramo de bulto 20 kg', () {
+			final escalas = fusionarEscalasMayoreo(
+				escalasMayoreo: const [],
+				escalasEmpaque: const [
+					(cantidadMinima: 20.0, precioUnitario: 25.0),
+				],
+			);
+			expect(
+				resolverPrecioConEscalas(
+					precioBase: 27.0,
+					cantidad: 26.0,
+					escalas: escalas,
+				),
+				25.0,
+			);
+		});
+
+		test('granel con bulto no usa fusion promedio', () {
+			expect(
+				productoUsaFusionPromedioPeso(
+					moduloVertical: ModuloVertical.general,
+					escalas: const [
+						(cantidadMinima: 20.0, precioUnitario: 25.0),
+					],
+				),
+				isFalse,
+			);
+		});
+
+		test('cortes fraccionados si usan fusion promedio', () {
+			expect(
+				productoUsaFusionPromedioPeso(
+					moduloVertical: ModuloVertical.general,
+					escalas: construirEscalasDesdePreciosCorte(
+						precioKilo: 30.0,
+						precioMedio: 20.0,
+					),
+				),
+				isTrue,
+			);
+		});
+	});
+
 	group('precios de corte por peso', () {
 		test('construye escalas desde kilo, medio y cuarto', () {
 			final escalas = construirEscalasDesdePreciosCorte(

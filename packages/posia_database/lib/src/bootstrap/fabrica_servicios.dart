@@ -101,6 +101,7 @@ class FabricaServicios {
 		final varianteRepo = VarianteRepository(baseDatos: base);
 		final almacenRepo = AlmacenRepository(baseDatos: base);
 		final presentacionRepo = PresentacionRepository(baseDatos: base);
+		final rolPersonalizadoRepo = RolPersonalizadoRepository(baseDatos: base);
 		final asistenciaRepo = AsistenciaRepository(baseDatos: base);
 		final empleadoPerfilRepo = EmpleadoPerfilRepository(baseDatos: base);
 		final nominaRepo = NominaRepository(baseDatos: base);
@@ -125,6 +126,7 @@ class FabricaServicios {
 			pedidoRepository: pedidoRepo,
 			precioRepository: precioRepo,
 			presentacionRepository: presentacionRepo,
+			rolPersonalizadoRepository: rolPersonalizadoRepo,
 			asistenciaRepository: asistenciaRepo,
 		);
 		final clienteHub = await _crearClienteHub(configRepo);
@@ -188,6 +190,7 @@ class FabricaServicios {
 			varianteRepository: varianteRepo,
 			almacenRepository: almacenRepo,
 			presentacionRepository: presentacionRepo,
+			rolPersonalizadoRepository: rolPersonalizadoRepo,
 			servicioCorteCaja: servicioCorteCaja,
 			baseDatos: base,
 			tiendaActivaId: tiendaId,
@@ -242,6 +245,7 @@ class FabricaServicios {
 		final varianteRepo = VarianteRepository(baseDatos: base);
 		final tiendaRepo = TiendaRepository(baseDatos: base);
 		final usuarioRepo = UsuarioRepository(baseDatos: base);
+		final rolPersonalizadoRepo = RolPersonalizadoRepository(baseDatos: base);
 		final almacenRepo = AlmacenRepository(baseDatos: base);
 		final colaSync = SyncEventRepository(baseDatos: base);
 		final estadoSyncRepo = SyncStateRepository(baseDatos: base);
@@ -256,6 +260,7 @@ class FabricaServicios {
 			varianteRepository: varianteRepo,
 			tiendaRepository: tiendaRepo,
 			usuarioRepository: usuarioRepo,
+			rolPersonalizadoRepository: rolPersonalizadoRepo,
 			almacenRepository: almacenRepo,
 		);
 		return SyncOrchestrator(

@@ -65,7 +65,7 @@ class PrecioRepository implements RepositorioPrecio {
 			whereArgs: [productoId],
 			orderBy: 'cantidad_minima ASC',
 		);
-		return filas
+		final escalasMayoreo = filas
 			.map(
 				(fila) => EscalaMayoreo(
 					productoId: productoId,
@@ -74,6 +74,62 @@ class PrecioRepository implements RepositorioPrecio {
 				),
 			)
 			.toList();
+		final escalasEmpaque = await _escalasDesdePresentaciones(productoId);
+		if (escalasEmpaque.isEmpty) {
+			return escalasMayoreo;
+		}
+		final fusionadas = fusionarEscalasMayoreo(
+			escalasMayoreo: escalasMayoreo.map(
+				(e) => (
+					cantidadMinima: e.cantidadMinima,
+					precioUnitario: e.precioUnitario,
+				),
+			),
+			escalasEmpaque: escalasEmpaque,
+		);
+		return fusionadas
+			.map(
+				(e) => EscalaMayoreo(
+					productoId: productoId,
+					cantidadMinima: e.cantidadMinima,
+					precioUnitario: e.precioUnitario,
+				),
+			)
+			.toList();
+	}
+
+	Future<List<EscalaMayoreoRef>> _escalasDesdePresentaciones(
+		String productoId,
+	) async {
+		final filas = await _baseDatos.rawQuery(
+			'''
+			SELECT pp.factor_a_base, pp.precio, p.precio_base
+			FROM presentaciones_producto pp
+			INNER JOIN products p ON p.id = pp.producto_id
+			WHERE pp.producto_id = ?
+			  AND pp.activo = 1
+			  AND pp.es_presentacion_base = 0
+			''',
+			[productoId],
+		);
+		final escalas = <EscalaMayoreoRef>[];
+		for (final fila in filas) {
+			final factor = (fila['factor_a_base'] as num?)?.toDouble() ?? 0.0;
+			if (factor <= 0.0) {
+				continue;
+			}
+			final precioBase = (fila['precio_base'] as num?)?.toDouble() ?? 0.0;
+			final precioTotal = (fila['precio'] as num?)?.toDouble() ??
+				redondearMonto(precioBase * factor);
+			if (precioTotal <= 0.0) {
+				continue;
+			}
+			escalas.add((
+				cantidadMinima: factor,
+				precioUnitario: redondearMonto(precioTotal / factor),
+			));
+		}
+		return escalas;
 	}
 
 	/// Inserta escala de mayoreo para producto.

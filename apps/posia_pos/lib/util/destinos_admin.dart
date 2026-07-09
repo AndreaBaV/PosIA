@@ -15,8 +15,16 @@ import '../screens/pantalla_reportes_admin.dart';
 import '../screens/pantalla_ventas_dia.dart';
 
 /// Construye pantalla admin por clave de tile si el usuario tiene permiso.
-Widget? construirDestinoAdmin(String clave, Usuario usuario) {
-	if (!tileAdminVisible(usuario, clave)) {
+Widget? construirDestinoAdmin(
+	String clave,
+	Usuario usuario, {
+	RolPersonalizado? rolPersonalizado,
+}) {
+	if (!tileAdminVisible(
+		usuario,
+		clave,
+		rolPersonalizado: rolPersonalizado,
+	)) {
 		return null;
 	}
 	return switch (clave) {

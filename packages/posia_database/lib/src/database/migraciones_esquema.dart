@@ -186,6 +186,7 @@ class MigracionesEsquema {
 				pin_credencial TEXT NOT NULL,
 				rol TEXT NOT NULL CHECK (rol IN ('administrador', 'supervisor', 'empleado')),
 				tienda_id TEXT,
+				rol_personalizado_id TEXT,
 				activo INTEGER NOT NULL DEFAULT 1 CHECK (activo IN (0, 1)),
 				creado_en TEXT NOT NULL,
 				actualizado_en TEXT NOT NULL,
@@ -278,6 +279,7 @@ class MigracionesEsquema {
 				pin_credencial TEXT NOT NULL,
 				rol TEXT NOT NULL CHECK (rol IN ('administrador', 'supervisor', 'empleado')),
 				tienda_id TEXT,
+				rol_personalizado_id TEXT,
 				activo INTEGER NOT NULL DEFAULT 1 CHECK (activo IN (0, 1)),
 				creado_en TEXT NOT NULL,
 				actualizado_en TEXT NOT NULL,
@@ -597,6 +599,7 @@ class MigracionesEsquema {
 		await migrarVersion17A18(base);
 		await migrarVersion18A19(base);
 		await migrarVersion19A20(base);
+		await migrarVersion25A26(base);
 	}
 
 	/// Tabla guia `ejemplo` en bases ya existentes (v10 → v11).
@@ -1015,6 +1018,27 @@ class MigracionesEsquema {
 		await base.execute(
 			'CREATE INDEX IF NOT EXISTS idx_wholesale_tiers_producto '
 			'ON wholesale_tiers(producto_id)',
+		);
+	}
+
+	/// Roles personalizados con permisos granulares (v25 → v26).
+	static Future<void> migrarVersion25A26(Database base) async {
+		await base.execute('''
+			CREATE TABLE IF NOT EXISTS roles_personalizados (
+				id TEXT PRIMARY KEY,
+				nombre TEXT NOT NULL,
+				descripcion TEXT NOT NULL DEFAULT '',
+				permisos_json TEXT NOT NULL DEFAULT '[]',
+				categorias_json TEXT NOT NULL DEFAULT '[]',
+				activo INTEGER NOT NULL DEFAULT 1,
+				tienda_id TEXT
+			)
+		''');
+		await _agregarColumnaSiNoExiste(
+			base,
+			'usuarios',
+			'rol_personalizado_id',
+			'TEXT',
 		);
 	}
 

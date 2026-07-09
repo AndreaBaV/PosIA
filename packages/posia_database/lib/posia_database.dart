@@ -62,6 +62,7 @@ export 'src/repositories/asistencia_repository.dart';
 export 'src/repositories/empleado_perfil_repository.dart';
 export 'src/repositories/nomina_repository.dart';
 export 'src/repositories/presentacion_repository.dart';
+export 'src/repositories/rol_personalizado_repository.dart';
 export 'src/services/servicio_asistencia.dart';
 export 'src/services/servicio_nomina.dart';
 export 'src/services/servicio_reconciliacion_hub.dart';

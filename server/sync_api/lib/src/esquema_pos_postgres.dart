@@ -173,6 +173,20 @@ class EsquemaPosPostgres {
 			CREATE INDEX IF NOT EXISTS idx_users_codigo ON users(codigo)
 		''');
 		await conexion.execute('''
+			ALTER TABLE users ADD COLUMN IF NOT EXISTS rol_personalizado_id TEXT
+		''');
+		await conexion.execute('''
+			CREATE TABLE IF NOT EXISTS custom_roles (
+				id TEXT PRIMARY KEY,
+				nombre TEXT NOT NULL,
+				descripcion TEXT NOT NULL DEFAULT '',
+				permisos_json JSONB NOT NULL DEFAULT '[]',
+				categorias_json JSONB NOT NULL DEFAULT '[]',
+				activo INTEGER NOT NULL DEFAULT 1,
+				tienda_id TEXT
+			)
+		''');
+		await conexion.execute('''
 			ALTER TABLE products ADD COLUMN IF NOT EXISTS permite_stock_negativo INTEGER NOT NULL DEFAULT 0
 		''');
 		await conexion.execute('''

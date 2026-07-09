@@ -12,6 +12,7 @@ import '../providers/app_providers.dart';
 import '../services/gestor_sesion_persistente.dart';
 import '../util/destinos_admin.dart';
 import '../util/plataforma_util.dart';
+import '../widgets/banner_progreso_sync.dart';
 import 'pantalla_admin.dart';
 import 'pantalla_asistencia_movil.dart';
 import 'pantalla_caja.dart';
@@ -63,22 +64,41 @@ class _PantallaInicioState extends ConsumerState<PantallaInicio> {
 			return false;
 		}
 		final atajos = ref.read(atajosCajaConfigProvider).value ?? AtajosCajaConfig.predeterminados();
+		final rolPersonalizado = ref.read(rolPersonalizadoSesionProvider);
 		return procesarAtajoTecladoEnCaja(
 			event: event,
 			context: context,
 			ref: ref,
 			atajos: atajos,
-			alIrAdmin: puedeAccederPanelAdmin(usuario)
+			alIrAdmin: puedeAccederPanelAdmin(
+				usuario,
+				rolPersonalizado: rolPersonalizado,
+			)
 				? () => setState(() => _indicePestana = 1)
 				: null,
-			alAbrirSeccionAdmin: puedeAccederPanelAdmin(usuario)
-				? (clave) => _abrirSeccionAdmin(clave, usuario)
+			alAbrirSeccionAdmin: puedeAccederPanelAdmin(
+				usuario,
+				rolPersonalizado: rolPersonalizado,
+			)
+				? (clave) => _abrirSeccionAdmin(
+					clave,
+					usuario,
+					rolPersonalizado: rolPersonalizado,
+				)
 				: null,
 		);
 	}
 
-	void _abrirSeccionAdmin(String clave, Usuario usuario) {
-		final destino = construirDestinoAdmin(clave, usuario);
+	void _abrirSeccionAdmin(
+		String clave,
+		Usuario usuario, {
+		RolPersonalizado? rolPersonalizado,
+	}) {
+		final destino = construirDestinoAdmin(
+			clave,
+			usuario,
+			rolPersonalizado: rolPersonalizado,
+		);
 		if (destino == null) {
 			return;
 		}
@@ -121,14 +141,22 @@ class _PantallaInicioState extends ConsumerState<PantallaInicio> {
 				if (usuario == null) {
 					return;
 				}
+				final rolPersonalizado = ref.read(rolPersonalizadoSesionProvider);
 				ref.read(solicitudNavegacionDesdeCajaProvider.notifier).limpiar();
 				if (next.esAdmin) {
-					if (puedeAccederPanelAdmin(usuario)) {
+					if (puedeAccederPanelAdmin(
+						usuario,
+						rolPersonalizado: rolPersonalizado,
+					)) {
 						setState(() => _indicePestana = 1);
 					}
 					return;
 				}
-				_abrirSeccionAdmin(next.clave!, usuario);
+				_abrirSeccionAdmin(
+					next.clave!,
+					usuario,
+					rolPersonalizado: rolPersonalizado,
+				);
 			},
 		);
 		final usuario = ref.watch(sesionUsuarioProvider);
@@ -137,8 +165,12 @@ class _PantallaInicioState extends ConsumerState<PantallaInicio> {
 				body: Center(child: CircularProgressIndicator()),
 			);
 		}
-		final muestraAdmin = puedeAccederPanelAdmin(usuario);
-		final esEmpleado = usuario.rol == RolUsuario.empleado;
+		final rolPersonalizado = ref.watch(rolPersonalizadoSesionProvider);
+		final muestraAdmin = puedeAccederPanelAdmin(
+			usuario,
+			rolPersonalizado: rolPersonalizado,
+		);
+		final esEmpleado = usuario.rol == RolUsuario.empleado && !muestraAdmin;
 		final esMovil = esPlataformaMovilNativa();
 		final caja = esMovil
 			? PantallaCajaMovil(
@@ -150,6 +182,7 @@ class _PantallaInicioState extends ConsumerState<PantallaInicio> {
 		return Scaffold(
 			body: Column(
 				children: [
+					const BannerProgresoSync(),
 					if (muestraBarraSesion)
 						BarraSesionUsuario(
 							nombreUsuario: usuario.nombre,

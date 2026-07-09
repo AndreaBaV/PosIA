@@ -7,6 +7,7 @@
 library;
 
 export 'src/config/configuracion_entorno.dart';
+export 'src/constants/permisos_admin.dart';
 export 'src/constants/posia_constants.dart';
 export 'src/constants/configuracion_despliegue.dart';
 export 'src/constants/motivos_inventario.dart';
@@ -56,6 +57,7 @@ export 'src/models/resumen_cliente.dart';
 export 'src/models/resumen_producto_venta.dart';
 export 'src/models/resumen_ventas_hora.dart';
 export 'src/models/resultado_precio.dart';
+export 'src/models/rol_personalizado.dart';
 export 'src/models/stock_nivel.dart';
 export 'src/models/sync_event.dart';
 export 'src/models/tienda.dart';
@@ -76,6 +78,7 @@ export 'src/utils/generador_ticket.dart';
 export 'src/utils/hasher_pin.dart';
 export 'src/utils/id_posia.dart';
 export 'src/utils/permisos_usuario.dart';
+export 'src/utils/politica_acceso_admin.dart';
 export 'src/utils/validador_codigo_usuario.dart';
 export 'src/utils/moneda_util.dart';
 export 'src/utils/traspaso_util.dart';

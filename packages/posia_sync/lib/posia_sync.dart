@@ -12,4 +12,5 @@ export 'src/aplicador_eventos_remotos.dart';
 export 'src/hub_sync_client.dart';
 export 'src/lan_sync_client.dart';
 export 'src/local_event_queue.dart';
+export 'src/progreso_sync.dart';
 export 'src/sync_orchestrator.dart';

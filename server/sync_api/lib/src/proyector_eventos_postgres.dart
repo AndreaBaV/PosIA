@@ -1,6 +1,8 @@
 /// Proyecta eventos del hub a tablas espejo del POS en PostgreSQL.
 library;
 
+import 'dart:convert';
+
 import 'package:posia_core/posia_core.dart';
 import 'package:postgres/postgres.dart';
 
@@ -41,6 +43,8 @@ class ProyectorEventosPostgres {
 				await _almacen(evento);
 			case 'userUpserted':
 				await _usuario(evento);
+			case 'customRoleUpserted':
+				await _rolPersonalizado(evento);
 			case 'quoteUpserted':
 				await _cotizacion(evento);
 			case 'orderUpserted':
@@ -622,10 +626,10 @@ class ProyectorEventosPostgres {
 			Sql.named('''
 				INSERT INTO users (
 					id, nombre, codigo, rol, tienda_id, activo,
-					pin_credencial, creado_en, actualizado_en
+					pin_credencial, creado_en, actualizado_en, rol_personalizado_id
 				) VALUES (
 					@id, @nombre, @codigo, @rol, @tienda, @activo,
-					@credencial, @creado, @actualizado
+					@credencial, @creado, @actualizado, @rolPersonalizado
 				)
 				ON CONFLICT (id) DO UPDATE SET
 					nombre = EXCLUDED.nombre,
@@ -635,7 +639,8 @@ class ProyectorEventosPostgres {
 					activo = EXCLUDED.activo,
 					pin_credencial = EXCLUDED.pin_credencial,
 					creado_en = EXCLUDED.creado_en,
-					actualizado_en = EXCLUDED.actualizado_en
+					actualizado_en = EXCLUDED.actualizado_en,
+					rol_personalizado_id = EXCLUDED.rol_personalizado_id
 			'''),
 			parameters: {
 				'id': id,
@@ -647,6 +652,42 @@ class ProyectorEventosPostgres {
 				'credencial': pinCredencial,
 				'creado': p['creadoEn'] as String? ?? evento.creadoEn.toUtc().toIso8601String(),
 				'actualizado': actualizadoEn,
+				'rolPersonalizado': p['rolPersonalizadoId'],
+			},
+		);
+	}
+
+	Future<void> _rolPersonalizado(EventoHub evento) async {
+		final p = evento.payload;
+		final id = p['id'] as String? ?? '';
+		if (id.isEmpty) {
+			return;
+		}
+		final permisos = p['permisosAdmin'];
+		final categorias = p['categoriasPermitidas'];
+		await _sesion.execute(
+			Sql.named('''
+				INSERT INTO custom_roles (
+					id, nombre, descripcion, permisos_json, categorias_json, activo, tienda_id
+				) VALUES (
+					@id, @nombre, @descripcion, @permisos, @categorias, @activo, @tienda
+				)
+				ON CONFLICT (id) DO UPDATE SET
+					nombre = EXCLUDED.nombre,
+					descripcion = EXCLUDED.descripcion,
+					permisos_json = EXCLUDED.permisos_json,
+					categorias_json = EXCLUDED.categorias_json,
+					activo = EXCLUDED.activo,
+					tienda_id = EXCLUDED.tienda_id
+			'''),
+			parameters: {
+				'id': id,
+				'nombre': p['nombre'] ?? '',
+				'descripcion': p['descripcion'] ?? '',
+				'permisos': jsonEncode(permisos ?? []),
+				'categorias': jsonEncode(categorias ?? []),
+				'activo': _boolInt(p['activo'], defaultValue: true),
+				'tienda': p['tiendaId'],
 			},
 		);
 	}

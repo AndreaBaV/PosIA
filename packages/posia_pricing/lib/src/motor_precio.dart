@@ -36,12 +36,33 @@ class MotorPrecio {
 			return precioLista;
 		}
 
+		if (contexto.esVentaPorPresentacion) {
+			return _resolverPrecioBase(contexto);
+		}
+
 		final precioMayoreo = await _resolverPrecioMayoreo(contexto);
 		if (precioMayoreo != null) {
 			return precioMayoreo;
 		}
 
 		return _resolverPrecioBase(contexto);
+	}
+
+	/// Indica si al fusionar lineas por peso se promedia (cortes) o recalcula.
+	Future<bool> usaFusionPromedioPeso({
+		required String productoId,
+		required ModuloVertical moduloVertical,
+	}) async {
+		final escalas = await _repositorioPrecio.obtenerEscalasMayoreo(productoId);
+		return productoUsaFusionPromedioPeso(
+			moduloVertical: moduloVertical,
+			escalas: escalas.map(
+				(e) => (
+					cantidadMinima: e.cantidadMinima,
+					precioUnitario: e.precioUnitario,
+				),
+			),
+		);
 	}
 
 	/// Intenta precio fijo cliente-producto.
@@ -58,7 +79,7 @@ class MotorPrecio {
 
 		final registro = await _repositorioPrecio.obtenerPrecioClienteProducto(
 			cliente.id,
-			contexto.producto.id,
+			contexto.idProductoPrecio,
 		);
 		if (registro == null) {
 			return null;
@@ -89,7 +110,7 @@ class MotorPrecio {
 
 		final precioLista = await _repositorioPrecio.obtenerPrecioLista(
 			listaId,
-			contexto.producto.id,
+			contexto.idProductoPrecio,
 		);
 		if (precioLista == null) {
 			return null;
@@ -109,7 +130,7 @@ class MotorPrecio {
 		ContextoPrecio contexto,
 	) async {
 		final escalas = await _repositorioPrecio.obtenerEscalasMayoreo(
-			contexto.producto.id,
+			contexto.idProductoPrecio,
 		);
 		if (escalas.isEmpty) {
 			return null;

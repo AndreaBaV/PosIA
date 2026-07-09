@@ -50,21 +50,58 @@ final servicioAdminProvider = FutureProvider<ServicioAdmin>((ref) async {
 });
 
 /// Indica si el tile administrativo es visible para el rol actual.
-bool tileAdminVisible(Usuario? usuario, String clave) {
+bool tileAdminVisible(
+	Usuario? usuario,
+	String clave, {
+	RolPersonalizado? rolPersonalizado,
+}) {
 	if (usuario == null) {
 		return true;
 	}
-	if (usuario.rol == RolUsuario.empleado) {
-		return clave == 'mi_cuenta';
-	}
-	if (usuario.rol == RolUsuario.supervisor) {
-		return !{'tiendas', 'sync', 'config'}.contains(clave);
-	}
-	return true;
+	return PoliticaAccesoAdmin.puedeVerSeccionAdmin(
+		usuario,
+		rolPersonalizado,
+		clave,
+	);
 }
 
 /// Indica si el usuario puede ver la pestaña Admin en la navegacion principal.
-bool puedeAccederPanelAdmin(Usuario usuario) => usuario.rol != RolUsuario.empleado;
+bool puedeAccederPanelAdmin(
+	Usuario usuario, {
+	RolPersonalizado? rolPersonalizado,
+}) => PoliticaAccesoAdmin.puedeAccederPanelAdmin(usuario, rolPersonalizado);
+
+/// Rol personalizado por identificador.
+final rolPersonalizadoPorIdProvider =
+	FutureProvider.family<RolPersonalizado?, String>((ref, rolId) async {
+		final servicio = await ref.watch(servicioAdminProvider.future);
+		return servicio.obtenerRolPersonalizado(rolId);
+	});
+
+/// Rol personalizado del usuario en sesion (null si no aplica).
+final rolPersonalizadoSesionProvider = Provider<RolPersonalizado?>((ref) {
+	final usuario = ref.watch(sesionUsuarioProvider);
+	final rolId = usuario?.rolPersonalizadoId;
+	if (rolId == null || rolId.isEmpty) {
+		return null;
+	}
+	return ref.watch(rolPersonalizadoPorIdProvider(rolId)).value;
+});
+
+/// Catalogo de roles personalizados para administracion.
+final rolesPersonalizadosAdminProvider =
+	FutureProvider<List<RolPersonalizado>>((ref) async {
+		final servicio = await ref.watch(servicioAdminProvider.future);
+		final operador = ref.watch(sesionUsuarioProvider);
+		return servicio.listarRolesPersonalizados(operador: operador);
+	});
+
+/// Roles activos para asignar a usuarios.
+final rolesPersonalizadosActivosProvider =
+	FutureProvider<List<RolPersonalizado>>((ref) async {
+		final servicio = await ref.watch(servicioAdminProvider.future);
+		return servicio.listarRolesPersonalizadosActivos();
+	});
 
 /// PIN administrativo configurado en el dispositivo.
 final pinAdminProvider = FutureProvider<String>((ref) async {
@@ -158,7 +195,12 @@ Future<void> refrescarDatosMaestros(WidgetRef ref) async {
 /// Catalogo de productos para administracion (unificado).
 final productosCatalogoAdminProvider = FutureProvider<List<Producto>>((ref) async {
 	final servicio = await ref.watch(servicioAdminProvider.future);
-	return servicio.listarProductosCatalogo();
+	final operador = ref.watch(sesionUsuarioProvider);
+	final rolPersonalizado = ref.watch(rolPersonalizadoSesionProvider);
+	return servicio.listarProductosCatalogoFiltrados(
+		operador: operador,
+		rolPersonalizado: rolPersonalizado,
+	);
 });
 
 /// Detalle de una lista de precios: clientes asignados y productos con precio.

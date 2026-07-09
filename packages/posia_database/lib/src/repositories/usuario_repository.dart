@@ -214,6 +214,7 @@ class UsuarioRepository {
 					'pin_credencial': pinCredencial,
 					'rol': usuario.rol.name,
 					'tienda_id': usuario.tiendaId,
+					'rol_personalizado_id': usuario.rolPersonalizadoId,
 					'activo': usuario.activo ? 1 : 0,
 					'creado_en': creadoEn,
 					'actualizado_en': ahora,
@@ -237,6 +238,7 @@ class UsuarioRepository {
 		required String codigo,
 		required RolUsuario rol,
 		String? tiendaId,
+		String? rolPersonalizadoId,
 		required bool activo,
 		required String pinCredencial,
 		required String creadoEn,
@@ -280,6 +282,7 @@ class UsuarioRepository {
 				'pin_credencial': pinCredencial,
 				'rol': rol.name,
 				'tienda_id': tiendaId,
+				'rol_personalizado_id': rolPersonalizadoId,
 				'activo': activo ? 1 : 0,
 				'creado_en': creadoEn,
 				'actualizado_en': actualizadoEn,
@@ -354,6 +357,7 @@ class UsuarioRepository {
 			codigo: fila['codigo'] as String,
 			rol: RolUsuario.values.byName(fila['rol'] as String),
 			tiendaId: fila['tienda_id'] as String?,
+			rolPersonalizadoId: fila['rol_personalizado_id'] as String?,
 			activo: (fila['activo'] as int) == 1,
 		);
 	}

@@ -3,6 +3,7 @@ library;
 
 import '../constants/posia_constants.dart';
 import '../enums/modo_calculo_utilidad.dart';
+import '../enums/modulo_vertical.dart';
 import '../enums/unidad_medida.dart';
 import 'moneda_util.dart';
 
@@ -233,6 +234,50 @@ double resolverPrecioConEscalas({
 		return redondearMonto(escala.precioUnitario);
 	}
 	return redondearMonto(precioBase);
+}
+
+/// Indica si al fusionar pesajes conviene promediar (cortes fraccionados).
+///
+/// Carnicería y productos con tramos bajo 1 kg (medio/cuarto) conservan el
+/// total de cada pesaje. Granel con bulto (ej. 20 kg) recalcula al sumar.
+bool productoUsaFusionPromedioPeso({
+	required ModuloVertical moduloVertical,
+	Iterable<EscalaMayoreoRef> escalas = const [],
+}) {
+	if (moduloVertical == ModuloVertical.carniceria) {
+		return true;
+	}
+	final lista = escalas.toList();
+	final tieneTramoKilo = lista.any(
+		(e) => e.cantidadMinima >= pesoKiloCompleto,
+	);
+	if (!tieneTramoKilo) {
+		return false;
+	}
+	return lista.any(
+		(e) =>
+			(e.cantidadMinima > 0.0 &&
+				e.cantidadMinima < pesoKiloCompleto) ||
+			e.cantidadMinima <= 0.001,
+	);
+}
+
+/// Combina escalas de mayoreo con las derivadas de empaques.
+///
+/// Si comparten [cantidadMinima], gana la escala de empaque (precio explícito).
+List<EscalaMayoreoRef> fusionarEscalasMayoreo({
+	required Iterable<EscalaMayoreoRef> escalasMayoreo,
+	required Iterable<EscalaMayoreoRef> escalasEmpaque,
+}) {
+	final porUmbral = <double, EscalaMayoreoRef>{};
+	for (final escala in escalasMayoreo) {
+		porUmbral[escala.cantidadMinima] = escala;
+	}
+	for (final escala in escalasEmpaque) {
+		porUmbral[escala.cantidadMinima] = escala;
+	}
+	return porUmbral.values.toList()
+		..sort((a, b) => a.cantidadMinima.compareTo(b.cantidadMinima));
 }
 
 /// Peso de un cuarto de kilo.

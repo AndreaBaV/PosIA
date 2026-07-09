@@ -4,38 +4,35 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:posia_database/posia_database.dart';
+import 'package:posia_sync/posia_sync.dart';
 import 'package:posia_ui/posia_ui.dart';
 
-import '../providers/admin_providers.dart';
+import '../providers/sync_providers.dart';
 import 'pantalla_instalacion_tecnico.dart';
 
 /// Muestra cola de eventos y permite sync manual; sin editar URL del hub.
-class PantallaSyncAdmin extends ConsumerStatefulWidget {
+class PantallaSyncAdmin extends ConsumerWidget {
 	const PantallaSyncAdmin({super.key});
 
 	@override
-	ConsumerState<PantallaSyncAdmin> createState() => _PantallaSyncAdminState();
-}
-
-class _PantallaSyncAdminState extends ConsumerState<PantallaSyncAdmin> {
-	bool _sincronizando = false;
-	String? _mensajeResultado;
-
-	@override
-	Widget build(BuildContext context) {
-		final estadoAsync = ref.watch(_estadoSyncProvider);
+	Widget build(BuildContext context, WidgetRef ref) {
+		final estadoAsync = ref.watch(estadoSyncPantallaProvider);
+		final syncUi = ref.watch(syncProgresoProvider);
 		return Scaffold(
 			appBar: AppBar(
 				title: const Text('Estado de la nube'),
 			),
 			body: estadoAsync.when(
-				data: (estado) => _ConstruirContenidoSync(
-					estado: estado,
-					sincronizando: _sincronizando,
-					mensajeResultado: _mensajeResultado,
-					alSincronizar: _ejecutarSyncManual,
-					alReconciliar: _ejecutarReconciliacion,
-					alRepararEquipo: _ejecutarReparacionEquipo,
+				data: (datos) => _ConstruirContenidoSync(
+					estado: datos.estado,
+					hubUrl: datos.hubUrl,
+					syncUi: syncUi,
+					alSincronizar: () =>
+						ref.read(syncProgresoProvider.notifier).sincronizarManual(),
+					alReconciliar: () =>
+						ref.read(syncProgresoProvider.notifier).reconciliarConHub(),
+					alRepararEquipo: () =>
+						ref.read(syncProgresoProvider.notifier).repararEquipo(),
 					alReconfigurar: () => abrirInstalacionTecnica(context, ref),
 				),
 				loading: () => const Center(child: CircularProgressIndicator()),
@@ -43,109 +40,22 @@ class _PantallaSyncAdminState extends ConsumerState<PantallaSyncAdmin> {
 			),
 		);
 	}
-
-	Future<void> _ejecutarSyncManual() async {
-		setState(() {
-			_sincronizando = true;
-			_mensajeResultado = null;
-		});
-		final servicio = await ref.read(servicioAdminProvider.future);
-		final resultado = await servicio.sincronizarManual();
-		ref.invalidate(_estadoSyncProvider);
-		setState(() {
-			_sincronizando = false;
-			_mensajeResultado = resultado.hubDisponible
-				? 'Enviados: ${resultado.eventosEnviados} · Recibidos: ${resultado.eventosRecibidos}'
-				: 'Sin conexión al hub o dispositivo en modo offline';
-		});
-	}
-
-	Future<void> _ejecutarReconciliacion() async {
-		setState(() {
-			_sincronizando = true;
-			_mensajeResultado = null;
-		});
-		final servicio = await ref.read(servicioAdminProvider.future);
-		final resultado = await servicio.reconciliarConHub();
-		ref.invalidate(_estadoSyncProvider);
-		setState(() {
-			_sincronizando = false;
-			_mensajeResultado = _mensajeReconciliacion(resultado);
-		});
-	}
-
-	String _mensajeReconciliacion(ResultadoReconciliacionHub resultado) {
-		if (!resultado.hubDisponible) {
-			return 'Sin conexión al hub o dispositivo en modo offline';
-		}
-		final accion = switch (resultado.accion) {
-			AccionReconciliacionHub.pullCompleto =>
-				'Base local vacía: datos descargados desde la nube.',
-			AccionReconciliacionHub.reconstruidaDesdeNube =>
-				'Datos locales no coincidían con la nube: base reconstruida.',
-			AccionReconciliacionHub.incremental =>
-				resultado.tiendasCoinciden
-					? 'Datos locales verificados con la nube.'
-					: 'Sincronización incremental completada.',
-			AccionReconciliacionHub.omitida => 'Reconciliación omitida.',
-		};
-		return '$accion Enviados: ${resultado.sync.eventosEnviados} · '
-			'Recibidos: ${resultado.sync.eventosRecibidos}';
-	}
-
-	Future<void> _ejecutarReparacionEquipo() async {
-		setState(() {
-			_sincronizando = true;
-			_mensajeResultado = null;
-		});
-		final servicio = await ref.read(servicioAdminProvider.future);
-		final resultado = await servicio.repararSincronizacionUsuarios();
-		ref.invalidate(_estadoSyncProvider);
-		setState(() {
-			_sincronizando = false;
-			_mensajeResultado = resultado.hubDisponible
-				? 'Reparación: enviados ${resultado.eventosEnviados} · '
-					'recibidos ${resultado.eventosRecibidos}. '
-					'Revise Admin → Equipo en todos los dispositivos.'
-				: 'Sin conexión al hub';
-		});
-	}
-}
-
-final _estadoSyncProvider = FutureProvider<_EstadoPantallaSync>((ref) async {
-	final servicio = await ref.watch(servicioAdminProvider.future);
-	final estado = await servicio.obtenerEstadoSync();
-	final hubUrl = await servicio.obtenerHubUrl();
-	return _EstadoPantallaSync(
-		estado: estado,
-		hubUrl: hubUrl,
-	);
-});
-
-class _EstadoPantallaSync {
-	const _EstadoPantallaSync({
-		required this.estado,
-		required this.hubUrl,
-	});
-
-	final EstadoSyncAdmin estado;
-	final String hubUrl;
 }
 
 class _ConstruirContenidoSync extends StatelessWidget {
 	const _ConstruirContenidoSync({
 		required this.estado,
-		required this.sincronizando,
-		required this.mensajeResultado,
+		required this.hubUrl,
+		required this.syncUi,
 		required this.alSincronizar,
 		required this.alReconciliar,
 		required this.alRepararEquipo,
 		required this.alReconfigurar,
 	});
 
-	final _EstadoPantallaSync estado;
-	final bool sincronizando;
-	final String? mensajeResultado;
+	final EstadoSyncAdmin estado;
+	final String hubUrl;
+	final EstadoSyncUi syncUi;
 	final VoidCallback alSincronizar;
 	final VoidCallback alReconciliar;
 	final VoidCallback alRepararEquipo;
@@ -153,7 +63,11 @@ class _ConstruirContenidoSync extends StatelessWidget {
 
 	@override
 	Widget build(BuildContext context) {
-		final hubActivo = estado.estado.hubConfigurado;
+		final hubActivo = estado.hubConfigurado;
+		final sincronizando = syncUi.activo;
+		final progreso = syncUi.progreso;
+		final mensajeResultado = syncUi.mensajeResultado;
+
 		return Padding(
 			padding: const EdgeInsets.all(24.0),
 			child: Column(
@@ -168,17 +82,21 @@ class _ConstruirContenidoSync extends StatelessWidget {
 						textAlign: TextAlign.center,
 						style: Theme.of(context).textTheme.bodyMedium,
 					),
+					if (sincronizando && progreso != null) ...[
+						const SizedBox(height: 20.0),
+						_BarraProgresoSync(progreso: progreso),
+					],
 					const SizedBox(height: 24.0),
 					_FilaEstadoSync(
 						icono: Icons.pending_actions,
 						etiqueta: 'Pendientes',
-						valor: '${estado.estado.eventosPendientes}',
+						valor: '${estado.eventosPendientes}',
 					),
 					const SizedBox(height: 12.0),
 					_FilaEstadoSync(
 						icono: Icons.error_outline,
 						etiqueta: 'Con error',
-						valor: '${estado.estado.eventosConError}',
+						valor: '${estado.eventosConError}',
 					),
 					const SizedBox(height: 12.0),
 					_FilaEstadoSync(
@@ -186,14 +104,14 @@ class _ConstruirContenidoSync extends StatelessWidget {
 						etiqueta: 'Hub',
 						valor: hubActivo ? 'Conectado' : 'No configurado',
 					),
-					if (estado.hubUrl.isNotEmpty) ...[
+					if (hubUrl.isNotEmpty) ...[
 						const SizedBox(height: 12.0),
 						Card(
 							child: ListTile(
 								leading: const Icon(Icons.link),
 								title: const Text('Servidor'),
 								subtitle: Text(
-									estado.hubUrl,
+									hubUrl,
 									maxLines: 2,
 									overflow: TextOverflow.ellipsis,
 								),
@@ -202,9 +120,18 @@ class _ConstruirContenidoSync extends StatelessWidget {
 					],
 					const Spacer(),
 					if (mensajeResultado != null) ...[
-						Text(mensajeResultado!, textAlign: TextAlign.center),
+						Text(mensajeResultado, textAlign: TextAlign.center),
 						const SizedBox(height: 12.0),
 					],
+					if (sincronizando)
+						Text(
+							'Puede cambiar de pestaña; la sincronización continúa en segundo plano.',
+							textAlign: TextAlign.center,
+							style: Theme.of(context).textTheme.bodySmall?.copyWith(
+								color: Colors.grey.shade700,
+							),
+						),
+					if (sincronizando) const SizedBox(height: 12.0),
 					if (hubActivo)
 						SizedBox(
 							height: 52.0,
@@ -217,7 +144,9 @@ class _ConstruirContenidoSync extends StatelessWidget {
 										child: CircularProgressIndicator(strokeWidth: 2.0),
 									)
 									: const Icon(Icons.sync),
-								label: Text(sincronizando ? 'Sincronizando...' : 'Sincronizar ahora'),
+								label: Text(
+									sincronizando ? 'Sincronizando…' : 'Sincronizar ahora',
+								),
 							),
 						),
 					if (hubActivo) ...[
@@ -236,7 +165,7 @@ class _ConstruirContenidoSync extends StatelessWidget {
 							child: OutlinedButton.icon(
 								onPressed: sincronizando ? null : alRepararEquipo,
 								icon: const Icon(Icons.people_outline),
-								label: const Text('Reparar equipo (usuarios)'),
+								label: const Text('Reparar equipo y roles'),
 							),
 						),
 					],
@@ -247,6 +176,51 @@ class _ConstruirContenidoSync extends StatelessWidget {
 						label: const Text('Reconfigurar conexión (técnico)'),
 					),
 				],
+			),
+		);
+	}
+}
+
+class _BarraProgresoSync extends StatelessWidget {
+	const _BarraProgresoSync({required this.progreso});
+
+	final ProgresoSync progreso;
+
+	@override
+	Widget build(BuildContext context) {
+		final tienePorcentaje = progreso.tienePorcentaje;
+		final porcentaje = progreso.porcentaje;
+		return Card(
+			color: Colors.indigo.withValues(alpha: 0.06),
+			child: Padding(
+				padding: const EdgeInsets.all(16.0),
+				child: Column(
+					crossAxisAlignment: CrossAxisAlignment.stretch,
+					children: [
+						Text(
+							progreso.mensaje,
+							style: Theme.of(context).textTheme.titleSmall,
+						),
+						const SizedBox(height: 12.0),
+						if (tienePorcentaje) ...[
+							LinearProgressIndicator(
+								value: progreso.fraccion ?? 0,
+								minHeight: 8.0,
+								borderRadius: BorderRadius.circular(4.0),
+							),
+							const SizedBox(height: 8.0),
+							Text(
+								'$porcentaje %',
+								textAlign: TextAlign.center,
+								style: const TextStyle(
+									fontWeight: FontWeight.bold,
+									fontSize: 16.0,
+								),
+							),
+						] else
+							const LinearProgressIndicator(minHeight: 8.0),
+					],
+				),
 			),
 		);
 	}

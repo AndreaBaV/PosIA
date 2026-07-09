@@ -82,4 +82,7 @@ enum TipoSyncEvento {
 
 	/// Presentaciones de empaque reemplazadas para un producto.
 	productPresentationsReplaced,
+
+	/// Rol personalizado creado o actualizado.
+	customRoleUpserted,
 }

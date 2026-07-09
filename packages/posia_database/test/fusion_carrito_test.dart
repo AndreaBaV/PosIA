@@ -131,5 +131,75 @@ void main() {
 			expect(redondearMonto(linea.cantidad * linea.precioUnitario), 40.0);
 			await fixture.cerrar();
 		});
+
+		test('26 kg sueltos aplican precio de bulto 20 kg desde empaque', () async {
+			final fixture = await FixtureAdmin.abrir();
+			final servicioAdmin = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
+			final producto = await servicioAdmin.registrarProductoCompleto(
+				AltaProductoRequest(
+					nombre: 'Arroz Morelos',
+					codigoBarras: '88005',
+					precioBase: 27.0,
+					categoriaId: fixture.categoriaId,
+					unidadMedida: UnidadMedida.kilogramo,
+					stockInicial: 200.0,
+				),
+			);
+			await PresentacionRepository(baseDatos: fixture.base).guardarPresentacion(
+				PresentacionProducto(
+					id: 'pres-bulto-arroz',
+					productoId: producto.id,
+					tipoPresentacionId: 'tp-kg',
+					nombre: 'Bulto 20 kg',
+					factorABase: 20.0,
+					esPresentacionBase: false,
+					precio: 500.0,
+					activo: true,
+				),
+			);
+			final servicio = await _crearServicioCaja(fixture);
+			expect(await servicio.agregarProductoConPeso(producto, 26.0), isEmpty);
+			final linea = servicio.obtenerCarrito().single;
+			expect(linea.cantidad, closeTo(26.0, 0.001));
+			expect(linea.precioUnitario, 25.0);
+			expect(linea.reglaPrecio, ReglaPrecio.escalaMayoreo);
+			expect(redondearMonto(linea.cantidad * linea.precioUnitario), 650.0);
+			await fixture.cerrar();
+		});
+
+		test('pesajes que suman bulto recalculan precio de mayoreo', () async {
+			final fixture = await FixtureAdmin.abrir();
+			final servicioAdmin = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
+			final producto = await servicioAdmin.registrarProductoCompleto(
+				AltaProductoRequest(
+					nombre: 'Frijol',
+					codigoBarras: '88006',
+					precioBase: 35.0,
+					categoriaId: fixture.categoriaId,
+					unidadMedida: UnidadMedida.kilogramo,
+					stockInicial: 200.0,
+				),
+			);
+			await PresentacionRepository(baseDatos: fixture.base).guardarPresentacion(
+				PresentacionProducto(
+					id: 'pres-bulto-frijol',
+					productoId: producto.id,
+					tipoPresentacionId: 'tp-kg',
+					nombre: 'Bulto 20 kg',
+					factorABase: 20.0,
+					esPresentacionBase: false,
+					precio: 600.0,
+					activo: true,
+				),
+			);
+			final servicio = await _crearServicioCaja(fixture);
+			expect(await servicio.agregarProductoConPeso(producto, 15.0), isEmpty);
+			expect(await servicio.agregarProductoConPeso(producto, 11.0), isEmpty);
+			final linea = servicio.obtenerCarrito().single;
+			expect(linea.cantidad, closeTo(26.0, 0.001));
+			expect(linea.precioUnitario, 30.0);
+			expect(redondearMonto(linea.cantidad * linea.precioUnitario), 780.0);
+			await fixture.cerrar();
+		});
 	});
 }

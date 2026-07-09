@@ -32,7 +32,9 @@ class ServicioReconciliacionHub {
 	final SyncStateRepository _syncStateRepository;
 	final TiendaRepository _tiendaRepository;
 
-	Future<ResultadoReconciliacionHub> reconciliar() async {
+	Future<ResultadoReconciliacionHub> reconciliar({
+		ReporteProgresoSync? alProgreso,
+	}) async {
 		if (!_syncOrchestrator.tieneHubConfigurado()) {
 			return const ResultadoReconciliacionHub(
 				accion: AccionReconciliacionHub.omitida,
@@ -75,7 +77,7 @@ class ServicioReconciliacionHub {
 		if (requierePullCompleto) {
 			final eraReconstruccion =
 				diagnostico.tieneDatosReales && !tiendasCoinciden;
-			await _syncOrchestrator.sincronizarPendientes();
+			await _syncOrchestrator.sincronizarPendientes(alProgreso: alProgreso);
 			await LimpiadorBaseLocal.vaciarDatosOperativos(_baseDatos);
 			limpioOperativos = true;
 			await _syncStateRepository.guardarCursorHub(0);
@@ -86,8 +88,8 @@ class ServicioReconciliacionHub {
 		}
 
 		final sync = cursorReiniciado
-			? await _syncOrchestrator.sincronizarDesdeOrigen()
-			: await _syncOrchestrator.sincronizarCompleto();
+			? await _syncOrchestrator.sincronizarDesdeOrigen(alProgreso: alProgreso)
+			: await _syncOrchestrator.sincronizarCompleto(alProgreso: alProgreso);
 
 		if (tiendasRemotas.isNotEmpty) {
 			for (final remota in tiendasRemotas) {

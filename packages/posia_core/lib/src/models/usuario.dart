@@ -13,6 +13,7 @@ class Usuario {
 		required this.rol,
 		required this.activo,
 		this.tiendaId,
+		this.rolPersonalizadoId,
 	});
 
 	final String id;
@@ -27,6 +28,9 @@ class Usuario {
 	/// Tienda asignada; null solo para administrador global.
 	final String? tiendaId;
 
+	/// Rol personalizado opcional con permisos granulares de admin.
+	final String? rolPersonalizadoId;
+
 	Usuario copiarCon({
 		String? id,
 		String? nombre,
@@ -35,7 +39,9 @@ class Usuario {
 		RolUsuario? rol,
 		bool? activo,
 		String? tiendaId,
+		String? rolPersonalizadoId,
 		bool limpiarTiendaId = false,
+		bool limpiarRolPersonalizado = false,
 	}) {
 		return Usuario(
 			id: id ?? this.id,
@@ -45,6 +51,9 @@ class Usuario {
 			rol: rol ?? this.rol,
 			activo: activo ?? this.activo,
 			tiendaId: limpiarTiendaId ? null : (tiendaId ?? this.tiendaId),
+			rolPersonalizadoId: limpiarRolPersonalizado
+				? null
+				: (rolPersonalizadoId ?? this.rolPersonalizadoId),
 		);
 	}
 }

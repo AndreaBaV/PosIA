@@ -248,6 +248,7 @@ class ServicioCaja {
       tiendaId: _tiendaId,
       cliente: _clienteActivo,
       canal: _canalVentaProducto(producto),
+      productoIdEscalas: producto.id,
     );
     return _motorPrecio.resolverPrecio(contexto);
   }
@@ -848,6 +849,7 @@ class ServicioCaja {
       tiendaId: _tiendaId,
       cliente: _clienteActivo,
       canal: _canalVentaProducto(producto),
+      productoIdEscalas: productoStockId ?? producto.id,
     );
     final resultado = await _motorPrecio.resolverPrecio(contexto);
     if (permitirFusion) {
@@ -859,7 +861,13 @@ class ServicioCaja {
           final cantidadNueva = lineaActual.cantidad + cantidad;
           final vendePorPeso = producto.requierePeso() ||
               producto.moduloVertical == ModuloVertical.carniceria;
-          if (vendePorPeso) {
+          final idPrecio = productoStockId ?? producto.id;
+          final usaPromedio = vendePorPeso &&
+              await _motorPrecio.usaFusionPromedioPeso(
+                productoId: idPrecio,
+                moduloVertical: producto.moduloVertical,
+              );
+          if (vendePorPeso && usaPromedio) {
             // Conserva el total de cada pesaje: no reaplicar tramo del kilo
             // cuando dos fracciones suman >= 1 kg.
             final totalPrevio = redondearMonto(
@@ -886,6 +894,7 @@ class ServicioCaja {
             tiendaId: _tiendaId,
             cliente: _clienteActivo,
             canal: _canalVentaProducto(producto),
+            productoIdEscalas: productoStockId ?? producto.id,
           );
           final precioActualizado = await _motorPrecio.resolverPrecio(
             contextoActualizado,
@@ -931,6 +940,7 @@ class ServicioCaja {
         canal: linea.producto.moduloVertical == ModuloVertical.carniceria
             ? CanalVenta.mayoreo
             : CanalVenta.mostrador,
+        productoIdEscalas: linea.productoStockId ?? linea.producto.id,
       );
       final resultado = await _motorPrecio.resolverPrecio(contexto);
       lineasActualizadas.add(
