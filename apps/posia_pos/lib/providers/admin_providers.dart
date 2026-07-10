@@ -71,6 +71,36 @@ bool puedeAccederPanelAdmin(
 	RolPersonalizado? rolPersonalizado,
 }) => PoliticaAccesoAdmin.puedeAccederPanelAdmin(usuario, rolPersonalizado);
 
+/// Destinos de la barra inferior del shell principal.
+enum DestinoNavegacionInicio { caja, asistencia, pedidos, admin }
+
+/// Pestañas visibles segun rol base y permisos de administracion.
+List<DestinoNavegacionInicio> destinosNavegacionInicio({
+	required Usuario usuario,
+	required bool muestraAdmin,
+}) {
+	final destinos = <DestinoNavegacionInicio>[DestinoNavegacionInicio.caja];
+	if (usuario.rol == RolUsuario.empleado) {
+		destinos.addAll([
+			DestinoNavegacionInicio.asistencia,
+			DestinoNavegacionInicio.pedidos,
+		]);
+	}
+	if (muestraAdmin) {
+		destinos.add(DestinoNavegacionInicio.admin);
+	}
+	return destinos;
+}
+
+/// Indice de un destino en la barra inferior, o null si no esta visible.
+int? indiceDestinoNavegacionInicio(
+	List<DestinoNavegacionInicio> destinos,
+	DestinoNavegacionInicio destino,
+) {
+	final indice = destinos.indexOf(destino);
+	return indice >= 0 ? indice : null;
+}
+
 /// Rol personalizado por identificador.
 final rolPersonalizadoPorIdProvider =
 	FutureProvider.family<RolPersonalizado?, String>((ref, rolId) async {

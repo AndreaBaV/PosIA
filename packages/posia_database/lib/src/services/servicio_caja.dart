@@ -1026,9 +1026,11 @@ class ServicioCaja {
                 productoId: idPrecio,
                 moduloVertical: producto.moduloVertical,
               );
-          if (vendePorPeso && usaPromedio) {
-            // Conserva el total de cada pesaje: no reaplicar tramo del kilo
-            // cuando dos fracciones suman >= 1 kg.
+          final conservarTotalPesajes = usaPromedio &&
+              (producto.moduloVertical == ModuloVertical.carniceria ||
+                  cantidadNueva < pesoKiloCompleto);
+          if (vendePorPeso && conservarTotalPesajes) {
+            // Conserva el total de cada pesaje mientras la suma quede bajo 1 kg.
             final totalPrevio = redondearMonto(
               lineaActual.cantidad * lineaActual.precioUnitario,
             );

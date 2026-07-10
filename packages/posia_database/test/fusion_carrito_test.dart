@@ -96,7 +96,7 @@ void main() {
 			await fixture.cerrar();
 		});
 
-		test('dos medios kilos con sobrecargo conservan total de cada pesaje', () async {
+		test('dos medios kilos recalculan precio de kilo al sumar 1 kg', () async {
 			final fixture = await FixtureAdmin.abrir();
 			final servicioAdmin = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
 			final escalas = construirEscalasDesdePreciosCorte(
@@ -128,7 +128,43 @@ void main() {
 			expect(await servicio.agregarProductoConPeso(producto, 0.5), isEmpty);
 			final linea = servicio.obtenerCarrito().single;
 			expect(linea.cantidad, closeTo(1.0, 0.001));
-			expect(redondearMonto(linea.cantidad * linea.precioUnitario), 40.0);
+			expect(linea.precioUnitario, 30.0);
+			expect(redondearMonto(linea.cantidad * linea.precioUnitario), 30.0);
+			await fixture.cerrar();
+		});
+
+		test('medios kilos bajo 1 kg conservan total de cada pesaje', () async {
+			final fixture = await FixtureAdmin.abrir();
+			final servicioAdmin = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
+			final escalas = construirEscalasDesdePreciosCorte(
+				precioKilo: 30.0,
+				precioMedio: 20.0,
+			)
+				.map(
+					(e) => EscalaMayoreo(
+						productoId: '',
+						cantidadMinima: e.cantidadMinima,
+						precioUnitario: e.precioUnitario,
+					),
+				)
+				.toList();
+			final producto = await servicioAdmin.registrarProductoCompleto(
+				AltaProductoRequest(
+					nombre: 'Arroz fraccionado',
+					codigoBarras: '88004b',
+					precioBase: 30.0,
+					categoriaId: fixture.categoriaId,
+					unidadMedida: UnidadMedida.kilogramo,
+					stockInicial: 100.0,
+					escalasMayoreo: escalas,
+				),
+			);
+			final servicio = await _crearServicioCaja(fixture);
+			expect(await servicio.agregarProductoConPeso(producto, 0.5), isEmpty);
+			expect(await servicio.agregarProductoConPeso(producto, 0.3), isEmpty);
+			final linea = servicio.obtenerCarrito().single;
+			expect(linea.cantidad, closeTo(0.8, 0.001));
+			expect(redondearMonto(linea.cantidad * linea.precioUnitario), 32.0);
 			await fixture.cerrar();
 		});
 

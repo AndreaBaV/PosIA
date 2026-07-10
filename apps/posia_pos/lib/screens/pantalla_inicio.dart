@@ -65,24 +65,31 @@ class _PantallaInicioState extends ConsumerState<PantallaInicio> {
 		}
 		final atajos = ref.read(atajosCajaConfigProvider).value ?? AtajosCajaConfig.predeterminados();
 		final rolPersonalizado = ref.read(rolPersonalizadoSesionProvider);
+		final muestraAdmin = puedeAccederPanelAdmin(
+			usuario,
+			rolPersonalizado: rolPersonalizado,
+		);
+		final destinos = destinosNavegacionInicio(
+			usuario: usuario,
+			muestraAdmin: muestraAdmin,
+		);
+		final indiceAdmin = indiceDestinoNavegacionInicio(
+			destinos,
+			DestinoNavegacionInicio.admin,
+		);
 		return procesarAtajoTecladoEnCaja(
 			event: event,
 			context: context,
 			ref: ref,
 			atajos: atajos,
-			alIrAdmin: puedeAccederPanelAdmin(
-				usuario,
-				rolPersonalizado: rolPersonalizado,
-			)
-				? () => setState(() => _indicePestana = 1)
+			alIrAdmin: indiceAdmin != null
+				? () => setState(() => _indicePestana = indiceAdmin)
 				: null,
-			alAbrirSeccionAdmin: puedeAccederPanelAdmin(
-				usuario,
-				rolPersonalizado: rolPersonalizado,
-			)
+			alAbrirSeccionAdmin: indiceAdmin != null
 				? (clave) => _abrirSeccionAdmin(
 					clave,
 					usuario,
+					indiceAdmin: indiceAdmin,
 					rolPersonalizado: rolPersonalizado,
 				)
 				: null,
@@ -92,6 +99,7 @@ class _PantallaInicioState extends ConsumerState<PantallaInicio> {
 	void _abrirSeccionAdmin(
 		String clave,
 		Usuario usuario, {
+		required int indiceAdmin,
 		RolPersonalizado? rolPersonalizado,
 	}) {
 		final destino = construirDestinoAdmin(
@@ -102,7 +110,7 @@ class _PantallaInicioState extends ConsumerState<PantallaInicio> {
 		if (destino == null) {
 			return;
 		}
-		setState(() => _indicePestana = 1);
+		setState(() => _indicePestana = indiceAdmin);
 		WidgetsBinding.instance.addPostFrameCallback((_) {
 			if (!mounted) {
 				return;
@@ -143,18 +151,31 @@ class _PantallaInicioState extends ConsumerState<PantallaInicio> {
 				}
 				final rolPersonalizado = ref.read(rolPersonalizadoSesionProvider);
 				ref.read(solicitudNavegacionDesdeCajaProvider.notifier).limpiar();
+				final muestraAdmin = puedeAccederPanelAdmin(
+					usuario,
+					rolPersonalizado: rolPersonalizado,
+				);
+				final destinos = destinosNavegacionInicio(
+					usuario: usuario,
+					muestraAdmin: muestraAdmin,
+				);
+				final indiceAdmin = indiceDestinoNavegacionInicio(
+			destinos,
+			DestinoNavegacionInicio.admin,
+		);
 				if (next.esAdmin) {
-					if (puedeAccederPanelAdmin(
-						usuario,
-						rolPersonalizado: rolPersonalizado,
-					)) {
-						setState(() => _indicePestana = 1);
+					if (indiceAdmin != null) {
+						setState(() => _indicePestana = indiceAdmin);
 					}
+					return;
+				}
+				if (indiceAdmin == null) {
 					return;
 				}
 				_abrirSeccionAdmin(
 					next.clave!,
 					usuario,
+					indiceAdmin: indiceAdmin,
 					rolPersonalizado: rolPersonalizado,
 				);
 			},
@@ -170,7 +191,13 @@ class _PantallaInicioState extends ConsumerState<PantallaInicio> {
 			usuario,
 			rolPersonalizado: rolPersonalizado,
 		);
-		final esEmpleado = usuario.rol == RolUsuario.empleado && !muestraAdmin;
+		final destinos = destinosNavegacionInicio(
+			usuario: usuario,
+			muestraAdmin: muestraAdmin,
+		);
+		final indiceSeleccionado = destinos.isEmpty
+			? 0
+			: _indicePestana.clamp(0, destinos.length - 1);
 		final esMovil = esPlataformaMovilNativa();
 		final caja = esMovil
 			? PantallaCajaMovil(
@@ -178,7 +205,17 @@ class _PantallaInicioState extends ConsumerState<PantallaInicio> {
 				alCerrarSesion: () => GestorSesionPersistente.cerrarSesion(ref),
 			)
 			: const PantallaCaja();
-		final muestraBarraSesion = !esMovil || _indicePestana != 0;
+		final muestraBarraSesion = !esMovil || indiceSeleccionado != 0;
+		final pantallas = destinos
+			.map(
+				(destino) => switch (destino) {
+					DestinoNavegacionInicio.caja => caja,
+					DestinoNavegacionInicio.asistencia => const PantallaAsistenciaMovil(),
+					DestinoNavegacionInicio.pedidos => const PantallaMisPedidos(),
+					DestinoNavegacionInicio.admin => PantallaAdmin(usuario: usuario),
+				},
+			)
+			.toList();
 		return Scaffold(
 			body: Column(
 				children: [
@@ -193,72 +230,53 @@ class _PantallaInicioState extends ConsumerState<PantallaInicio> {
 							alCerrarSesion: () => GestorSesionPersistente.cerrarSesion(ref),
 						),
 					Expanded(
-						child: muestraAdmin
-							? IndexedStack(
-								index: _indicePestana,
-								children: [
-									caja,
-									PantallaAdmin(usuario: usuario),
-								],
-							)
-							: esEmpleado
-								? IndexedStack(
-									index: _indicePestana,
-									children: [
-										caja,
-										const PantallaAsistenciaMovil(),
-										const PantallaMisPedidos(),
-									],
-								)
-								: caja,
+						child: destinos.length <= 1
+							? caja
+							: IndexedStack(
+								index: indiceSeleccionado,
+								children: pantallas,
+							),
 					),
 				],
 			),
-			bottomNavigationBar: muestraAdmin
-				? NavigationBar(
+			bottomNavigationBar: destinos.length <= 1
+				? null
+				: NavigationBar(
 					height: 68.0,
 					labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-					selectedIndex: _indicePestana,
-					onDestinationSelected: (indice) => setState(() => _indicePestana = indice),
-					destinations: const [
-						NavigationDestination(
-							icon: Icon(Icons.point_of_sale_outlined),
-							selectedIcon: Icon(Icons.point_of_sale),
-							label: 'Caja',
-						),
-						NavigationDestination(
-							icon: Icon(Icons.admin_panel_settings_outlined),
-							selectedIcon: Icon(Icons.admin_panel_settings),
-							label: 'Admin',
-						),
-					],
-				)
-				: esEmpleado
-					? NavigationBar(
-						height: 68.0,
-						labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-						selectedIndex: _indicePestana,
-						onDestinationSelected: (indice) => setState(() => _indicePestana = indice),
-						destinations: const [
-							NavigationDestination(
-								icon: Icon(Icons.point_of_sale_outlined),
-								selectedIcon: Icon(Icons.point_of_sale),
-								label: 'Caja',
-							),
-							NavigationDestination(
-								icon: Icon(Icons.fingerprint_outlined),
-								selectedIcon: Icon(Icons.fingerprint),
-								label: 'Asistencia',
-							),
-							NavigationDestination(
-								icon: Icon(Icons.assignment_outlined),
-								selectedIcon: Icon(Icons.assignment),
-								label: 'Pedidos',
-							),
-						],
-					)
-					: null,
+					selectedIndex: indiceSeleccionado,
+					onDestinationSelected: (indice) =>
+						setState(() => _indicePestana = indice),
+					destinations: destinos
+						.map((destino) => _destinoNavegacion(destino))
+						.toList(),
+				),
 		);
+	}
+
+	NavigationDestination _destinoNavegacion(DestinoNavegacionInicio destino) {
+		return switch (destino) {
+			DestinoNavegacionInicio.caja => const NavigationDestination(
+				icon: Icon(Icons.point_of_sale_outlined),
+				selectedIcon: Icon(Icons.point_of_sale),
+				label: 'Caja',
+			),
+			DestinoNavegacionInicio.asistencia => const NavigationDestination(
+				icon: Icon(Icons.fingerprint_outlined),
+				selectedIcon: Icon(Icons.fingerprint),
+				label: 'Asistencia',
+			),
+			DestinoNavegacionInicio.pedidos => const NavigationDestination(
+				icon: Icon(Icons.assignment_outlined),
+				selectedIcon: Icon(Icons.assignment),
+				label: 'Pedidos',
+			),
+			DestinoNavegacionInicio.admin => const NavigationDestination(
+				icon: Icon(Icons.admin_panel_settings_outlined),
+				selectedIcon: Icon(Icons.admin_panel_settings),
+				label: 'Admin',
+			),
+		};
 	}
 
 	String _nombreTienda(BuildContext context, WidgetRef ref) {

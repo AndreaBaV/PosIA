@@ -239,7 +239,9 @@ double resolverPrecioConEscalas({
 /// Indica si al fusionar pesajes conviene promediar (cortes fraccionados).
 ///
 /// Carnicería y productos con tramos bajo 1 kg (medio/cuarto) conservan el
-/// total de cada pesaje. Granel con bulto (ej. 20 kg) recalcula al sumar.
+/// total de cada pesaje mientras la suma quede bajo 1 kg; al alcanzar 1 kg o
+/// más se recalcula el tramo aplicable. Granel con bulto (ej. 20 kg) recalcula
+/// al sumar.
 bool productoUsaFusionPromedioPeso({
 	required ModuloVertical moduloVertical,
 	Iterable<EscalaMayoreoRef> escalas = const [],
