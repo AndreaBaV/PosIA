@@ -20,6 +20,7 @@ import '../repositories/cliente_repository.dart';
 import '../repositories/cotizacion_repository.dart';
 import '../repositories/inventario_repository.dart';
 import '../repositories/lote_farmacia_repository.dart';
+import '../repositories/lote_promocion_repository.dart';
 import '../repositories/producto_repository.dart';
 import '../repositories/ticket_espera_repository.dart';
 import '../repositories/presentacion_repository.dart';
@@ -48,6 +49,7 @@ class ServicioCaja {
     required ProductoRepository productoRepository,
     required InventarioRepository inventarioRepository,
     LoteFarmaciaRepository? loteFarmaciaRepository,
+    LotePromocionRepository? lotePromocionRepository,
     required Database baseDatos,
     VarianteRepository? varianteRepository,
     PresentacionRepository? presentacionRepository,
@@ -68,6 +70,8 @@ class ServicioCaja {
   }) : _productoRepository = productoRepository,
        _inventarioRepository = inventarioRepository,
        _loteFarmaciaRepository = loteFarmaciaRepository,
+       _lotePromocionRepository = lotePromocionRepository ??
+           LotePromocionRepository(baseDatos: baseDatos),
        _baseDatos = baseDatos,
        _varianteRepository = varianteRepository,
        _presentacionRepository = presentacionRepository,
@@ -89,6 +93,7 @@ class ServicioCaja {
   final ProductoRepository _productoRepository;
   final InventarioRepository _inventarioRepository;
   final LoteFarmaciaRepository? _loteFarmaciaRepository;
+  final LotePromocionRepository _lotePromocionRepository;
   final Database _baseDatos;
   final VarianteRepository? _varianteRepository;
   final PresentacionRepository? _presentacionRepository;
@@ -477,7 +482,10 @@ class ServicioCaja {
     if (indice < 0 || indice >= _lineasCarrito.length) {
       return;
     }
+    final productoId = _lineasCarrito[indice].productoStockId ??
+        _lineasCarrito[indice].producto.id;
     _lineasCarrito.removeAt(indice);
+    await _recalcularPreciosLotePromocion(productoId);
     _ajustarDescuentoTicketAlCarrito();
   }
 
@@ -554,36 +562,25 @@ class ServicioCaja {
       return errorStock;
     }
 
-    var precioUnitario = linea.precioUnitario;
-    var reglaPrecio = linea.reglaPrecio;
-    if (reglaPrecio != ReglaPrecio.precioManual) {
-      final contexto = ContextoPrecio(
-        producto: linea.producto,
-        cantidad: cantidad,
-        tiendaId: _tiendaId,
-        cliente: _clienteActivo,
-        canal: _canalVentaProducto(linea.producto),
-        productoIdEscalas: linea.productoStockId ?? linea.producto.id,
-      );
-      final resultado = await _motorPrecio.resolverPrecio(contexto);
-      precioUnitario = resultado.precioUnitario;
-      reglaPrecio = resultado.reglaAplicada;
-    }
-
-    var lineaActualizada = linea.copiarCon(
+    _lineasCarrito[indice] = linea.copiarCon(
       cantidad: cantidad,
-      precioUnitario: precioUnitario,
-      reglaPrecio: reglaPrecio,
       etiquetaLote: linea.producto.requierePeso() ||
               linea.producto.moduloVertical == ModuloVertical.carniceria
           ? formatearPesoKg(cantidad)
           : linea.etiquetaLote,
     );
-    final maxDescuento = calcularDescuentoMaximoLinea(lineaActualizada);
+
+    final productoId = linea.productoStockId ?? linea.producto.id;
+    if (linea.reglaPrecio != ReglaPrecio.precioManual) {
+      await _recalcularPreciosLotePromocion(productoId);
+    }
+
+    final actual = _lineasCarrito[indice];
+    final maxDescuento = calcularDescuentoMaximoLinea(actual);
     final descuentoAjustado = redondearMonto(
-      lineaActualizada.descuentoLinea.clamp(0.0, maxDescuento),
+      actual.descuentoLinea.clamp(0.0, maxDescuento),
     );
-    _lineasCarrito[indice] = lineaActualizada.copiarCon(
+    _lineasCarrito[indice] = actual.copiarCon(
       descuentoLinea: descuentoAjustado,
     );
     _ajustarDescuentoTicketAlCarrito();
@@ -1002,13 +999,20 @@ class ServicioCaja {
     double factorABase = 1.0,
     String? productoStockId,
   }) async {
+    final idPrecio = productoStockId ?? producto.id;
+    final cantidadEscalaPrevista = await _cantidadLoteEnCarrito(
+      idPrecio,
+      cantidadExtra: cantidad * (factorABase > 0 ? factorABase : 1.0),
+      excluirPresentaciones: true,
+    );
     final contexto = ContextoPrecio(
       producto: producto,
       cantidad: cantidad,
+      cantidadParaEscala: cantidadEscalaPrevista,
       tiendaId: _tiendaId,
       cliente: _clienteActivo,
       canal: _canalVentaProducto(producto),
-      productoIdEscalas: productoStockId ?? producto.id,
+      productoIdEscalas: idPrecio,
     );
     final resultado = await _motorPrecio.resolverPrecio(contexto);
     if (permitirFusion) {
@@ -1020,7 +1024,6 @@ class ServicioCaja {
           final cantidadNueva = lineaActual.cantidad + cantidad;
           final vendePorPeso = producto.requierePeso() ||
               producto.moduloVertical == ModuloVertical.carniceria;
-          final idPrecio = productoStockId ?? producto.id;
           final usaPromedio = vendePorPeso &&
               await _motorPrecio.usaFusionPromedioPeso(
                 productoId: idPrecio,
@@ -1030,7 +1033,6 @@ class ServicioCaja {
               (producto.moduloVertical == ModuloVertical.carniceria ||
                   cantidadNueva < pesoKiloCompleto);
           if (vendePorPeso && conservarTotalPesajes) {
-            // Conserva el total de cada pesaje mientras la suma quede bajo 1 kg.
             final totalPrevio = redondearMonto(
               lineaActual.cantidad * lineaActual.precioUnitario,
             );
@@ -1047,26 +1049,15 @@ class ServicioCaja {
               etiquetaLote: _etiquetaLoteFusionada(producto, cantidadNueva) ??
                   lineaActual.etiquetaLote,
             );
+            await _recalcularPreciosLotePromocion(idPrecio);
             return;
           }
-          final contextoActualizado = ContextoPrecio(
-            producto: producto,
-            cantidad: cantidadNueva,
-            tiendaId: _tiendaId,
-            cliente: _clienteActivo,
-            canal: _canalVentaProducto(producto),
-            productoIdEscalas: productoStockId ?? producto.id,
-          );
-          final precioActualizado = await _motorPrecio.resolverPrecio(
-            contextoActualizado,
-          );
           _lineasCarrito[indiceExistente] = lineaActual.copiarCon(
             cantidad: cantidadNueva,
-            precioUnitario: precioActualizado.precioUnitario,
-            reglaPrecio: precioActualizado.reglaAplicada,
             etiquetaLote: _etiquetaLoteFusionada(producto, cantidadNueva) ??
                 lineaActual.etiquetaLote,
           );
+          await _recalcularPreciosLotePromocion(idPrecio);
           return;
         }
       }
@@ -1083,6 +1074,7 @@ class ServicioCaja {
         productoStockId: productoStockId,
       ),
     );
+    await _recalcularPreciosLotePromocion(idPrecio);
   }
 
   Future<void> _sincronizarClienteEnCarrito() async {
@@ -1103,9 +1095,11 @@ class ServicioCaja {
         );
         continue;
       }
+      final cantidadEscala = await _cantidadParaEscalaLinea(linea);
       final contexto = ContextoPrecio(
         producto: linea.producto,
         cantidad: linea.cantidad,
+        cantidadParaEscala: cantidadEscala,
         tiendaId: _tiendaId,
         cliente: _clienteActivo,
         canal: linea.producto.moduloVertical == ModuloVertical.carniceria
@@ -1131,6 +1125,75 @@ class ServicioCaja {
       ..clear()
       ..addAll(lineasActualizadas);
     _ajustarDescuentoTicketAlCarrito();
+  }
+
+  /// Recalcula precios de todas las lineas del lote del producto (o solo el SKU).
+  Future<void> _recalcularPreciosLotePromocion(String productoId) async {
+    final lote = await _lotePromocionRepository.obtenerPorProducto(productoId);
+    final ids = lote != null
+        ? lote.productoIds.toSet()
+        : <String>{productoId};
+    for (var i = 0; i < _lineasCarrito.length; i++) {
+      final linea = _lineasCarrito[i];
+      if (linea.reglaPrecio == ReglaPrecio.precioManual) {
+        continue;
+      }
+      final idLinea = linea.productoStockId ?? linea.producto.id;
+      if (!ids.contains(idLinea) && !ids.contains(linea.producto.id)) {
+        continue;
+      }
+      final cantidadEscala = await _cantidadParaEscalaLinea(linea);
+      final contexto = ContextoPrecio(
+        producto: linea.producto,
+        cantidad: linea.cantidad,
+        cantidadParaEscala: cantidadEscala,
+        tiendaId: _tiendaId,
+        cliente: _clienteActivo,
+        canal: _canalVentaProducto(linea.producto),
+        productoIdEscalas: idLinea,
+      );
+      final resultado = await _motorPrecio.resolverPrecio(contexto);
+      _lineasCarrito[i] = linea.copiarCon(
+        precioUnitario: resultado.precioUnitario,
+        reglaPrecio: resultado.reglaAplicada,
+      );
+    }
+  }
+
+  Future<double> _cantidadParaEscalaLinea(LineaCarrito linea) async {
+    final id = linea.productoStockId ?? linea.producto.id;
+    if (_esLineaPresentacionFija(linea)) {
+      return linea.cantidad;
+    }
+    return _cantidadLoteEnCarrito(id);
+  }
+
+  Future<double> _cantidadLoteEnCarrito(
+    String productoId, {
+    double cantidadExtra = 0.0,
+    bool excluirPresentaciones = true,
+  }) async {
+    final lote = await _lotePromocionRepository.obtenerPorProducto(productoId);
+    final miembros = lote?.productoIds.toSet() ?? {productoId};
+    var suma = cantidadExtra;
+    for (final linea in _lineasCarrito) {
+      if (excluirPresentaciones && _esLineaPresentacionFija(linea)) {
+        continue;
+      }
+      final idLinea = linea.productoStockId ?? linea.producto.id;
+      if (!miembros.contains(idLinea) && !miembros.contains(linea.producto.id)) {
+        continue;
+      }
+      final factor = linea.factorABase > 0 ? linea.factorABase : 1.0;
+      // Piezas sueltas: factor 1. Presentacion fija no entra (filtrada arriba).
+      suma += linea.cantidad * (excluirPresentaciones ? 1.0 : factor);
+    }
+    return suma;
+  }
+
+  bool _esLineaPresentacionFija(LineaCarrito linea) {
+    final stockId = linea.productoStockId;
+    return stockId != null && stockId != linea.producto.id;
   }
 
   void _ajustarDescuentoTicketAlCarrito() {

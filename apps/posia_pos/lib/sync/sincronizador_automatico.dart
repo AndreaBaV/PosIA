@@ -3,7 +3,7 @@
 /// Autor: Equipo POSIA
 /// Matricula: POSIA-2026-001
 /// Fecha creacion: 2026-06-11 16:00:00 (UTC-6)
-/// Ultima modificacion: 2026-06-11 16:00:00 (UTC-6)
+/// Ultima modificacion: 2026-07-10 16:30:00 (UTC-6)
 library;
 
 import 'dart:async';
@@ -17,14 +17,21 @@ class SincronizadorAutomatico {
 	/// Crea sincronizador sobre el orquestador de la caja.
 	///
 	/// [orquestador] Orquestador de sincronizacion activo.
-	SincronizadorAutomatico({required SyncOrchestrator orquestador})
-		: _orquestador = orquestador;
+	/// [sincronizarConCatalogo] Si se provee, el primer ciclo (y al recuperar
+	/// red la primera vez) reencola el catalogo completo hacia Neon.
+	SincronizadorAutomatico({
+		required SyncOrchestrator orquestador,
+		Future<void> Function()? sincronizarConCatalogo,
+	}) : _orquestador = orquestador,
+	     _sincronizarConCatalogo = sincronizarConCatalogo;
 
 	final SyncOrchestrator _orquestador;
+	final Future<void> Function()? _sincronizarConCatalogo;
 	StreamSubscription<List<ConnectivityResult>>? _suscripcionConectividad;
 	Timer? _temporizador;
 	Timer? _temporizadorMantenerHub;
 	bool _sincronizando = false;
+	bool _catalogoEmpujado = false;
 
 	/// Inicia escucha de conectividad y ciclo periodico.
 	///
@@ -38,14 +45,14 @@ class SincronizadorAutomatico {
 			.listen(_alCambiarConectividad);
 		_temporizador = Timer.periodic(
 			const Duration(seconds: INTERVALO_SYNC_PERIODICO_SEGUNDOS),
-			(_) => _intentarSincronizar(),
+			(_) => _intentarSincronizar(forzarCatalogo: false),
 		);
 		_temporizadorMantenerHub = Timer.periodic(
 			const Duration(seconds: INTERVALO_MANTENER_HUB_VIVO_SEGUNDOS),
 			(_) => unawaited(_orquestador.mantenerHubVivo()),
 		);
 		unawaited(_orquestador.mantenerHubVivo());
-		unawaited(_intentarSincronizar());
+		unawaited(_intentarSincronizar(forzarCatalogo: true));
 	}
 
 	/// Detiene escucha y temporizador.
@@ -66,18 +73,24 @@ class SincronizadorAutomatico {
 			(resultado) => resultado != ConnectivityResult.none,
 		);
 		if (hayConexion) {
-			unawaited(_intentarSincronizar());
+			unawaited(_intentarSincronizar(forzarCatalogo: !_catalogoEmpujado));
 		}
 	}
 
-	/// Ejecuta ciclo de sync evitando ejecuciones simultaneas (silencioso, no bloquea UI).
-	Future<void> _intentarSincronizar() async {
+	/// Ejecuta ciclo de sync evitando ejecuciones simultaneas (silencioso).
+	Future<void> _intentarSincronizar({required bool forzarCatalogo}) async {
 		if (_sincronizando) {
 			return;
 		}
 		_sincronizando = true;
 		try {
-			await _orquestador.sincronizarCompleto();
+			final conCatalogo = _sincronizarConCatalogo;
+			if (conCatalogo != null && (forzarCatalogo || !_catalogoEmpujado)) {
+				await conCatalogo();
+				_catalogoEmpujado = true;
+			} else {
+				await _orquestador.sincronizarCompleto();
+			}
 		} on Object {
 			// Reintenta en el siguiente ciclo; la caja sigue operando con datos locales.
 		} finally {

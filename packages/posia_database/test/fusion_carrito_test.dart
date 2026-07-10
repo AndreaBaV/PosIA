@@ -168,6 +168,78 @@ void main() {
 			await fixture.cerrar();
 		});
 
+		test('guarda y recupera presentaciones arbitrarias menores a 1 kg', () async {
+			final fixture = await FixtureAdmin.abrir();
+			final servicioAdmin = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
+			final escalas = construirEscalasDesdeCortes(
+				precioKilo: 200.0,
+				cortes: const [
+					(pesoKg: 0.1, precioCorte: 25.0),
+					(pesoKg: 0.25, precioCorte: 40.0),
+					(pesoKg: 0.5, precioCorte: 70.0),
+				],
+			)
+				.map(
+					(e) => EscalaMayoreo(
+						productoId: '',
+						cantidadMinima: e.cantidadMinima,
+						precioUnitario: e.precioUnitario,
+					),
+				)
+				.toList();
+			final producto = await servicioAdmin.registrarProductoCompleto(
+				AltaProductoRequest(
+					nombre: 'Semilla a granel',
+					codigoBarras: '88004c',
+					precioBase: 200.0,
+					categoriaId: fixture.categoriaId,
+					unidadMedida: UnidadMedida.kilogramo,
+					stockInicial: 50.0,
+					escalasMayoreo: escalas,
+				),
+			);
+
+			final guardadas = await servicioAdmin.listarEscalasMayoreo(producto.id);
+			expect(guardadas, isNotEmpty);
+			final cortes = extraerCortesFraccionDesdeEscalas(
+				guardadas.map(
+					(e) => (
+						cantidadMinima: e.cantidadMinima,
+						precioUnitario: e.precioUnitario,
+					),
+				),
+			);
+			expect(cortes, hasLength(3));
+			expect(cortes[0].pesoKg, closeTo(0.1, 0.001));
+			expect(cortes[0].precioCorte, 25.0);
+			expect(cortes[1].pesoKg, closeTo(0.25, 0.001));
+			expect(cortes[1].precioCorte, 40.0);
+			expect(cortes[2].pesoKg, closeTo(0.5, 0.001));
+			expect(cortes[2].precioCorte, 70.0);
+
+			final filas = await fixture.base.query(
+				'wholesale_tiers',
+				where: 'producto_id = ?',
+				whereArgs: [producto.id],
+				orderBy: 'cantidad_minima ASC',
+			);
+			expect(filas, isNotEmpty);
+			expect(
+				filas.any(
+					(f) =>
+						((f['cantidad_minima'] as num).toDouble() - 0.1).abs() < 0.001 &&
+						((f['precio_unitario'] as num).toDouble() - 250.0).abs() < 0.011,
+				),
+				isTrue,
+			);
+
+			final servicio = await _crearServicioCaja(fixture);
+			expect(await servicio.agregarProductoConPeso(producto, 0.1), isEmpty);
+			final linea = servicio.obtenerCarrito().single;
+			expect(redondearMonto(linea.cantidad * linea.precioUnitario), 25.0);
+			await fixture.cerrar();
+		});
+
 		test('26 kg sueltos aplican precio de bulto 20 kg desde empaque', () async {
 			final fixture = await FixtureAdmin.abrir();
 			final servicioAdmin = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);

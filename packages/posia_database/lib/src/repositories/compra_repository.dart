@@ -70,6 +70,20 @@ class CompraRepository {
 		return resultado;
 	}
 
+	/// Lista compras recientes de todas las tiendas (para reencolar sync).
+	Future<List<Compra>> listarRecientes({int limite = 500}) async {
+		final filas = await _baseDatos.query(
+			'purchases',
+			orderBy: 'fecha_compra DESC, creada_en DESC',
+			limit: limite,
+		);
+		final resultado = <Compra>[];
+		for (final fila in filas) {
+			resultado.add(await _mapear(fila));
+		}
+		return resultado;
+	}
+
 	Future<Compra?> obtenerPorId(String id) async {
 		final filas = await _baseDatos.query(
 			'purchases',

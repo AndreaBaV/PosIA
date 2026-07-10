@@ -244,6 +244,32 @@ class EsquemaPosPostgres {
 			ON wholesale_tiers(producto_id)
 		''');
 		await conexion.execute('''
+			CREATE TABLE IF NOT EXISTS lotes_promocion (
+				id TEXT PRIMARY KEY,
+				codigo_externo TEXT NOT NULL,
+				nombre TEXT NOT NULL DEFAULT '',
+				cantidad_minima DOUBLE PRECISION NOT NULL,
+				precio_unitario DOUBLE PRECISION NOT NULL,
+				activo INTEGER NOT NULL DEFAULT 1
+			)
+		''');
+		await conexion.execute('''
+			CREATE UNIQUE INDEX IF NOT EXISTS idx_lotes_promocion_codigo
+			ON lotes_promocion(codigo_externo)
+			WHERE activo = 1
+		''');
+		await conexion.execute('''
+			CREATE TABLE IF NOT EXISTS lote_promocion_miembros (
+				lote_id TEXT NOT NULL,
+				producto_id TEXT NOT NULL,
+				PRIMARY KEY (lote_id, producto_id)
+			)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_lote_promocion_miembros_producto
+			ON lote_promocion_miembros(producto_id)
+		''');
+		await conexion.execute('''
 			CREATE TABLE IF NOT EXISTS price_lists (
 				id TEXT PRIMARY KEY,
 				nombre TEXT NOT NULL,
@@ -434,6 +460,51 @@ class EsquemaPosPostgres {
 				stock_minimo DOUBLE PRECISION NOT NULL DEFAULT 0,
 				PRIMARY KEY (producto_id, almacen_id)
 			)
+		''');
+		await conexion.execute('''
+			CREATE TABLE IF NOT EXISTS suppliers (
+				id TEXT PRIMARY KEY,
+				nombre TEXT NOT NULL,
+				contacto TEXT NOT NULL DEFAULT '',
+				telefono TEXT NOT NULL DEFAULT '',
+				activo INTEGER NOT NULL DEFAULT 1,
+				email TEXT NOT NULL DEFAULT '',
+				rfc TEXT NOT NULL DEFAULT '',
+				direccion TEXT NOT NULL DEFAULT '',
+				notas TEXT NOT NULL DEFAULT '',
+				dias_credito INTEGER NOT NULL DEFAULT 0
+			)
+		''');
+		await conexion.execute('''
+			CREATE TABLE IF NOT EXISTS purchases (
+				id TEXT PRIMARY KEY,
+				tienda_id TEXT NOT NULL,
+				proveedor_id TEXT NOT NULL,
+				fecha_compra TEXT NOT NULL,
+				notas TEXT NOT NULL DEFAULT '',
+				total DOUBLE PRECISION NOT NULL,
+				creada_en TEXT NOT NULL,
+				creado_por TEXT
+			)
+		''');
+		await conexion.execute('''
+			CREATE TABLE IF NOT EXISTS purchase_lines (
+				id SERIAL PRIMARY KEY,
+				compra_id TEXT NOT NULL,
+				producto_id TEXT NOT NULL,
+				nombre_producto TEXT NOT NULL,
+				cantidad DOUBLE PRECISION NOT NULL,
+				costo_unitario DOUBLE PRECISION NOT NULL,
+				subtotal DOUBLE PRECISION NOT NULL
+			)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_purchases_tienda_fecha
+			ON purchases(tienda_id, fecha_compra DESC)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_purchase_lines_compra
+			ON purchase_lines(compra_id)
 		''');
 		await _asegurarIndices(conexion);
 	}

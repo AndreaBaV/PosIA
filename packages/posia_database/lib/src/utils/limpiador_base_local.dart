@@ -38,6 +38,8 @@ class LimpiadorBaseLocal {
 		'price_lists',
 		'customer_product_prices',
 		'wholesale_tiers',
+		'lote_promocion_miembros',
+		'lotes_promocion',
 		'customer_discounts',
 		'products',
 		'categories',

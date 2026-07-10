@@ -26,6 +26,7 @@ class ContextoPrecio {
 		required this.cliente,
 		required this.canal,
 		this.productoIdEscalas,
+		this.cantidadParaEscala,
 	});
 
 	/// Producto sujeto a cotizacion.
@@ -43,6 +44,13 @@ class ContextoPrecio {
 
 	/// Cantidad de unidades o kilogramos.
 	final double cantidad;
+
+	/// Cantidad agregada para evaluar escalas (ej. suma del lote promocion).
+	/// Si es null se usa [cantidad].
+	final double? cantidadParaEscala;
+
+	/// Cantidad efectiva para umbrales de mayoreo / lote.
+	double get cantidadEscala => cantidadParaEscala ?? cantidad;
 
 	/// Identificador de tienda activa.
 	final String tiendaId;

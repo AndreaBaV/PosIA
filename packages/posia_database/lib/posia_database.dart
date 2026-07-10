@@ -40,6 +40,7 @@ export 'src/repositories/ticket_espera_repository.dart';
 export 'src/repositories/tienda_repository.dart';
 export 'src/repositories/inventario_repository.dart';
 export 'src/repositories/lote_farmacia_repository.dart';
+export 'src/repositories/lote_promocion_repository.dart';
 export 'src/repositories/precio_repository.dart';
 export 'src/repositories/producto_repository.dart';
 export 'src/repositories/sync_event_repository.dart';

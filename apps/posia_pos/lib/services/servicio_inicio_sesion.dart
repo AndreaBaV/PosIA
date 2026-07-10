@@ -51,7 +51,7 @@ class ServicioInicioSesion {
 			container.invalidate(contenedorServiciosProvider);
 			final contenedorActivo = await container.read(contenedorServiciosProvider.future);
 			try {
-				await contenedorActivo.syncOrchestrator.sincronizarCompleto();
+				await contenedorActivo.servicioAdmin.sincronizarManual();
 			} on Object {
 				// La caja opera localmente aunque el hub no responda al instante.
 			}

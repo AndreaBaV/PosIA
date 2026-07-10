@@ -11,15 +11,23 @@ import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../utils/transaccion_sqlite.dart';
+import 'lote_promocion_repository.dart';
 
 /// Implementa [RepositorioPrecio] sobre SQLite local.
 class PrecioRepository implements RepositorioPrecio {
 	/// Crea repositorio con conexion SQLite activa.
 	///
 	/// [baseDatos] Conexion local abierta.
-	PrecioRepository({required Database baseDatos}) : _baseDatos = baseDatos;
+	PrecioRepository({
+		required Database baseDatos,
+		LotePromocionRepository? lotePromocionRepository,
+	}) : _baseDatos = baseDatos,
+	     _lotePromocionRepository =
+	         lotePromocionRepository ??
+	         LotePromocionRepository(baseDatos: baseDatos);
 
 	final Database _baseDatos;
+	final LotePromocionRepository _lotePromocionRepository;
 
 	@override
 	Future<PrecioClienteProducto?> obtenerPrecioClienteProducto(
@@ -93,6 +101,46 @@ class PrecioRepository implements RepositorioPrecio {
 					productoId: productoId,
 					cantidadMinima: e.cantidadMinima,
 					precioUnitario: e.precioUnitario,
+				),
+			)
+			.toList();
+	}
+
+	@override
+	Future<LotePromocion?> obtenerLotePromocionPorProducto(String productoId) {
+		return _lotePromocionRepository.obtenerPorProducto(productoId);
+	}
+
+	/// Escalas guardadas en wholesale_tiers (sin fusionar presentaciones).
+	Future<List<EscalaMayoreo>> listarEscalasMayoreoPersistidas(
+		String productoId,
+	) async {
+		final filas = await _baseDatos.query(
+			'wholesale_tiers',
+			where: 'producto_id = ?',
+			whereArgs: [productoId],
+			orderBy: 'cantidad_minima ASC',
+		);
+		return filas
+			.map(
+				(fila) => EscalaMayoreo(
+					productoId: productoId,
+					cantidadMinima: (fila['cantidad_minima'] as num).toDouble(),
+					precioUnitario: (fila['precio_unitario'] as num).toDouble(),
+				),
+			)
+			.toList();
+	}
+
+	/// Todos los precios preferenciales cliente-producto.
+	Future<List<PrecioClienteProducto>> listarTodosPreciosClienteProducto() async {
+		final filas = await _baseDatos.query('customer_product_prices');
+		return filas
+			.map(
+				(fila) => PrecioClienteProducto(
+					clienteId: fila['cliente_id'] as String,
+					productoId: fila['producto_id'] as String,
+					precioUnitario: (fila['precio_unitario'] as num).toDouble(),
 				),
 			)
 			.toList();

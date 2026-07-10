@@ -15,6 +15,7 @@ class RepositorioPrecioMemoria implements RepositorioPrecio {
 	final Map<String, double> _preciosClienteProducto = {};
 	final Map<String, double> _preciosLista = {};
 	final List<EscalaMayoreo> _escalas = [];
+	final Map<String, LotePromocion> _lotesPorProducto = {};
 
 	@override
 	Future<PrecioClienteProducto?> obtenerPrecioClienteProducto(
@@ -44,8 +45,19 @@ class RepositorioPrecioMemoria implements RepositorioPrecio {
 		return _escalas.where((escala) => escala.productoId == productoId).toList();
 	}
 
+	@override
+	Future<LotePromocion?> obtenerLotePromocionPorProducto(String productoId) async {
+		return _lotesPorProducto[productoId];
+	}
+
 	void registrarEscala(EscalaMayoreo escala) {
 		_escalas.add(escala);
+	}
+
+	void registrarLote(LotePromocion lote) {
+		for (final productoId in lote.productoIds) {
+			_lotesPorProducto[productoId] = lote;
+		}
 	}
 }
 

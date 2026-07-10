@@ -17,6 +17,9 @@ enum ReglaPrecio {
 	/// Escala de mayoreo por cantidad.
 	escalaMayoreo,
 
+	/// Mayoreo compartido por lote de promocion (mix-and-match).
+	lotePromocion,
+
 	/// Precio base del producto en la tienda.
 	precioBase,
 

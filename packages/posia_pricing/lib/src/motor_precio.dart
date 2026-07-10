@@ -128,6 +128,18 @@ class MotorPrecio {
 	Future<ResultadoPrecio?> _resolverPrecioMayoreo(
 		ContextoPrecio contexto,
 	) async {
+		final lote = await _repositorioPrecio.obtenerLotePromocionPorProducto(
+			contexto.idProductoPrecio,
+		);
+		if (lote != null &&
+			lote.activo &&
+			contexto.cantidadEscala + 1e-9 >= lote.cantidadMinima) {
+			return ResultadoPrecio(
+				precioUnitario: redondearMonto(lote.precioUnitario),
+				reglaAplicada: ReglaPrecio.lotePromocion,
+			);
+		}
+
 		final escalas = await _repositorioPrecio.obtenerEscalasMayoreo(
 			contexto.idProductoPrecio,
 		);
@@ -139,7 +151,7 @@ class MotorPrecio {
 			escalas.map(
 				(e) => (cantidadMinima: e.cantidadMinima, precioUnitario: e.precioUnitario),
 			),
-			contexto.cantidad,
+			contexto.cantidadEscala,
 		);
 		if (escalaAplicable == null) {
 			return null;

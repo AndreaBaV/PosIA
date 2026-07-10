@@ -62,6 +62,9 @@ class ImportadorProductos {
     'proveedor',
     'notas',
     'piezas_por_caja',
+    'precio_caja',
+    'codigo_caja',
+    'lote_promocion',
     'unidades_por_bulto',
     'permite_stock_negativo',
   ];
@@ -105,7 +108,33 @@ class ImportadorProductos {
     'stock_minimo': ['stock_minimo', 'minimo', 'stock minimo', 'min'],
     'proveedor': ['proveedor', 'supplier', 'vendor'],
     'notas': ['notas', 'notes', 'comentarios', 'observaciones'],
-    'piezas_por_caja': ['piezas_por_caja', 'piezas caja', 'piezas por caja'],
+    'piezas_por_caja': [
+      'piezas_por_caja',
+      'piezas caja',
+      'piezas por caja',
+      'piezas_caja',
+      'piezascaja',
+    ],
+    'precio_caja': [
+      'precio_caja',
+      'precio caja',
+      'preciocaja',
+      'precio_de_caja',
+    ],
+    'codigo_caja': [
+      'codigo_caja',
+      'codigo caja',
+      'codigocaja',
+      'barcode_caja',
+      'upc_caja',
+    ],
+    'lote_promocion': [
+      'lote_promocion',
+      'lote promocion',
+      'promocion',
+      'grupo_promocion',
+      'grupo promocion',
+    ],
     'unidades_por_bulto': [
       'unidades_por_bulto',
       'unidades bulto',
@@ -129,6 +158,9 @@ class ImportadorProductos {
       '24',
       '6',
       '',
+      '',
+      '24',
+      '400',
       '',
       '',
       '',
@@ -208,6 +240,7 @@ class ImportadorProductos {
       };
       final codigosEnArchivo = <String>{};
       final filas = <FilaImportacionProducto>[];
+      final metaLotes = <String, ({double cantidadMinima, double precioUnitario})>{};
 
       for (var i = 1; i < filasCrudas.length; i++) {
         final numeroFila = i + 1;
@@ -305,6 +338,62 @@ class ImportadorProductos {
           }
         }
 
+        double? precioCaja;
+        final precioCajaTexto = valores['precio_caja']?.trim() ?? '';
+        if (precioCajaTexto.isNotEmpty) {
+          precioCaja = parsearPrecioTexto(precioCajaTexto);
+          if (precioCaja == null || precioCaja <= 0) {
+            errores.add('precio_caja invalido: "$precioCajaTexto"');
+            precioCaja = null;
+          }
+        }
+
+        final codigoCaja = valores['codigo_caja']?.trim() ?? '';
+        if (codigoCaja.isNotEmpty) {
+          final codigoNorm = codigoCaja.toLowerCase();
+          if (codigosBarrasExistentes.contains(codigoNorm) ||
+              codigosEnArchivo.contains(codigoNorm)) {
+            errores.add('Codigo de caja duplicado: $codigoCaja');
+          } else {
+            codigosEnArchivo.add(codigoNorm);
+          }
+        }
+
+        final lotePromocionCodigo = valores['lote_promocion']?.trim();
+        final tieneLote =
+            lotePromocionCodigo != null && lotePromocionCodigo.isNotEmpty;
+        if (tieneLote) {
+          if (piezasPorCaja == null || piezasPorCaja <= 0) {
+            errores.add(
+              'lote_promocion "$lotePromocionCodigo" requiere piezas_caja',
+            );
+          }
+          if (precioCaja == null || precioCaja <= 0) {
+            errores.add(
+              'lote_promocion "$lotePromocionCodigo" requiere precio_caja',
+            );
+          }
+          if (piezasPorCaja != null &&
+              piezasPorCaja > 0 &&
+              precioCaja != null &&
+              precioCaja > 0) {
+            final precioUnitario = redondearMonto(precioCaja / piezasPorCaja);
+            final meta = metaLotes[lotePromocionCodigo];
+            if (meta == null) {
+              metaLotes[lotePromocionCodigo] = (
+                cantidadMinima: piezasPorCaja.toDouble(),
+                precioUnitario: precioUnitario,
+              );
+            } else if (meta.cantidadMinima != piezasPorCaja.toDouble() ||
+                meta.precioUnitario != precioUnitario) {
+              errores.add(
+                'lote_promocion "$lotePromocionCodigo" con piezas/precio '
+                'distintos a otras filas del mismo lote',
+              );
+            }
+          }
+        }
+
         int? unidadesPorBulto;
         final bultoTexto = valores['unidades_por_bulto']?.trim() ?? '';
         if (bultoTexto.isNotEmpty) {
@@ -342,6 +431,9 @@ class ImportadorProductos {
             stockMinimo: stockMinimo,
             costoUnitario: costo,
             permiteStockNegativo: permiteNegativo,
+            precioCaja: precioCaja,
+            codigoCaja: codigoCaja,
+            lotePromocionCodigo: tieneLote ? lotePromocionCodigo : null,
           );
         }
 

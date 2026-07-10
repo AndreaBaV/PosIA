@@ -51,6 +51,7 @@ export 'src/models/linea_pedido.dart';
 export 'src/models/linea_cotizacion.dart';
 export 'src/models/linea_venta.dart';
 export 'src/models/lote_farmacia.dart';
+export 'src/models/lote_promocion.dart';
 export 'src/models/lista_precios.dart';
 export 'src/models/producto.dart';
 export 'src/models/resumen_cliente.dart';

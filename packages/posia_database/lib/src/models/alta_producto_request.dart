@@ -22,6 +22,9 @@ class AltaProductoRequest {
 		this.escalasMayoreo = const [],
 		this.costoUnitario = 0.0,
 		this.permiteStockNegativo = true,
+		this.precioCaja,
+		this.codigoCaja = '',
+		this.lotePromocionCodigo,
 	});
 
 	final String nombre;
@@ -39,6 +42,15 @@ class AltaProductoRequest {
 	final List<EscalaMayoreo> escalasMayoreo;
 	final double costoUnitario;
 	final bool permiteStockNegativo;
+
+	/// Precio total de la presentacion caja (opcional; si falta se deriva).
+	final double? precioCaja;
+
+	/// Codigo de barras de la caja (opcional).
+	final String codigoCaja;
+
+	/// Codigo de lote de promocion del archivo (ej. "1"); null = sin lote.
+	final String? lotePromocionCodigo;
 }
 
 /// Inventario agrupado por producto con existencias por tienda y almacén.

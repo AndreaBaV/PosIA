@@ -6,6 +6,8 @@
 /// Ultima modificacion: 2026-06-07 18:30:00 (UTC-6)
 library;
 
+import 'package:posia_core/posia_core.dart';
+
 import 'models/escala_mayoreo.dart';
 import 'models/precio_cliente_producto.dart';
 
@@ -33,4 +35,7 @@ abstract class RepositorioPrecio {
 	/// [productoId] Producto a consultar.
 	/// Retorna lista de escalas disponibles.
 	Future<List<EscalaMayoreo>> obtenerEscalasMayoreo(String productoId);
+
+	/// Obtiene lote de promocion activo del producto, si pertenece a uno.
+	Future<LotePromocion?> obtenerLotePromocionPorProducto(String productoId);
 }

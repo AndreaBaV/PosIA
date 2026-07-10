@@ -601,6 +601,7 @@ class MigracionesEsquema {
 		await migrarVersion18A19(base);
 		await migrarVersion19A20(base);
 		await migrarVersion25A26(base);
+		await migrarVersion28A29(base);
 	}
 
 	/// Tabla guia `ejemplo` en bases ya existentes (v10 → v11).
@@ -1072,6 +1073,36 @@ class MigracionesEsquema {
 			'nombre',
 			"TEXT NOT NULL DEFAULT ''",
 		);
+	}
+
+	/// v6.29: lotes de promocion mayoreo compartido (mix-and-match).
+	static Future<void> migrarVersion28A29(Database base) async {
+		await base.execute('''
+			CREATE TABLE IF NOT EXISTS lotes_promocion (
+				id TEXT PRIMARY KEY,
+				codigo_externo TEXT NOT NULL,
+				nombre TEXT NOT NULL DEFAULT '',
+				cantidad_minima REAL NOT NULL,
+				precio_unitario REAL NOT NULL,
+				activo INTEGER NOT NULL DEFAULT 1
+			)
+		''');
+		await base.execute('''
+			CREATE UNIQUE INDEX IF NOT EXISTS idx_lotes_promocion_codigo
+			ON lotes_promocion(codigo_externo)
+			WHERE activo = 1
+		''');
+		await base.execute('''
+			CREATE TABLE IF NOT EXISTS lote_promocion_miembros (
+				lote_id TEXT NOT NULL,
+				producto_id TEXT NOT NULL,
+				PRIMARY KEY (lote_id, producto_id)
+			)
+		''');
+		await base.execute('''
+			CREATE INDEX IF NOT EXISTS idx_lote_promocion_miembros_producto
+			ON lote_promocion_miembros(producto_id)
+		''');
 	}
 
 	/// v6.23: codigo de barras unico por tienda entre productos activos.

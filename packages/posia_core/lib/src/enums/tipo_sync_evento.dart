@@ -83,6 +83,9 @@ enum TipoSyncEvento {
 	/// Escalas de mayoreo reemplazadas para un producto.
 	wholesaleTiersReplaced,
 
+	/// Lote de promocion mayoreo creado o reemplazado (miembros incluidos).
+	lotePromocionReplaced,
+
 	/// Presentaciones de empaque reemplazadas para un producto.
 	productPresentationsReplaced,
 
@@ -106,4 +109,13 @@ enum TipoSyncEvento {
 
 	/// Precio preferencial cliente-producto eliminado.
 	customerProductPriceDeleted,
+
+	/// Proveedor creado o actualizado.
+	supplierUpserted,
+
+	/// Proveedor eliminado.
+	supplierDeleted,
+
+	/// Compra a proveedor registrada (incluye lineas y efecto en stock).
+	purchaseCompleted,
 }
