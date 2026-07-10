@@ -257,24 +257,28 @@ class FabricaServicios {
     final varianteRepo = VarianteRepository(baseDatos: base);
     final tiendaRepo = TiendaRepository(baseDatos: base);
     final usuarioRepo = UsuarioRepository(baseDatos: base);
-    final rolPersonalizadoRepo = RolPersonalizadoRepository(baseDatos: base);
-    final almacenRepo = AlmacenRepository(baseDatos: base);
-    final colaSync = SyncEventRepository(baseDatos: base);
-    final estadoSyncRepo = SyncStateRepository(baseDatos: base);
-    final aplicadorRemoto = AplicadorEventosSqlite(
-      baseDatos: base,
-      productoRepository: productoRepo,
-      clienteRepository: clienteRepo,
-      ventaRepository: ventaRepo,
-      inventarioRepository: inventarioRepo,
-      categoriaRepository: categoriaRepo,
-      traspasoRepository: traspasoRepo,
-      varianteRepository: varianteRepo,
-      tiendaRepository: tiendaRepo,
-      usuarioRepository: usuarioRepo,
-      rolPersonalizadoRepository: rolPersonalizadoRepo,
-      almacenRepository: almacenRepo,
-    );
+		final rolPersonalizadoRepo = RolPersonalizadoRepository(baseDatos: base);
+		final almacenRepo = AlmacenRepository(baseDatos: base);
+		final proveedorRepo = ProveedorRepository(baseDatos: base);
+		final compraRepo = CompraRepository(baseDatos: base);
+		final colaSync = SyncEventRepository(baseDatos: base);
+		final estadoSyncRepo = SyncStateRepository(baseDatos: base);
+		final aplicadorRemoto = AplicadorEventosSqlite(
+			baseDatos: base,
+			productoRepository: productoRepo,
+			clienteRepository: clienteRepo,
+			ventaRepository: ventaRepo,
+			inventarioRepository: inventarioRepo,
+			categoriaRepository: categoriaRepo,
+			traspasoRepository: traspasoRepo,
+			varianteRepository: varianteRepo,
+			tiendaRepository: tiendaRepo,
+			usuarioRepository: usuarioRepo,
+			rolPersonalizadoRepository: rolPersonalizadoRepo,
+			almacenRepository: almacenRepo,
+			proveedorRepository: proveedorRepo,
+			compraRepository: compraRepo,
+		);
     return SyncOrchestrator(
       colaLocal: colaSync,
       clienteHub: clienteHub,
