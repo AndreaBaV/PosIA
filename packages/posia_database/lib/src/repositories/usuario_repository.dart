@@ -244,6 +244,10 @@ class UsuarioRepository {
 		required String creadoEn,
 		required String actualizadoEn,
 	}) async {
+		await _asegurarPadresFk(
+			tiendaId: tiendaId,
+			rolPersonalizadoId: rolPersonalizadoId,
+		);
 		final filaExistente = await _baseDatos.query(
 			'usuarios',
 			where: 'id = ?',
@@ -290,6 +294,75 @@ class UsuarioRepository {
 			conflictAlgorithm: ConflictAlgorithm.replace,
 		);
 		return true;
+	}
+
+	/// Garantiza filas padre antes de insertar usuarios (FK v33).
+	Future<void> _asegurarPadresFk({
+		String? tiendaId,
+		String? rolPersonalizadoId,
+	}) async {
+		if (tiendaId != null && tiendaId.trim().isNotEmpty) {
+			await _asegurarTiendaPadre(tiendaId);
+		}
+		if (rolPersonalizadoId != null && rolPersonalizadoId.trim().isNotEmpty) {
+			await _asegurarRolPersonalizadoPadre(
+				rolPersonalizadoId,
+				tiendaId: tiendaId,
+			);
+		}
+	}
+
+	Future<void> _asegurarTiendaPadre(String tiendaId) async {
+		final filas = await _baseDatos.query(
+			'stores',
+			where: 'id = ?',
+			whereArgs: [tiendaId],
+			limit: 1,
+		);
+		if (filas.isNotEmpty) {
+			return;
+		}
+		await _baseDatos.insert(
+			'stores',
+			{
+				'id': tiendaId,
+				'nombre': 'Tienda',
+				'direccion': '',
+				'activa': 1,
+			},
+			conflictAlgorithm: ConflictAlgorithm.ignore,
+		);
+	}
+
+	Future<void> _asegurarRolPersonalizadoPadre(
+		String rolId, {
+		String? tiendaId,
+	}) async {
+		final filas = await _baseDatos.query(
+			'roles_personalizados',
+			where: 'id = ?',
+			whereArgs: [rolId],
+			limit: 1,
+		);
+		if (filas.isNotEmpty) {
+			return;
+		}
+		if (tiendaId != null && tiendaId.trim().isNotEmpty) {
+			await _asegurarTiendaPadre(tiendaId);
+		}
+		await _baseDatos.insert(
+			'roles_personalizados',
+			{
+				'id': rolId,
+				'nombre': 'Rol',
+				'descripcion': '',
+				'permisos_json': '[]',
+				'categorias_json': '[]',
+				'activo': 1,
+				'tienda_id': tiendaId,
+			},
+			conflictAlgorithm: ConflictAlgorithm.ignore,
+		);
 	}
 
 	/// Libera un codigo ocupado por otra cuenta cuando llega un evento mas reciente.

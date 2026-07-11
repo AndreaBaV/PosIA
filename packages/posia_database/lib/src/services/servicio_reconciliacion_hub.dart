@@ -87,10 +87,6 @@ class ServicioReconciliacionHub {
 				: AccionReconciliacionHub.pullCompleto;
 		}
 
-		final sync = cursorReiniciado
-			? await _syncOrchestrator.sincronizarDesdeOrigen(alProgreso: alProgreso)
-			: await _syncOrchestrator.sincronizarCompleto(alProgreso: alProgreso);
-
 		if (tiendasRemotas.isNotEmpty) {
 			for (final remota in tiendasRemotas) {
 				await _tiendaRepository.fusionarRemota(
@@ -106,6 +102,10 @@ class ServicioReconciliacionHub {
 				);
 			}
 		}
+
+		final sync = cursorReiniciado
+			? await _syncOrchestrator.sincronizarDesdeOrigen(alProgreso: alProgreso)
+			: await _syncOrchestrator.sincronizarCompleto(alProgreso: alProgreso);
 
 		return ResultadoReconciliacionHub(
 			accion: accion,

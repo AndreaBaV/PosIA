@@ -1106,8 +1106,8 @@ class ServicioAdmin {
         mensaje: 'Descargando equipo desde la nube…',
       ),
     );
-    await importarUsuariosDesdeHub();
     await importarRolesPersonalizadosDesdeHub();
+    await importarUsuariosDesdeHub();
     final repo = _usuarioRepository;
     if (repo != null) {
       final activos = await repo.listarTodos();
@@ -1135,6 +1135,8 @@ class ServicioAdmin {
     if (cliente == null || !await cliente.tieneAuthHub()) {
       return 0;
     }
+    await _sincronizarTiendasDesdeHub();
+    await importarRolesPersonalizadosDesdeHub();
     final remotos = await cliente.obtenerUsuarios();
     if (remotos.isEmpty) {
       return 0;
