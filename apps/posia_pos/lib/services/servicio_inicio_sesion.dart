@@ -9,6 +9,7 @@ import 'package:posia_database/posia_database.dart';
 
 import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
+import '../bootstrap/limpiador_cache_local.dart';
 import 'gestor_acceso_biometrico.dart';
 import 'gestor_sesion_persistente.dart';
 
@@ -66,24 +67,34 @@ class ServicioInicioSesion {
 			// Sync (cola + catalogo) siempre en segundo plano.
 			unawaited(() async {
 				try {
-					await contenedorActivo.syncOrchestrator
-						.sincronizarCompleto()
-						.timeout(
-							const Duration(seconds: TIMEOUT_HUB_SYNC_SEGUNDOS + 5),
-						);
+					if (LimpiadorCacheLocal.seLimpioEnEsteArranque) {
+						await contenedorActivo.syncOrchestrator
+							.sincronizarDesdeOrigen()
+							.timeout(
+								const Duration(seconds: TIMEOUT_HUB_SYNC_SEGUNDOS + 5),
+							);
+					} else {
+						await contenedorActivo.syncOrchestrator
+							.sincronizarCompleto()
+							.timeout(
+								const Duration(seconds: TIMEOUT_HUB_SYNC_SEGUNDOS + 5),
+							);
+					}
 					await PosiaLocalDatabase.obtenerInstancia()
 						.completarMigracionIntegridadTrasSync();
 				} on Object {
 					// La caja opera localmente aunque el hub no responda.
 				}
-				try {
-					await contenedorActivo.servicioAdmin.sincronizarManual(
-						incluirCatalogo: true,
-					);
-					await PosiaLocalDatabase.obtenerInstancia()
-						.completarMigracionIntegridadTrasSync();
-				} on Object {
-					// Catalogo se reintentara en sync automatico / manual.
+				if (!LimpiadorCacheLocal.seLimpioEnEsteArranque) {
+					try {
+						await contenedorActivo.servicioAdmin.sincronizarManual(
+							incluirCatalogo: true,
+						);
+						await PosiaLocalDatabase.obtenerInstancia()
+							.completarMigracionIntegridadTrasSync();
+					} on Object {
+						// Catalogo se reintentara en sync automatico / manual.
+					}
 				}
 			}());
 			container.invalidate(carritoNotifierProvider);

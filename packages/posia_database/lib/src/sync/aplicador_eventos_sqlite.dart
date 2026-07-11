@@ -816,6 +816,8 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		if (productoId.isEmpty) {
 			return;
 		}
+		final tiendaId = payload['tiendaId'] as String? ?? evento.tiendaId;
+		await _asegurarTiendaPadre(tiendaId);
 		final unidadNombre = payload['unidadMedida'] as String? ?? UnidadMedida.pieza.name;
 		final verticalNombre = payload['moduloVertical'] as String? ?? ModuloVertical.general.name;
 		final producto = Producto(
@@ -829,7 +831,7 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			),
 			rutaImagen: payload['rutaImagen'] as String? ?? '',
 			activo: payload['activo'] as bool? ?? true,
-			tiendaId: payload['tiendaId'] as String? ?? evento.tiendaId,
+			tiendaId: tiendaId,
 			moduloVertical: ModuloVertical.values.firstWhere(
 				(valor) => valor.name == verticalNombre,
 				orElse: () => ModuloVertical.general,
@@ -844,6 +846,26 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			permiteStockNegativo: payload['permiteStockNegativo'] as bool? ?? true,
 		);
 		await _productoRepository.guardar(producto);
+	}
+
+	/// Garantiza que exista la tienda padre antes de insertar productos (FK v33).
+	Future<void> _asegurarTiendaPadre(String tiendaId) async {
+		final repo = _tiendaRepository;
+		if (repo == null || tiendaId.trim().isEmpty) {
+			return;
+		}
+		final existente = await repo.obtenerPorId(tiendaId);
+		if (existente != null) {
+			return;
+		}
+		await repo.guardar(
+			Tienda(
+				id: tiendaId,
+				nombre: 'Tienda',
+				direccion: '',
+				activa: true,
+			),
+		);
 	}
 
 	/// Inserta o actualiza cliente remoto.

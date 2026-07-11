@@ -88,9 +88,12 @@ abstract final class MigracionIntegridadReferencial {
 			WHERE proveedor_id IS NOT NULL
 				AND proveedor_id NOT IN (SELECT id FROM proveedores)
 		''');
+		// Crear tiendas faltantes en lugar de borrar productos (preserva catalogo).
 		await sqlConPadre('products', 'stores', '''
-			DELETE FROM products
-			WHERE tienda_id NOT IN (SELECT id FROM stores)
+			INSERT OR IGNORE INTO stores (id, nombre, direccion, activa)
+			SELECT DISTINCT p.tienda_id, 'Tienda', '', 1
+			FROM products p
+			WHERE p.tienda_id NOT IN (SELECT id FROM stores)
 		''');
 
 		await sqlConPadre('customers', 'price_lists', '''
