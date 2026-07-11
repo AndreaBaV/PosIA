@@ -33,6 +33,15 @@ class ServicioInicioSesion {
 
 		try {
 			final auth = await container.read(servicioAutenticacionProvider.future);
+			if (resultado.desdeHub) {
+				final base = await PosiaLocalDatabase.obtenerInstancia().obtenerBaseDatos();
+				final tiendaRepo = TiendaRepository(baseDatos: base);
+				for (final tienda in resultado.tiendas) {
+					if (tienda.activa) {
+						await tiendaRepo.fusionarRemota(tienda);
+					}
+				}
+			}
 			await auth.guardarUsuarioRemoto(resultado);
 			final configRepo = await container.read(configDispositivoRepoProvider.future);
 			await GestorSesionPersistente.guardar(configRepo, usuario);
