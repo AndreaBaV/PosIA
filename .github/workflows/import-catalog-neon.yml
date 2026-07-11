@@ -1,0 +1,32 @@
+name: Import catalog to Neon
+
+on:
+  workflow_dispatch:
+    inputs:
+      archivo:
+        description: Ruta del XLSX dentro del repo
+        required: true
+        default: apps/posia_pos/hola2.xlsx
+
+permissions:
+  contents: read
+
+jobs:
+  importar:
+    name: Importar productos a Neon
+    runs-on: ubuntu-latest
+    environment: arturo-tienda-de-abarrotes
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Importar hoja al hub
+        env:
+          POSIA_HUB_URL: ${{ secrets.POSIA_HUB_URL }}
+          POSIA_HUB_API_KEY: ${{ secrets.POSIA_HUB_API_KEY }}
+        run: |
+          if [ -z "$POSIA_HUB_URL" ] || [ -z "$POSIA_HUB_API_KEY" ]; then
+            echo "::error::POSIA_HUB_URL y POSIA_HUB_API_KEY son obligatorios"
+            exit 1
+          fi
+          python3 scripts/importar_hola2_neon.py "${{ github.event.inputs.archivo }}"

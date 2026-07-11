@@ -90,8 +90,8 @@ abstract final class MigracionIntegridadReferencial {
 		''');
 		// Crear tiendas faltantes en lugar de borrar productos (preserva catalogo).
 		await sqlConPadre('products', 'stores', '''
-			INSERT OR IGNORE INTO stores (id, nombre, direccion, activa)
-			SELECT DISTINCT p.tienda_id, 'Tienda', '', 1
+			INSERT OR IGNORE INTO stores (id, nombre, activa)
+			SELECT DISTINCT p.tienda_id, 'Tienda', 1
 			FROM products p
 			WHERE p.tienda_id NOT IN (SELECT id FROM stores)
 		''');
