@@ -7,6 +7,7 @@ import json
 import os
 import re
 import sys
+import time
 import unicodedata
 import uuid
 import zipfile
@@ -203,28 +204,39 @@ def enviar_lote(hub_url: str, api_key: str, tienda_id: str, eventos: list[dict])
     errores: list[str] = []
     aceptados = 0
     for evento in eventos:
-        try:
-            data = http_json(
-                "POST",
-                f"{hub_url.rstrip('/')}/v1/events",
-                api_key,
-                {
-                    "deviceId": DISPOSITIVO_ID,
-                    "storeId": tienda_id,
-                    "events": [evento],
-                },
-            )
-            if int(data.get("accepted", 0)) < 1:
-                detalle = json.dumps(data)
-                errores.append(
-                    f"No aceptado {evento['type']} "
-                    f"{evento.get('payload', {}).get('nombre', evento['id'])} "
-                    f"({detalle})"
+        for intento in range(4):
+            try:
+                data = http_json(
+                    "POST",
+                    f"{hub_url.rstrip('/')}/v1/events",
+                    api_key,
+                    {
+                        "deviceId": DISPOSITIVO_ID,
+                        "storeId": tienda_id,
+                        "events": [evento],
+                    },
                 )
-            else:
-                aceptados += 1
-        except RuntimeError as err:
-            errores.append(str(err))
+                if int(data.get("accepted", 0)) < 1:
+                    detalle = json.dumps(data)
+                    errores.append(
+                        f"No aceptado {evento['type']} "
+                        f"{evento.get('payload', {}).get('nombre', evento['id'])} "
+                        f"({detalle})"
+                    )
+                else:
+                    aceptados += 1
+                break
+            except RuntimeError as err:
+                mensaje = str(err)
+                es_transitorio = any(
+                    token in mensaje
+                    for token in ("503", "502", "504", "Connection refused", "timed out")
+                )
+                if es_transitorio and intento < 3:
+                    time.sleep(2 ** intento)
+                    continue
+                errores.append(mensaje)
+                break
     return aceptados, errores
 
 
