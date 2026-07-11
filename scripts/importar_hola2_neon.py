@@ -125,18 +125,37 @@ def evento(tipo: str, payload: dict, tienda_id: str) -> dict:
     }
 
 
-def enviar_lote(hub_url: str, api_key: str, tienda_id: str, eventos: list[dict]) -> int:
-    body = {
-        "deviceId": DISPOSITIVO_ID,
-        "storeId": tienda_id,
-        "events": eventos,
-    }
-    data = http_json("POST", f"{hub_url.rstrip('/')}/v1/events", api_key, body)
-    aceptados = int(data.get("accepted", 0))
-    recibidos = int(data.get("received", len(eventos)))
-    if aceptados < recibidos:
-        raise RuntimeError(f"Solo {aceptados}/{recibidos} eventos aceptados por el hub")
-    return aceptados
+def product_id(codigo_barras: str, nombre: str) -> str:
+    if codigo_barras:
+        return slug(codigo_barras, "prod")
+    return slug(nombre, "prod")
+
+
+def enviar_lote(hub_url: str, api_key: str, tienda_id: str, eventos: list[dict]) -> tuple[int, list[str]]:
+    errores: list[str] = []
+    aceptados = 0
+    for evento in eventos:
+        try:
+            data = http_json(
+                "POST",
+                f"{hub_url.rstrip('/')}/v1/events",
+                api_key,
+                {
+                    "deviceId": DISPOSITIVO_ID,
+                    "storeId": tienda_id,
+                    "events": [evento],
+                },
+            )
+            if int(data.get("accepted", 0)) < 1:
+                errores.append(
+                    f"No aceptado {evento['type']} "
+                    f"{evento.get('payload', {}).get('nombre', evento['id'])}"
+                )
+            else:
+                aceptados += 1
+        except RuntimeError as err:
+            errores.append(str(err))
+    return aceptados, errores
 
 
 def construir_eventos(filas: list[list[str]], tienda_id: str) -> list[dict]:
@@ -199,7 +218,9 @@ def construir_eventos(filas: list[list[str]], tienda_id: str) -> list[dict]:
             continue
         precio = parsear_precio(celda(fila, i_precio))
         if precio is None:
-            print(f"Omitido (precio inválido): {nombre}", file=sys.stderr)
+            precio = parsear_precio(celda(fila, i_costo))
+        if precio is None:
+            print(f"Omitido (sin precio): {nombre}", file=sys.stderr)
             continue
         costo = parsear_precio(celda(fila, i_costo)) or 0.0
         categoria_txt = celda(fila, i_categoria) or CATEGORIA_DEFECTO
@@ -210,10 +231,11 @@ def construir_eventos(filas: list[list[str]], tienda_id: str) -> list[dict]:
             unidad = "pieza"
         piezas_txt = celda(fila, i_piezas)
         piezas = int(float(piezas_txt)) if piezas_txt else None
+        codigo = celda(fila, i_upc)
         payload = {
-            "id": str(uuid.uuid4()),
+            "id": product_id(codigo, nombre),
             "nombre": nombre,
-            "codigoBarras": celda(fila, i_upc),
+            "codigoBarras": codigo,
             "precioBase": precio,
             "unidadMedida": unidad,
             "rutaImagen": "",
@@ -257,18 +279,27 @@ def main() -> int:
     eventos = construir_eventos(filas, tienda_id)
 
     total = 0
+    errores_totales: list[str] = []
     for i in range(0, len(eventos), LOTE_EVENTOS):
         lote = eventos[i : i + LOTE_EVENTOS]
-        total += enviar_lote(hub_url, api_key, tienda_id, lote)
-        print(f"Enviados {total}/{len(eventos)} eventos…")
+        aceptados, errores = enviar_lote(hub_url, api_key, tienda_id, lote)
+        total += aceptados
+        errores_totales.extend(errores)
+        print(f"Progreso: {total}/{len(eventos)} eventos aceptados…")
 
     productos = sum(1 for e in eventos if e["type"] == "productUpserted")
     categorias = sum(1 for e in eventos if e["type"] == "categoryUpserted")
     print(
-        f"Importación completada: {productos} productos, "
-        f"{categorias} categorías, tienda={tienda_id}"
+        f"Importación completada: {productos} productos preparados, "
+        f"{categorias} categorías, {total} eventos aceptados, tienda={tienda_id}"
     )
-    return 0
+    if errores_totales:
+        print(f"Advertencias ({len(errores_totales)}):", file=sys.stderr)
+        for err in errores_totales[:20]:
+            print(f"  - {err}", file=sys.stderr)
+        if len(errores_totales) > 20:
+            print(f"  … y {len(errores_totales) - 20} más", file=sys.stderr)
+    return 0 if total > 0 else 1
 
 
 if __name__ == "__main__":
