@@ -154,6 +154,34 @@ def obtener_tienda_id(hub_url: str, api_key: str) -> str:
     return tiendas[0]["id"]
 
 
+def mapear_ids_producto_por_upc(hub_url: str, api_key: str) -> dict[str, str]:
+    """Reutiliza ids ya proyectados en Neon para re-import idempotente."""
+    mapa: dict[str, str] = {}
+    cursor = 0
+    while True:
+        data = http_json(
+            "GET",
+            f"{hub_url.rstrip('/')}/v1/events?since={cursor}",
+            api_key,
+        )
+        eventos = data.get("events") or []
+        if not eventos:
+            break
+        for ev in eventos:
+            if ev.get("type") != "productUpserted":
+                continue
+            payload = ev.get("payload") or {}
+            upc = str(payload.get("codigoBarras") or "").strip()
+            prod_id = str(payload.get("id") or "").strip()
+            if upc and prod_id:
+                mapa[upc] = prod_id
+        ultimo = int(data.get("lastSeq") or cursor)
+        if ultimo <= cursor:
+            break
+        cursor = ultimo
+    return mapa
+
+
 def evento(tipo: str, payload: dict, tienda_id: str) -> dict:
     return {
         "id": str(uuid.uuid4()),
@@ -187,9 +215,11 @@ def enviar_lote(hub_url: str, api_key: str, tienda_id: str, eventos: list[dict])
                 },
             )
             if int(data.get("accepted", 0)) < 1:
+                detalle = json.dumps(data)
                 errores.append(
                     f"No aceptado {evento['type']} "
-                    f"{evento.get('payload', {}).get('nombre', evento['id'])}"
+                    f"{evento.get('payload', {}).get('nombre', evento['id'])} "
+                    f"({detalle})"
                 )
             else:
                 aceptados += 1
@@ -198,7 +228,11 @@ def enviar_lote(hub_url: str, api_key: str, tienda_id: str, eventos: list[dict])
     return aceptados, errores
 
 
-def construir_eventos(filas: list[list[str]], tienda_id: str) -> list[dict]:
+def construir_eventos(
+    filas: list[list[str]],
+    tienda_id: str,
+    ids_por_upc: dict[str, str] | None = None,
+) -> list[dict]:
     if not filas:
         raise RuntimeError("Hoja vacía")
     headers = [h.strip().lower() for h in filas[0]]
@@ -272,8 +306,11 @@ def construir_eventos(filas: list[list[str]], tienda_id: str) -> list[dict]:
         piezas_txt = celda(fila, i_piezas)
         piezas = int(float(piezas_txt)) if piezas_txt else None
         codigo = celda(fila, i_upc)
+        prod_id = ids_por_upc.get(codigo) if codigo and ids_por_upc else None
+        if not prod_id:
+            prod_id = product_id(codigo, nombre)
         payload = {
-            "id": product_id(codigo, nombre),
+            "id": prod_id,
             "nombre": nombre,
             "codigoBarras": codigo,
             "precioBase": precio,
@@ -316,7 +353,10 @@ def main() -> int:
 
     filas = leer_filas_xlsx(ruta)
     tienda_id = obtener_tienda_id(hub_url, api_key)
-    eventos = construir_eventos(filas, tienda_id)
+    ids_por_upc = mapear_ids_producto_por_upc(hub_url, api_key)
+    if ids_por_upc:
+        print(f"Reutilizando {len(ids_por_upc)} ids de producto ya existentes en Neon")
+    eventos = construir_eventos(filas, tienda_id, ids_por_upc)
 
     database_url = os.environ.get("DATABASE_URL", "").strip()
     if database_url:
