@@ -27,9 +27,8 @@ env:
   FLUTTER_VERSION: "3.41.5"
   JAVA_VERSION: "17"
   APP_DIR: apps/posia_pos
-  # "true" borra SQLite local al primer arranque de cada version (+build).
-  # Poner "false" en produccion para conservar datos entre actualizaciones.
-  POSIA_LIMPIAR_CACHE_LOCAL: "true"
+  # "false" conserva datos entre actualizaciones. Usar "true" solo para builds de prueba.
+  POSIA_LIMPIAR_CACHE_LOCAL: "false"
 
 jobs:
   android:

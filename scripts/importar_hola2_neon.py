@@ -1,0 +1,275 @@
+#!/usr/bin/env python3
+"""Importa productos desde hola2.xlsx al catálogo Neon vía hub POSIA."""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import sys
+import unicodedata
+import uuid
+import zipfile
+import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
+from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
+
+NS = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+CATEGORIA_DEFECTO = "abarrotes"
+DISPOSITIVO_ID = "import-hola2-script"
+LOTE_EVENTOS = 40
+
+
+def col_idx(col: str) -> int:
+    n = 0
+    for c in col:
+        n = n * 26 + (ord(c) - 64)
+    return n
+
+
+def slug(texto: str, prefijo: str) -> str:
+    t = (
+        unicodedata.normalize("NFKD", texto.strip().lower())
+        .encode("ascii", "ignore")
+        .decode("ascii")
+    )
+    t = re.sub(r"[^a-z0-9]+", "-", t).strip("-")
+    return f"{prefijo}-{t or '1'}"
+
+
+def leer_filas_xlsx(ruta: Path) -> list[list[str]]:
+    with zipfile.ZipFile(ruta) as z:
+        shared: list[str] = []
+        if "xl/sharedStrings.xml" in z.namelist():
+            root = ET.fromstring(z.read("xl/sharedStrings.xml"))
+            for si in root.findall("m:si", NS):
+                parts = [x.text or "" for x in si.findall(".//m:t", NS)]
+                shared.append("".join(parts))
+        sheet = ET.fromstring(z.read("xl/worksheets/sheet1.xml"))
+        filas: dict[int, list[str]] = {}
+        for row in sheet.findall(".//m:sheetData/m:row", NS):
+            rnum = int(row.get("r", "0"))
+            cells: dict[int, str] = {}
+            for c in row.findall("m:c", NS):
+                ref = c.get("r", "")
+                m = re.match(r"([A-Z]+)(\d+)", ref)
+                if not m:
+                    continue
+                col = m.group(1)
+                t = c.get("t")
+                v = c.find("m:v", NS)
+                if v is None:
+                    val = ""
+                elif t == "s":
+                    val = shared[int(v.text)] if v.text else ""
+                else:
+                    val = v.text or ""
+                cells[col_idx(col)] = val
+            if cells:
+                maxc = max(cells)
+                filas[rnum] = [cells.get(i, "") for i in range(1, maxc + 1)]
+        return [filas[k] for k in sorted(filas)]
+
+
+def parsear_precio(texto: str) -> float | None:
+    t = texto.strip().replace("$", "").replace(",", "")
+    if not t:
+        return None
+    try:
+        return float(t)
+    except ValueError:
+        return None
+
+
+def http_json(
+    method: str,
+    url: str,
+    api_key: str,
+    body: dict | None = None,
+) -> dict:
+    data = None
+    headers = {"x-api-key": api_key, "Accept": "application/json"}
+    if body is not None:
+        data = json.dumps(body).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+    req = Request(url, data=data, headers=headers, method=method)
+    try:
+        with urlopen(req, timeout=120) as resp:
+            raw = resp.read().decode("utf-8")
+            return json.loads(raw) if raw else {}
+    except HTTPError as e:
+        detail = e.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"HTTP {e.code} {url}: {detail}") from e
+    except URLError as e:
+        raise RuntimeError(f"No se pudo conectar a {url}: {e}") from e
+
+
+def obtener_tienda_id(hub_url: str, api_key: str) -> str:
+    data = http_json("GET", f"{hub_url.rstrip('/')}/v1/stores", api_key)
+    tiendas = data.get("tiendas") or []
+    if not tiendas:
+        raise RuntimeError("El hub no tiene tiendas activas en Neon")
+    return tiendas[0]["id"]
+
+
+def evento(tipo: str, payload: dict, tienda_id: str) -> dict:
+    return {
+        "id": str(uuid.uuid4()),
+        "type": tipo,
+        "payload": payload,
+        "createdAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "storeId": tienda_id,
+        "deviceId": DISPOSITIVO_ID,
+    }
+
+
+def enviar_lote(hub_url: str, api_key: str, tienda_id: str, eventos: list[dict]) -> int:
+    body = {
+        "deviceId": DISPOSITIVO_ID,
+        "storeId": tienda_id,
+        "events": eventos,
+    }
+    data = http_json("POST", f"{hub_url.rstrip('/')}/v1/events", api_key, body)
+    aceptados = int(data.get("accepted", 0))
+    recibidos = int(data.get("received", len(eventos)))
+    if aceptados < recibidos:
+        raise RuntimeError(f"Solo {aceptados}/{recibidos} eventos aceptados por el hub")
+    return aceptados
+
+
+def construir_eventos(filas: list[list[str]], tienda_id: str) -> list[dict]:
+    if not filas:
+        raise RuntimeError("Hoja vacía")
+    headers = [h.strip().lower() for h in filas[0]]
+
+    def idx(nombres: list[str]) -> int | None:
+        for nombre in nombres:
+            if nombre in headers:
+                return headers.index(nombre)
+        return None
+
+    i_nombre = idx(["nombre", "producto", "articulo"])
+    i_costo = idx(["costo", "costo_unitario"])
+    i_precio = idx(["precio", "precio_base", "precio venta"])
+    i_upc = idx(["upc", "codigo_barras", "barcode", "sku"])
+    i_unidad = idx(["unidad", "unidad_medida"])
+    i_categoria = idx(["categoria", "categoría", "category"])
+    i_lote = idx(["lote_promocion", "lote promocion"])
+    i_piezas = idx(["piezas_caja", "piezas caja"])
+    i_precio_caja = idx(["precio_caja", "precio caja"])
+
+    if i_nombre is None or i_precio is None:
+        raise RuntimeError('Faltan columnas obligatorias "nombre" y "precio"')
+
+    def celda(fila: list[str], i: int | None) -> str:
+        if i is None or i >= len(fila):
+            return ""
+        return fila[i].strip()
+
+    categorias: dict[str, str] = {}
+    eventos: list[dict] = []
+
+    def asegurar_categoria(nombre: str) -> str:
+        clave = nombre.strip() or CATEGORIA_DEFECTO
+        if clave not in categorias:
+            cat_id = slug(clave, "cat")
+            categorias[clave] = cat_id
+            eventos.append(
+                evento(
+                    "categoryUpserted",
+                    {
+                        "id": cat_id,
+                        "nombre": clave.title() if clave != CATEGORIA_DEFECTO else "Abarrotes",
+                        "icono": "shopping_basket",
+                        "colorHex": "#4CAF50",
+                        "orden": len(categorias),
+                        "activa": True,
+                    },
+                    tienda_id,
+                )
+            )
+        return categorias[clave]
+
+    productos = 0
+    for fila in filas[1:]:
+        nombre = celda(fila, i_nombre)
+        if not nombre:
+            continue
+        precio = parsear_precio(celda(fila, i_precio))
+        if precio is None:
+            print(f"Omitido (precio inválido): {nombre}", file=sys.stderr)
+            continue
+        costo = parsear_precio(celda(fila, i_costo)) or 0.0
+        categoria_txt = celda(fila, i_categoria) or CATEGORIA_DEFECTO
+        cat_id = asegurar_categoria(categoria_txt)
+        unidad_txt = celda(fila, i_unidad) or "pieza"
+        unidad = unidad_txt.lower()
+        if unidad in ("pz", "pza", "piezas", "unidad"):
+            unidad = "pieza"
+        piezas_txt = celda(fila, i_piezas)
+        piezas = int(float(piezas_txt)) if piezas_txt else None
+        payload = {
+            "id": str(uuid.uuid4()),
+            "nombre": nombre,
+            "codigoBarras": celda(fila, i_upc),
+            "precioBase": precio,
+            "unidadMedida": unidad,
+            "rutaImagen": "",
+            "activo": True,
+            "tiendaId": tienda_id,
+            "moduloVertical": "general",
+            "categoriaId": cat_id,
+            "costoUnitario": costo,
+            "favoritoCaja": False,
+            "permiteStockNegativo": True,
+        }
+        if piezas:
+            payload["piezasPorCaja"] = piezas
+        lote = celda(fila, i_lote)
+        precio_caja = parsear_precio(celda(fila, i_precio_caja))
+        if lote:
+            payload["notas"] = f"lote_promocion:{lote}"
+        if precio_caja:
+            payload["notas"] = (payload.get("notas", "") + f" precio_caja:{precio_caja}").strip()
+        eventos.append(evento("productUpserted", payload, tienda_id))
+        productos += 1
+
+    if productos == 0:
+        raise RuntimeError("No se encontraron productos válidos en la hoja")
+    return eventos
+
+
+def main() -> int:
+    ruta = Path(sys.argv[1] if len(sys.argv) > 1 else "apps/posia_pos/hola2.xlsx")
+    hub_url = os.environ.get("POSIA_HUB_URL", "").strip()
+    api_key = os.environ.get("POSIA_HUB_API_KEY", "").strip()
+    if not hub_url or not api_key:
+        print("Defina POSIA_HUB_URL y POSIA_HUB_API_KEY", file=sys.stderr)
+        return 1
+    if not ruta.exists():
+        print(f"No existe el archivo: {ruta}", file=sys.stderr)
+        return 1
+
+    filas = leer_filas_xlsx(ruta)
+    tienda_id = obtener_tienda_id(hub_url, api_key)
+    eventos = construir_eventos(filas, tienda_id)
+
+    total = 0
+    for i in range(0, len(eventos), LOTE_EVENTOS):
+        lote = eventos[i : i + LOTE_EVENTOS]
+        total += enviar_lote(hub_url, api_key, tienda_id, lote)
+        print(f"Enviados {total}/{len(eventos)} eventos…")
+
+    productos = sum(1 for e in eventos if e["type"] == "productUpserted")
+    categorias = sum(1 for e in eventos if e["type"] == "categoryUpserted")
+    print(
+        f"Importación completada: {productos} productos, "
+        f"{categorias} categorías, tienda={tienda_id}"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

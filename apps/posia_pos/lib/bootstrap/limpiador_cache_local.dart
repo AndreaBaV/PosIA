@@ -15,6 +15,9 @@ class LimpiadorCacheLocal {
 
 	static const _archivoMarcador = '.posia_cache_wipe_marker';
 
+	/// True si este arranque borro SQLite (el sync debe descargar desde Neon).
+	static bool seLimpioEnEsteArranque = false;
+
 	/// Devuelve true si se eliminaron datos locales en este arranque.
 	static Future<bool> aplicarSiCorresponde() async {
 		if (!ConfiguracionDespliegue.limpiarCacheLocal) {
@@ -35,6 +38,7 @@ class LimpiadorCacheLocal {
 		await PosiaLocalDatabase.obtenerInstancia().reiniciarAlmacenLocalCompleto();
 		await GestorAccesoBiometrico().limpiarAlmacen();
 		await marcador.writeAsString(buildId);
+		seLimpioEnEsteArranque = true;
 		return true;
 	}
 }

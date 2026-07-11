@@ -18,6 +18,7 @@ import 'package:posia_licensing/posia_licensing.dart';
 
 import '../services/impresora_documentos_marca.dart';
 import '../bootstrap/inicializador_app.dart';
+import '../bootstrap/limpiador_cache_local.dart';
 import '../sync/sincronizador_automatico.dart';
 import '../services/gestor_sesion_persistente.dart';
 import '../util/plataforma_util.dart';
@@ -105,9 +106,15 @@ final sincronizadorAutomaticoProvider = FutureProvider<SincronizadorAutomatico>(
 		(evento) => _imprimirVentaRemotaTrasSync(ref, evento);
 	final sincronizador = SincronizadorAutomatico(
 		orquestador: contenedor.syncOrchestrator,
-		sincronizarConCatalogo: () => contenedor.servicioAdmin.sincronizarManual(
-			incluirCatalogo: true,
-		),
+		sincronizarConCatalogo: () async {
+			if (LimpiadorCacheLocal.seLimpioEnEsteArranque) {
+				await contenedor.syncOrchestrator.sincronizarDesdeOrigen();
+				await PosiaLocalDatabase.obtenerInstancia()
+					.completarMigracionIntegridadTrasSync();
+				return;
+			}
+			await contenedor.servicioAdmin.sincronizarManual(incluirCatalogo: true);
+		},
 	);
 	sincronizador.iniciar();
 	ref.onDispose(sincronizador.detener);

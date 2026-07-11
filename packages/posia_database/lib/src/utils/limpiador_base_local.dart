@@ -54,18 +54,27 @@ class LimpiadorBaseLocal {
 	];
 
 	static const _idsEjemplo = [
-		IdsEjemplo.tienda,
 		IdsEjemplo.categoria,
 		IdsEjemplo.producto,
 		IdsEjemplo.cliente,
 		IdsEjemplo.vendedor,
 		IdsEjemplo.proveedor,
 		IdsEjemplo.usuario,
+		IdsEjemplo.tienda,
 	];
 
 	/// Quita filas guia y registros demo insertados al crear el esquema.
 	static Future<bool> eliminarDatosEjemplo(Database base) async {
 		var elimino = false;
+		// Hijos antes que padres (FK v33 en products.tienda_id, etc.).
+		final filasStock = await base.delete(
+			'stock_levels',
+			where: 'producto_id = ?',
+			whereArgs: [IdsEjemplo.producto],
+		);
+		if (filasStock > 0) {
+			elimino = true;
+		}
 		for (final id in _idsEjemplo) {
 			for (final tabla in _tablasPorIdEjemplo(id)) {
 				final filas = await base.delete(
@@ -78,11 +87,6 @@ class LimpiadorBaseLocal {
 				}
 			}
 		}
-		await base.delete(
-			'stock_levels',
-			where: 'producto_id = ?',
-			whereArgs: [IdsEjemplo.producto],
-		);
 		await base.delete(
 			'vendedores',
 			where: "codigo = 'ejemplo'",
