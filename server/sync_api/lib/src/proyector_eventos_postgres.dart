@@ -127,12 +127,26 @@ class ProyectorEventosPostgres {
 
   Future<void> _producto(EventoHub evento) async {
     final p = evento.payload;
-    final id = p['id'] as String? ?? '';
+    var id = p['id'] as String? ?? '';
     if (id.isEmpty) {
       return;
     }
     final tiendaId = p['tiendaId'] as String? ?? evento.tiendaId;
     await _asegurarTienda(tiendaId);
+    final codigo = (p['codigoBarras'] as String? ?? '').trim();
+    if (codigo.isNotEmpty) {
+      final existente = await _sesion.execute(
+        Sql.named('''
+          SELECT id FROM products
+          WHERE tienda_id = @tienda AND codigo_barras = @codigo
+          LIMIT 1
+        '''),
+        parameters: {'tienda': tiendaId, 'codigo': codigo},
+      );
+      if (existente.isNotEmpty) {
+        id = existente.first[0] as String;
+      }
+    }
     await _sesion.execute(
       Sql.named('''
 				INSERT INTO products (

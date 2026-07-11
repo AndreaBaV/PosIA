@@ -54,8 +54,8 @@ class LimpiadorBaseLocal {
 	];
 
 	static const _idsEjemplo = [
-		IdsEjemplo.categoria,
 		IdsEjemplo.producto,
+		IdsEjemplo.categoria,
 		IdsEjemplo.cliente,
 		IdsEjemplo.vendedor,
 		IdsEjemplo.proveedor,

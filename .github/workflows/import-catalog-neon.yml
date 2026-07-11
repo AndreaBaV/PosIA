@@ -31,11 +31,13 @@ jobs:
         env:
           POSIA_HUB_URL: ${{ secrets.POSIA_HUB_URL }}
           POSIA_HUB_API_KEY: ${{ secrets.POSIA_HUB_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           if [ -z "$POSIA_HUB_URL" ] || [ -z "$POSIA_HUB_API_KEY" ]; then
             echo "::error::POSIA_HUB_URL y POSIA_HUB_API_KEY son obligatorios"
             exit 1
           fi
+          pip install --quiet psycopg2-binary
           ARCHIVO="${{ github.event.inputs.archivo }}"
           if [ -z "$ARCHIVO" ]; then
             ARCHIVO="apps/posia_pos/hola2.xlsx"

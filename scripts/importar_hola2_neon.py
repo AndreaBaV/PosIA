@@ -22,6 +22,46 @@ DISPOSITIVO_ID = "import-hola2-script"
 LOTE_EVENTOS = 40
 
 
+def _parse_database_url(url: str) -> dict:
+    from urllib.parse import urlparse, unquote
+
+    parsed = urlparse(url)
+    return {
+        "host": parsed.hostname,
+        "port": parsed.port or 5432,
+        "dbname": parsed.path.lstrip("/"),
+        "user": unquote(parsed.username or ""),
+        "password": unquote(parsed.password or ""),
+        "sslmode": "require",
+    }
+
+
+def limpiar_conflictos_barcode(database_url: str, tienda_id: str, codigos: list[str]) -> int:
+    """Elimina productos huérfanos con mismo UPC pero distinto id (re-import)."""
+    if not codigos:
+        return 0
+    try:
+        import psycopg2
+    except ImportError:
+        return 0
+    conn = psycopg2.connect(_parse_database_url(database_url))
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM products
+                WHERE tienda_id = %s
+                  AND codigo_barras = ANY(%s)
+                """,
+                (tienda_id, codigos),
+            )
+            eliminados = cur.rowcount
+        conn.commit()
+        return eliminados
+    finally:
+        conn.close()
+
+
 def col_idx(col: str) -> int:
     n = 0
     for c in col:
@@ -278,6 +318,18 @@ def main() -> int:
     tienda_id = obtener_tienda_id(hub_url, api_key)
     eventos = construir_eventos(filas, tienda_id)
 
+    database_url = os.environ.get("DATABASE_URL", "").strip()
+    if database_url:
+        codigos = [
+            e["payload"]["codigoBarras"]
+            for e in eventos
+            if e["type"] == "productUpserted"
+            and e["payload"].get("codigoBarras")
+        ]
+        eliminados = limpiar_conflictos_barcode(database_url, tienda_id, codigos)
+        if eliminados:
+            print(f"Limpieza Neon: {eliminados} productos duplicados por UPC eliminados")
+
     total = 0
     errores_totales: list[str] = []
     for i in range(0, len(eventos), LOTE_EVENTOS):
@@ -299,6 +351,8 @@ def main() -> int:
             print(f"  - {err}", file=sys.stderr)
         if len(errores_totales) > 20:
             print(f"  … y {len(errores_totales) - 20} más", file=sys.stderr)
+    if errores_totales and total < len(eventos):
+        return 1
     return 0 if total > 0 else 1
 
 
