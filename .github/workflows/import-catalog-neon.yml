@@ -7,6 +7,13 @@ on:
         description: Ruta del XLSX dentro del repo
         required: true
         default: apps/posia_pos/hola2.xlsx
+  push:
+    branches: [main]
+    paths:
+      - apps/posia_pos/hola2.xlsx
+      - apps/posia_pos/hola.xlsx
+      - scripts/importar_hola2_neon.py
+      - .github/workflows/import-catalog-neon.yml
 
 permissions:
   contents: read
@@ -29,4 +36,8 @@ jobs:
             echo "::error::POSIA_HUB_URL y POSIA_HUB_API_KEY son obligatorios"
             exit 1
           fi
-          python3 scripts/importar_hola2_neon.py "${{ github.event.inputs.archivo }}"
+          ARCHIVO="${{ github.event.inputs.archivo }}"
+          if [ -z "$ARCHIVO" ]; then
+            ARCHIVO="apps/posia_pos/hola2.xlsx"
+          fi
+          python3 scripts/importar_hola2_neon.py "$ARCHIVO"
