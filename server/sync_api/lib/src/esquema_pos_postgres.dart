@@ -1,4 +1,4 @@
-/// Esquema PostgreSQL espejo del POS local (SQLite v5).
+/// Esquema PostgreSQL espejo del POS local (SQLite v32).
 library;
 
 import 'package:posia_core/posia_core.dart';
@@ -193,6 +193,9 @@ class EsquemaPosPostgres {
 			ALTER TABLE products ADD COLUMN IF NOT EXISTS costo_unitario DOUBLE PRECISION NOT NULL DEFAULT 0
 		''');
 		await conexion.execute('''
+			ALTER TABLE products ADD COLUMN IF NOT EXISTS favorito_caja INTEGER NOT NULL DEFAULT 0
+		''');
+		await conexion.execute('''
 			ALTER TABLE customers ADD COLUMN IF NOT EXISTS dias_credito INTEGER NOT NULL DEFAULT $DIAS_CREDITO_PREDETERMINADO
 		''');
 		await conexion.execute('''
@@ -299,6 +302,23 @@ class EsquemaPosPostgres {
 		await conexion.execute('''
 			CREATE INDEX IF NOT EXISTS idx_customer_product_prices_producto
 			ON customer_product_prices(producto_id)
+		''');
+		await conexion.execute('''
+			CREATE TABLE IF NOT EXISTS customer_discounts (
+				id TEXT PRIMARY KEY,
+				cliente_id TEXT NOT NULL,
+				tipo TEXT NOT NULL,
+				valor DOUBLE PRECISION NOT NULL,
+				producto_id TEXT,
+				condicion TEXT NOT NULL,
+				umbral DOUBLE PRECISION,
+				activo INTEGER NOT NULL DEFAULT 1,
+				descripcion TEXT NOT NULL DEFAULT ''
+			)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_customer_discounts_cliente
+			ON customer_discounts(cliente_id)
 		''');
 		await conexion.execute('''
 			CREATE TABLE IF NOT EXISTS tipos_presentacion (
@@ -448,8 +468,20 @@ class EsquemaPosPostgres {
 				id TEXT PRIMARY KEY,
 				nombre TEXT NOT NULL,
 				tienda_id TEXT,
-				activo INTEGER NOT NULL DEFAULT 1
+				activo INTEGER NOT NULL DEFAULT 1,
+				latitud DOUBLE PRECISION,
+				longitud DOUBLE PRECISION,
+				radio_metros DOUBLE PRECISION DEFAULT 150
 			)
+		''');
+		await conexion.execute('''
+			ALTER TABLE almacenes ADD COLUMN IF NOT EXISTS latitud DOUBLE PRECISION
+		''');
+		await conexion.execute('''
+			ALTER TABLE almacenes ADD COLUMN IF NOT EXISTS longitud DOUBLE PRECISION
+		''');
+		await conexion.execute('''
+			ALTER TABLE almacenes ADD COLUMN IF NOT EXISTS radio_metros DOUBLE PRECISION DEFAULT 150
 		''');
 		await conexion.execute('''
 			CREATE TABLE IF NOT EXISTS warehouse_stock (
@@ -506,7 +538,69 @@ class EsquemaPosPostgres {
 			CREATE INDEX IF NOT EXISTS idx_purchase_lines_compra
 			ON purchase_lines(compra_id)
 		''');
+		await conexion.execute('''
+			CREATE TABLE IF NOT EXISTS cash_shifts (
+				id TEXT PRIMARY KEY,
+				tienda_id TEXT NOT NULL,
+				caja_id TEXT NOT NULL,
+				vendedor_id TEXT,
+				fondo_inicial DOUBLE PRECISION NOT NULL,
+				total_efectivo DOUBLE PRECISION NOT NULL DEFAULT 0,
+				total_tarjeta DOUBLE PRECISION NOT NULL DEFAULT 0,
+				total_transferencia DOUBLE PRECISION NOT NULL DEFAULT 0,
+				total_ventas DOUBLE PRECISION NOT NULL DEFAULT 0,
+				cantidad_ventas INTEGER NOT NULL DEFAULT 0,
+				abierto_en TEXT NOT NULL,
+				cerrado_en TEXT,
+				estado TEXT NOT NULL
+			)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_cash_shifts_tienda_abierto
+			ON cash_shifts(tienda_id, abierto_en DESC)
+		''');
+		await conexion.execute('''
+			CREATE TABLE IF NOT EXISTS employee_profiles (
+				usuario_id TEXT PRIMARY KEY,
+				tarifa_hora DOUBLE PRECISION NOT NULL DEFAULT 0,
+				tipo_pago TEXT NOT NULL DEFAULT 'por_hora',
+				actualizado_en TEXT NOT NULL
+			)
+		''');
+		await conexion.execute('''
+			CREATE TABLE IF NOT EXISTS payroll_periods (
+				id TEXT PRIMARY KEY,
+				tienda_id TEXT,
+				inicio_en TEXT NOT NULL,
+				fin_en TEXT NOT NULL,
+				estado TEXT NOT NULL,
+				cerrado_en TEXT,
+				cerrado_por TEXT
+			)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_payroll_periods_tienda
+			ON payroll_periods(tienda_id, inicio_en DESC)
+		''');
+		await conexion.execute('''
+			CREATE TABLE IF NOT EXISTS payroll_lines (
+				id TEXT PRIMARY KEY,
+				periodo_id TEXT NOT NULL,
+				usuario_id TEXT NOT NULL,
+				horas_trabajadas DOUBLE PRECISION NOT NULL,
+				tarifa_hora DOUBLE PRECISION NOT NULL,
+				monto_bruto DOUBLE PRECISION NOT NULL,
+				monto_neto DOUBLE PRECISION NOT NULL
+			)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_payroll_lines_periodo
+			ON payroll_lines(periodo_id)
+		''');
 		await _asegurarIndices(conexion);
+		await _asegurarClavesForaneas(conexion);
+		await _asegurarTiposTemporales(conexion);
+		await _asegurarRetencionSyncEvents(conexion);
 	}
 
 	static Future<void> _asegurarIndices(Connection conexion) async {
@@ -518,5 +612,339 @@ class EsquemaPosPostgres {
 			ON products(tienda_id, codigo_barras)
 			WHERE activo = 1 AND codigo_barras <> ''
 		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_products_tienda ON products(tienda_id)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_products_categoria ON products(categoria_id)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_sales_tienda_fecha ON sales(tienda_id, creada_en DESC)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_sales_turno ON sales(turno_caja_id)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_sales_cliente ON sales(cliente_id)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_transfer_lines_transfer
+			ON transfer_lines(transfer_id)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_warehouse_stock_almacen
+			ON warehouse_stock(almacen_id)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_almacenes_tienda ON almacenes(tienda_id)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_orders_empleado
+			ON orders(asignado_a_usuario_id, estado)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_product_variants_padre
+			ON product_variants(producto_padre_id)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_sync_events_store_seq
+			ON sync_events(store_id, seq)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_sync_events_store_created
+			ON sync_events(store_id, created_at DESC)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_sync_events_created
+			ON sync_events(created_at)
+		''');
+	}
+
+	/// FKs DEFERRABLE: permiten proyectar lotes multi-fila y validar al COMMIT.
+	static Future<void> _asegurarClavesForaneas(Connection conexion) async {
+		const fks = <(String tabla, String nombre, String definicion)>[
+			(
+				'products',
+				'fk_products_tienda',
+				'FOREIGN KEY (tienda_id) REFERENCES stores(id)',
+			),
+			(
+				'product_variants',
+				'fk_variants_producto',
+				'FOREIGN KEY (producto_padre_id) REFERENCES products(id) ON DELETE CASCADE',
+			),
+			(
+				'stock_levels',
+				'fk_stock_producto',
+				'FOREIGN KEY (producto_id) REFERENCES products(id) ON DELETE CASCADE',
+			),
+			(
+				'stock_levels',
+				'fk_stock_tienda',
+				'FOREIGN KEY (tienda_id) REFERENCES stores(id)',
+			),
+			(
+				'almacenes',
+				'fk_almacenes_tienda',
+				'FOREIGN KEY (tienda_id) REFERENCES stores(id)',
+			),
+			(
+				'warehouse_stock',
+				'fk_warehouse_stock_producto',
+				'FOREIGN KEY (producto_id) REFERENCES products(id) ON DELETE CASCADE',
+			),
+			(
+				'warehouse_stock',
+				'fk_warehouse_stock_almacen',
+				'FOREIGN KEY (almacen_id) REFERENCES almacenes(id) ON DELETE CASCADE',
+			),
+			(
+				'sales',
+				'fk_sales_tienda',
+				'FOREIGN KEY (tienda_id) REFERENCES stores(id)',
+			),
+			(
+				'sale_lines',
+				'fk_sale_lines_venta',
+				'FOREIGN KEY (venta_id) REFERENCES sales(id) ON DELETE CASCADE',
+			),
+			(
+				'cash_shifts',
+				'fk_cash_shifts_tienda',
+				'FOREIGN KEY (tienda_id) REFERENCES stores(id)',
+			),
+			(
+				'transfer_lines',
+				'fk_transfer_lines_transfer',
+				'FOREIGN KEY (transfer_id) REFERENCES transfers(id) ON DELETE CASCADE',
+			),
+			(
+				'wholesale_tiers',
+				'fk_wholesale_tiers_producto',
+				'FOREIGN KEY (producto_id) REFERENCES products(id) ON DELETE CASCADE',
+			),
+			(
+				'lote_promocion_miembros',
+				'fk_lote_miembros_lote',
+				'FOREIGN KEY (lote_id) REFERENCES lotes_promocion(id) ON DELETE CASCADE',
+			),
+			(
+				'lote_promocion_miembros',
+				'fk_lote_miembros_producto',
+				'FOREIGN KEY (producto_id) REFERENCES products(id) ON DELETE CASCADE',
+			),
+			(
+				'price_list_items',
+				'fk_price_list_items_lista',
+				'FOREIGN KEY (lista_precios_id) REFERENCES price_lists(id) ON DELETE CASCADE',
+			),
+			(
+				'price_list_items',
+				'fk_price_list_items_producto',
+				'FOREIGN KEY (producto_id) REFERENCES products(id) ON DELETE CASCADE',
+			),
+			(
+				'customer_product_prices',
+				'fk_cpp_cliente',
+				'FOREIGN KEY (cliente_id) REFERENCES customers(id) ON DELETE CASCADE',
+			),
+			(
+				'customer_product_prices',
+				'fk_cpp_producto',
+				'FOREIGN KEY (producto_id) REFERENCES products(id) ON DELETE CASCADE',
+			),
+			(
+				'customer_discounts',
+				'fk_customer_discounts_cliente',
+				'FOREIGN KEY (cliente_id) REFERENCES customers(id) ON DELETE CASCADE',
+			),
+			(
+				'product_presentations',
+				'fk_presentations_producto',
+				'FOREIGN KEY (producto_id) REFERENCES products(id) ON DELETE CASCADE',
+			),
+			(
+				'quote_lines',
+				'fk_quote_lines_cotizacion',
+				'FOREIGN KEY (cotizacion_id) REFERENCES quotes(id) ON DELETE CASCADE',
+			),
+			(
+				'order_lines',
+				'fk_order_lines_pedido',
+				'FOREIGN KEY (pedido_id) REFERENCES orders(id) ON DELETE CASCADE',
+			),
+			(
+				'purchase_lines',
+				'fk_purchase_lines_compra',
+				'FOREIGN KEY (compra_id) REFERENCES purchases(id) ON DELETE CASCADE',
+			),
+			(
+				'purchases',
+				'fk_purchases_proveedor',
+				'FOREIGN KEY (proveedor_id) REFERENCES suppliers(id)',
+			),
+			(
+				'purchases',
+				'fk_purchases_tienda',
+				'FOREIGN KEY (tienda_id) REFERENCES stores(id)',
+			),
+			(
+				'users',
+				'fk_users_tienda',
+				'FOREIGN KEY (tienda_id) REFERENCES stores(id)',
+			),
+			(
+				'attendance_challenges',
+				'fk_attendance_challenges_tienda',
+				'FOREIGN KEY (tienda_id) REFERENCES stores(id)',
+			),
+			(
+				'attendance_records',
+				'fk_attendance_records_tienda',
+				'FOREIGN KEY (tienda_id) REFERENCES stores(id)',
+			),
+			(
+				'payroll_periods',
+				'fk_payroll_periods_tienda',
+				'FOREIGN KEY (tienda_id) REFERENCES stores(id)',
+			),
+			(
+				'payroll_lines',
+				'fk_payroll_lines_periodo',
+				'FOREIGN KEY (periodo_id) REFERENCES payroll_periods(id) ON DELETE CASCADE',
+			),
+		];
+		for (final fk in fks) {
+			final (tabla, nombre, definicion) = fk;
+			try {
+				await conexion.execute(
+					'ALTER TABLE $tabla DROP CONSTRAINT IF EXISTS $nombre',
+				);
+				await conexion.execute('''
+					ALTER TABLE $tabla
+					ADD CONSTRAINT $nombre
+					$definicion
+					DEFERRABLE INITIALLY DEFERRED
+				''');
+			} on Object {
+				// Orfandad previa u otro conflicto: no bloquear arranque.
+			}
+		}
+	}
+
+	/// Convierte timestamps de negocio TEXT ISO → TIMESTAMPTZ (idempotente).
+	static Future<void> _asegurarTiposTemporales(Connection conexion) async {
+		const columnas = <(String tabla, String columna, bool nullable)>[
+			('sales', 'creada_en', false),
+			('sales', 'credito_vence_en', true),
+			('sales', 'credito_liquidado_en', true),
+			('stock_levels', 'actualizado_en', false),
+			('warehouse_stock', 'actualizado_en', false),
+			('transfers', 'solicitado_en', false),
+			('transfers', 'completado_en', true),
+			('quotes', 'creada_en', false),
+			('orders', 'creado_en', false),
+			('orders', 'asignado_en', true),
+			('orders', 'credito_vence_en', true),
+			('purchases', 'fecha_compra', false),
+			('purchases', 'creada_en', false),
+			('cash_shifts', 'abierto_en', false),
+			('cash_shifts', 'cerrado_en', true),
+			('attendance_challenges', 'expira_en', false),
+			('attendance_records', 'entrada_en', false),
+			('attendance_records', 'salida_en', true),
+			('users', 'creado_en', false),
+			('users', 'actualizado_en', false),
+			('employee_profiles', 'actualizado_en', false),
+			('payroll_periods', 'inicio_en', false),
+			('payroll_periods', 'fin_en', false),
+			('payroll_periods', 'cerrado_en', true),
+		];
+		for (final col in columnas) {
+			await _convertirColumnaATimestamptz(
+				conexion,
+				tabla: col.$1,
+				columna: col.$2,
+				nullable: col.$3,
+			);
+		}
+	}
+
+	static Future<void> _convertirColumnaATimestamptz(
+		Connection conexion, {
+		required String tabla,
+		required String columna,
+		required bool nullable,
+	}) async {
+		try {
+			final tipo = await conexion.execute(
+				Sql.named('''
+					SELECT data_type
+					FROM information_schema.columns
+					WHERE table_schema = 'public'
+						AND table_name = @tabla
+						AND column_name = @columna
+				'''),
+				parameters: {'tabla': tabla, 'columna': columna},
+			);
+			if (tipo.isEmpty) {
+				return;
+			}
+			final dataType = (tipo.first[0] as String?) ?? '';
+			if (dataType.contains('timestamp')) {
+				return;
+			}
+			if (nullable) {
+				await conexion.execute('''
+					ALTER TABLE $tabla
+					ALTER COLUMN $columna TYPE TIMESTAMPTZ
+					USING CASE
+						WHEN $columna IS NULL OR btrim($columna::text) = '' THEN NULL
+						ELSE $columna::timestamptz
+					END
+				''');
+			} else {
+				await conexion.execute('''
+					ALTER TABLE $tabla
+					ALTER COLUMN $columna TYPE TIMESTAMPTZ
+					USING CASE
+						WHEN $columna IS NULL OR btrim($columna::text) = '' THEN now()
+						ELSE $columna::timestamptz
+					END
+				''');
+			}
+		} on Object {
+			// Datos no parseables u otro error: conservar TEXT.
+		}
+	}
+
+	/// Indice + meta de retencion del log de sync.
+	static Future<void> _asegurarRetencionSyncEvents(Connection conexion) async {
+		await conexion.execute('''
+			CREATE TABLE IF NOT EXISTS schema_meta (
+				clave TEXT PRIMARY KEY,
+				valor TEXT NOT NULL
+			)
+		''');
+		await conexion.execute(
+			Sql.named('''
+				INSERT INTO schema_meta (clave, valor)
+				VALUES ('sync_events_retention_days', @dias)
+				ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor
+			'''),
+			parameters: {'dias': '$DIAS_RETENCION_SYNC_EVENTS'},
+		);
+	}
+
+	/// Purga eventos del hub mas antiguos que la ventana de retencion.
+	static Future<int> purgarEventosAntiguos(Connection conexion) async {
+		final resultado = await conexion.execute(
+			Sql.named('''
+				DELETE FROM sync_events
+				WHERE created_at < now() - make_interval(days => @dias)
+			'''),
+			parameters: {'dias': DIAS_RETENCION_SYNC_EVENTS},
+		);
+		return resultado.affectedRows;
 	}
 }

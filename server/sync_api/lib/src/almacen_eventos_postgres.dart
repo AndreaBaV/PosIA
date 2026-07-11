@@ -4,13 +4,14 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:posia_core/posia_core.dart';
 import 'package:postgres/postgres.dart';
 
 import 'almacen_eventos.dart';
+import 'almacen_usuarios_postgres.dart';
 import 'esquema_pos_postgres.dart';
 import 'evento_hub.dart';
 import 'proyector_eventos_postgres.dart';
-import 'almacen_usuarios_postgres.dart';
 
 class AlmacenEventosPostgres implements AlmacenEventos {
 	AlmacenEventosPostgres({required String urlConexion})
@@ -23,6 +24,13 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 	Future<void> inicializar() async {
 		final conexion = await _abrirConexion();
 		await EsquemaPosPostgres.crearEsquemaCompleto(conexion);
+		final purgados = await EsquemaPosPostgres.purgarEventosAntiguos(conexion);
+		if (purgados > 0) {
+			stdout.writeln(
+				'Sync: purgados $purgados eventos antiguos '
+				'(retencion ${DIAS_RETENCION_SYNC_EVENTS}d)',
+			);
+		}
 		await _reproyectarEventosEspejoPendientes(conexion);
 	}
 

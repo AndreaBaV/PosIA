@@ -108,6 +108,7 @@ class ServicioNomina {
 			cerradoEn: DateTime.now().toUtc(),
 			cerradoPor: cerradoPor,
 		);
+		final lineasPayload = <Map<String, Object?>>[];
 		await _baseDatos.transaction((tx) async {
 			await _nominaRepository.guardarPeriodo(periodo, db: tx);
 			final usuarios = await _usuarioRepository.listarActivos();
@@ -132,18 +133,24 @@ class ServicioNomina {
 					continue;
 				}
 				final bruto = redondearMonto(horas * tarifa);
-				await _nominaRepository.guardarLinea(
-					LineaNomina(
-						id: _generadorId.v4(),
-						periodoId: periodoId,
-						usuarioId: usuario.id,
-						horasTrabajadas: horas,
-						tarifaHora: tarifa,
-						montoBruto: bruto,
-						montoNeto: bruto,
-					),
-					db: tx,
+				final linea = LineaNomina(
+					id: _generadorId.v4(),
+					periodoId: periodoId,
+					usuarioId: usuario.id,
+					horasTrabajadas: horas,
+					tarifaHora: tarifa,
+					montoBruto: bruto,
+					montoNeto: bruto,
 				);
+				await _nominaRepository.guardarLinea(linea, db: tx);
+				lineasPayload.add({
+					'id': linea.id,
+					'usuarioId': linea.usuarioId,
+					'horasTrabajadas': linea.horasTrabajadas,
+					'tarifaHora': linea.tarifaHora,
+					'montoBruto': linea.montoBruto,
+					'montoNeto': linea.montoNeto,
+				});
 			}
 		});
 		final sync = _syncOrchestrator;
@@ -156,9 +163,13 @@ class ServicioNomina {
 					tipo: TipoSyncEvento.payrollPeriodClosed,
 					payload: {
 						'periodoId': periodoId,
+						'tiendaId': _tiendaId,
 						'inicioEn': inicio.toIso8601String(),
 						'finEn': fin.toIso8601String(),
 						'cerradoPor': cerradoPor,
+						'cerradoEn': periodo.cerradoEn?.toIso8601String(),
+						'estado': periodo.estado,
+						'lineas': lineasPayload,
 					},
 					creadoEn: DateTime.now().toUtc(),
 					estado: EstadoSyncEvento.pendiente,

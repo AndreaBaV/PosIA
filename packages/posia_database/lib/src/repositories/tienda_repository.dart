@@ -71,7 +71,7 @@ class TiendaRepository {
 				'activa': tienda.activa ? 1 : 0,
 				'latitud': tienda.latitud,
 				'longitud': tienda.longitud,
-				'radio_metros_asistencia': tienda.radioMetrosAsistencia,
+				'radio_metros': tienda.radioMetrosAsistencia,
 			},
 			conflictAlgorithm: ConflictAlgorithm.replace,
 		);
@@ -139,8 +139,20 @@ class TiendaRepository {
 			activa: (fila['activa'] as int) == 1,
 			latitud: (fila['latitud'] as num?)?.toDouble(),
 			longitud: (fila['longitud'] as num?)?.toDouble(),
-			radioMetrosAsistencia:
-				(fila['radio_metros_asistencia'] as num?)?.toDouble() ?? 150,
+			radioMetrosAsistencia: _leerRadioMetros(fila),
 		);
+	}
+
+	/// Lee radio de asistencia aceptando columna nueva o legacy.
+	double _leerRadioMetros(Map<String, Object?> fila) {
+		final nuevo = fila['radio_metros'];
+		if (nuevo is num) {
+			return nuevo.toDouble();
+		}
+		final legacy = fila['radio_metros_asistencia'];
+		if (legacy is num) {
+			return legacy.toDouble();
+		}
+		return 150;
 	}
 }

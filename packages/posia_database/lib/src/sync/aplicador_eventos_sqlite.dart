@@ -21,6 +21,9 @@ import '../repositories/precio_repository.dart';
 import '../repositories/presentacion_repository.dart';
 import '../repositories/proveedor_repository.dart';
 import '../repositories/compra_repository.dart';
+import '../repositories/descuento_cliente_repository.dart';
+import '../repositories/empleado_perfil_repository.dart';
+import '../repositories/nomina_repository.dart';
 import '../repositories/rol_personalizado_repository.dart';
 import '../repositories/tienda_repository.dart';
 import '../repositories/traspaso_repository.dart';
@@ -62,6 +65,9 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		CompraRepository? compraRepository,
 		RolPersonalizadoRepository? rolPersonalizadoRepository,
 		AsistenciaRepository? asistenciaRepository,
+		EmpleadoPerfilRepository? empleadoPerfilRepository,
+		NominaRepository? nominaRepository,
+		DescuentoClienteRepository? descuentoClienteRepository,
 	}) : _baseDatos = baseDatos,
 	     _productoRepository = productoRepository,
 	     _clienteRepository = clienteRepository,
@@ -81,7 +87,10 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 	     _proveedorRepository = proveedorRepository,
 	     _compraRepository = compraRepository,
 	     _rolPersonalizadoRepository = rolPersonalizadoRepository,
-	     _asistenciaRepository = asistenciaRepository;
+	     _asistenciaRepository = asistenciaRepository,
+	     _empleadoPerfilRepository = empleadoPerfilRepository,
+	     _nominaRepository = nominaRepository,
+	     _descuentoClienteRepository = descuentoClienteRepository;
 
 	final Database _baseDatos;
 	final ProductoRepository _productoRepository;
@@ -103,6 +112,9 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 	final CompraRepository? _compraRepository;
 	final RolPersonalizadoRepository? _rolPersonalizadoRepository;
 	final AsistenciaRepository? _asistenciaRepository;
+	final EmpleadoPerfilRepository? _empleadoPerfilRepository;
+	final NominaRepository? _nominaRepository;
+	final DescuentoClienteRepository? _descuentoClienteRepository;
 
 	/// Eventos cuya aplicacion no es idempotente por si sola (mutan stock con
 	/// deltas o escriben varias filas). Se aplican en transaccion + dedupe para
@@ -233,6 +245,10 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 				await _aplicarPrecioClienteProductoRemoto(evento);
 			case TipoSyncEvento.customerProductPriceDeleted:
 				await _aplicarPrecioClienteProductoEliminadoRemoto(evento);
+			case TipoSyncEvento.customerDiscountUpserted:
+				await _aplicarDescuentoClienteRemoto(evento);
+			case TipoSyncEvento.customerDiscountDeleted:
+				await _aplicarDescuentoClienteEliminadoRemoto(evento);
 			case TipoSyncEvento.supplierUpserted:
 				await _aplicarProveedorRemoto(evento);
 			case TipoSyncEvento.supplierDeleted:
@@ -248,11 +264,135 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			case TipoSyncEvento.attendanceCheckedOut:
 				await _aplicarSalidaAsistenciaRemota(evento);
 			case TipoSyncEvento.warehouseUpserted:
-			case TipoSyncEvento.presentationTypeUpserted:
-			case TipoSyncEvento.productPresentationUpserted:
+				await _aplicarAlmacenRemoto(evento);
 			case TipoSyncEvento.employeeProfileUpserted:
+				await _aplicarPerfilEmpleadoRemoto(evento);
 			case TipoSyncEvento.payrollPeriodClosed:
+				await _aplicarPeriodoNominaRemoto(evento);
+			case TipoSyncEvento.presentationTypeUpserted:
+				await _aplicarTipoPresentacionRemoto(evento);
+			case TipoSyncEvento.productPresentationUpserted:
+				// Legacy: reemplazado por productPresentationsReplaced.
 				break;
+		}
+	}
+
+	Future<void> _aplicarTipoPresentacionRemoto(SyncEvent evento) async {
+		final repo = _presentacionRepository;
+		if (repo == null) {
+			return;
+		}
+		final payload = evento.payload;
+		final id = payload['id'] as String? ?? '';
+		if (id.isEmpty) {
+			return;
+		}
+		await repo.guardarTipo(
+			TipoPresentacion(
+				id: id,
+				nombre: payload['nombre'] as String? ?? '',
+				unidad: payload['unidad'] as String? ?? 'pieza',
+				activo: payload['activo'] as bool? ?? true,
+			),
+		);
+	}
+
+	Future<void> _aplicarAlmacenRemoto(SyncEvent evento) async {
+		final repo = _almacenRepository;
+		if (repo == null) {
+			return;
+		}
+		final payload = evento.payload;
+		final id = payload['id'] as String? ?? '';
+		if (id.isEmpty) {
+			return;
+		}
+		await repo.guardar(
+			Almacen(
+				id: id,
+				nombre: payload['nombre'] as String? ?? '',
+				tiendaId: payload['tiendaId'] as String?,
+				activo: payload['activo'] as bool? ?? true,
+				latitud: (payload['latitud'] as num?)?.toDouble(),
+				longitud: (payload['longitud'] as num?)?.toDouble(),
+				radioMetros: (payload['radioMetros'] as num?)?.toDouble() ?? 150,
+			),
+		);
+	}
+
+	Future<void> _aplicarPerfilEmpleadoRemoto(SyncEvent evento) async {
+		final repo = _empleadoPerfilRepository;
+		if (repo == null) {
+			return;
+		}
+		final payload = evento.payload;
+		final usuarioId = payload['usuarioId'] as String? ?? '';
+		if (usuarioId.isEmpty) {
+			return;
+		}
+		await repo.guardar(
+			EmpleadoPerfil(
+				usuarioId: usuarioId,
+				tarifaHora: (payload['tarifaHora'] as num?)?.toDouble() ?? 0.0,
+				tipoPago: payload['tipoPago'] as String? ?? 'por_hora',
+				actualizadoEn: DateTime.parse(
+					payload['actualizadoEn'] as String? ??
+						evento.creadoEn.toIso8601String(),
+				),
+			),
+		);
+	}
+
+	Future<void> _aplicarPeriodoNominaRemoto(SyncEvent evento) async {
+		final repo = _nominaRepository;
+		if (repo == null) {
+			return;
+		}
+		final payload = evento.payload;
+		final periodoId = payload['periodoId'] as String? ?? '';
+		if (periodoId.isEmpty) {
+			return;
+		}
+		final cerradoCrudo = payload['cerradoEn'] as String?;
+		await repo.guardarPeriodo(
+			PeriodoNomina(
+				id: periodoId,
+				tiendaId: payload['tiendaId'] as String? ?? evento.tiendaId,
+				inicioEn: DateTime.parse(
+					payload['inicioEn'] as String? ?? evento.creadoEn.toIso8601String(),
+				),
+				finEn: DateTime.parse(
+					payload['finEn'] as String? ?? evento.creadoEn.toIso8601String(),
+				),
+				estado: payload['estado'] as String? ?? 'cerrado',
+				cerradoEn: cerradoCrudo == null ? null : DateTime.parse(cerradoCrudo),
+				cerradoPor: payload['cerradoPor'] as String?,
+			),
+		);
+		final lineasCrudas = payload['lineas'];
+		if (lineasCrudas is! List) {
+			return;
+		}
+		for (final cruda in lineasCrudas) {
+			if (cruda is! Map) {
+				continue;
+			}
+			final linea = Map<String, Object?>.from(cruda);
+			final lineaId = linea['id'] as String? ?? '';
+			if (lineaId.isEmpty) {
+				continue;
+			}
+			await repo.guardarLinea(
+				LineaNomina(
+					id: lineaId,
+					periodoId: periodoId,
+					usuarioId: linea['usuarioId'] as String? ?? '',
+					horasTrabajadas: (linea['horasTrabajadas'] as num?)?.toDouble() ?? 0.0,
+					tarifaHora: (linea['tarifaHora'] as num?)?.toDouble() ?? 0.0,
+					montoBruto: (linea['montoBruto'] as num?)?.toDouble() ?? 0.0,
+					montoNeto: (linea['montoNeto'] as num?)?.toDouble() ?? 0.0,
+				),
+			);
 		}
 	}
 
@@ -308,10 +448,21 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 				activa: payload['activa'] as bool? ?? true,
 				latitud: (payload['latitud'] as num?)?.toDouble(),
 				longitud: (payload['longitud'] as num?)?.toDouble(),
-				radioMetrosAsistencia:
-					(payload['radioMetrosAsistencia'] as num?)?.toDouble() ?? 150,
+				radioMetrosAsistencia: _radioMetrosDesdePayload(payload),
 			),
 		);
+	}
+
+	double _radioMetrosDesdePayload(Map<String, Object?> payload) {
+		final canonico = payload['radioMetros'];
+		if (canonico is num) {
+			return canonico.toDouble();
+		}
+		final legacy = payload['radioMetrosAsistencia'];
+		if (legacy is num) {
+			return legacy.toDouble();
+		}
+		return 150;
 	}
 
 	Future<void> _aplicarUsuarioRemoto(SyncEvent evento) async {
@@ -688,7 +839,9 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			unidadesPorBulto: (payload['unidadesPorBulto'] as num?)?.toInt(),
 			proveedorId: payload['proveedorId'] as String?,
 			notas: payload['notas'] as String? ?? '',
-			permiteStockNegativo: payload['permiteStockNegativo'] as bool? ?? false,
+			costoUnitario: (payload['costoUnitario'] as num?)?.toDouble() ?? 0.0,
+			favoritoCaja: payload['favoritoCaja'] as bool? ?? false,
+			permiteStockNegativo: payload['permiteStockNegativo'] as bool? ?? true,
 		);
 		await _productoRepository.guardar(producto);
 	}
@@ -1162,6 +1315,51 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			return;
 		}
 		await repo.eliminarPrecioClienteProducto(clienteId, productoId);
+	}
+
+	Future<void> _aplicarDescuentoClienteRemoto(SyncEvent evento) async {
+		final repo = _descuentoClienteRepository;
+		if (repo == null) {
+			return;
+		}
+		final payload = evento.payload;
+		final id = payload['id'] as String? ?? '';
+		if (id.isEmpty) {
+			return;
+		}
+		final tipoNombre = payload['tipo'] as String? ?? '';
+		final condicionNombre = payload['condicion'] as String? ?? '';
+		await repo.guardar(
+			DescuentoCliente(
+				id: id,
+				clienteId: payload['clienteId'] as String? ?? '',
+				tipo: TipoDescuentoCliente.values.firstWhere(
+					(v) => v.name == tipoNombre,
+					orElse: () => TipoDescuentoCliente.porcentajeGeneral,
+				),
+				valor: (payload['valor'] as num?)?.toDouble() ?? 0.0,
+				productoId: payload['productoId'] as String?,
+				condicion: CondicionDescuentoCliente.values.firstWhere(
+					(v) => v.name == condicionNombre,
+					orElse: () => CondicionDescuentoCliente.siempre,
+				),
+				umbral: (payload['umbral'] as num?)?.toDouble(),
+				activo: payload['activo'] as bool? ?? true,
+				descripcion: payload['descripcion'] as String? ?? '',
+			),
+		);
+	}
+
+	Future<void> _aplicarDescuentoClienteEliminadoRemoto(SyncEvent evento) async {
+		final repo = _descuentoClienteRepository;
+		if (repo == null) {
+			return;
+		}
+		final id = evento.payload['id'] as String? ?? '';
+		if (id.isEmpty) {
+			return;
+		}
+		await repo.eliminar(id);
 	}
 
 	Future<void> _aplicarPresentacionesRemotas(SyncEvent evento) async {

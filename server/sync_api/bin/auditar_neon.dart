@@ -1,6 +1,7 @@
 /// Audita tablas e índices del esquema Neon (solo lectura).
 import 'dart:io';
 
+import 'package:posia_core/posia_core.dart';
 import 'package:postgres/postgres.dart';
 
 Future<void> main() async {
@@ -80,19 +81,7 @@ Future<void> main() async {
 	}
 
 	print('\n=== COLUMNAS CLAVE (Neon) ===');
-	const tablasClave = [
-		'products',
-		'sales',
-		'sale_lines',
-		'customers',
-		'quotes',
-		'orders',
-		'wholesale_tiers',
-		'product_presentations',
-		'tipos_presentacion',
-		'registros_asistencia',
-	];
-	for (final nombre in tablasClave) {
+	for (final nombre in MapaTablasSync.tablasClaveAuditoriaNeon) {
 		final existe = tablas.any((f) => f[0] == nombre);
 		if (!existe) {
 			print('$nombre\t(NO EXISTE)');
@@ -111,6 +100,11 @@ Future<void> main() async {
 		for (final c in cols) {
 			print('  ${c[0]}\t${c[1]}\tnullable=${c[2]}');
 		}
+	}
+
+	print('\n=== MAPA SQLITE → NEON (renombres) ===');
+	for (final par in MapaTablasSync.renombres) {
+		print('${par.sqlite}\t→\t${par.neon}');
 	}
 
 	await conn.close();

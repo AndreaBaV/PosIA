@@ -364,7 +364,9 @@ class HubSyncClient {
           latitud: (map['latitud'] as num?)?.toDouble(),
           longitud: (map['longitud'] as num?)?.toDouble(),
           radioMetrosAsistencia:
-              (map['radioMetrosAsistencia'] as num?)?.toDouble() ?? 150,
+              (map['radioMetros'] as num?)?.toDouble() ??
+              (map['radioMetrosAsistencia'] as num?)?.toDouble() ??
+              150,
         ),
       );
     }

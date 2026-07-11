@@ -105,7 +105,9 @@ final sincronizadorAutomaticoProvider = FutureProvider<SincronizadorAutomatico>(
 		(evento) => _imprimirVentaRemotaTrasSync(ref, evento);
 	final sincronizador = SincronizadorAutomatico(
 		orquestador: contenedor.syncOrchestrator,
-		sincronizarConCatalogo: () => contenedor.servicioAdmin.sincronizarManual(),
+		sincronizarConCatalogo: () => contenedor.servicioAdmin.sincronizarManual(
+			incluirCatalogo: true,
+		),
 	);
 	sincronizador.iniciar();
 	ref.onDispose(sincronizador.detener);

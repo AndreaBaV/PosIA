@@ -10,6 +10,8 @@ export 'src/bootstrap/fabrica_servicios.dart';
 export 'src/bootstrap/aprovisionador_dispositivo.dart';
 export 'src/bootstrap/aprovisionador_offline.dart';
 export 'src/database/migraciones_esquema.dart';
+export 'src/database/migracion_integridad_referencial.dart';
+export 'src/database/migracion_requiere_sync_hub.dart';
 export 'src/database/posia_local_database.dart';
 export 'src/models/alta_producto_request.dart';
 export 'src/models/alerta_faltante.dart';

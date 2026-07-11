@@ -68,6 +68,8 @@ class SyncOrchestrator {
     }
     final total = pendientes.length;
     var enviados = 0;
+    var fallosConsecutivos = 0;
+    const maxFallosConsecutivos = 3;
     for (final evento in pendientes) {
       alProgreso?.call(
         ProgresoSync(
@@ -81,8 +83,15 @@ class SyncOrchestrator {
       if (exito) {
         await _colaLocal.marcarEnviado(evento.id);
         enviados = enviados + 1;
+        fallosConsecutivos = 0;
       } else {
         await _colaLocal.marcarError(evento.id);
+        fallosConsecutivos = fallosConsecutivos + 1;
+        // Hub caido o red lenta: no bloquear minutos/horas reintentando
+        // cada evento con timeout individual.
+        if (fallosConsecutivos >= maxFallosConsecutivos) {
+          break;
+        }
       }
     }
     alProgreso?.call(

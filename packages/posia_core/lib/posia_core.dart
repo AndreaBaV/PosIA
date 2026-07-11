@@ -7,6 +7,8 @@
 library;
 
 export 'src/config/configuracion_entorno.dart';
+export 'src/constants/clasificacion_arquitectura_sync.dart';
+export 'src/constants/mapa_tablas_sync.dart';
 export 'src/constants/permisos_admin.dart';
 export 'src/constants/posia_constants.dart';
 export 'src/constants/configuracion_despliegue.dart';

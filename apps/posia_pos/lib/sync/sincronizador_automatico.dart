@@ -10,6 +10,7 @@ import 'dart:async';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:posia_core/posia_core.dart';
+import 'package:posia_database/posia_database.dart';
 import 'package:posia_sync/posia_sync.dart';
 
 /// Dispara sync al recuperar conexion y en ciclo periodico.
@@ -91,6 +92,8 @@ class SincronizadorAutomatico {
 			} else {
 				await _orquestador.sincronizarCompleto();
 			}
+			await PosiaLocalDatabase.obtenerInstancia()
+				.completarMigracionIntegridadTrasSync();
 		} on Object {
 			// Reintenta en el siguiente ciclo; la caja sigue operando con datos locales.
 		} finally {

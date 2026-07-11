@@ -138,6 +138,9 @@ class FabricaServicios {
       compraRepository: compraRepo,
       rolPersonalizadoRepository: rolPersonalizadoRepo,
       asistenciaRepository: asistenciaRepo,
+      empleadoPerfilRepository: empleadoPerfilRepo,
+      nominaRepository: nominaRepo,
+      descuentoClienteRepository: descuentoClienteRepo,
     );
     final clienteHub = await _crearClienteHub(configRepo);
     final sync = SyncOrchestrator(

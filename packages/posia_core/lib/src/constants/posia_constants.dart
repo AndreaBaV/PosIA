@@ -7,7 +7,13 @@
 library;
 
 /// Version actual del esquema local SQLite.
-const int SCHEMA_VERSION = 29;
+const int SCHEMA_VERSION = 33;
+
+/// Ultima version de esquema sin rebuild de FOREIGN KEY (pre-integridad).
+const int SCHEMA_VERSION_PRE_INTEGRIDAD = 32;
+
+/// Dias de retencion del log append-only `sync_events` en el hub.
+const int DIAS_RETENCION_SYNC_EVENTS = 90;
 
 /// Identificador de categoria virtual "Todos" en caja.
 const String CATEGORIA_TODOS_ID = '__todos__';

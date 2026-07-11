@@ -62,8 +62,8 @@ class AlmacenUsuariosPostgres {
 		return {
 			..._mapearPerfil(cols),
 			'pinCredencial': credencial,
-			'creadoEn': cols['creado_en'] as String? ?? '',
-			'actualizadoEn': cols['actualizado_en'] as String? ?? '',
+			'creadoEn': _textoTemporal(cols['creado_en']),
+			'actualizadoEn': _textoTemporal(cols['actualizado_en']),
 		};
 	}
 
@@ -77,6 +77,16 @@ class AlmacenUsuariosPostgres {
 			'rolPersonalizadoId': cols['rol_personalizado_id'] as String?,
 			'activo': (cols['activo'] as int? ?? 0) == 1,
 		};
+	}
+
+	String _textoTemporal(Object? valor) {
+		if (valor is DateTime) {
+			return valor.toUtc().toIso8601String();
+		}
+		if (valor is String) {
+			return valor;
+		}
+		return '';
 	}
 
 	Future<List<Map<String, Object?>>> listarTiendasActivas() async {
@@ -97,6 +107,7 @@ class AlmacenUsuariosPostgres {
 					'activa': (cols['activa'] as int? ?? 0) == 1,
 					'latitud': cols['latitud'],
 					'longitud': cols['longitud'],
+					'radioMetros': cols['radio_metros'] ?? 150,
 					'radioMetrosAsistencia': cols['radio_metros'] ?? 150,
 				};
 			})
@@ -118,8 +129,8 @@ class AlmacenUsuariosPostgres {
 			return {
 				..._mapearPerfil(cols),
 				'pinCredencial': cols['pin_credencial'] as String? ?? '',
-				'creadoEn': cols['creado_en'] as String? ?? '',
-				'actualizadoEn': cols['actualizado_en'] as String? ?? '',
+				'creadoEn': _textoTemporal(cols['creado_en']),
+				'actualizadoEn': _textoTemporal(cols['actualizado_en']),
 			};
 		}).where((u) => (u['id'] as String).isNotEmpty).toList();
 	}

@@ -30,6 +30,14 @@ class DescuentoClienteRepository {
 		return filas.map(_mapear).toList();
 	}
 
+	Future<List<DescuentoCliente>> listarTodos() async {
+		final filas = await _baseDatos.query(
+			'customer_discounts',
+			orderBy: 'cliente_id ASC, tipo ASC',
+		);
+		return filas.map(_mapear).toList();
+	}
+
 	Future<void> guardar(DescuentoCliente descuento) async {
 		await _baseDatos.insert(
 			'customer_discounts',

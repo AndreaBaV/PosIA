@@ -44,10 +44,11 @@ enum TipoSyncEvento {
 	/// Almacen creado o actualizado.
 	warehouseUpserted,
 
-	/// Tipo de presentacion creado o actualizado.
+	/// Tipo de presentacion creado o actualizado (activo).
 	presentationTypeUpserted,
 
-	/// Presentacion de producto creada o actualizada.
+	/// Legacy: presentacion individual. Usar [productPresentationsReplaced].
+	/// Se acepta en el log historico pero no se emite ni se aplica.
 	productPresentationUpserted,
 
 	/// Desafio PIN de asistencia creado.
@@ -118,4 +119,10 @@ enum TipoSyncEvento {
 
 	/// Compra a proveedor registrada (incluye lineas y efecto en stock).
 	purchaseCompleted,
+
+	/// Descuento comercial de cliente creado o actualizado.
+	customerDiscountUpserted,
+
+	/// Descuento comercial de cliente eliminado.
+	customerDiscountDeleted,
 }

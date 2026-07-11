@@ -14,6 +14,7 @@ import 'package:posia_sync/posia_sync.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 
+import '../database/posia_local_database.dart';
 import '../models/alta_producto_request.dart';
 import '../models/alerta_faltante.dart';
 import '../models/config_dispositivo.dart';
@@ -883,21 +884,28 @@ class ServicioAdmin {
 
   /// Ejecuta ciclo completo de sincronizacion con el hub.
   ///
-  /// Siempre reencola el catalogo local espejado en Neon (tiendas, categorias,
-  /// productos, listas de precios, clientes, etc.) y luego envia la cola.
+  /// [incluirCatalogo] Si es true, reencola el catalogo local espejado en Neon
+  /// antes de enviar. En login/arranque usar false o llamar en segundo plano.
   Future<ResultadoSync> sincronizarManual({
     ReporteProgresoSync? alProgreso,
+    bool incluirCatalogo = true,
   }) async {
-    alProgreso?.call(
-      const ProgresoSync(
-        fase: FaseProgresoSync.preparar,
-        indice: 0,
-        total: 0,
-        mensaje: 'Preparando catálogo local para la nube…',
-      ),
-    );
-    await _reencolarCatalogoLocalPendiente(alProgreso: alProgreso);
-    return _syncOrchestrator.sincronizarCompleto(alProgreso: alProgreso);
+    if (incluirCatalogo) {
+      alProgreso?.call(
+        const ProgresoSync(
+          fase: FaseProgresoSync.preparar,
+          indice: 0,
+          total: 0,
+          mensaje: 'Preparando catálogo local para la nube…',
+        ),
+      );
+      await _reencolarCatalogoLocalPendiente(alProgreso: alProgreso);
+    }
+    final resultado =
+        await _syncOrchestrator.sincronizarCompleto(alProgreso: alProgreso);
+    await PosiaLocalDatabase.obtenerInstancia()
+        .completarMigracionIntegridadTrasSync();
+    return resultado;
   }
 
   /// Encola de nuevo todo el catalogo local que Neon proyecta como espejo.
@@ -914,6 +922,7 @@ class ServicioAdmin {
     final tiendas = await _tiendaRepository.listarTodas();
     final almacenes = await listarAlmacenes();
     final categorias = await listarCategorias();
+    final tiposPresentacion = await listarTiposPresentacion();
     final productos = await listarProductosCatalogo();
     final clientes = await listarClientes();
     final listas = await listarListasPrecios();
@@ -922,6 +931,8 @@ class ServicioAdmin {
     final lotes = await _lotePromocionRepository.listarActivos();
     final preciosCliente =
         await _precioRepository?.listarTodosPreciosClienteProducto() ?? [];
+    final descuentosCliente =
+        await _descuentoClienteRepository?.listarTodos() ?? [];
     final proveedores = await listarProveedores();
     final compras = await _compraRepository?.listarRecientes() ?? [];
 
@@ -929,6 +940,7 @@ class ServicioAdmin {
         tiendas.length +
         almacenes.length +
         categorias.length +
+        tiposPresentacion.length +
         productos.length +
         clientes.length +
         listas.length +
@@ -936,6 +948,7 @@ class ServicioAdmin {
         usuarios.length +
         lotes.length +
         preciosCliente.length +
+        descuentosCliente.length +
         proveedores.length +
         compras.length;
     // Presentaciones, escalas, variantes e items de lista se cuentan al vuelo.
@@ -968,6 +981,11 @@ class ServicioAdmin {
       await _registrarEventoCategoria(categoria);
       encolados++;
       reportar('Categorías ($encolados)…');
+    }
+    for (final tipo in tiposPresentacion) {
+      await _registrarEventoTipoPresentacion(tipo);
+      encolados++;
+      reportar('Tipos presentación ($encolados)…');
     }
     for (final producto in productos) {
       await _registrarEventoProducto(producto);
@@ -1027,6 +1045,11 @@ class ServicioAdmin {
       );
       encolados++;
       reportar('Precios cliente ($encolados)…');
+    }
+    for (final descuento in descuentosCliente) {
+      await _registrarEventoDescuentoCliente(descuento);
+      encolados++;
+      reportar('Descuentos cliente ($encolados)…');
     }
     for (final rol in roles) {
       await _registrarEventoRolPersonalizado(rol);
@@ -1505,6 +1528,7 @@ class ServicioAdmin {
       descripcion: descripcion.trim(),
     );
     await repo.guardar(descuento);
+    await _registrarEventoDescuentoCliente(descuento);
     return descuento;
   }
 
@@ -1521,10 +1545,12 @@ class ServicioAdmin {
       umbral: descuento.umbral,
     );
     await repo.guardar(descuento);
+    await _registrarEventoDescuentoCliente(descuento);
   }
 
   Future<void> eliminarDescuentoCliente(String descuentoId) async {
     await _descuentoClienteRepository?.eliminar(descuentoId);
+    await _registrarEventoDescuentoClienteEliminado(descuentoId);
   }
 
   Future<List<PrecioClienteProducto>> listarPreciosEspecialesCliente(
@@ -1684,8 +1710,9 @@ class ServicioAdmin {
       await cambiarTiendaActiva(tiendaId);
     } else {
       await LimpiadorBaseLocal.eliminarDatosEjemplo(_baseDatos);
+      // Preferir tiendas ya recibidas en el login; no bloquear en hub.
       await _asegurarTiendasAdministrador(tiendasIniciales: tiendasDesdeHub);
-      await importarUsuariosDesdeHub();
+      // Usuarios remotos se importan en sync de fondo / manual.
     }
   }
 
@@ -3224,8 +3251,16 @@ class ServicioAdmin {
     if (tiendasIniciales.isNotEmpty) {
       await importarTiendasDesdeHub(tiendasIniciales);
     }
+    // Solo consultar hub si no hay tiendas locales ni en el payload de login.
+    // Evita colgar el arranque cuando el hub esta lento o caido.
     if ((await _tiendaRepository.listarActivasOperativas()).isEmpty) {
-      await _sincronizarTiendasDesdeHub();
+      try {
+        await _sincronizarTiendasDesdeHub().timeout(
+          const Duration(seconds: TIMEOUT_HUB_SYNC_SEGUNDOS),
+        );
+      } on Object {
+        // Admin puede reintentar desde la pantalla de tiendas.
+      }
     }
   }
 
@@ -4084,6 +4119,10 @@ class ServicioAdmin {
     bool favorito,
   ) async {
     await _productoRepository.establecerFavoritoCaja(productoId, favorito);
+    final producto = await _productoRepository.obtenerPorId(productoId);
+    if (producto != null) {
+      await _registrarEventoProducto(producto);
+    }
   }
 
   Future<void> _registrarEventoCategoria(Categoria categoria) async {
@@ -4463,6 +4502,42 @@ class ServicioAdmin {
     await _syncOrchestrator.registrarEvento(evento);
   }
 
+  Future<void> _registrarEventoDescuentoCliente(DescuentoCliente descuento) async {
+    final evento = SyncEvent(
+      id: _generadorId.v4(),
+      tiendaId: _tiendaActivaId,
+      dispositivoId: _cajaId,
+      tipo: TipoSyncEvento.customerDiscountUpserted,
+      payload: {
+        'id': descuento.id,
+        'clienteId': descuento.clienteId,
+        'tipo': descuento.tipo.name,
+        'valor': descuento.valor,
+        'productoId': descuento.productoId,
+        'condicion': descuento.condicion.name,
+        'umbral': descuento.umbral,
+        'activo': descuento.activo,
+        'descripcion': descuento.descripcion,
+      },
+      creadoEn: DateTime.now().toUtc(),
+      estado: EstadoSyncEvento.pendiente,
+    );
+    await _syncOrchestrator.registrarEvento(evento);
+  }
+
+  Future<void> _registrarEventoDescuentoClienteEliminado(String descuentoId) async {
+    final evento = SyncEvent(
+      id: _generadorId.v4(),
+      tiendaId: _tiendaActivaId,
+      dispositivoId: _cajaId,
+      tipo: TipoSyncEvento.customerDiscountDeleted,
+      payload: {'id': descuentoId},
+      creadoEn: DateTime.now().toUtc(),
+      estado: EstadoSyncEvento.pendiente,
+    );
+    await _syncOrchestrator.registrarEvento(evento);
+  }
+
   Future<void> sincronizarPresentacionesProducto(String productoId) async {
     final repo = _presentacionRepository;
     if (repo == null) {
@@ -4718,6 +4793,8 @@ class ServicioAdmin {
         'activa': tienda.activa,
         'latitud': tienda.latitud,
         'longitud': tienda.longitud,
+        'radioMetros': tienda.radioMetrosAsistencia,
+        // Compatibilidad con eventos/clientes previos.
         'radioMetrosAsistencia': tienda.radioMetrosAsistencia,
       },
       creadoEn: DateTime.now().toUtc(),
@@ -4848,6 +4925,8 @@ class ServicioAdmin {
         'unidadesPorBulto': producto.unidadesPorBulto,
         'proveedorId': producto.proveedorId,
         'notas': producto.notas,
+        'costoUnitario': producto.costoUnitario,
+        'favoritoCaja': producto.favoritoCaja,
         'permiteStockNegativo': producto.permiteStockNegativo,
       },
       creadoEn: DateTime.now().toUtc(),
@@ -5233,6 +5312,9 @@ class ServicioAdmin {
           'nombre': almacen.nombre,
           'tiendaId': almacen.tiendaId,
           'activo': almacen.activo,
+          'latitud': almacen.latitud,
+          'longitud': almacen.longitud,
+          'radioMetros': almacen.radioMetros,
         },
         creadoEn: DateTime.now().toUtc(),
         estado: EstadoSyncEvento.pendiente,
@@ -5261,7 +5343,26 @@ class ServicioAdmin {
       activo: true,
     );
     await repo.guardarTipo(tipo);
+    await _registrarEventoTipoPresentacion(tipo);
     return tipo;
+  }
+
+  Future<void> _registrarEventoTipoPresentacion(TipoPresentacion tipo) async {
+    final evento = SyncEvent(
+      id: _generadorId.v4(),
+      tiendaId: _tiendaActivaId,
+      dispositivoId: _cajaId,
+      tipo: TipoSyncEvento.presentationTypeUpserted,
+      payload: {
+        'id': tipo.id,
+        'nombre': tipo.nombre,
+        'unidad': tipo.unidad,
+        'activo': tipo.activo,
+      },
+      creadoEn: DateTime.now().toUtc(),
+      estado: EstadoSyncEvento.pendiente,
+    );
+    await _syncOrchestrator.registrarEvento(evento);
   }
 
   Future<List<PresentacionProducto>> listarPresentacionesProducto(

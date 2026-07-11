@@ -42,19 +42,50 @@ class ServicioInicioSesion {
 			}
 			container.invalidate(contenedorServiciosProvider);
 			final contenedor = await container.read(contenedorServiciosProvider.future);
-			await contenedor.servicioAdmin
-				.activarSesionTrasLogin(
-					usuario,
-					tiendasDesdeHub: resultado.tiendas,
-				)
-				.timeout(const Duration(seconds: TIMEOUT_HUB_SYNC_SEGUNDOS + 10));
+			// Solo trabajo local / tiendas ya traidas en el login. Nada de hub aqui:
+			// si el hub cuelga, la UI no debe quedarse en "Iniciando…".
+			try {
+				await contenedor.servicioAdmin
+					.activarSesionTrasLogin(
+						usuario,
+						tiendasDesdeHub: resultado.tiendas,
+					)
+					.timeout(const Duration(seconds: 8));
+			} on Object {
+				// Continuar con datos locales; sync de fondo reintentara.
+			}
 			container.invalidate(contenedorServiciosProvider);
 			final contenedorActivo = await container.read(contenedorServiciosProvider.future);
-			try {
-				await contenedorActivo.servicioAdmin.sincronizarManual();
-			} on Object {
-				// La caja opera localmente aunque el hub no responda al instante.
+
+			// Desbloquear selector de tienda / caja antes de cualquier sync.
+			if (esAdmin) {
+				container.read(sesionAdminListoProvider.notifier).listo();
+				container.invalidate(tiendasAccesoProvider);
 			}
+
+			// Sync (cola + catalogo) siempre en segundo plano.
+			unawaited(() async {
+				try {
+					await contenedorActivo.syncOrchestrator
+						.sincronizarCompleto()
+						.timeout(
+							const Duration(seconds: TIMEOUT_HUB_SYNC_SEGUNDOS + 5),
+						);
+					await PosiaLocalDatabase.obtenerInstancia()
+						.completarMigracionIntegridadTrasSync();
+				} on Object {
+					// La caja opera localmente aunque el hub no responda.
+				}
+				try {
+					await contenedorActivo.servicioAdmin.sincronizarManual(
+						incluirCatalogo: true,
+					);
+					await PosiaLocalDatabase.obtenerInstancia()
+						.completarMigracionIntegridadTrasSync();
+				} on Object {
+					// Catalogo se reintentara en sync automatico / manual.
+				}
+			}());
 			container.invalidate(carritoNotifierProvider);
 
 			if (!esAdmin) {

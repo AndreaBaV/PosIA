@@ -10,6 +10,7 @@ import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../seed/placeholders_ejemplo.dart';
+import 'migracion_integridad_referencial.dart';
 
 /// Aplica cambios de esquema entre versiones.
 class MigracionesEsquema {
@@ -313,7 +314,7 @@ class MigracionesEsquema {
 		await base.execute('''
 			CREATE TABLE cash_shifts (
 				id TEXT PRIMARY KEY,
-				tienda_id TEXT NOT NULL,
+				tienda_id TEXT NOT NULL REFERENCES stores(id),
 				caja_id TEXT NOT NULL,
 				vendedor_id TEXT,
 				fondo_inicial REAL NOT NULL,
@@ -331,7 +332,7 @@ class MigracionesEsquema {
 			CREATE TABLE inventory_movements (
 				id TEXT PRIMARY KEY,
 				producto_id TEXT NOT NULL,
-				tienda_id TEXT NOT NULL,
+				tienda_id TEXT NOT NULL REFERENCES stores(id),
 				tipo TEXT NOT NULL,
 				cantidad REAL NOT NULL,
 				cantidad_anterior REAL NOT NULL,
@@ -350,8 +351,8 @@ class MigracionesEsquema {
 		await base.execute('''
 			CREATE TABLE transfers (
 				id TEXT PRIMARY KEY,
-				tienda_origen_id TEXT NOT NULL,
-				tienda_destino_id TEXT NOT NULL,
+				tienda_origen_id TEXT NOT NULL REFERENCES stores(id),
+				tienda_destino_id TEXT NOT NULL REFERENCES stores(id),
 				estado TEXT NOT NULL,
 				solicitado_en TEXT NOT NULL,
 				completado_en TEXT,
@@ -361,7 +362,7 @@ class MigracionesEsquema {
 		await base.execute('''
 			CREATE TABLE transfer_lines (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				transfer_id TEXT NOT NULL,
+				transfer_id TEXT NOT NULL REFERENCES transfers(id) ON DELETE CASCADE,
 				producto_id TEXT NOT NULL,
 				cantidad_solicitada REAL NOT NULL,
 				cantidad_recibida REAL
@@ -370,7 +371,7 @@ class MigracionesEsquema {
 		await base.execute('''
 			CREATE TABLE product_variants (
 				id TEXT PRIMARY KEY,
-				producto_padre_id TEXT NOT NULL,
+				producto_padre_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
 				nombre TEXT NOT NULL,
 				sku TEXT NOT NULL,
 				codigo_barras TEXT NOT NULL DEFAULT '',
@@ -427,6 +428,14 @@ class MigracionesEsquema {
 			)
 		''');
 		await base.execute('''
+			CREATE TABLE stores (
+				id TEXT PRIMARY KEY,
+				nombre TEXT NOT NULL,
+				direccion TEXT NOT NULL,
+				activa INTEGER NOT NULL
+			)
+		''');
+		await base.execute('''
 			CREATE TABLE products (
 				id TEXT PRIMARY KEY,
 				nombre TEXT NOT NULL,
@@ -435,7 +444,7 @@ class MigracionesEsquema {
 				unidad_medida TEXT NOT NULL,
 				ruta_imagen TEXT NOT NULL,
 				activo INTEGER NOT NULL,
-				tienda_id TEXT NOT NULL,
+				tienda_id TEXT NOT NULL REFERENCES stores(id),
 				modulo_vertical TEXT NOT NULL DEFAULT 'general',
 				categoria_id TEXT,
 				piezas_por_caja INTEGER,
@@ -473,15 +482,15 @@ class MigracionesEsquema {
 		await base.execute('''
 			CREATE TABLE wholesale_tiers (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				producto_id TEXT NOT NULL,
+				producto_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
 				cantidad_minima REAL NOT NULL,
 				precio_unitario REAL NOT NULL
 			)
 		''');
 		await base.execute('''
 			CREATE TABLE customer_product_prices (
-				cliente_id TEXT NOT NULL,
-				producto_id TEXT NOT NULL,
+				cliente_id TEXT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+				producto_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
 				precio_unitario REAL NOT NULL,
 				PRIMARY KEY (cliente_id, producto_id)
 			)
@@ -489,7 +498,7 @@ class MigracionesEsquema {
 		await base.execute('''
 			CREATE TABLE customer_discounts (
 				id TEXT PRIMARY KEY,
-				cliente_id TEXT NOT NULL,
+				cliente_id TEXT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
 				tipo TEXT NOT NULL,
 				valor REAL NOT NULL,
 				producto_id TEXT,
@@ -511,8 +520,8 @@ class MigracionesEsquema {
 		''');
 		await base.execute('''
 			CREATE TABLE price_list_items (
-				lista_precios_id TEXT NOT NULL,
-				producto_id TEXT NOT NULL,
+				lista_precios_id TEXT NOT NULL REFERENCES price_lists(id) ON DELETE CASCADE,
+				producto_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
 				precio_unitario REAL NOT NULL,
 				PRIMARY KEY (lista_precios_id, producto_id)
 			)
@@ -520,7 +529,7 @@ class MigracionesEsquema {
 		await base.execute('''
 			CREATE TABLE sales (
 				id TEXT PRIMARY KEY,
-				tienda_id TEXT NOT NULL,
+				tienda_id TEXT NOT NULL REFERENCES stores(id),
 				caja_id TEXT NOT NULL,
 				cliente_id TEXT,
 				metodo_pago TEXT NOT NULL,
@@ -542,7 +551,7 @@ class MigracionesEsquema {
 		await base.execute('''
 			CREATE TABLE sale_lines (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				venta_id TEXT NOT NULL,
+				venta_id TEXT NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
 				producto_id TEXT NOT NULL,
 				nombre_producto TEXT NOT NULL,
 				cantidad REAL NOT NULL,
@@ -555,8 +564,8 @@ class MigracionesEsquema {
 		''');
 		await base.execute('''
 			CREATE TABLE stock_levels (
-				producto_id TEXT NOT NULL,
-				tienda_id TEXT NOT NULL,
+				producto_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+				tienda_id TEXT NOT NULL REFERENCES stores(id),
 				cantidad REAL NOT NULL,
 				actualizado_en TEXT NOT NULL,
 				stock_minimo REAL NOT NULL DEFAULT 0,
@@ -586,14 +595,6 @@ class MigracionesEsquema {
 				aplicado_en TEXT NOT NULL
 			)
 		''');
-		await base.execute('''
-			CREATE TABLE stores (
-				id TEXT PRIMARY KEY,
-				nombre TEXT NOT NULL,
-				direccion TEXT NOT NULL,
-				activa INTEGER NOT NULL
-			)
-		''');
 		await crearTablasVerticales(base);
 		await crearTablasOperaciones(base);
 		await PlaceholdersEjemplo.insertarGuiaTenant(base);
@@ -602,6 +603,11 @@ class MigracionesEsquema {
 		await migrarVersion19A20(base);
 		await migrarVersion25A26(base);
 		await migrarVersion28A29(base);
+		await migrarVersion29A30(base);
+		await migrarVersion30A31(base);
+		await migrarVersion31A32(base);
+		// Install fresco: FKs reales (cola vacia). Upgrade usa fase 2 en open.
+		await migrarVersion32A33(base);
 	}
 
 	/// Tabla guia `ejemplo` en bases ya existentes (v10 → v11).
@@ -635,7 +641,7 @@ class MigracionesEsquema {
 		await base.execute('''
 			CREATE TABLE IF NOT EXISTS orders (
 				id TEXT PRIMARY KEY,
-				tienda_id TEXT NOT NULL,
+				tienda_id TEXT NOT NULL REFERENCES stores(id),
 				cliente_id TEXT,
 				nombre_entrega TEXT NOT NULL,
 				telefono_entrega TEXT NOT NULL,
@@ -658,7 +664,7 @@ class MigracionesEsquema {
 		await base.execute('''
 			CREATE TABLE IF NOT EXISTS order_lines (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				pedido_id TEXT NOT NULL,
+				pedido_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
 				producto_id TEXT NOT NULL,
 				nombre_producto TEXT NOT NULL,
 				cantidad REAL NOT NULL,
@@ -701,7 +707,7 @@ class MigracionesEsquema {
 		await base.execute('''
 			CREATE TABLE IF NOT EXISTS held_tickets (
 				id TEXT PRIMARY KEY,
-				tienda_id TEXT NOT NULL,
+				tienda_id TEXT NOT NULL REFERENCES stores(id),
 				caja_id TEXT NOT NULL,
 				cliente_id TEXT,
 				nombre_cliente TEXT,
@@ -715,7 +721,7 @@ class MigracionesEsquema {
 		await base.execute('''
 			CREATE TABLE IF NOT EXISTS held_ticket_lines (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				ticket_id TEXT NOT NULL,
+				ticket_id TEXT NOT NULL REFERENCES held_tickets(id) ON DELETE CASCADE,
 				producto_id TEXT NOT NULL,
 				nombre_producto TEXT NOT NULL,
 				cantidad REAL NOT NULL,
@@ -740,7 +746,7 @@ class MigracionesEsquema {
 		await base.execute('''
 			CREATE TABLE IF NOT EXISTS quotes (
 				id TEXT PRIMARY KEY,
-				tienda_id TEXT NOT NULL,
+				tienda_id TEXT NOT NULL REFERENCES stores(id),
 				nombre TEXT NOT NULL DEFAULT '',
 				cliente_id TEXT,
 				nombre_cliente TEXT,
@@ -755,7 +761,7 @@ class MigracionesEsquema {
 		await base.execute('''
 			CREATE TABLE IF NOT EXISTS quote_lines (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				cotizacion_id TEXT NOT NULL,
+				cotizacion_id TEXT NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
 				producto_id TEXT NOT NULL,
 				nombre_producto TEXT NOT NULL,
 				cantidad REAL NOT NULL,
@@ -774,8 +780,8 @@ class MigracionesEsquema {
 		await base.execute('''
 			CREATE TABLE IF NOT EXISTS purchases (
 				id TEXT PRIMARY KEY,
-				tienda_id TEXT NOT NULL,
-				proveedor_id TEXT NOT NULL,
+				tienda_id TEXT NOT NULL REFERENCES stores(id),
+				proveedor_id TEXT NOT NULL REFERENCES proveedores(id),
 				fecha_compra TEXT NOT NULL,
 				notas TEXT NOT NULL DEFAULT '',
 				total REAL NOT NULL,
@@ -786,7 +792,7 @@ class MigracionesEsquema {
 		await base.execute('''
 			CREATE TABLE IF NOT EXISTS purchase_lines (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				compra_id TEXT NOT NULL,
+				compra_id TEXT NOT NULL REFERENCES purchases(id) ON DELETE CASCADE,
 				producto_id TEXT NOT NULL,
 				nombre_producto TEXT NOT NULL,
 				cantidad REAL NOT NULL,
@@ -807,8 +813,8 @@ class MigracionesEsquema {
 		await base.execute('''
 			CREATE TABLE pharmacy_lots (
 				id TEXT PRIMARY KEY,
-				producto_id TEXT NOT NULL,
-				tienda_id TEXT NOT NULL,
+				producto_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+				tienda_id TEXT NOT NULL REFERENCES stores(id),
 				numero_lote TEXT NOT NULL,
 				caduca_en TEXT NOT NULL,
 				cantidad REAL NOT NULL,
@@ -826,7 +832,7 @@ class MigracionesEsquema {
 			base,
 			'products',
 			'permite_stock_negativo',
-			'INTEGER NOT NULL DEFAULT 0',
+			'INTEGER NOT NULL DEFAULT 1',
 		);
 		await _agregarColumnaSiNoExiste(
 			base,
@@ -843,14 +849,14 @@ class MigracionesEsquema {
 		await _agregarColumnaSiNoExiste(
 			base,
 			'stores',
-			'radio_metros_asistencia',
+			'radio_metros',
 			'REAL DEFAULT 150',
 		);
 		await base.execute('''
 			CREATE TABLE IF NOT EXISTS almacenes (
 				id TEXT PRIMARY KEY,
 				nombre TEXT NOT NULL,
-				tienda_id TEXT,
+				tienda_id TEXT REFERENCES stores(id),
 				activo INTEGER NOT NULL DEFAULT 1,
 				latitud REAL,
 				longitud REAL,
@@ -859,8 +865,8 @@ class MigracionesEsquema {
 		''');
 		await base.execute('''
 			CREATE TABLE IF NOT EXISTS stock_almacen (
-				producto_id TEXT NOT NULL,
-				almacen_id TEXT NOT NULL,
+				producto_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+				almacen_id TEXT NOT NULL REFERENCES almacenes(id) ON DELETE CASCADE,
 				cantidad REAL NOT NULL,
 				actualizado_en TEXT NOT NULL,
 				stock_minimo REAL NOT NULL DEFAULT 0,
@@ -878,8 +884,8 @@ class MigracionesEsquema {
 		await base.execute('''
 			CREATE TABLE IF NOT EXISTS presentaciones_producto (
 				id TEXT PRIMARY KEY,
-				producto_id TEXT NOT NULL,
-				tipo_presentacion_id TEXT,
+				producto_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+				tipo_presentacion_id TEXT REFERENCES tipos_presentacion(id),
 				nombre TEXT NOT NULL,
 				factor_a_base REAL NOT NULL DEFAULT 1,
 				es_presentacion_base INTEGER NOT NULL DEFAULT 0,
@@ -902,7 +908,7 @@ class MigracionesEsquema {
 		await base.execute('''
 			CREATE TABLE IF NOT EXISTS desafios_asistencia (
 				id TEXT PRIMARY KEY,
-				tienda_id TEXT NOT NULL,
+				tienda_id TEXT NOT NULL REFERENCES stores(id),
 				pin_hash TEXT NOT NULL,
 				expira_en TEXT NOT NULL,
 				creado_por TEXT NOT NULL,
@@ -916,7 +922,7 @@ class MigracionesEsquema {
 			CREATE TABLE IF NOT EXISTS registros_asistencia (
 				id TEXT PRIMARY KEY,
 				usuario_id TEXT NOT NULL,
-				tienda_id TEXT NOT NULL,
+				tienda_id TEXT NOT NULL REFERENCES stores(id),
 				entrada_en TEXT NOT NULL,
 				salida_en TEXT,
 				metodo TEXT NOT NULL,
@@ -940,7 +946,7 @@ class MigracionesEsquema {
 		await base.execute('''
 			CREATE TABLE IF NOT EXISTS periodos_nomina (
 				id TEXT PRIMARY KEY,
-				tienda_id TEXT,
+				tienda_id TEXT REFERENCES stores(id),
 				inicio_en TEXT NOT NULL,
 				fin_en TEXT NOT NULL,
 				estado TEXT NOT NULL,
@@ -951,7 +957,7 @@ class MigracionesEsquema {
 		await base.execute('''
 			CREATE TABLE IF NOT EXISTS lineas_nomina (
 				id TEXT PRIMARY KEY,
-				periodo_id TEXT NOT NULL,
+				periodo_id TEXT NOT NULL REFERENCES periodos_nomina(id) ON DELETE CASCADE,
 				usuario_id TEXT NOT NULL,
 				horas_trabajadas REAL NOT NULL,
 				tarifa_hora REAL NOT NULL,
@@ -1094,8 +1100,8 @@ class MigracionesEsquema {
 		''');
 		await base.execute('''
 			CREATE TABLE IF NOT EXISTS lote_promocion_miembros (
-				lote_id TEXT NOT NULL,
-				producto_id TEXT NOT NULL,
+				lote_id TEXT NOT NULL REFERENCES lotes_promocion(id) ON DELETE CASCADE,
+				producto_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
 				PRIMARY KEY (lote_id, producto_id)
 			)
 		''');
@@ -1103,6 +1109,115 @@ class MigracionesEsquema {
 			CREATE INDEX IF NOT EXISTS idx_lote_promocion_miembros_producto
 			ON lote_promocion_miembros(producto_id)
 		''');
+	}
+
+	/// v6.30: indices de rendimiento + integridad referencial activa.
+	///
+	/// Las FKs en tablas ya existentes no se pueden ALTER en SQLite; se aplican
+	/// en instalaciones nuevas via CREATE TABLE. Aqui se aseguran indices.
+	static Future<void> migrarVersion29A30(Database base) async {
+		await base.execute('PRAGMA foreign_keys = ON');
+		const indices = <String>[
+			'CREATE INDEX IF NOT EXISTS idx_sale_lines_venta ON sale_lines(venta_id)',
+			'CREATE INDEX IF NOT EXISTS idx_sale_lines_producto ON sale_lines(producto_id)',
+			'CREATE INDEX IF NOT EXISTS idx_sales_tienda_fecha ON sales(tienda_id, creada_en)',
+			'CREATE INDEX IF NOT EXISTS idx_sales_turno ON sales(turno_caja_id)',
+			'CREATE INDEX IF NOT EXISTS idx_sales_cliente ON sales(cliente_id)',
+			'CREATE INDEX IF NOT EXISTS idx_purchase_lines_compra ON purchase_lines(compra_id)',
+			'CREATE INDEX IF NOT EXISTS idx_quote_lines_cotizacion ON quote_lines(cotizacion_id)',
+			'CREATE INDEX IF NOT EXISTS idx_order_lines_pedido ON order_lines(pedido_id)',
+			'CREATE INDEX IF NOT EXISTS idx_transfer_lines_transfer ON transfer_lines(transfer_id)',
+			'CREATE INDEX IF NOT EXISTS idx_price_list_items_producto ON price_list_items(producto_id)',
+			'CREATE INDEX IF NOT EXISTS idx_customer_product_prices_producto ON customer_product_prices(producto_id)',
+			'CREATE INDEX IF NOT EXISTS idx_wholesale_tiers_producto ON wholesale_tiers(producto_id)',
+			'CREATE INDEX IF NOT EXISTS idx_products_tienda ON products(tienda_id)',
+			'CREATE INDEX IF NOT EXISTS idx_products_categoria ON products(categoria_id)',
+			'CREATE INDEX IF NOT EXISTS idx_product_variants_padre ON product_variants(producto_padre_id)',
+			'CREATE INDEX IF NOT EXISTS idx_presentaciones_producto ON presentaciones_producto(producto_id)',
+			'CREATE INDEX IF NOT EXISTS idx_stock_almacen_almacen ON stock_almacen(almacen_id)',
+			'CREATE INDEX IF NOT EXISTS idx_almacenes_tienda ON almacenes(tienda_id)',
+			'CREATE INDEX IF NOT EXISTS idx_cash_shifts_tienda_abierto ON cash_shifts(tienda_id, abierto_en)',
+			'CREATE INDEX IF NOT EXISTS idx_lineas_nomina_periodo ON lineas_nomina(periodo_id)',
+			'CREATE INDEX IF NOT EXISTS idx_periodos_nomina_tienda ON periodos_nomina(tienda_id, inicio_en)',
+			'CREATE INDEX IF NOT EXISTS idx_registros_asistencia_tienda ON registros_asistencia(tienda_id, entrada_en)',
+			'CREATE INDEX IF NOT EXISTS idx_registros_asistencia_usuario ON registros_asistencia(usuario_id, entrada_en)',
+			'CREATE INDEX IF NOT EXISTS idx_held_ticket_lines_ticket ON held_ticket_lines(ticket_id)',
+			'CREATE INDEX IF NOT EXISTS idx_sync_event_queue_estado ON sync_event_queue(estado, creado_en)',
+		];
+		for (final sql in indices) {
+			await base.execute(sql);
+		}
+	}
+
+	/// v6.31: alinea radio_metros (antes radio_metros_asistencia) y DEFAULT stock.
+	static Future<void> migrarVersion30A31(Database base) async {
+		final info = await base.rawQuery('PRAGMA table_info(stores)');
+		final tieneLegacy = info.any(
+			(fila) => fila['name'] == 'radio_metros_asistencia',
+		);
+		final tieneNuevo = info.any((fila) => fila['name'] == 'radio_metros');
+		if (tieneLegacy && !tieneNuevo) {
+			try {
+				await base.execute(
+					'ALTER TABLE stores RENAME COLUMN radio_metros_asistencia TO radio_metros',
+				);
+			} on Object {
+				await _agregarColumnaSiNoExiste(
+					base,
+					'stores',
+					'radio_metros',
+					'REAL DEFAULT 150',
+				);
+				await base.execute('''
+					UPDATE stores
+					SET radio_metros = COALESCE(radio_metros_asistencia, 150)
+					WHERE radio_metros IS NULL
+				''');
+			}
+		} else if (!tieneNuevo) {
+			await _agregarColumnaSiNoExiste(
+				base,
+				'stores',
+				'radio_metros',
+				'REAL DEFAULT 150',
+			);
+		} else if (tieneLegacy) {
+			await base.execute('''
+				UPDATE stores
+				SET radio_metros = COALESCE(radio_metros, radio_metros_asistencia, 150)
+			''');
+		}
+		// Homogeneiza DEFAULT documental: installs nuevos ya usan 1.
+		// No reescribe filas existentes (pueden ser intencionales en 0).
+	}
+
+	/// v6.32: reafirma indices de prioridad baja y DEFAULT de stock negativo.
+	static Future<void> migrarVersion31A32(Database base) async {
+		await migrarVersion29A30(base);
+		// SQLite no permite ALTER COLUMN DEFAULT; el DEFAULT 1 ya aplica en
+		// CREATE/ADD nuevos. Aqui solo documentamos la politica vigente.
+		final info = await base.rawQuery('PRAGMA table_info(products)');
+		final col = info.cast<Map<String, Object?>>().where(
+			(fila) => fila['name'] == 'permite_stock_negativo',
+		);
+		if (col.isEmpty) {
+			await _agregarColumnaSiNoExiste(
+				base,
+				'products',
+				'permite_stock_negativo',
+				'INTEGER NOT NULL DEFAULT 1',
+			);
+		}
+	}
+
+	/// v6.33: reconstruye tablas con FOREIGN KEY (1FN/2FN/3FN).
+	///
+	/// Exige cola `sync_event_queue` sin pendientes/errores (espejo en Neon).
+	static Future<void> migrarVersion32A33(Database base) async {
+		if (await MigracionIntegridadReferencial.yaAplicada(base)) {
+			return;
+		}
+		await MigracionIntegridadReferencial.aplicar(base);
 	}
 
 	/// v6.23: codigo de barras unico por tienda entre productos activos.
