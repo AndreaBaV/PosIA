@@ -6,12 +6,16 @@ import 'dart:convert';
 import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../utils/asegurador_padres_fk.dart';
+
 /// Persiste roles personalizados y sus permisos.
 class RolPersonalizadoRepository {
 	RolPersonalizadoRepository({required Database baseDatos})
-		: _baseDatos = baseDatos;
+		: _baseDatos = baseDatos,
+		  _padresFk = AseguradorPadresFk(baseDatos);
 
 	final Database _baseDatos;
+	final AseguradorPadresFk _padresFk;
 
 	Future<List<RolPersonalizado>> listarTodos() async {
 		final filas = await _baseDatos.query(
@@ -52,7 +56,7 @@ class RolPersonalizadoRepository {
 	}
 
 	Future<void> guardar(RolPersonalizado rol) async {
-		await _asegurarTiendaPadre(rol.tiendaId);
+		await _padresFk.asegurarTienda(rol.tiendaId);
 		await _baseDatos.transaction((tx) async {
 			await tx.insert(
 				'roles_personalizados',
@@ -68,31 +72,6 @@ class RolPersonalizadoRepository {
 				conflictAlgorithm: ConflictAlgorithm.replace,
 			);
 		});
-	}
-
-	Future<void> _asegurarTiendaPadre(String? tiendaId) async {
-		if (tiendaId == null || tiendaId.trim().isEmpty) {
-			return;
-		}
-		final filas = await _baseDatos.query(
-			'stores',
-			where: 'id = ?',
-			whereArgs: [tiendaId],
-			limit: 1,
-		);
-		if (filas.isNotEmpty) {
-			return;
-		}
-		await _baseDatos.insert(
-			'stores',
-			{
-				'id': tiendaId,
-				'nombre': 'Tienda',
-				'direccion': '',
-				'activa': 1,
-			},
-			conflictAlgorithm: ConflictAlgorithm.ignore,
-		);
 	}
 
 	Future<void> eliminarLogico(String id) async {

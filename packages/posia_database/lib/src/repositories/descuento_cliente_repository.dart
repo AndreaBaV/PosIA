@@ -4,11 +4,16 @@ library;
 import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../utils/asegurador_padres_fk.dart';
+
 /// Persiste reglas de descuento comercial por cliente.
 class DescuentoClienteRepository {
-	DescuentoClienteRepository({required Database baseDatos}) : _baseDatos = baseDatos;
+	DescuentoClienteRepository({required Database baseDatos})
+		: _baseDatos = baseDatos,
+		  _padresFk = AseguradorPadresFk(baseDatos);
 
 	final Database _baseDatos;
+	final AseguradorPadresFk _padresFk;
 
 	Future<List<DescuentoCliente>> listarPorCliente(String clienteId) async {
 		final filas = await _baseDatos.query(
@@ -39,6 +44,8 @@ class DescuentoClienteRepository {
 	}
 
 	Future<void> guardar(DescuentoCliente descuento) async {
+		await _padresFk.asegurarCliente(descuento.clienteId);
+		await _padresFk.asegurarProducto(descuento.productoId);
 		await _baseDatos.insert(
 			'customer_discounts',
 			{

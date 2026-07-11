@@ -10,6 +10,7 @@ import 'package:posia_pricing/posia_pricing.dart';
 import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../utils/asegurador_padres_fk.dart';
 import '../utils/transaccion_sqlite.dart';
 import 'lote_promocion_repository.dart';
 
@@ -22,11 +23,13 @@ class PrecioRepository implements RepositorioPrecio {
 		required Database baseDatos,
 		LotePromocionRepository? lotePromocionRepository,
 	}) : _baseDatos = baseDatos,
+	     _padresFk = AseguradorPadresFk(baseDatos),
 	     _lotePromocionRepository =
 	         lotePromocionRepository ??
 	         LotePromocionRepository(baseDatos: baseDatos);
 
 	final Database _baseDatos;
+	final AseguradorPadresFk _padresFk;
 	final LotePromocionRepository _lotePromocionRepository;
 
 	@override
@@ -230,6 +233,8 @@ class PrecioRepository implements RepositorioPrecio {
 	///
 	/// [precio] Registro de precio especial.
 	Future<void> guardarPrecioClienteProducto(PrecioClienteProducto precio) async {
+		await _padresFk.asegurarCliente(precio.clienteId);
+		await _padresFk.asegurarProducto(precio.productoId);
 		await _baseDatos.insert(
 			'customer_product_prices',
 			{
@@ -284,6 +289,8 @@ class PrecioRepository implements RepositorioPrecio {
 		String productoId,
 		double precioUnitario,
 	) async {
+		await _padresFk.asegurarListaPrecios(listaPreciosId);
+		await _padresFk.asegurarProducto(productoId);
 		await _baseDatos.insert(
 			'price_list_items',
 			{

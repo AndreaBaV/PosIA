@@ -4,11 +4,16 @@ library;
 import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../utils/asegurador_padres_fk.dart';
+
 /// Persiste y consulta clientes locales.
 class ClienteRepository {
-	ClienteRepository({required Database baseDatos}) : _baseDatos = baseDatos;
+	ClienteRepository({required Database baseDatos})
+		: _baseDatos = baseDatos,
+		  _padresFk = AseguradorPadresFk(baseDatos);
 
 	final Database _baseDatos;
+	final AseguradorPadresFk _padresFk;
 
 	Future<List<Cliente>> listarTodos() async {
 		final filas = await _baseDatos.query('customers', orderBy: 'nombre ASC');
@@ -73,6 +78,7 @@ class ClienteRepository {
 	}
 
 	Future<void> guardar(Cliente cliente) async {
+		await _padresFk.asegurarListaPrecios(cliente.listaPreciosId);
 		await _baseDatos.insert(
 			'customers',
 			_mapearMapa(cliente),
