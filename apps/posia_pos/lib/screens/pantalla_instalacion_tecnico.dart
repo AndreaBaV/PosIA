@@ -318,7 +318,9 @@ class _PantallaInstalacionTecnicoState extends ConsumerState<PantallaInstalacion
 			if (usarHub && ref.read(sesionUsuarioProvider) != null) {
 				ref.invalidate(contenedorServiciosProvider);
 				final servicioAdmin = await ref.read(servicioAdminProvider.future);
-				final resultado = await servicioAdmin.sincronizarManual();
+				final resultado = await servicioAdmin.sincronizarManual(
+					incluirCatalogo: true,
+				);
 				mensaje = resultado.hubDisponible
 					? 'Listo. Sync: ${resultado.eventosRecibidos} eventos recibidos.'
 					: 'Listo. Hub guardado; la sync se reintentará automáticamente.';

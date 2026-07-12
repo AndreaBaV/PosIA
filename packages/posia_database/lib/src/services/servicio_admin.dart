@@ -885,10 +885,11 @@ class ServicioAdmin {
   /// Ejecuta ciclo completo de sincronizacion con el hub.
   ///
   /// [incluirCatalogo] Si es true, reencola el catalogo local espejado en Neon
-  /// antes de enviar. En login/arranque usar false o llamar en segundo plano.
+  /// antes de enviar. Reservado para arranque, reconciliacion o instalacion;
+  /// la sync manual desde Admin debe usar false.
   Future<ResultadoSync> sincronizarManual({
     ReporteProgresoSync? alProgreso,
-    bool incluirCatalogo = true,
+    bool incluirCatalogo = false,
   }) async {
     if (incluirCatalogo) {
       alProgreso?.call(
@@ -915,19 +916,46 @@ class ServicioAdmin {
   Future<int> _reencolarCatalogoLocalPendiente({
     ReporteProgresoSync? alProgreso,
   }) async {
+    void reportarIndeterminado(String mensaje) {
+      alProgreso?.call(
+        ProgresoSync(
+          fase: FaseProgresoSync.preparar,
+          indice: 0,
+          total: 0,
+          mensaje: mensaje,
+        ),
+      );
+    }
+
     if (_tiendaActivaId.trim().isEmpty || _cajaId.trim().isEmpty) {
+      reportarIndeterminado(
+        'Catálogo omitido: configure tienda y caja activas.',
+      );
       return 0;
     }
 
+    reportarIndeterminado('Cargando catálogo local…');
+    await Future<void>.delayed(Duration.zero);
+
+    reportarIndeterminado('Leyendo tiendas y almacenes…');
     final tiendas = await _tiendaRepository.listarTodas();
     final almacenes = await listarAlmacenes();
+    await Future<void>.delayed(Duration.zero);
+
+    reportarIndeterminado('Leyendo categorías y productos…');
     final categorias = await listarCategorias();
     final tiposPresentacion = await listarTiposPresentacion();
     final productos = await listarProductosCatalogo();
+    await Future<void>.delayed(Duration.zero);
+
+    reportarIndeterminado('Leyendo clientes y listas de precios…');
     final clientes = await listarClientes();
     final listas = await listarListasPrecios();
     final roles = await _rolPersonalizadoRepository?.listarTodos() ?? [];
     final usuarios = await _usuarioRepository?.listarTodos() ?? [];
+    await Future<void>.delayed(Duration.zero);
+
+    reportarIndeterminado('Leyendo promociones y precios…');
     final lotes = await _lotePromocionRepository.listarActivos();
     final preciosCliente =
         await _precioRepository?.listarTodosPreciosClienteProducto() ?? [];
@@ -935,6 +963,7 @@ class ServicioAdmin {
         await _descuentoClienteRepository?.listarTodos() ?? [];
     final proveedores = await listarProveedores();
     final compras = await _compraRepository?.listarRecientes() ?? [];
+    await Future<void>.delayed(Duration.zero);
 
     var totalEstimado =
         tiendas.length +
@@ -987,7 +1016,8 @@ class ServicioAdmin {
       encolados++;
       reportar('Tipos presentación ($encolados)…');
     }
-    for (final producto in productos) {
+    for (var i = 0; i < productos.length; i++) {
+      final producto = productos[i];
       await _registrarEventoProducto(producto);
       encolados++;
       final escalas =
@@ -1009,7 +1039,10 @@ class ServicioAdmin {
         encolados++;
         totalEstimado++;
       }
-      reportar('Productos y precios ($encolados)…');
+      if (i.isEven) {
+        reportar('Productos (${i + 1}/${productos.length})…');
+        await Future<void>.delayed(Duration.zero);
+      }
     }
     for (final lote in lotes) {
       await _registrarEventoLotePromocion(lote);
@@ -1122,7 +1155,10 @@ class ServicioAdmin {
         await _registrarEventoRolPersonalizado(rol);
       }
     }
-    return sincronizarManual(alProgreso: alProgreso);
+    return sincronizarManual(
+      alProgreso: alProgreso,
+      incluirCatalogo: false,
+    );
   }
 
   /// Descarga cuentas del hub Postgres e importa en SQLite local.

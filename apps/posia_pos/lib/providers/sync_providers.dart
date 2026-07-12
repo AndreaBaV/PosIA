@@ -61,7 +61,10 @@ class SyncProgresoNotifier extends Notifier<EstadoSyncUi> {
 		);
 		try {
 			final servicio = await ref.read(servicioAdminProvider.future);
-			final resultado = await servicio.sincronizarManual(alProgreso: _reportar);
+			final resultado = await servicio.sincronizarManual(
+				alProgreso: _reportar,
+				incluirCatalogo: false,
+			);
 			final mensaje = resultado.hubDisponible
 				? 'Enviados: ${resultado.eventosEnviados} · '
 					'Recibidos: ${resultado.eventosRecibidos}'
