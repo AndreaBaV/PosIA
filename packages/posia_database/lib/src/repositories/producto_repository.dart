@@ -181,11 +181,13 @@ class ProductoRepository {
 	///
 	/// [producto] Producto a persistir.
 	Future<void> guardar(Producto producto, {DatabaseExecutor? db}) async {
-		await _padresFk.asegurarPadresDeProducto(
-			tiendaId: producto.tiendaId,
-			categoriaId: producto.categoriaId,
-			proveedorId: producto.proveedorId,
-		);
+		if (db == null) {
+			await _padresFk.asegurarPadresDeProducto(
+				tiendaId: producto.tiendaId,
+				categoriaId: producto.categoriaId,
+				proveedorId: producto.proveedorId,
+			);
+		}
 		final exec = db ?? _baseDatos;
 		await exec.insert(
 			'products',

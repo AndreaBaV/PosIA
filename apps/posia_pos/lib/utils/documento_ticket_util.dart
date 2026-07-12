@@ -4,7 +4,10 @@ library;
 import 'package:posia_core/posia_core.dart';
 import 'package:posia_database/posia_database.dart';
 
-Future<String?> _nombreTiendaPorId(ServicioAdmin servicio, String tiendaId) async {
+Future<String?> _nombreTiendaPorId(ServicioAdmin servicio, String? tiendaId) async {
+	if (tiendaId == null || tiendaId.trim().isEmpty) {
+		return null;
+	}
 	final tiendas = await servicio.obtenerTiendasPermitidas();
 	for (final tienda in tiendas) {
 		if (tienda.id == tiendaId) {
@@ -14,7 +17,10 @@ Future<String?> _nombreTiendaPorId(ServicioAdmin servicio, String tiendaId) asyn
 	return null;
 }
 
-Future<String?> _direccionTiendaPorId(ServicioAdmin servicio, String tiendaId) async {
+Future<String?> _direccionTiendaPorId(ServicioAdmin servicio, String? tiendaId) async {
+	if (tiendaId == null || tiendaId.trim().isEmpty) {
+		return null;
+	}
 	final tiendas = await servicio.obtenerTiendasPermitidas();
 	for (final tienda in tiendas) {
 		if (tienda.id == tiendaId) {
@@ -35,7 +41,7 @@ Future<TicketDigitalContenido> obtenerTicketDigitalCompra({
 	return construirTicketDigitalCompra(
 		compra: compra,
 		nombreProveedor: nombreProveedor,
-		nombreTienda: nombreTienda ?? 'Tienda',
+		nombreTienda: nombreTienda ?? NOMBRE_COMERCIAL_APP,
 		direccionTienda: direccionTienda,
 	);
 }

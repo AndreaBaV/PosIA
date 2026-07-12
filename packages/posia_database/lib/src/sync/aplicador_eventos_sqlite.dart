@@ -1213,7 +1213,31 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 				);
 			})
 			.toList();
-		final tiendaId = p['tiendaId'] as String? ?? evento.tiendaId;
+		final asignacionesCrudas = p['asignaciones'] as List<Object?>? ?? [];
+		final asignaciones = <AsignacionCompra>[];
+		var seq = 0;
+		for (final cruda in asignacionesCrudas.whereType<Map<Object?, Object?>>()) {
+			seq++;
+			final mapa = Map<String, Object?>.from(cruda);
+			final tipoRaw = mapa['destinoTipo'] as String? ?? 'almacen';
+			final tipo = TipoDestinoCompra.values.firstWhere(
+				(t) => t.name == tipoRaw,
+				orElse: () => TipoDestinoCompra.almacen,
+			);
+			asignaciones.add(
+				AsignacionCompra(
+					id: mapa['id'] as String? ?? '$id-alloc-$seq',
+					productoId: mapa['productoId'] as String? ?? '',
+					destinoTipo: tipo,
+					destinoId: mapa['destinoId'] as String? ?? '',
+					cantidad: (mapa['cantidad'] as num?)?.toDouble() ?? 0.0,
+				),
+			);
+		}
+		final tiendaRaw = p['tiendaId'] as String?;
+		final tiendaId = (tiendaRaw != null && tiendaRaw.trim().isNotEmpty)
+			? tiendaRaw
+			: null;
 		final compra = Compra(
 			id: id,
 			tiendaId: tiendaId,
@@ -1228,17 +1252,41 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			),
 			creadoPor: p['creadoPor'] as String?,
 			lineas: lineas,
+			asignaciones: asignaciones,
 		);
 		await repo.guardar(compra, db: ejecutor);
-		if (existente == null) {
-			for (final linea in lineas) {
-				await _ajustarStock(
-					linea.productoId,
-					tiendaId,
-					linea.cantidad,
-					ejecutor: ejecutor,
-				);
+		if (existente != null) {
+			return;
+		}
+		if (asignaciones.isNotEmpty) {
+			for (final asignacion in asignaciones) {
+				if (asignacion.destinoTipo == TipoDestinoCompra.tienda) {
+					await _ajustarStock(
+						asignacion.productoId,
+						asignacion.destinoId,
+						asignacion.cantidad,
+						ejecutor: ejecutor,
+					);
+				} else {
+					await _ajustarStockAlmacen(
+						asignacion.productoId,
+						asignacion.destinoId,
+						asignacion.cantidad,
+						ejecutor: ejecutor,
+					);
+				}
 			}
+			return;
+		}
+		// Legacy sin asignaciones: stock a tienda del evento.
+		final destinoLegacy = tiendaId ?? evento.tiendaId;
+		for (final linea in lineas) {
+			await _ajustarStock(
+				linea.productoId,
+				destinoLegacy,
+				linea.cantidad,
+				ejecutor: ejecutor,
+			);
 		}
 	}
 

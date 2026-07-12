@@ -510,7 +510,7 @@ class EsquemaPosPostgres {
 		await conexion.execute('''
 			CREATE TABLE IF NOT EXISTS purchases (
 				id TEXT PRIMARY KEY,
-				tienda_id TEXT NOT NULL,
+				tienda_id TEXT,
 				proveedor_id TEXT NOT NULL,
 				fecha_compra TEXT NOT NULL,
 				notas TEXT NOT NULL DEFAULT '',
@@ -518,6 +518,9 @@ class EsquemaPosPostgres {
 				creada_en TEXT NOT NULL,
 				creado_por TEXT
 			)
+		''');
+		await conexion.execute('''
+			ALTER TABLE purchases ALTER COLUMN tienda_id DROP NOT NULL
 		''');
 		await conexion.execute('''
 			CREATE TABLE IF NOT EXISTS purchase_lines (
@@ -531,12 +534,30 @@ class EsquemaPosPostgres {
 			)
 		''');
 		await conexion.execute('''
+			CREATE TABLE IF NOT EXISTS purchase_allocations (
+				id TEXT PRIMARY KEY,
+				compra_id TEXT NOT NULL,
+				producto_id TEXT NOT NULL,
+				destino_tipo TEXT NOT NULL,
+				destino_id TEXT NOT NULL,
+				cantidad DOUBLE PRECISION NOT NULL
+			)
+		''');
+		await conexion.execute('''
 			CREATE INDEX IF NOT EXISTS idx_purchases_tienda_fecha
 			ON purchases(tienda_id, fecha_compra DESC)
 		''');
 		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_purchases_fecha
+			ON purchases(fecha_compra DESC)
+		''');
+		await conexion.execute('''
 			CREATE INDEX IF NOT EXISTS idx_purchase_lines_compra
 			ON purchase_lines(compra_id)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_purchase_allocations_compra
+			ON purchase_allocations(compra_id)
 		''');
 		await conexion.execute('''
 			CREATE TABLE IF NOT EXISTS cash_shifts (
@@ -776,6 +797,11 @@ class EsquemaPosPostgres {
 			(
 				'purchase_lines',
 				'fk_purchase_lines_compra',
+				'FOREIGN KEY (compra_id) REFERENCES purchases(id) ON DELETE CASCADE',
+			),
+			(
+				'purchase_allocations',
+				'fk_purchase_allocations_compra',
 				'FOREIGN KEY (compra_id) REFERENCES purchases(id) ON DELETE CASCADE',
 			),
 			(

@@ -1,6 +1,29 @@
 /// Compra de mercancia a proveedor.
 library;
 
+/// Destino fisico de mercancia comprada (almacen o tienda).
+enum TipoDestinoCompra {
+	almacen,
+	tienda,
+}
+
+/// Asignacion de cantidad de un producto a una ubicacion.
+class AsignacionCompra {
+	const AsignacionCompra({
+		required this.id,
+		required this.productoId,
+		required this.destinoTipo,
+		required this.destinoId,
+		required this.cantidad,
+	});
+
+	final String id;
+	final String productoId;
+	final TipoDestinoCompra destinoTipo;
+	final String destinoId;
+	final double cantidad;
+}
+
 /// Linea de producto en una compra.
 class LineaCompra {
 	const LineaCompra({
@@ -18,22 +41,24 @@ class LineaCompra {
 	final double subtotal;
 }
 
-/// Registro de compra con proveedor, fecha y detalle.
+/// Registro de compra a nivel empresa (razon social), con ubicaciones.
 class Compra {
 	const Compra({
 		required this.id,
-		required this.tiendaId,
 		required this.proveedorId,
 		required this.fechaCompra,
 		required this.notas,
 		required this.total,
 		required this.creadaEn,
 		required this.lineas,
+		this.tiendaId,
 		this.creadoPor,
+		this.asignaciones = const [],
 	});
 
 	final String id;
-	final String tiendaId;
+	/// Tienda legacy opcional; las compras nuevas no la requieren.
+	final String? tiendaId;
 	final String proveedorId;
 	final DateTime fechaCompra;
 	final String notas;
@@ -41,4 +66,5 @@ class Compra {
 	final DateTime creadaEn;
 	final String? creadoPor;
 	final List<LineaCompra> lineas;
+	final List<AsignacionCompra> asignaciones;
 }

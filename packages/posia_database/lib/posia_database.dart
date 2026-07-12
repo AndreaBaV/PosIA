@@ -27,6 +27,7 @@ export 'src/models/resultado_reconciliacion_hub.dart';
 export 'src/models/stock_por_tienda.dart';
 export 'src/models/stock_por_almacen.dart';
 export 'src/models/linea_compra_solicitud.dart';
+export 'src/models/asignacion_compra_solicitud.dart';
 export 'src/models/linea_pedido_solicitud.dart';
 export 'src/repositories/pedido_repository.dart';
 export 'src/models/linea_traspaso_solicitud.dart';

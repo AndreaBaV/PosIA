@@ -318,45 +318,91 @@ final proveedoresAdminProvider = FutureProvider<List<Proveedor>>((ref) async {
 	return servicio.listarProveedores();
 });
 
-/// Datos para pantalla de compras (historial, proveedores y productos por tienda).
+/// Ubicación seleccionable para mercancía de compra (almacén o tienda).
+class UbicacionMercanciaCompra {
+	const UbicacionMercanciaCompra({
+		required this.tipo,
+		required this.id,
+		required this.etiqueta,
+	});
+
+	final TipoDestinoCompra tipo;
+	final String id;
+	final String etiqueta;
+
+	String get clave => '${tipo.name}:$id';
+}
+
+/// Datos para pantalla de compras a nivel empresa.
 class DatosComprasAdmin {
 	const DatosComprasAdmin({
 		required this.compras,
 		required this.proveedores,
 		required this.productos,
 		required this.tiendas,
-		required this.tiendaId,
+		required this.almacenes,
+		required this.ubicaciones,
+		required this.ubicacionPorDefecto,
 		required this.nombresProveedor,
+		required this.nombresUbicacion,
 	});
 
 	final List<Compra> compras;
 	final List<Proveedor> proveedores;
 	final List<Producto> productos;
 	final List<Tienda> tiendas;
-	final String tiendaId;
+	final List<Almacen> almacenes;
+	final List<UbicacionMercanciaCompra> ubicaciones;
+	final UbicacionMercanciaCompra ubicacionPorDefecto;
 	final Map<String, String> nombresProveedor;
+	final Map<String, String> nombresUbicacion;
 }
 
-/// Compras, proveedores y catalogo por tienda para registro de compras.
-final comprasDatosAdminProvider = FutureProvider.family<DatosComprasAdmin, String?>(
-	(ref, tiendaOperacionId) async {
-		final servicio = await ref.watch(servicioAdminProvider.future);
-		final operador = ref.watch(sesionUsuarioProvider);
-		final proveedores = await ref.watch(proveedoresAdminProvider.future);
-		final tiendas = await servicio.obtenerTiendasPermitidas(operador: operador);
-		final tiendaId = tiendaOperacionId ?? operador?.tiendaId ?? servicio.tiendaActivaId;
-		final compras = await servicio.listarCompras(tiendaId: tiendaId, operador: operador);
-		final productos = await servicio.listarProductosActivosPorTienda(tiendaId);
-		return DatosComprasAdmin(
-			compras: compras,
-			proveedores: proveedores.where((p) => p.activo).toList(),
-			productos: productos,
-			tiendas: tiendas,
-			tiendaId: tiendaId,
-			nombresProveedor: {for (final p in proveedores) p.id: p.nombre},
-		);
-	},
-);
+/// Compras, proveedores, catálogo y ubicaciones de la razón social.
+final comprasDatosAdminProvider = FutureProvider<DatosComprasAdmin>((ref) async {
+	final servicio = await ref.watch(servicioAdminProvider.future);
+	final operador = ref.watch(sesionUsuarioProvider);
+	final proveedores = await ref.watch(proveedoresAdminProvider.future);
+	final tiendas = await servicio.obtenerTiendasPermitidas(operador: operador);
+	final almacenes = (await servicio.listarAlmacenes()).where((a) => a.activo).toList();
+	final compras = await servicio.listarCompras(operador: operador);
+	final productos = await servicio.listarProductos();
+	final almacenDefecto = await servicio.obtenerAlmacenPorDefectoCompra();
+	final ubicaciones = <UbicacionMercanciaCompra>[
+		...almacenes.map(
+			(a) => UbicacionMercanciaCompra(
+				tipo: TipoDestinoCompra.almacen,
+				id: a.id,
+				etiqueta: 'Almacén · ${a.nombre}',
+			),
+		),
+		...tiendas.map(
+			(t) => UbicacionMercanciaCompra(
+				tipo: TipoDestinoCompra.tienda,
+				id: t.id,
+				etiqueta: 'Tienda · ${t.nombre}',
+			),
+		),
+	];
+	final ubicacionPorDefecto = ubicaciones.firstWhere(
+		(u) => u.tipo == TipoDestinoCompra.almacen && u.id == almacenDefecto.id,
+		orElse: () => ubicaciones.firstWhere(
+			(u) => u.tipo == TipoDestinoCompra.almacen,
+			orElse: () => ubicaciones.first,
+		),
+	);
+	return DatosComprasAdmin(
+		compras: compras,
+		proveedores: proveedores.where((p) => p.activo).toList(),
+		productos: productos,
+		tiendas: tiendas,
+		almacenes: almacenes,
+		ubicaciones: ubicaciones,
+		ubicacionPorDefecto: ubicacionPorDefecto,
+		nombresProveedor: {for (final p in proveedores) p.id: p.nombre},
+		nombresUbicacion: {for (final u in ubicaciones) u.clave: u.etiqueta},
+	);
+});
 
 /// Invalida caches de proveedores tras altas, ediciones o bajas.
 void invalidarProveedores(WidgetRef ref) {

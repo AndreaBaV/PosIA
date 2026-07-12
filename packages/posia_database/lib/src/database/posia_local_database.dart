@@ -226,6 +226,9 @@ class PosiaLocalDatabase {
 					if (anterior < 33 && nueva >= 33) {
 						await MigracionesEsquema.migrarVersion32A33(base);
 					}
+					if (anterior < 34 && nueva >= 34) {
+						await MigracionesEsquema.migrarVersion33A34(base);
+					}
 				},
 			);
 			_migracionFkPendientePorSync = false;
@@ -386,6 +389,6 @@ class PosiaLocalDatabase {
 		if (versionAnterior < 32 && versionNueva >= 32) {
 			await MigracionesEsquema.migrarVersion31A32(base);
 		}
-		// v33 se aplica en fase 2 (openDatabase version SCHEMA_VERSION).
+		// v33/v34 se aplican en fase 2 (openDatabase version SCHEMA_VERSION).
 	}
 }

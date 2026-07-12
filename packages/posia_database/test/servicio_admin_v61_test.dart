@@ -143,7 +143,7 @@ void main() {
 			await fixture.cerrar();
 		});
 
-		test('registrarCompra aumenta stock y actualiza costo', () async {
+		test('registrarCompra sin ubicacion entra a almacen por defecto', () async {
 			final fixture = await FixtureAdmin.abrir();
 			final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
 			final proveedor = await servicio.registrarProveedor(nombre: 'Distribuidora');
@@ -170,15 +170,120 @@ void main() {
 			);
 			expect(compra.lineas.length, 1);
 			expect(compra.total, 95.0);
-			final stock = await fixture.inventarioRepository.obtenerStock(
+			expect(compra.tiendaId, isNull);
+			expect(compra.asignaciones, hasLength(1));
+			expect(compra.asignaciones.first.destinoTipo, TipoDestinoCompra.almacen);
+			final almacenId = compra.asignaciones.first.destinoId;
+			final stockAlmacen = await fixture.almacenRepository.obtenerStock(
+				producto.id,
+				almacenId,
+			);
+			expect(stockAlmacen?.cantidad, 10.0);
+			final stockTienda = await fixture.inventarioRepository.obtenerStock(
 				producto.id,
 				fixture.tiendaOrigenId,
 			);
-			expect(stock?.cantidad, 15.0);
+			expect(stockTienda?.cantidad, 5.0);
 			final actualizado = await servicio.obtenerProducto(producto.id);
 			expect(actualizado?.costoUnitario, 9.5);
 			final historial = await servicio.listarCompras();
 			expect(historial.any((c) => c.id == compra.id), isTrue);
+			await fixture.cerrar();
+		});
+
+		test('registrarCompra con ubicacion tienda aumenta stock de tienda', () async {
+			final fixture = await FixtureAdmin.abrir();
+			final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
+			final proveedor = await servicio.registrarProveedor(nombre: 'Mayorista');
+			final producto = await servicio.registrarProductoCompleto(
+				AltaProductoRequest(
+					nombre: 'A tienda',
+					codigoBarras: '556',
+					precioBase: 15.0,
+					categoriaId: fixture.categoriaId,
+					stockInicial: 2.0,
+					costoUnitario: 5.0,
+				),
+			);
+			final compra = await servicio.registrarCompra(
+				proveedorId: proveedor.id,
+				fechaCompra: DateTime.utc(2026, 6, 22),
+				lineas: [
+					LineaCompraSolicitud(
+						productoId: producto.id,
+						cantidad: 8.0,
+						costoUnitario: 6.0,
+					),
+				],
+				ubicaciones: [
+					AsignacionCompraSolicitud(
+						productoId: producto.id,
+						destinoTipo: TipoDestinoCompra.tienda,
+						destinoId: fixture.tiendaOrigenId,
+						cantidad: 8.0,
+					),
+				],
+			);
+			expect(compra.asignaciones.single.destinoTipo, TipoDestinoCompra.tienda);
+			final stock = await fixture.inventarioRepository.obtenerStock(
+				producto.id,
+				fixture.tiendaOrigenId,
+			);
+			expect(stock?.cantidad, 10.0);
+			await fixture.cerrar();
+		});
+
+		test('registrarCompra subdivide entre almacen y tienda', () async {
+			final fixture = await FixtureAdmin.abrir();
+			final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
+			final proveedor = await servicio.registrarProveedor(nombre: 'Mixto');
+			final producto = await servicio.registrarProductoCompleto(
+				AltaProductoRequest(
+					nombre: 'Subdividido',
+					codigoBarras: '557',
+					precioBase: 12.0,
+					categoriaId: fixture.categoriaId,
+					stockInicial: 0.0,
+					costoUnitario: 4.0,
+				),
+			);
+			final almacen = await servicio.obtenerAlmacenPorDefectoCompra();
+			final compra = await servicio.registrarCompra(
+				proveedorId: proveedor.id,
+				fechaCompra: DateTime.utc(2026, 6, 22),
+				lineas: [
+					LineaCompraSolicitud(
+						productoId: producto.id,
+						cantidad: 10.0,
+						costoUnitario: 4.5,
+					),
+				],
+				ubicaciones: [
+					AsignacionCompraSolicitud(
+						productoId: producto.id,
+						destinoTipo: TipoDestinoCompra.almacen,
+						destinoId: almacen.id,
+						cantidad: 7.0,
+					),
+					AsignacionCompraSolicitud(
+						productoId: producto.id,
+						destinoTipo: TipoDestinoCompra.tienda,
+						destinoId: fixture.tiendaOrigenId,
+						cantidad: 3.0,
+					),
+				],
+			);
+			expect(compra.asignaciones, hasLength(2));
+			final stockAlmacen = await fixture.almacenRepository.obtenerStock(
+				producto.id,
+				almacen.id,
+			);
+			expect(stockAlmacen?.cantidad, 7.0);
+			final stockTienda = await fixture.inventarioRepository.obtenerStock(
+				producto.id,
+				fixture.tiendaOrigenId,
+			);
+			expect(stockTienda?.cantidad, 3.0);
 			await fixture.cerrar();
 		});
 

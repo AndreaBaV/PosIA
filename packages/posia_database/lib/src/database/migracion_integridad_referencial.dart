@@ -260,8 +260,11 @@ abstract final class MigracionIntegridadReferencial {
 		''');
 		await sql('purchases', '''
 			DELETE FROM purchases
-			WHERE tienda_id NOT IN (SELECT id FROM stores)
-				OR proveedor_id NOT IN (SELECT id FROM proveedores)
+			WHERE proveedor_id NOT IN (SELECT id FROM proveedores)
+				OR (
+					tienda_id IS NOT NULL
+					AND tienda_id NOT IN (SELECT id FROM stores)
+				)
 		''');
 		await sql('orders', '''
 			DELETE FROM orders WHERE tienda_id NOT IN (SELECT id FROM stores)
@@ -798,7 +801,7 @@ abstract final class MigracionIntegridadReferencial {
 			ddl: '''
 				CREATE TABLE purchases_fk (
 					id TEXT PRIMARY KEY,
-					tienda_id TEXT NOT NULL REFERENCES stores(id),
+					tienda_id TEXT REFERENCES stores(id),
 					proveedor_id TEXT NOT NULL REFERENCES proveedores(id),
 					fecha_compra TEXT NOT NULL,
 					notas TEXT NOT NULL DEFAULT '',

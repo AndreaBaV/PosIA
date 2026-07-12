@@ -152,8 +152,16 @@ Uint8List renderizarTicketDigitalPng({
         );
         final sub =
             '${_formatearCantidad(linea.cantidad)} x ${formatearMoneda(linea.precioUnitario)}';
-        _dibujarTexto(image, sub, x: xProd, y: y, font: img.arial24);
-        y += _altoLinea(img.arial24);
+        final anchoUtilLinea = xImp - xProd;
+        final lineasSub = _envolverTexto(
+          sub,
+          font: img.arial24,
+          anchoMax: anchoUtilLinea,
+        );
+        for (final l in lineasSub) {
+          _dibujarTexto(image, l, x: xProd, y: y, font: img.arial24);
+          y += _altoLinea(img.arial24);
+        }
       } else {
         final cantidadStr = '${_formatearCantidad(linea.cantidad)} u.';
         final wCant = _medirTexto(cantidadStr, img.arial24);
@@ -197,53 +205,51 @@ Uint8List renderizarTicketDigitalPng({
     y += 12;
   }
 
-  final xProd = _padding;
-  final xImp = ancho - _padding;
-
   if (contenido.descuentoTicket > 0) {
-    _dibujarTexto(image, 'Descuento', x: xProd, y: y, font: img.arial24);
-    final txt = '-${formatearMoneda(contenido.descuentoTicket)}';
-    _dibujarTexto(
+    y = _dibujarFilaEtiquetaValor(
       image,
-      txt,
-      x: xImp - _medirTexto(txt, img.arial24),
+      'Descuento',
+      '-${formatearMoneda(contenido.descuentoTicket)}',
       y: y,
+      ancho: ancho,
       font: img.arial24,
     );
-    y += _altoLinea(img.arial24) + 4;
+    y += 4;
   }
 
-  // TOTAL destacado
+  // TOTAL destacado (apila etiqueta/importe si no caben en una sola linea).
   final etiquetaTotal = _normalizar(contenido.etiquetaTotal);
   final totalStr = contenido.mostrarImportes
       ? formatearMoneda(contenido.total)
       : _formatearCantidad(contenido.total);
-  _dibujarTexto(image, etiquetaTotal, x: xProd, y: y + 8, font: img.arial48);
-  _dibujarTexto(
+  y = _dibujarFilaEtiquetaValor(
     image,
+    etiquetaTotal,
     totalStr,
-    x: xImp - _medirTexto(totalStr, img.arial48),
     y: y,
+    ancho: ancho,
     font: img.arial48,
   );
-  y += _altoLinea(img.arial48) + 8;
+  y += 8;
 
   if (contenido.montoRecibido != null) {
-    y = _dibujarFilaMeta(
+    y = _dibujarFilaEtiquetaValor(
       image,
       'Recibido',
       formatearMoneda(contenido.montoRecibido!),
-      y,
-      ancho,
+      y: y,
+      ancho: ancho,
+      font: img.arial24,
     );
   }
   if (contenido.cambio != null) {
-    y = _dibujarFilaMeta(
+    y = _dibujarFilaEtiquetaValor(
       image,
       'Cambio',
       formatearMoneda(contenido.cambio!),
-      y,
-      ancho,
+      y: y,
+      ancho: ancho,
+      font: img.arial24,
     );
   }
   if (contenido.creditoPlazoDias != null && contenido.creditoVenceEn != null) {
@@ -257,19 +263,21 @@ Uint8List renderizarTicketDigitalPng({
       font: img.arial24,
     );
     y += 4;
-    y = _dibujarFilaMeta(
+    y = _dibujarFilaEtiquetaValor(
       image,
       'Plazo',
-      '${contenido.creditoPlazoDias} día(s)',
-      y,
-      ancho,
+      '${contenido.creditoPlazoDias} dia(s)',
+      y: y,
+      ancho: ancho,
+      font: img.arial24,
     );
-    y = _dibujarFilaMeta(
+    y = _dibujarFilaEtiquetaValor(
       image,
       'Vence',
       formatearFechaCredito(contenido.creditoVenceEn!.toLocal()),
-      y,
-      ancho,
+      y: y,
+      ancho: ancho,
+      font: img.arial24,
     );
   }
   y += 6;
@@ -341,7 +349,15 @@ int _estimarAltoTicket(
           font: img.arial24,
           anchoMax: anchoDescripcion > 0 ? anchoDescripcion : 200,
         );
-        y += _altoLinea(img.arial24) * (lineasDescripcion.length + 1);
+        y += _altoLinea(img.arial24) * lineasDescripcion.length;
+        final sub =
+            '${_formatearCantidad(linea.cantidad)} x ${formatearMoneda(linea.precioUnitario)}';
+        final lineasSub = _envolverTexto(
+          sub,
+          font: img.arial24,
+          anchoMax: (xImp - xProd) > 0 ? (xImp - xProd) : 200,
+        );
+        y += _altoLinea(img.arial24) * lineasSub.length;
       } else {
         final cantidadStr = '${_formatearCantidad(linea.cantidad)} u.';
         final wCant = _medirTexto(cantidadStr, img.arial24);
@@ -364,36 +380,70 @@ int _estimarAltoTicket(
   }
 
   if (contenido.descuentoTicket > 0) {
-    y += _altoLinea(img.arial24) + 4;
+    y += _estimarAltoFilaEtiquetaValor(
+      'Descuento',
+      '-${formatearMoneda(contenido.descuentoTicket)}',
+      ancho: ancho,
+      font: img.arial24,
+    );
+    y += 4;
   }
-  y += _altoLinea(img.arial48) + 8;
+  final etiquetaTotal = _normalizar(contenido.etiquetaTotal);
+  final totalStr = contenido.mostrarImportes
+      ? formatearMoneda(contenido.total)
+      : _formatearCantidad(contenido.total);
+  y += _estimarAltoFilaEtiquetaValor(
+    etiquetaTotal,
+    totalStr,
+    ancho: ancho,
+    font: img.arial48,
+  );
+  y += 8;
   if (contenido.montoRecibido != null) {
-    y += _altoLinea(img.arial24);
+    y += _estimarAltoFilaEtiquetaValor(
+      'Recibido',
+      formatearMoneda(contenido.montoRecibido!),
+      ancho: ancho,
+      font: img.arial24,
+    );
   }
   if (contenido.cambio != null) {
-    y += _altoLinea(img.arial24);
+    y += _estimarAltoFilaEtiquetaValor(
+      'Cambio',
+      formatearMoneda(contenido.cambio!),
+      ancho: ancho,
+      font: img.arial24,
+    );
   }
   if (contenido.creditoPlazoDias != null && contenido.creditoVenceEn != null) {
-    y += 18 + (_altoLinea(img.arial24) * 2);
+    y += 18;
+    y += _altoLinea(img.arial24);
+    y += _estimarAltoFilaEtiquetaValor(
+      'Plazo',
+      '${contenido.creditoPlazoDias} dia(s)',
+      ancho: ancho,
+      font: img.arial24,
+    );
+    y += _estimarAltoFilaEtiquetaValor(
+      'Vence',
+      formatearFechaCredito(contenido.creditoVenceEn!.toLocal()),
+      ancho: ancho,
+      font: img.arial24,
+    );
   }
   y += 18;
+  final anchoTextoPie = ancho - (_padding * 2);
   for (final nota in contenido.notasPie) {
     if (nota.trim().isEmpty) {
       y += 10;
       continue;
     }
-    if (contenido.tipo == TipoDocumentoTicketDigital.pagare ||
-        contenido.tipo == TipoDocumentoTicketDigital.comprobanteTraspaso) {
-      final anchoTexto = ancho - (_padding * 2);
-      final lineas = _envolverTexto(
-        _normalizar(nota),
-        font: img.arial24,
-        anchoMax: anchoTexto,
-      );
-      y += _altoLinea(img.arial24) * lineas.length + 4;
-    } else {
-      y += _altoLinea(img.arial24) + 4;
-    }
+    final lineas = _envolverTexto(
+      _normalizar(nota),
+      font: img.arial24,
+      anchoMax: anchoTextoPie,
+    );
+    y += _altoLinea(img.arial24) * lineas.length + 4;
   }
   y += _margenInferiorTicket;
 
@@ -649,7 +699,7 @@ int _dibujarMetaEncabezado(
   return yFin + _espacioEntreMetaEncabezado;
 }
 
-/// Dibuja texto centrado horizontalmente y avanza y en una linea.
+/// Dibuja texto centrado horizontalmente (con wrap) y avanza y.
 int _dibujarTextoCentrado(
   img.Image image,
   String texto, {
@@ -657,10 +707,16 @@ int _dibujarTextoCentrado(
   required img.BitmapFont font,
 }) {
   final ancho = image.width;
-  final w = _medirTexto(texto, font);
-  final x = ((ancho - w) ~/ 2).clamp(0, ancho - 1);
-  _dibujarTexto(image, texto, x: x, y: y, font: font);
-  return y + _altoLinea(font);
+  final anchoMax = ancho - (_padding * 2);
+  final lineas = _envolverTexto(texto, font: font, anchoMax: anchoMax);
+  var yActual = y;
+  for (final linea in lineas) {
+    final w = _medirTexto(linea, font);
+    final x = ((ancho - w) ~/ 2).clamp(_padding, ancho - _padding - 1);
+    _dibujarTexto(image, linea, x: x, y: yActual, font: font);
+    yActual += _altoLinea(font);
+  }
+  return yActual;
 }
 
 /// Dibuja texto con doble trazo horizontal para que quede solido en termica.
@@ -675,19 +731,116 @@ void _dibujarTexto(
   img.drawString(image, texto, font: font, x: x + 1, y: y, color: _negro);
 }
 
-int _dibujarFilaMeta(
+/// Fila etiqueta (izq) + valor (der). Si no caben juntas, apila en dos lineas.
+int _dibujarFilaEtiquetaValor(
   img.Image image,
   String etiqueta,
-  String valor,
-  int y,
-  int anchoImagen,
-) {
-  final etiquetaTexto = '${_normalizar(etiqueta)}:';
-  _dibujarTexto(image, etiquetaTexto, x: _padding, y: y, font: img.arial24);
-  final valorNormalizado = _normalizar(valor);
-  final xValor = _padding + _medirTexto(etiquetaTexto, img.arial24) + 12;
-  _dibujarTexto(image, valorNormalizado, x: xValor, y: y, font: img.arial24);
-  return y + _altoLinea(img.arial24);
+  String valor, {
+  required int y,
+  required int ancho,
+  required img.BitmapFont font,
+}) {
+  final etiquetaTexto = _normalizar(etiqueta);
+  final valorTexto = _normalizar(valor);
+  final xIzq = _padding;
+  final xDer = ancho - _padding;
+  final anchoUtil = xDer - xIzq;
+  const gap = 12;
+  final wValor = _medirTexto(valorTexto, font);
+  final wEtiqueta = _medirTexto(etiquetaTexto, font);
+
+  if (wEtiqueta + gap + wValor <= anchoUtil) {
+    _dibujarTexto(image, etiquetaTexto, x: xIzq, y: y, font: font);
+    _dibujarTexto(
+      image,
+      valorTexto,
+      x: xDer - wValor,
+      y: y,
+      font: font,
+    );
+    return y + _altoLinea(font);
+  }
+
+  // Etiqueta en su propio bloque (wrap), valor alineado a la derecha debajo.
+  final anchoEtiqueta = (anchoUtil - gap - wValor).clamp(40, anchoUtil);
+  final lineasEtiqueta = _envolverTexto(
+    etiquetaTexto,
+    font: font,
+    anchoMax: anchoEtiqueta,
+  );
+  // Si aun con wrap la etiqueta es muy ancha, usa todo el ancho y el valor abajo.
+  final cabenLadoALado = lineasEtiqueta.every(
+    (l) => _medirTexto(l, font) + gap + wValor <= anchoUtil,
+  );
+  var yActual = y;
+  if (cabenLadoALado) {
+    for (var i = 0; i < lineasEtiqueta.length; i++) {
+      _dibujarTexto(image, lineasEtiqueta[i], x: xIzq, y: yActual, font: font);
+      if (i == 0) {
+        _dibujarTexto(
+          image,
+          valorTexto,
+          x: xDer - wValor,
+          y: yActual,
+          font: font,
+        );
+      }
+      yActual += _altoLinea(font);
+    }
+    return yActual;
+  }
+
+  yActual = _dibujarTextoEnColumna(
+    image,
+    etiquetaTexto,
+    x: xIzq,
+    y: yActual,
+    anchoMax: anchoUtil,
+    font: font,
+  );
+  _dibujarTexto(
+    image,
+    valorTexto,
+    x: xDer - wValor,
+    y: yActual,
+    font: font,
+  );
+  return yActual + _altoLinea(font);
+}
+
+int _estimarAltoFilaEtiquetaValor(
+  String etiqueta,
+  String valor, {
+  required int ancho,
+  required img.BitmapFont font,
+}) {
+  final etiquetaTexto = _normalizar(etiqueta);
+  final valorTexto = _normalizar(valor);
+  final anchoUtil = ancho - (_padding * 2);
+  const gap = 12;
+  final wValor = _medirTexto(valorTexto, font);
+  final wEtiqueta = _medirTexto(etiquetaTexto, font);
+  if (wEtiqueta + gap + wValor <= anchoUtil) {
+    return _altoLinea(font);
+  }
+  final anchoEtiqueta = (anchoUtil - gap - wValor).clamp(40, anchoUtil);
+  final lineasEtiqueta = _envolverTexto(
+    etiquetaTexto,
+    font: font,
+    anchoMax: anchoEtiqueta,
+  );
+  final cabenLadoALado = lineasEtiqueta.every(
+    (l) => _medirTexto(l, font) + gap + wValor <= anchoUtil,
+  );
+  if (cabenLadoALado) {
+    return _altoLinea(font) * lineasEtiqueta.length;
+  }
+  final lineasCompletas = _envolverTexto(
+    etiquetaTexto,
+    font: font,
+    anchoMax: anchoUtil,
+  );
+  return _altoLinea(font) * (lineasCompletas.length + 1);
 }
 
 void _dibujarSeparador(
@@ -725,23 +878,48 @@ List<String> _envolverTexto(
   required img.BitmapFont font,
   required int anchoMax,
 }) {
-  if (_medirTexto(texto, font) <= anchoMax) {
+  final limite = anchoMax < 8 ? 8 : anchoMax;
+  if (_medirTexto(texto, font) <= limite) {
     return [texto];
   }
   final palabras = texto.split(' ');
   final lineas = <String>[];
   var actual = '';
+
+  void agregarLinea(String linea) {
+    if (linea.isNotEmpty) {
+      lineas.add(linea);
+    }
+  }
+
   for (final palabra in palabras) {
+    if (_medirTexto(palabra, font) > limite) {
+      agregarLinea(actual);
+      actual = '';
+      var fragmento = '';
+      for (final rune in palabra.runes) {
+        final ch = String.fromCharCode(rune);
+        final propuesta = '$fragmento$ch';
+        if (fragmento.isNotEmpty && _medirTexto(propuesta, font) > limite) {
+          agregarLinea(fragmento);
+          fragmento = ch;
+        } else {
+          fragmento = propuesta;
+        }
+      }
+      actual = fragmento;
+      continue;
+    }
     final propuesta = actual.isEmpty ? palabra : '$actual $palabra';
-    if (_medirTexto(propuesta, font) <= anchoMax) {
+    if (_medirTexto(propuesta, font) <= limite) {
       actual = propuesta;
     } else {
-      if (actual.isNotEmpty) lineas.add(actual);
+      agregarLinea(actual);
       actual = palabra;
     }
   }
-  if (actual.isNotEmpty) lineas.add(actual);
-  return lineas;
+  agregarLinea(actual);
+  return lineas.isEmpty ? [''] : lineas;
 }
 
 /// Recorta margenes transparentes o casi blancos alrededor del logo.

@@ -119,4 +119,51 @@ void main() {
     expect(ticket.height, greaterThan(700));
     expect(_contieneTextoPie(png, 'FIRMA DEL DEUDOR'), isTrue);
   });
+
+  test('monto liquidado no se solapa con el importe en 58mm', () {
+    final venta = Venta(
+      id: 'venta-credito-liq-001',
+      tiendaId: 'tienda-test',
+      cajaId: 'caja-1',
+      clienteId: 'cli-1',
+      total: 1250.50,
+      metodoPago: MetodoPago.credito,
+      estado: EstadoVenta.completada,
+      creadaEn: DateTime.utc(2026, 6, 22, 10),
+      creditoLiquidado: true,
+      creditoLiquidadoEn: DateTime.utc(2026, 7, 1),
+      lineas: const [
+        LineaVenta(
+          productoId: 'p1',
+          nombreProducto: 'Producto con nombre bastante largo para wrap',
+          cantidad: 3,
+          precioUnitario: 416.83,
+          reglaPrecio: ReglaPrecio.precioBase,
+        ),
+      ],
+    );
+    final contenido = construirTicketDigitalLiquidacionCredito(
+      venta: venta,
+      nombreTienda: 'Abarrotes Centro',
+      nombreCliente: 'Maria Gonzalez',
+    );
+    expect(contenido.etiquetaTotal, 'MONTO LIQUIDADO');
+
+    final png80 = renderizarTicketDigitalPng(
+      contenido: contenido,
+      anchoRolloMm: 80,
+    );
+    final png58 = renderizarTicketDigitalPng(
+      contenido: contenido,
+      anchoRolloMm: 58,
+    );
+    final ticket80 = img.decodePng(png80)!;
+    final ticket58 = img.decodePng(png58)!;
+
+    expect(ticket80.width, anchoTicketBitmap80mm);
+    expect(ticket58.width, anchoTicketBitmap58mm);
+    // Con etiqueta larga, el ticket debe crecer (etiqueta + importe apilados).
+    expect(ticket58.height, greaterThan(400));
+    expect(ticket80.height, greaterThan(400));
+  });
 }

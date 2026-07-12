@@ -332,8 +332,10 @@ class AseguradorPadresFk {
 		if (await _existe('purchases', compraId)) {
 			return;
 		}
-		final tienda = tiendaId?.trim().isNotEmpty == true ? tiendaId! : _tiendaSync;
-		await asegurarTienda(tienda);
+		final tienda = tiendaId?.trim().isNotEmpty == true ? tiendaId : null;
+		if (tienda != null) {
+			await asegurarTienda(tienda);
+		}
 		await asegurarProveedor(proveedorId ?? 'proveedor-sync');
 		final ahora = DateTime.now().toUtc().toIso8601String();
 		await _baseDatos.insert(
@@ -649,10 +651,15 @@ class AseguradorPadresFk {
 	}
 
 	Future<void> asegurarPadresDeCompra(Compra compra) async {
-		await asegurarTienda(compra.tiendaId);
+		if (compra.tiendaId != null && compra.tiendaId!.trim().isNotEmpty) {
+			await asegurarTienda(compra.tiendaId);
+		}
 		await asegurarProveedor(compra.proveedorId);
 		for (final linea in compra.lineas) {
-			await asegurarProducto(linea.productoId, tiendaId: compra.tiendaId);
+			await asegurarProducto(
+				linea.productoId,
+				tiendaId: compra.tiendaId ?? _tiendaSync,
+			);
 		}
 	}
 

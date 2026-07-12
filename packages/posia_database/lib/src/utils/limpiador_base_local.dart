@@ -16,6 +16,7 @@ class LimpiadorBaseLocal {
 		'orders',
 		'quote_lines',
 		'quotes',
+		'purchase_allocations',
 		'purchase_lines',
 		'purchases',
 		'transfer_lines',

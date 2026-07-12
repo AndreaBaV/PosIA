@@ -296,18 +296,20 @@ List<pw.Widget> _construirContenido({
       ),
     pw.SizedBox(height: 4),
     pw.Row(
-      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
       crossAxisAlignment: pw.CrossAxisAlignment.end,
       children: [
-        pw.Text(
-          contenido.etiquetaTotal,
-          style: pw.TextStyle(
-            fontSize: 9.5,
-            fontWeight: pw.FontWeight.bold,
-            color: acento,
-            letterSpacing: 0.4,
+        pw.Expanded(
+          child: pw.Text(
+            contenido.etiquetaTotal,
+            style: pw.TextStyle(
+              fontSize: 9.5,
+              fontWeight: pw.FontWeight.bold,
+              color: acento,
+              letterSpacing: 0.4,
+            ),
           ),
         ),
+        pw.SizedBox(width: 8),
         pw.Text(
           formatearMoneda(contenido.total),
           style: pw.TextStyle(
