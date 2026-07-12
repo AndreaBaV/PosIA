@@ -11,6 +11,10 @@ library;
 import 'package:sqflite/sqflite.dart';
 
 /// [Database] compuesta: lecturas a [_lectura], escrituras a [_escritura].
+///
+/// Las conexiones subyacentes se pueden reemplazar en caliente (p. ej. tras
+/// reabrir la BD por migracion) sin invalidar los repositorios/servicios que
+/// ya tienen una referencia a este envoltorio.
 class ConexionOperativaRuteada implements Database {
 	ConexionOperativaRuteada({
 		required Database escritura,
@@ -18,8 +22,17 @@ class ConexionOperativaRuteada implements Database {
 	}) : _escritura = escritura,
 	     _lectura = lectura;
 
-	final Database _escritura;
-	final Database _lectura;
+	Database _escritura;
+	Database _lectura;
+
+	/// Sustituye las conexiones cerradas por unas recien abiertas.
+	void reemplazarConexiones({
+		required Database escritura,
+		required Database lectura,
+	}) {
+		_escritura = escritura;
+		_lectura = lectura;
+	}
 
 	// --- Lecturas: conexion de solo-lectura (snapshot WAL) ---
 

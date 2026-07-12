@@ -70,28 +70,72 @@ class SyncOrchestrator {
     var enviados = 0;
     var fallosConsecutivos = 0;
     const maxFallosConsecutivos = 3;
+
+    // Agrupar por identidad hub: un POST admite un solo storeId/deviceId.
+    final porIdentidad = <String, List<SyncEvent>>{};
     for (final evento in pendientes) {
-      alProgreso?.call(
-        ProgresoSync(
-          fase: FaseProgresoSync.enviar,
-          indice: enviados,
-          total: total,
-          mensaje: 'Enviando cambios (${enviados + 1} de $total)…',
-        ),
-      );
-      final exito = await _transmitirEvento(evento);
-      if (exito) {
-        await _colaLocal.marcarEnviado(evento.id);
-        enviados = enviados + 1;
-        fallosConsecutivos = 0;
-      } else {
-        await _colaLocal.marcarError(evento.id);
+      final tienda = evento.tiendaId.trim().isNotEmpty
+          ? evento.tiendaId
+          : _tiendaId;
+      final dispositivo = evento.dispositivoId.trim().isNotEmpty
+          ? evento.dispositivoId
+          : _dispositivoId;
+      final clave = '$tienda|$dispositivo';
+      porIdentidad.putIfAbsent(clave, () => []).add(evento);
+    }
+
+    for (final entrada in porIdentidad.entries) {
+      final partes = entrada.key.split('|');
+      final tiendaId = partes[0];
+      final dispositivoId = partes.length > 1 ? partes[1] : '';
+      if (tiendaId.trim().isEmpty || dispositivoId.trim().isEmpty) {
+        for (final evento in entrada.value) {
+          await _colaLocal.marcarError(evento.id);
+        }
         fallosConsecutivos = fallosConsecutivos + 1;
-        // Hub caido o red lenta: no bloquear minutos/horas reintentando
-        // cada evento con timeout individual.
         if (fallosConsecutivos >= maxFallosConsecutivos) {
           break;
         }
+        continue;
+      }
+      final eventosGrupo = entrada.value;
+      for (var i = 0; i < eventosGrupo.length; i += TAMANO_LOTE_SYNC_HUB) {
+        final fin = i + TAMANO_LOTE_SYNC_HUB > eventosGrupo.length
+            ? eventosGrupo.length
+            : i + TAMANO_LOTE_SYNC_HUB;
+        final lote = eventosGrupo.sublist(i, fin);
+        alProgreso?.call(
+          ProgresoSync(
+            fase: FaseProgresoSync.enviar,
+            indice: enviados,
+            total: total,
+            mensaje:
+                'Enviando cambios (${enviados + 1}–${enviados + lote.length} de $total)…',
+          ),
+        );
+        final exito = await _transmitirLote(
+          lote,
+          tiendaId: tiendaId,
+          dispositivoId: dispositivoId,
+        );
+        if (exito) {
+          for (final evento in lote) {
+            await _colaLocal.marcarEnviado(evento.id);
+          }
+          enviados = enviados + lote.length;
+          fallosConsecutivos = 0;
+        } else {
+          for (final evento in lote) {
+            await _colaLocal.marcarError(evento.id);
+          }
+          fallosConsecutivos = fallosConsecutivos + 1;
+          if (fallosConsecutivos >= maxFallosConsecutivos) {
+            break;
+          }
+        }
+      }
+      if (fallosConsecutivos >= maxFallosConsecutivos) {
+        break;
       }
     }
     alProgreso?.call(
@@ -132,19 +176,37 @@ class SyncOrchestrator {
       }
     }
     // No abortar el ciclo si /health falla: tras offline el hub puede despertar
-    // lento, pero POST/GET /v1/events aún pueden funcionar. Un return temprano
-    // dejaba la cola local sin enviar mientras el pull de otra caja sí llegaba.
+    // lento, pero POST/GET /v1/events aún pueden funcionar.
     final hubOk = await clienteHub.verificarSalud();
+    // Neon es la fuente de verdad operativa multi-caja: pull primero para que
+    // las demas cajas reciban cambios aunque la cola local este saturada.
+    alProgreso?.call(
+      const ProgresoSync(
+        fase: FaseProgresoSync.preparar,
+        indice: 0,
+        total: 0,
+        mensaje: 'Limpiando cola de catálogo duplicada…',
+      ),
+    );
+    await _colaLocal.descartarPendientesCatalogoEspejo();
+    alProgreso?.call(
+      const ProgresoSync(
+        fase: FaseProgresoSync.recibir,
+        indice: 0,
+        total: 0,
+        mensaje: 'Descargando cambios desde la nube…',
+      ),
+    );
+    final recibidos = await _ejecutarPull(clienteHub, alProgreso: alProgreso);
     alProgreso?.call(
       const ProgresoSync(
         fase: FaseProgresoSync.enviar,
         indice: 0,
         total: 0,
-        mensaje: 'Conectando con la nube…',
+        mensaje: 'Enviando cambios locales a la nube…',
       ),
     );
     final enviados = await sincronizarPendientes(alProgreso: alProgreso);
-    final recibidos = await _ejecutarPull(clienteHub, alProgreso: alProgreso);
     alProgreso?.call(
       ProgresoSync(
         fase: FaseProgresoSync.listo,
@@ -210,31 +272,26 @@ class SyncOrchestrator {
     return aplicados;
   }
 
-  Future<bool> _transmitirEvento(SyncEvent evento) async {
+  Future<bool> _transmitirLote(
+    List<SyncEvent> eventos, {
+    required String tiendaId,
+    required String dispositivoId,
+  }) async {
+    if (eventos.isEmpty) {
+      return true;
+    }
     var exitoLan = false;
     var exitoHub = false;
     final clienteLan = _clienteLan;
     if (clienteLan != null) {
-      exitoLan = await clienteLan.enviarEventos([evento]);
+      exitoLan = await clienteLan.enviarEventos(eventos);
     }
     final clienteHub = _clienteHub;
     if (clienteHub != null) {
-      // El hub exige storeId/deviceId no vacíos. Preferir los del evento (que
-      // se fijaron al guardar localmente) por si el orquestador se construyó
-      // antes de seleccionar tienda o con identidad incompleta.
-      final tiendaId = evento.tiendaId.trim().isNotEmpty
-          ? evento.tiendaId
-          : _tiendaId;
-      final dispositivoId = evento.dispositivoId.trim().isNotEmpty
-          ? evento.dispositivoId
-          : _dispositivoId;
-      if (tiendaId.trim().isEmpty || dispositivoId.trim().isEmpty) {
-        return false;
-      }
       exitoHub = await clienteHub.enviarEventos(
         dispositivoId: dispositivoId,
         tiendaId: tiendaId,
-        eventos: [evento],
+        eventos: eventos,
       );
     }
     return exitoLan || exitoHub;

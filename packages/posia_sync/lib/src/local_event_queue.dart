@@ -3,7 +3,7 @@
 /// Autor: Equipo POSIA
 /// Matricula: POSIA-2026-001
 /// Fecha creacion: 2026-06-07 18:30:00 (UTC-6)
-/// Ultima modificacion: 2026-06-07 18:30:00 (UTC-6)
+/// Ultima modificacion: 2026-07-12 11:55:00 (UTC-6)
 library;
 
 import 'package:posia_core/posia_core.dart';
@@ -29,4 +29,10 @@ abstract class LocalEventQueue {
 	///
 	/// [eventoId] Identificador del evento fallido.
 	Future<void> marcarError(String eventoId);
+
+	/// Descarta pendientes de catalogo espejo (reencolados duplicados).
+	///
+	/// Por defecto no hace nada; las implementaciones SQLite limpian basura
+	/// antes de empujar a Neon.
+	Future<int> descartarPendientesCatalogoEspejo() async => 0;
 }

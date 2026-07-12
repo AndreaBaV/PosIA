@@ -65,14 +65,16 @@ class PosiaLocalDatabase {
 
 	Future<Database> obtenerBaseDatos() async {
 		final ruteada = _baseOperativaRuteada;
-		if (ruteada != null) {
+		final escritura = _baseOperativa;
+		if (ruteada != null && escritura != null && escritura.isOpen) {
 			return ruteada;
 		}
 		return _abrirBaseOperativa();
 	}
 
-	Future<void> cerrarBaseOperativa() async {
-		_baseOperativaRuteada = null;
+	/// Cierra conexiones físicas. Conserva el envoltorio [ConexionOperativaRuteada]
+	/// para poder hot-swap al reabrir (evita `database_closed` en servicios vivos).
+	Future<void> cerrarBaseOperativa({bool desecharEnvoltorio = false}) async {
 		if (_baseOperativaLectura != null) {
 			await _baseOperativaLectura!.close();
 			_baseOperativaLectura = null;
@@ -81,11 +83,14 @@ class PosiaLocalDatabase {
 			await _baseOperativa!.close();
 			_baseOperativa = null;
 		}
+		if (desecharEnvoltorio) {
+			_baseOperativaRuteada = null;
+		}
 	}
 
 	/// Elimina el archivo SQLite operativo; se recrea vacio en el siguiente acceso.
 	Future<void> reiniciarBaseOperativa() async {
-		await cerrarBaseOperativa();
+		await cerrarBaseOperativa(desecharEnvoltorio: true);
 		final ruta = await motor_sqlite.resolverRutaBaseDatos(_archivoOperativa);
 		// deleteDatabase elimina tambien los archivos -wal y -shm de WAL.
 		await deleteDatabase(ruta);
@@ -111,6 +116,8 @@ class PosiaLocalDatabase {
 	/// Tras sync exitoso al hub: reintenta rebuild con FOREIGN KEY (v33).
 	///
 	/// Retorna true si la base ya esta en [SCHEMA_VERSION] con FKs aplicadas.
+	/// No cierra la BD si aun hay pendientes: v33 fallaria y dejaria handles
+	/// muertos (`database_closed`) en cajas con 7+ usuarios activos.
 	Future<bool> completarMigracionIntegridadTrasSync() async {
 		if (!_migracionFkPendientePorSync) {
 			final abierta = _baseOperativa;
@@ -123,15 +130,30 @@ class PosiaLocalDatabase {
 				return true;
 			}
 		}
+		final abierta = _baseOperativa;
+		if (abierta != null && abierta.isOpen) {
+			final filas = await abierta.rawQuery('''
+				SELECT COUNT(*) AS c
+				FROM sync_event_queue
+				WHERE estado IN ('pendiente', 'error')
+			''');
+			final pendientes = (filas.first['c'] as int?) ?? 0;
+			if (pendientes > 0) {
+				return false;
+			}
+		}
 		await cerrarBaseOperativa();
 		await _abrirBaseOperativa();
 		return !_migracionFkPendientePorSync;
 	}
 
 	Future<Database> _abrirBaseOperativa() async {
-		final existente = _baseOperativaRuteada;
-		if (existente != null) {
-			return existente;
+		final escrituraAbierta = _baseOperativa;
+		final ruteadaExistente = _baseOperativaRuteada;
+		if (escrituraAbierta != null &&
+			escrituraAbierta.isOpen &&
+			ruteadaExistente != null) {
+			return ruteadaExistente;
 		}
 		final ruta = await motor_sqlite.resolverRutaBaseDatos(_archivoOperativa);
 		final versionActual = await _leerVersionOperativa(ruta);
@@ -161,9 +183,17 @@ class PosiaLocalDatabase {
 
 		_baseOperativa = escritura;
 		final lectura = await _abrirConexionLectura(ruta);
+		final lecturaEfectiva = lectura ?? escritura;
+		if (ruteadaExistente is ConexionOperativaRuteada) {
+			ruteadaExistente.reemplazarConexiones(
+				escritura: escritura,
+				lectura: lecturaEfectiva,
+			);
+			return ruteadaExistente;
+		}
 		final ruteada = ConexionOperativaRuteada(
 			escritura: escritura,
-			lectura: lectura ?? escritura,
+			lectura: lecturaEfectiva,
 		);
 		_baseOperativaRuteada = ruteada;
 		return ruteada;

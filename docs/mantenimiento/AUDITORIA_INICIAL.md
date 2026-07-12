@@ -1,0 +1,203 @@
+# Auditoría inicial POSIA — rama `mantenimiento`
+
+**Fecha:** 2026-07-12  
+**Rama:** `mantenimiento`  
+**Alcance:** inventario y diagnóstico (sin refactors en este documento)  
+**Criterio de merge a `main`:** solo cuando el cambio correspondiente esté verificado como funcional
+
+---
+
+## 1. Veredicto ejecutivo
+
+| Pregunta | Respuesta |
+|----------|-----------|
+| ¿`ServicioAdmin` (≈5550 líneas) es mantenible así? | **No.** Es un *God Object*: muchos dominios en un solo archivo. |
+| ¿Está correctamente modularizado? | **Parcial.** Hay repositorios y otros servicios (`ServicioCaja`, `ServicioReconciliacionHub`, etc.), pero Admin concentra demasiada orquestación. |
+| ¿Todo el código se utiliza? | **Casi todo lo “gordo” sí se usa** desde pantallas/providers. Hay piezas **cableadas a null**, stubs o paquetes muy delgados pendientes de madurar. |
+| ¿Hay demasiados archivos? | **El volumen es normal** para un POS multi-módulo (~356 `.dart` de lib + app). El problema no es “muchos archivos”, sino **concentración extrema** en pocos archivos enormes. |
+
+---
+
+## 2. `ServicioAdmin` — mapa de responsabilidades
+
+**Archivo:** `packages/posia_database/lib/src/services/servicio_admin.dart`  
+**Tamaño:** ~5558 líneas / ~181 KB (el más grande del monorepo, ~3× el segundo).  
+**Métodos (aprox.):** ~183 públicos + ~57 privados.
+
+### 2.1 Secciones internas (comentarios `// ---`)
+
+| Rango aprox. | Dominio | Notas |
+|--------------|---------|--------|
+| 1–230 | Construcción, deps, precio comercial, transacción | Núcleo / DI manual |
+| 239–860 | Productos, importación lote, inventario consolidado | Alto tráfico admin + caja |
+| 870–1310 | Sync, reconciliación, hub, instalación técnico | Crítico multi-caja; reciente foco de bugs |
+| 1314–1386 | Categorías | |
+| 1388–1432 | Variantes | |
+| 1434–1687 | Clientes + descuentos + precios especiales | |
+| 1689–2208 | Vendedores + usuarios + roles | Incluye auth helpers |
+| 2210–2431 | Proveedores + compras | |
+| 2433–2805 | Pedidos + cotizaciones | |
+| 2807–3097 | Configuración dispositivo/caja/etiquetas/créditos | Solapa con `ServicioConfiguracionDispositivo` |
+| 3099–3243 | Historial ventas, anulaciones, devoluciones | |
+| 3245–3776 | Traspasos tienda/tienda | |
+| 3778–3950 | Corte caja + movimientos inventario + alertas | |
+| 3951–4177 | Reportes + listas de precios | |
+| 4179–5005 | **Emisión de eventos sync** (`_registrarEvento*`) | ~800 líneas mecánicas; primer candidato a extraer |
+| 5007–5392 | Almacenes y traspasos almacén | |
+| 5394–fin | Presentaciones / tipos presentación | |
+
+### 2.2 Por qué no es mantenible
+
+1. **Un solo tipo** conoce sync, catálogo, usuarios, compras, pedidos, reportes, almacenes y config.
+2. **API pública enorme** (~180 métodos): cualquier pantalla Admin acopla a este fachada.
+3. **Duplicación de concerns:** config hub también vive en `ServicioConfiguracionDispositivo`; carnicería/farmacia ya tienen servicios aparte pero Admin sigue orquestando precios/productos.
+4. **Riesgo de regresión alto:** un cambio de sync toca el mismo archivo que altas de producto o nómina-adjacent users.
+5. **Tests:** hay fixtures/tests de Admin, pero cubrir 5500 líneas de forma segura es costoso; conviene partir por dominio antes de ampliar cobertura.
+
+### 2.3 ¿Se usa?
+
+Sí, de forma intensiva. La app no llama siempre `ServicioAdmin` directo: pasa por:
+
+- `servicioAdminProvider` / `contenedorServiciosProvider`
+- `admin_providers.dart`, `inventario_admin_providers.dart`, `sync_providers.dart`
+- pantallas Admin (productos, clientes, sync, almacenes, etc.)
+- utilidades de ticket/crédito/existencias
+
+**Conclusión de uso:** no es “código muerto acumulado”; es **código vivo mal factorizado**. Los `_registrarEvento*` son privados pero indispensables para el espejo Neon.
+
+---
+
+## 3. Extracciones recomendadas (orden sugerido)
+
+Hacerlas **una por PR/commit** en `mantenimiento`, con tests del dominio tocado. No fusionar a `main` hasta validar en laptop + al menos un móvil.
+
+| # | Extracción | Riesgo | Beneficio |
+|---|------------|--------|-----------|
+| 1 | `AdminEmisorEventosSync` (todos los `_registrarEvento*` + `_idEventoEspejo`) | Bajo | −800 líneas; sync events en un solo sitio |
+| 2 | `AdminSyncCatalogo` (`_reencolarCatalogoLocalPendiente`, sync manual/reconciliar wrappers) | Medio | Aísla el área que generó cola basura |
+| 3 | `AdminCatalogoProductos` (CRUD producto, import lote, escalas) | Medio | Pantalla productos/import dejan de depender del monstruo |
+| 4 | `AdminAlmacenes` | Medio | Dominio ya demarcado por comentarios |
+| 5 | `AdminUsuariosRoles` | Medio-alto | Auth + permisos + sync inmediato |
+| 6 | Pedidos / cotizaciones / compras / traspasos | Medio | Dominios ya seccionados |
+| 7 | Config + reportes | Bajo-medio | Posible unificar con servicios de config existentes |
+
+**Patrón sugerido:** `ServicioAdmin` queda como fachada delgada que delega (sin romper providers/pantallas).
+
+---
+
+## 4. Inventario del monorepo (archivos `.dart` de lib)
+
+| Paquete / app | Archivos lib (aprox.) | Observación |
+|---------------|----------------------|-------------|
+| `apps/posia_pos/lib` | 95 | UI; varias pantallas grandes |
+| `posia_core` | 87 | Modelos/enums/constantes — volumen esperado |
+| `posia_database` | 75 | Persistencia + servicios; aquí está el peso real |
+| `posia_ui` | 36 | Widgets compartidos |
+| `posia_hardware` | 18 | Impresión / stubs hardware |
+| `posia_voice` | 10 | Voz Jane — activo vía caja |
+| `posia_sync` | 9 | Hub sync; **LAN no cableado** |
+| `posia_pricing` | 7 | Motor de precios — usado |
+| `posia_licensing` | 3 | Licencia inyectada en providers |
+| `posia_inventory` | 3 | Gestor inventario — delgado pero usado |
+| `server/` | 13 | Hub API |
+
+**Top archivos por tamaño (señales de deuda):**
+
+1. `servicio_admin.dart` (~181 KB)
+2. `pantalla_formulario_producto.dart` (~57 KB)
+3. `servicio_caja.dart` (~51 KB)
+4. `aplicador_eventos_sqlite.dart` (~50 KB)
+5. `pantalla_caja.dart` (~45 KB)
+6. `migraciones_esquema.dart` / `migracion_integridad_referencial.dart`
+
+---
+
+## 5. Piezas sospechosas / incompletas (no necesariamente basura)
+
+| Ítem | Evidencia | Acción sugerida (futura) |
+|------|-----------|--------------------------|
+| `LanSyncClient` | Existe, pero `FabricaServicios` pasa `clienteLan: null` siempre | Documentar como “no productivo” o cablear; no borrar aún |
+| Hardware `Scale` / `CustomerDisplay` | Presentes en registry; uso real limitado | Auditar pantallas caja vs stubs |
+| `ServicioCarniceria` en database | Existe y se inyecta; lógica también en `posia_core` vertical | Clarificar frontera core vs database |
+| Paquetes `posia_licensing` / `posia_inventory` | Muy pocos archivos | OK si son límites de dominio; no fusionar por capricho |
+| Exports de `posia_database.dart` | Exporta casi todo el lib útil | Evitar exportar internals al partir Admin |
+| Docs `proyecto_jane_voice_*.plan.md` | Plan, no código | Mantener fuera de release o en `docs/` |
+
+**Importante:** “Muchos archivos” en `posia_core` (modelos) y repositorios **no es síntoma de basura**; es separación razonable. La deuda está en **servicios/UI monolíticos**.
+
+---
+
+## 6. Plan de auditoría progresiva (checklist)
+
+Trabajar solo en `mantenimiento`. Marcar al completar.
+
+### Fase A — Sync y datos (prioridad operativa)
+- [ ] Validar en dispositivo real el fix de `database_closed` + descarte cola catálogo (cambios ya en working tree de esta rama)
+- [ ] Extraer emisor de eventos sync
+- [ ] Extraer reencolado / sync manual / reconciliación
+- [ ] Revisar `aplicador_eventos_sqlite.dart` (espejo pull Neon)
+- [ ] Revisar `sync_orchestrator` + hub client (lotes, pull-first)
+
+### Fase B — `ServicioAdmin` por dominio
+- [ ] Productos + importación
+- [ ] Almacenes
+- [ ] Usuarios / roles
+- [ ] Clientes / precios / listas
+- [ ] Compras / proveedores
+- [ ] Pedidos / cotizaciones
+- [ ] Traspasos
+- [ ] Reportes / config
+
+### Fase C — App UI
+- [ ] `pantalla_formulario_producto.dart`
+- [ ] `pantalla_caja.dart` / `pantalla_caja_movil.dart`
+- [ ] Providers Admin: ¿demasiada lógica en Riverpod?
+
+### Fase D — Paquetes satélite
+- [ ] `posia_hardware`: qué está productivo vs stub
+- [ ] `posia_voice`: cobertura y acoplamiento a caja
+- [ ] `posia_sync` LAN: decisión keep/wire/remove
+- [ ] `server/sync_api`: alineación con cliente Flutter
+
+### Fase E — Limpieza
+- [ ] Dead code con analyzer / referencias cero (tras extracciones)
+- [ ] Tests de humo por dominio antes de cada merge a `main`
+
+---
+
+## 7. Reglas de trabajo en esta rama
+
+1. **No push a `main`** hasta validar funcionalidad del cambio concreto.
+2. Preferir **commits pequeños** por dominio extraído.
+3. Mantener **fachada `ServicioAdmin`** mientras existan pantallas acopladas; reducir cuerpo, no romper API de golpe.
+4. Cada extracción debe incluir: compile + test del paquete + prueba manual del flujo Admin/caja tocado.
+5. Actualizar este documento (sección 6) al cerrar cada ítem.
+
+---
+
+## 8. Estado actual de la rama (contexto)
+
+Al crear este documento, `mantenimiento` incluye cambios locales aún no necesariamente commitados relacionados con:
+
+- Hot-swap SQLite / mitigación `database_closed`
+- Descarte de pendientes de catálogo duplicados
+- Pull-first + envío por lotes
+- IDs estables en upserts de catálogo
+
+Esos cambios son **correctivos de sync**, no de modularización. Conviene:
+
+1. Validarlos / commitearlos aparte en esta rama.
+2. Empezar extracciones de `ServicioAdmin` en commits posteriores.
+
+---
+
+## 9. Respuesta directa a la duda de archivos
+
+> “Hay demasiados archivos, no sé si todos sean funcionales.”
+
+- **No hace falta fusionar paquetes** solo por tener pocos archivos (`licensing`, `inventory`).
+- **Sí hace falta partir** los 5–6 archivos gigantes listados arriba.
+- La mayoría de repositorios/modelos **sí se usan** vía `FabricaServicios` + Admin/Caja.
+- Lo “no funcional / incompleto” más claro hoy: **sync LAN deshabilitado** (`clienteLan: null`), no un cementerio de archivos huérfanos.
+
+Cuando quieras empezar el cambio #1 (emisor de eventos), se puede hacer en un commit dedicado sobre esta misma rama.

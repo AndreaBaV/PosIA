@@ -885,12 +885,43 @@ class ServicioAdmin {
   /// Ejecuta ciclo completo de sincronizacion con el hub.
   ///
   /// [incluirCatalogo] Si es true, reencola el catalogo local espejado en Neon
-  /// antes de enviar. En login/arranque usar false o llamar en segundo plano.
+  /// antes de enviar. Se omite automaticamente si la cola ya esta saturada
+  /// (p. ej. tras pulsar "Sincronizar" muchas veces). Neon es la fuente de
+  /// verdad del catalogo via pull.
   Future<ResultadoSync> sincronizarManual({
     ReporteProgresoSync? alProgreso,
     bool incluirCatalogo = true,
   }) async {
-    if (incluirCatalogo) {
+    alProgreso?.call(
+      const ProgresoSync(
+        fase: FaseProgresoSync.preparar,
+        indice: 0,
+        total: 0,
+        mensaje: 'Limpiando cola local duplicada…',
+      ),
+    );
+    // Basura de reencolados repetidos: no empujar a Neon; el catalogo ya esta
+    // en la nube y se recibe por pull.
+    final descartados =
+        await _syncEventRepository.descartarPendientesCatalogoEspejo();
+    if (descartados > 0) {
+      alProgreso?.call(
+        ProgresoSync(
+          fase: FaseProgresoSync.preparar,
+          indice: 0,
+          total: 0,
+          mensaje: 'Descartados $descartados eventos de catálogo duplicados…',
+        ),
+      );
+    }
+
+    final pendientes = await _syncEventRepository.contarPendientes();
+    // Si acabamos de tirar basura de reencolado, NO volver a empujar el
+    // catalogo local: Neon es la fuente de verdad.
+    final debeReencolar = incluirCatalogo &&
+        descartados == 0 &&
+        pendientes < UMBRAL_NO_REENCOLAR_CATALOGO;
+    if (debeReencolar) {
       alProgreso?.call(
         const ProgresoSync(
           fase: FaseProgresoSync.preparar,
@@ -900,6 +931,18 @@ class ServicioAdmin {
         ),
       );
       await _reencolarCatalogoLocalPendiente(alProgreso: alProgreso);
+    } else if (incluirCatalogo &&
+        (descartados > 0 || pendientes >= UMBRAL_NO_REENCOLAR_CATALOGO)) {
+      alProgreso?.call(
+        ProgresoSync(
+          fase: FaseProgresoSync.preparar,
+          indice: 0,
+          total: 0,
+          mensaje: descartados > 0
+              ? 'Catálogo local no se reencola (Neon es la fuente de verdad)…'
+              : 'Cola local alta ($pendientes): se omite reencolar catálogo…',
+        ),
+      );
     }
     final resultado =
         await _syncOrchestrator.sincronizarCompleto(alProgreso: alProgreso);
@@ -1078,12 +1121,18 @@ class ServicioAdmin {
 
   /// Limpia placeholders, compara con la nube y descarga datos si hace falta.
   ///
-  /// Antes de reconciliar, reencola el catalogo local para que Neon no quede
-  /// atrasado respecto a SQLite.
+  /// Antes de reconciliar, limpia basura de reencolado. Solo reencola catalogo
+  /// si la cola operativa esta razonable; Neon es la fuente de verdad.
   Future<ResultadoReconciliacionHub> reconciliarConHub({
     ReporteProgresoSync? alProgreso,
   }) async {
-    await _reencolarCatalogoLocalPendiente(alProgreso: alProgreso);
+    final descartados =
+        await _syncEventRepository.descartarPendientesCatalogoEspejo();
+    final pendientes = await _syncEventRepository.contarPendientes();
+    // Tras limpiar basura, no reinyectar el catalogo local: se descarga de Neon.
+    if (descartados == 0 && pendientes < UMBRAL_NO_REENCOLAR_CATALOGO) {
+      await _reencolarCatalogoLocalPendiente(alProgreso: alProgreso);
+    }
     final servicio = ServicioReconciliacionHub(
       baseDatos: _baseDatos,
       configRepository: _configRepository,
@@ -4129,7 +4178,7 @@ class ServicioAdmin {
 
   Future<void> _registrarEventoCategoria(Categoria categoria) async {
     final evento = SyncEvent(
-      id: _generadorId.v4(),
+      id: _idEventoEspejo(TipoSyncEvento.categoryUpserted, categoria.id),
       tiendaId: _tiendaActivaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.categoryUpserted,
@@ -4149,7 +4198,7 @@ class ServicioAdmin {
 
   Future<void> _registrarEventoRolPersonalizado(RolPersonalizado rol) async {
     final evento = SyncEvent(
-      id: _generadorId.v4(),
+      id: _idEventoEspejo(TipoSyncEvento.customRoleUpserted, rol.id),
       tiendaId: _tiendaActivaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.customRoleUpserted,
@@ -4170,7 +4219,7 @@ class ServicioAdmin {
 
   Future<void> _registrarEventoCliente(Cliente cliente) async {
     final evento = SyncEvent(
-      id: _generadorId.v4(),
+      id: _idEventoEspejo(TipoSyncEvento.customerUpserted, cliente.id),
       tiendaId: _tiendaActivaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.customerUpserted,
@@ -4195,7 +4244,7 @@ class ServicioAdmin {
 
   Future<void> _registrarEventoProveedor(Proveedor proveedor) async {
     final evento = SyncEvent(
-      id: _generadorId.v4(),
+      id: _idEventoEspejo(TipoSyncEvento.supplierUpserted, proveedor.id),
       tiendaId: _tiendaActivaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.supplierUpserted,
@@ -4362,7 +4411,7 @@ class ServicioAdmin {
     List<EscalaMayoreo> escalas,
   ) async {
     final evento = SyncEvent(
-      id: _generadorId.v4(),
+      id: _idEventoEspejo(TipoSyncEvento.wholesaleTiersReplaced, productoId),
       tiendaId: _tiendaActivaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.wholesaleTiersReplaced,
@@ -4385,7 +4434,7 @@ class ServicioAdmin {
 
   Future<void> _registrarEventoLotePromocion(LotePromocion lote) async {
     final evento = SyncEvent(
-      id: _generadorId.v4(),
+      id: _idEventoEspejo(TipoSyncEvento.lotePromocionReplaced, lote.id),
       tiendaId: _tiendaActivaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.lotePromocionReplaced,
@@ -4406,7 +4455,7 @@ class ServicioAdmin {
 
   Future<void> _registrarEventoListaPrecios(ListaPrecios lista) async {
     final evento = SyncEvent(
-      id: _generadorId.v4(),
+      id: _idEventoEspejo(TipoSyncEvento.priceListUpserted, lista.id),
       tiendaId: _tiendaActivaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.priceListUpserted,
@@ -4436,7 +4485,10 @@ class ServicioAdmin {
     required double precioUnitario,
   }) async {
     final evento = SyncEvent(
-      id: _generadorId.v4(),
+      id: _idEventoEspejo(
+        TipoSyncEvento.priceListItemUpserted,
+        '$listaId:$productoId',
+      ),
       tiendaId: _tiendaActivaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.priceListItemUpserted,
@@ -4473,7 +4525,10 @@ class ServicioAdmin {
     required double precioUnitario,
   }) async {
     final evento = SyncEvent(
-      id: _generadorId.v4(),
+      id: _idEventoEspejo(
+        TipoSyncEvento.customerProductPriceUpserted,
+        '$clienteId:$productoId',
+      ),
       tiendaId: _tiendaActivaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.customerProductPriceUpserted,
@@ -4506,7 +4561,7 @@ class ServicioAdmin {
 
   Future<void> _registrarEventoDescuentoCliente(DescuentoCliente descuento) async {
     final evento = SyncEvent(
-      id: _generadorId.v4(),
+      id: _idEventoEspejo(TipoSyncEvento.customerDiscountUpserted, descuento.id),
       tiendaId: _tiendaActivaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.customerDiscountUpserted,
@@ -4557,7 +4612,10 @@ class ServicioAdmin {
     List<PresentacionProducto> presentaciones,
   ) async {
     final evento = SyncEvent(
-      id: _generadorId.v4(),
+      id: _idEventoEspejo(
+        TipoSyncEvento.productPresentationsReplaced,
+        productoId,
+      ),
       tiendaId: _tiendaActivaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.productPresentationsReplaced,
@@ -4724,7 +4782,7 @@ class ServicioAdmin {
 
   Future<void> _registrarEventoVariante(VarianteProducto variante) async {
     final evento = SyncEvent(
-      id: _generadorId.v4(),
+      id: _idEventoEspejo(TipoSyncEvento.variantUpserted, variante.id),
       tiendaId: _tiendaActivaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.variantUpserted,
@@ -4784,7 +4842,7 @@ class ServicioAdmin {
 
   Future<void> _registrarEventoTienda(Tienda tienda) async {
     final evento = SyncEvent(
-      id: _generadorId.v4(),
+      id: _idEventoEspejo(TipoSyncEvento.storeUpserted, tienda.id),
       tiendaId: _tiendaActivaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.storeUpserted,
@@ -4881,7 +4939,7 @@ class ServicioAdmin {
       return;
     }
     final evento = SyncEvent(
-      id: _generadorId.v4(),
+      id: _idEventoEspejo(TipoSyncEvento.userUpserted, usuario.id),
       tiendaId: _tiendaActivaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.userUpserted,
@@ -4908,7 +4966,7 @@ class ServicioAdmin {
   /// [producto] Producto recien guardado.
   Future<void> _registrarEventoProducto(Producto producto) async {
     final evento = SyncEvent(
-      id: _generadorId.v4(),
+      id: _idEventoEspejo(TipoSyncEvento.productUpserted, producto.id),
       tiendaId: _tiendaActivaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.productUpserted,
@@ -4935,6 +4993,15 @@ class ServicioAdmin {
       estado: EstadoSyncEvento.pendiente,
     );
     await _syncOrchestrator.registrarEvento(evento);
+  }
+
+  /// Id estable para upserts de catalogo: reencolar reemplaza, no duplica.
+  String _idEventoEspejo(TipoSyncEvento tipo, String claveEntidad) {
+    final clave = claveEntidad.trim();
+    if (clave.isEmpty) {
+      return _generadorId.v4();
+    }
+    return '${tipo.name}:$clave';
   }
 
   // --- Almacenes ---
@@ -5305,7 +5372,7 @@ class ServicioAdmin {
   Future<void> _registrarEventoAlmacen(Almacen almacen) async {
     await _syncOrchestrator.registrarEvento(
       SyncEvent(
-        id: _generadorId.v4(),
+        id: _idEventoEspejo(TipoSyncEvento.warehouseUpserted, almacen.id),
         tiendaId: _tiendaActivaId,
         dispositivoId: _cajaId,
         tipo: TipoSyncEvento.warehouseUpserted,
@@ -5351,7 +5418,7 @@ class ServicioAdmin {
 
   Future<void> _registrarEventoTipoPresentacion(TipoPresentacion tipo) async {
     final evento = SyncEvent(
-      id: _generadorId.v4(),
+      id: _idEventoEspejo(TipoSyncEvento.presentationTypeUpserted, tipo.id),
       tiendaId: _tiendaActivaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.presentationTypeUpserted,

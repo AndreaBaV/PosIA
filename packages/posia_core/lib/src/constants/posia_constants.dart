@@ -2,7 +2,7 @@
 /// Autor: Equipo POSIA
 /// Matricula: POSIA-2026-001
 /// Fecha creacion: 2026-06-07 18:30:00 (UTC-6)
-/// Ultima modificacion: 2026-06-07 18:30:00 (UTC-6)
+/// Ultima modificacion: 2026-07-12 11:55:00 (UTC-6)
 
 library;
 
@@ -64,6 +64,13 @@ const int TIMEOUT_HUB_SYNC_SEGUNDOS = 15;
 /// vea "usuario no encontrado" por un falso negativo de red mientras el
 /// servidor arranca.
 const int TIMEOUT_HUB_DESPERTAR_SEGUNDOS = 60;
+
+/// Eventos por lote al empujar la cola local al hub.
+const int TAMANO_LOTE_SYNC_HUB = 40;
+
+/// Si la cola local supera este umbral, no se reencola el catalogo completo
+/// (evita multiplicar pendientes al pulsar "Sincronizar" varias veces).
+const int UMBRAL_NO_REENCOLAR_CATALOGO = 200;
 
 /// Nombre del servicio mDNS para descubrimiento LAN.
 const String MDNS_SERVICIO_SYNC = 'posia-sync';
