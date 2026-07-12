@@ -36,6 +36,7 @@ void main() {
 				codigoBarras: '123',
 				precioBase: 32,
 				unidadMedida: UnidadMedida.pieza,
+				rutaImagen: '',
 				activo: true,
 				tiendaId: tiendaId,
 				categoriaId: categoriaId,
@@ -63,6 +64,7 @@ void main() {
 				id: ventaId,
 				tiendaId: tiendaId,
 				cajaId: 'caja-1',
+				clienteId: null,
 				lineas: [
 					LineaVenta(
 						productoId: productoId,
@@ -86,6 +88,8 @@ void main() {
 				tiendaDestinoId: 'tienda-b',
 				estado: EstadoTraspaso.solicitado,
 				solicitadoEn: DateTime.now().toUtc(),
+				completadoEn: null,
+				notas: '',
 				lineas: [
 					LineaTraspaso(
 						productoId: productoId,

@@ -32,6 +32,7 @@ void main() {
 				codigoBarras: '235532456455',
 				precioBase: 32.0,
 				unidadMedida: UnidadMedida.pieza,
+				rutaImagen: '',
 				activo: true,
 				tiendaId: tiendaId,
 				categoriaId: categoriaId,
