@@ -4,11 +4,16 @@ library;
 import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../utils/asegurador_padres_fk.dart';
+
 /// Persiste presentaciones comerciales bajo un producto padre.
 class VarianteRepository {
-	VarianteRepository({required Database baseDatos}) : _baseDatos = baseDatos;
+	VarianteRepository({required Database baseDatos})
+		: _baseDatos = baseDatos,
+		  _padresFk = AseguradorPadresFk(baseDatos);
 
 	final Database _baseDatos;
+	final AseguradorPadresFk _padresFk;
 
 	Future<VarianteProducto?> obtenerPorId(String varianteId) async {
 		final filas = await _baseDatos.query(
@@ -70,6 +75,7 @@ class VarianteRepository {
 	}
 
 	Future<void> guardar(VarianteProducto variante) async {
+		await _padresFk.asegurarProducto(variante.productoPadreId);
 		await _baseDatos.insert(
 			'product_variants',
 			{

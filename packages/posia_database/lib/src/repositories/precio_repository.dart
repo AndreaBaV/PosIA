@@ -187,6 +187,7 @@ class PrecioRepository implements RepositorioPrecio {
 	///
 	/// [escala] Escala comercial a registrar.
 	Future<void> guardarEscalaMayoreo(EscalaMayoreo escala) async {
+		await _padresFk.asegurarProducto(escala.productoId);
 		await _baseDatos.insert('wholesale_tiers', {
 			'producto_id': escala.productoId,
 			'cantidad_minima': escala.cantidadMinima,
@@ -213,6 +214,7 @@ class PrecioRepository implements RepositorioPrecio {
 		List<EscalaMayoreo> escalas, {
 		DatabaseExecutor? db,
 	}) async {
+		await _padresFk.asegurarProducto(productoId);
 		await ejecutarEscrituraTransaccional(_baseDatos, db, (transaccion) async {
 			await transaccion.delete(
 				'wholesale_tiers',

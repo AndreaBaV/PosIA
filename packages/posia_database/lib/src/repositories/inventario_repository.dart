@@ -10,14 +10,19 @@ import 'package:posia_core/posia_core.dart';
 import 'package:posia_inventory/posia_inventory.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../utils/asegurador_padres_fk.dart';
+
 /// Implementa [RepositorioInventario] sobre SQLite local.
 class InventarioRepository implements RepositorioInventario {
 	/// Crea repositorio con conexion SQLite activa.
 	///
 	/// [baseDatos] Conexion local abierta.
-	InventarioRepository({required Database baseDatos}) : _baseDatos = baseDatos;
+	InventarioRepository({required Database baseDatos})
+		: _baseDatos = baseDatos,
+		  _padresFk = AseguradorPadresFk(baseDatos);
 
 	final Database _baseDatos;
+	final AseguradorPadresFk _padresFk;
 
 	@override
 	Future<StockNivel?> obtenerStock(
@@ -40,6 +45,11 @@ class InventarioRepository implements RepositorioInventario {
 
 	@override
 	Future<void> guardarStock(StockNivel stock, {DatabaseExecutor? db}) async {
+		await _padresFk.asegurarProducto(
+			stock.productoId,
+			tiendaId: stock.tiendaId,
+		);
+		await _padresFk.asegurarTienda(stock.tiendaId);
 		final exec = db ?? _baseDatos;
 		await exec.insert(
 			'stock_levels',

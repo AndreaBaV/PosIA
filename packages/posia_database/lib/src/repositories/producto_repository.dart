@@ -9,14 +9,19 @@ library;
 import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../utils/asegurador_padres_fk.dart';
+
 /// Persiste y consulta catalogo de productos local.
 class ProductoRepository {
 	/// Crea repositorio con conexion SQLite activa.
 	///
 	/// [baseDatos] Conexion local abierta.
-	ProductoRepository({required Database baseDatos}) : _baseDatos = baseDatos;
+	ProductoRepository({required Database baseDatos})
+		: _baseDatos = baseDatos,
+		  _padresFk = AseguradorPadresFk(baseDatos);
 
 	final Database _baseDatos;
+	final AseguradorPadresFk _padresFk;
 
 	static const _sqlCatalogoActivo = '''
 		SELECT p.*
@@ -176,6 +181,11 @@ class ProductoRepository {
 	///
 	/// [producto] Producto a persistir.
 	Future<void> guardar(Producto producto, {DatabaseExecutor? db}) async {
+		await _padresFk.asegurarPadresDeProducto(
+			tiendaId: producto.tiendaId,
+			categoriaId: producto.categoriaId,
+			proveedorId: producto.proveedorId,
+		);
 		final exec = db ?? _baseDatos;
 		await exec.insert(
 			'products',

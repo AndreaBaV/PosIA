@@ -91,6 +91,75 @@ class AseguradorPadresFk {
 		);
 	}
 
+	Future<void> asegurarCategoria(String? categoriaId) async {
+		if (categoriaId == null || categoriaId.trim().isEmpty) {
+			return;
+		}
+		final existente = await _baseDatos.query(
+			'categories',
+			where: 'id = ?',
+			whereArgs: [categoriaId],
+			limit: 1,
+		);
+		if (existente.isNotEmpty) {
+			return;
+		}
+		await _baseDatos.insert(
+			'categories',
+			{
+				'id': categoriaId,
+				'nombre': 'Categoría',
+				'icono': 'shopping_basket',
+				'color_hex': '#4CAF50',
+				'orden': 0,
+				'activa': 1,
+			},
+			conflictAlgorithm: ConflictAlgorithm.ignore,
+		);
+	}
+
+	Future<void> asegurarProveedor(String? proveedorId) async {
+		if (proveedorId == null || proveedorId.trim().isEmpty) {
+			return;
+		}
+		final existente = await _baseDatos.query(
+			'proveedores',
+			where: 'id = ?',
+			whereArgs: [proveedorId],
+			limit: 1,
+		);
+		if (existente.isNotEmpty) {
+			return;
+		}
+		await _baseDatos.insert(
+			'proveedores',
+			{
+				'id': proveedorId,
+				'nombre': 'Proveedor',
+				'contacto': '',
+				'telefono': '',
+				'activo': 1,
+				'email': '',
+				'rfc': '',
+				'direccion': '',
+				'notas': '',
+				'dias_credito': 0,
+			},
+			conflictAlgorithm: ConflictAlgorithm.ignore,
+		);
+	}
+
+	/// Garantiza tienda, categoría y proveedor antes de insertar productos.
+	Future<void> asegurarPadresDeProducto({
+		required String tiendaId,
+		String? categoriaId,
+		String? proveedorId,
+	}) async {
+		await asegurarTienda(tiendaId);
+		await asegurarCategoria(categoriaId);
+		await asegurarProveedor(proveedorId);
+	}
+
 	Future<void> asegurarProducto(
 		String? productoId, {
 		String? tiendaId,
