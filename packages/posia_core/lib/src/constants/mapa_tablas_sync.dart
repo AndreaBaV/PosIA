@@ -87,6 +87,7 @@ abstract final class MapaTablasSync {
 		'almacenes',
 		'purchases',
 		'purchase_lines',
+		'purchase_allocations',
 		'cash_shifts',
 	];
 

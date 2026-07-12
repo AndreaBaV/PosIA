@@ -2232,7 +2232,6 @@ class ServicioAdmin {
     required List<LineaCompraSolicitud> lineas,
     required DateTime fechaCompra,
     String notas = '',
-    String? tiendaId,
     Usuario? operador,
   }) async {
     final repo = _compraRepository;
@@ -2246,11 +2245,10 @@ class ServicioAdmin {
     if (proveedor == null) {
       throw StateError('Proveedor no encontrado');
     }
-    final tiendaDestino = tiendaId ?? _tiendaActivaId;
-    _validarPermisoTienda(operador, tiendaDestino);
     final ahora = DateTime.now().toUtc();
     final compraId = _generadorId.v4();
     final lineasCompra = <LineaCompra>[];
+    final asignacionesCompra = <AsignacionInventarioCompra>[];
     final productosActualizados = <Producto>[];
     final movimientosPendientes = <MovimientoInventario>[];
     var total = 0.0;
@@ -2262,6 +2260,40 @@ class ServicioAdmin {
       if (solicitud.costoUnitario < 0) {
         throw StateError('El costo no puede ser negativo');
       }
+      if (solicitud.asignaciones.isEmpty) {
+        throw StateError('Distribuya el inventario de cada producto');
+      }
+      var sumaAsignada = 0.0;
+      for (final asignacion in solicitud.asignaciones) {
+        if (asignacion.cantidad <= 0) {
+          throw StateError('Las cantidades asignadas deben ser mayores a cero');
+        }
+        if (asignacion.destinoId.trim().isEmpty) {
+          throw StateError('Seleccione destino de inventario');
+        }
+        if (asignacion.destinoTipo != AsignacionInventarioCompra.destinoTienda &&
+            asignacion.destinoTipo != AsignacionInventarioCompra.destinoAlmacen) {
+          throw StateError('Destino de inventario no valido');
+        }
+        if (asignacion.esTienda) {
+          _validarPermisoTienda(operador, asignacion.destinoId);
+        }
+        sumaAsignada = sumaAsignada + asignacion.cantidad;
+        asignacionesCompra.add(
+          AsignacionInventarioCompra(
+            productoId: solicitud.productoId,
+            destinoTipo: asignacion.destinoTipo,
+            destinoId: asignacion.destinoId,
+            cantidad: asignacion.cantidad,
+          ),
+        );
+      }
+      if ((sumaAsignada - solicitud.cantidad).abs() > 0.001) {
+        throw StateError(
+          'La distribucion debe sumar la cantidad comprada por producto',
+        );
+      }
+
       final producto = await _productoRepository.obtenerPorId(
         solicitud.productoId,
       );
@@ -2272,29 +2304,31 @@ class ServicioAdmin {
       final subtotal = redondearMonto(solicitud.cantidad * costo);
       total = total + subtotal;
 
-      final stockActual = await _inventarioRepository.obtenerStock(
-        solicitud.productoId,
-        tiendaDestino,
+      productosActualizados.add(
+        producto.copiarCon(
+          costoUnitario: costo,
+          proveedorId: proveedorId,
+        ),
       );
-      final anterior = stockActual?.cantidad ?? 0.0;
-      final nuevo = anterior + solicitud.cantidad;
 
-      final productoActualizado = producto.copiarCon(
-        costoUnitario: costo,
-        proveedorId: proveedorId,
-      );
-      productosActualizados.add(productoActualizado);
-
-      if (_movimientoRepository != null) {
+      for (final asignacion in solicitud.asignaciones) {
+        if (!asignacion.esTienda || _movimientoRepository == null) {
+          continue;
+        }
+        final stockActual = await _inventarioRepository.obtenerStock(
+          solicitud.productoId,
+          asignacion.destinoId,
+        );
+        final anterior = stockActual?.cantidad ?? 0.0;
         movimientosPendientes.add(
           MovimientoInventario(
             id: _generadorId.v4(),
             productoId: solicitud.productoId,
-            tiendaId: tiendaDestino,
+            tiendaId: asignacion.destinoId,
             tipo: TipoMovimientoInventario.entrada,
-            cantidad: solicitud.cantidad,
+            cantidad: asignacion.cantidad,
             cantidadAnterior: anterior,
-            cantidadNueva: nuevo,
+            cantidadNueva: anterior + asignacion.cantidad,
             motivo: 'Compra ${compraId.substring(0, 8).toUpperCase()}',
             referenciaId: compraId,
             proveedorId: proveedorId,
@@ -2317,7 +2351,6 @@ class ServicioAdmin {
 
     final compra = Compra(
       id: compraId,
-      tiendaId: tiendaDestino,
       proveedorId: proveedorId,
       fechaCompra: fechaCompra.toUtc(),
       notas: notas.trim(),
@@ -2325,34 +2358,56 @@ class ServicioAdmin {
       creadaEn: ahora,
       creadoPor: operador?.id,
       lineas: lineasCompra,
+      asignaciones: asignacionesCompra,
     );
 
     await _enTransaccion((tx) async {
       for (var i = 0; i < lineasCompra.length; i++) {
-        final linea = lineasCompra[i];
-        final movimiento = i < movimientosPendientes.length
-            ? movimientosPendientes[i]
-            : null;
-        final stockActual = await _inventarioRepository.obtenerStock(
-          linea.productoId,
-          tiendaDestino,
-          db: tx,
-        );
-        final anterior = stockActual?.cantidad ?? 0.0;
-        await _inventarioRepository.guardarStock(
-          StockNivel(
-            productoId: linea.productoId,
-            tiendaId: tiendaDestino,
-            cantidad: anterior + linea.cantidad,
-            actualizadoEn: ahora,
-            stockMinimo: stockActual?.stockMinimo ?? 0.0,
-          ),
-          db: tx,
-        );
         await _productoRepository.guardar(productosActualizados[i], db: tx);
-        if (movimiento != null) {
-          await _movimientoRepository!.guardar(movimiento, db: tx);
+      }
+      for (final asignacion in asignacionesCompra) {
+        if (asignacion.esTienda) {
+          final stockActual = await _inventarioRepository.obtenerStock(
+            asignacion.productoId,
+            asignacion.destinoId,
+            db: tx,
+          );
+          final anterior = stockActual?.cantidad ?? 0.0;
+          await _inventarioRepository.guardarStock(
+            StockNivel(
+              productoId: asignacion.productoId,
+              tiendaId: asignacion.destinoId,
+              cantidad: anterior + asignacion.cantidad,
+              actualizadoEn: ahora,
+              stockMinimo: stockActual?.stockMinimo ?? 0.0,
+            ),
+            db: tx,
+          );
+        } else if (asignacion.esAlmacen) {
+          final almacenRepo = _almacenRepository;
+          if (almacenRepo == null) {
+            throw StateError('Repositorio de almacenes no configurado');
+          }
+          final stockActual = await almacenRepo.obtenerStock(
+            asignacion.productoId,
+            asignacion.destinoId,
+            db: tx,
+          );
+          final anterior = stockActual?.cantidad ?? 0.0;
+          await almacenRepo.guardarStock(
+            StockAlmacen(
+              productoId: asignacion.productoId,
+              almacenId: asignacion.destinoId,
+              cantidad: anterior + asignacion.cantidad,
+              actualizadoEn: ahora,
+              stockMinimo: stockActual?.stockMinimo ?? 0.0,
+            ),
+            db: tx,
+          );
         }
+      }
+      for (final movimiento in movimientosPendientes) {
+        await _movimientoRepository!.guardar(movimiento, db: tx);
       }
       await repo.guardar(compra, db: tx);
     });
@@ -2364,17 +2419,12 @@ class ServicioAdmin {
     return compra;
   }
 
-  Future<List<Compra>> listarCompras({
-    String? tiendaId,
-    Usuario? operador,
-  }) async {
+  Future<List<Compra>> listarCompras({Usuario? operador}) async {
     final repo = _compraRepository;
     if (repo == null) {
       return [];
     }
-    final tiendaDestino = tiendaId ?? operador?.tiendaId ?? _tiendaActivaId;
-    _validarPermisoTienda(operador, tiendaDestino);
-    return repo.listarPorTienda(tiendaDestino);
+    return repo.listarTodas();
   }
 
   Future<Compra?> obtenerCompra(String compraId) async {
@@ -4233,12 +4283,13 @@ class ServicioAdmin {
   Future<void> _registrarEventoCompra(Compra compra) async {
     final evento = SyncEvent(
       id: _generadorId.v4(),
-      tiendaId: compra.tiendaId.isNotEmpty ? compra.tiendaId : _tiendaActivaId,
+      tiendaId: _tiendaActivaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.purchaseCompleted,
       payload: {
         'id': compra.id,
-        'tiendaId': compra.tiendaId,
+        if (compra.tiendaId != null && compra.tiendaId!.isNotEmpty)
+          'tiendaId': compra.tiendaId,
         'proveedorId': compra.proveedorId,
         'fechaCompra': compra.fechaCompra.toIso8601String(),
         'notas': compra.notas,
@@ -4253,6 +4304,16 @@ class ServicioAdmin {
                 'cantidad': l.cantidad,
                 'costoUnitario': l.costoUnitario,
                 'subtotal': l.subtotal,
+              },
+            )
+            .toList(),
+        'asignaciones': compra.asignaciones
+            .map(
+              (a) => {
+                'productoId': a.productoId,
+                'destinoTipo': a.destinoTipo,
+                'destinoId': a.destinoId,
+                'cantidad': a.cantidad,
               },
             )
             .toList(),

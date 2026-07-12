@@ -1467,8 +1467,10 @@ class ProyectorEventosPostgres {
     if (id.isEmpty) {
       return;
     }
-    final tiendaId = p['tiendaId'] as String? ?? evento.tiendaId;
-    await _asegurarTienda(tiendaId);
+    final tiendaLegacy = p['tiendaId'] as String? ?? evento.tiendaId;
+    if (tiendaLegacy.isNotEmpty) {
+      await _asegurarTienda(tiendaLegacy);
+    }
     final existente = await _sesion.execute(
       Sql.named('SELECT id FROM purchases WHERE id = @id'),
       parameters: {'id': id},
@@ -1493,7 +1495,7 @@ class ProyectorEventosPostgres {
 			'''),
       parameters: {
         'id': id,
-        'tienda': tiendaId,
+        'tienda': p['tiendaId'],
         'proveedor': p['proveedorId'] ?? '',
         'fecha': p['fechaCompra'] ?? evento.creadoEn.toUtc().toIso8601String(),
         'notas': p['notas'] ?? '',
@@ -1506,9 +1508,27 @@ class ProyectorEventosPostgres {
       Sql.named('DELETE FROM purchase_lines WHERE compra_id = @id'),
       parameters: {'id': id},
     );
+    await _sesion.execute(
+      Sql.named('DELETE FROM purchase_allocations WHERE compra_id = @id'),
+      parameters: {'id': id},
+    );
     final creadaEn =
         p['creadaEn'] as String? ?? evento.creadoEn.toUtc().toIso8601String();
-    for (final linea in _listaMapas(p['lineas'])) {
+    final lineas = _listaMapas(p['lineas']);
+    var asignaciones = _listaMapas(p['asignaciones']);
+    if (asignaciones.isEmpty && tiendaLegacy.isNotEmpty) {
+      asignaciones = lineas
+          .map(
+            (linea) => {
+              'productoId': linea['productoId'],
+              'destinoTipo': 'tienda',
+              'destinoId': tiendaLegacy,
+              'cantidad': linea['cantidad'],
+            },
+          )
+          .toList();
+    }
+    for (final linea in lineas) {
       await _sesion.execute(
         Sql.named('''
 					INSERT INTO purchase_lines (
@@ -1527,13 +1547,35 @@ class ProyectorEventosPostgres {
           'subtotal': _dbl(linea['subtotal']),
         },
       );
+    }
+    for (final asignacion in asignaciones) {
+      await _sesion.execute(
+        Sql.named('''
+					INSERT INTO purchase_allocations (
+						compra_id, producto_id, destino_tipo, destino_id, cantidad
+					) VALUES (
+						@compra, @producto, @tipo, @destino, @cantidad
+					)
+				'''),
+        parameters: {
+          'compra': id,
+          'producto': asignacion['productoId'] ?? '',
+          'tipo': asignacion['destinoTipo'] ?? '',
+          'destino': asignacion['destinoId'] ?? '',
+          'cantidad': _dbl(asignacion['cantidad']),
+        },
+      );
       if (esNueva) {
-        await _deltaStock(
-          linea['productoId'] as String? ?? '',
-          tiendaId,
-          _dbl(linea['cantidad']),
-          creadaEn,
-        );
+        final destinoTipo = asignacion['destinoTipo'] as String? ?? '';
+        final productoId = asignacion['productoId'] as String? ?? '';
+        final destinoId = asignacion['destinoId'] as String? ?? '';
+        final delta = _dbl(asignacion['cantidad']);
+        if (destinoTipo == 'tienda') {
+          await _asegurarTienda(destinoId);
+          await _deltaStock(productoId, destinoId, delta, creadaEn);
+        } else if (destinoTipo == 'almacen') {
+          await _deltaStockAlmacen(productoId, destinoId, delta, creadaEn);
+        }
       }
     }
   }

@@ -1213,10 +1213,35 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 				);
 			})
 			.toList();
-		final tiendaId = p['tiendaId'] as String? ?? evento.tiendaId;
+		final asignacionesCrudas = p['asignaciones'] as List<Object?>? ?? [];
+		var asignaciones = asignacionesCrudas
+			.whereType<Map<Object?, Object?>>()
+			.map((cruda) {
+				final mapa = Map<String, Object?>.from(cruda);
+				return AsignacionInventarioCompra(
+					productoId: mapa['productoId'] as String? ?? '',
+					destinoTipo: mapa['destinoTipo'] as String? ?? '',
+					destinoId: mapa['destinoId'] as String? ?? '',
+					cantidad: (mapa['cantidad'] as num?)?.toDouble() ?? 0.0,
+				);
+			})
+			.toList();
+		final tiendaLegacy = p['tiendaId'] as String? ?? evento.tiendaId;
+		if (asignaciones.isEmpty && tiendaLegacy.isNotEmpty) {
+			asignaciones = lineas
+				.map(
+					(linea) => AsignacionInventarioCompra(
+						productoId: linea.productoId,
+						destinoTipo: AsignacionInventarioCompra.destinoTienda,
+						destinoId: tiendaLegacy,
+						cantidad: linea.cantidad,
+					),
+				)
+				.toList();
+		}
 		final compra = Compra(
 			id: id,
-			tiendaId: tiendaId,
+			tiendaId: p['tiendaId'] as String?,
 			proveedorId: p['proveedorId'] as String? ?? '',
 			fechaCompra: DateTime.parse(
 				p['fechaCompra'] as String? ?? evento.creadoEn.toIso8601String(),
@@ -1228,16 +1253,26 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			),
 			creadoPor: p['creadoPor'] as String?,
 			lineas: lineas,
+			asignaciones: asignaciones,
 		);
 		await repo.guardar(compra, db: ejecutor);
 		if (existente == null) {
-			for (final linea in lineas) {
-				await _ajustarStock(
-					linea.productoId,
-					tiendaId,
-					linea.cantidad,
-					ejecutor: ejecutor,
-				);
+			for (final asignacion in asignaciones) {
+				if (asignacion.esTienda) {
+					await _ajustarStock(
+						asignacion.productoId,
+						asignacion.destinoId,
+						asignacion.cantidad,
+						ejecutor: ejecutor,
+					);
+				} else if (asignacion.esAlmacen) {
+					await _ajustarStockAlmacen(
+						asignacion.productoId,
+						asignacion.destinoId,
+						asignacion.cantidad,
+						ejecutor: ejecutor,
+					);
+				}
 			}
 		}
 	}

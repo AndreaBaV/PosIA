@@ -7,7 +7,7 @@
 library;
 
 /// Version actual del esquema local SQLite.
-const int SCHEMA_VERSION = 33;
+const int SCHEMA_VERSION = 34;
 
 /// Ultima version de esquema sin rebuild de FOREIGN KEY (pre-integridad).
 const int SCHEMA_VERSION_PRE_INTEGRIDAD = 32;

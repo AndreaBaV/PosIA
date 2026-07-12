@@ -332,15 +332,16 @@ class AseguradorPadresFk {
 		if (await _existe('purchases', compraId)) {
 			return;
 		}
-		final tienda = tiendaId?.trim().isNotEmpty == true ? tiendaId! : _tiendaSync;
-		await asegurarTienda(tienda);
+		if (tiendaId != null && tiendaId.trim().isNotEmpty) {
+			await asegurarTienda(tiendaId);
+		}
 		await asegurarProveedor(proveedorId ?? 'proveedor-sync');
 		final ahora = DateTime.now().toUtc().toIso8601String();
 		await _baseDatos.insert(
 			'purchases',
 			{
 				'id': compraId,
-				'tienda_id': tienda,
+				'tienda_id': tiendaId?.trim().isNotEmpty == true ? tiendaId : null,
 				'proveedor_id': proveedorId ?? 'proveedor-sync',
 				'fecha_compra': ahora,
 				'notas': '',
@@ -649,10 +650,26 @@ class AseguradorPadresFk {
 	}
 
 	Future<void> asegurarPadresDeCompra(Compra compra) async {
-		await asegurarTienda(compra.tiendaId);
+		if (compra.tiendaId != null && compra.tiendaId!.trim().isNotEmpty) {
+			await asegurarTienda(compra.tiendaId);
+		}
 		await asegurarProveedor(compra.proveedorId);
 		for (final linea in compra.lineas) {
-			await asegurarProducto(linea.productoId, tiendaId: compra.tiendaId);
+			await asegurarProducto(
+				linea.productoId,
+				tiendaId: compra.tiendaId ?? _tiendaSync,
+			);
+		}
+		for (final asignacion in compra.asignaciones) {
+			if (asignacion.esTienda) {
+				await asegurarTienda(asignacion.destinoId);
+			} else if (asignacion.esAlmacen) {
+				await asegurarAlmacen(asignacion.destinoId);
+			}
+			await asegurarProducto(
+				asignacion.productoId,
+				tiendaId: asignacion.esTienda ? asignacion.destinoId : _tiendaSync,
+			);
 		}
 	}
 

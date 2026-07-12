@@ -608,6 +608,7 @@ class MigracionesEsquema {
 		await migrarVersion31A32(base);
 		// Install fresco: FKs reales (cola vacia). Upgrade usa fase 2 en open.
 		await migrarVersion32A33(base);
+		await migrarVersion33A34(base);
 	}
 
 	/// Tabla guia `ejemplo` en bases ya existentes (v10 → v11).
@@ -780,7 +781,7 @@ class MigracionesEsquema {
 		await base.execute('''
 			CREATE TABLE IF NOT EXISTS purchases (
 				id TEXT PRIMARY KEY,
-				tienda_id TEXT NOT NULL REFERENCES stores(id),
+				tienda_id TEXT REFERENCES stores(id),
 				proveedor_id TEXT NOT NULL REFERENCES proveedores(id),
 				fecha_compra TEXT NOT NULL,
 				notas TEXT NOT NULL DEFAULT '',
@@ -800,9 +801,27 @@ class MigracionesEsquema {
 				subtotal REAL NOT NULL
 			)
 		''');
+		await _crearTablaAsignacionesCompra(base);
 		await base.execute(
-			'CREATE INDEX IF NOT EXISTS idx_purchases_tienda_fecha '
-			'ON purchases(tienda_id, fecha_compra DESC)',
+			'CREATE INDEX IF NOT EXISTS idx_purchases_fecha '
+			'ON purchases(fecha_compra DESC)',
+		);
+	}
+
+	static Future<void> _crearTablaAsignacionesCompra(Database base) async {
+		await base.execute('''
+			CREATE TABLE IF NOT EXISTS purchase_allocations (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				compra_id TEXT NOT NULL REFERENCES purchases(id) ON DELETE CASCADE,
+				producto_id TEXT NOT NULL REFERENCES products(id),
+				destino_tipo TEXT NOT NULL CHECK (destino_tipo IN ('tienda', 'almacen')),
+				destino_id TEXT NOT NULL,
+				cantidad REAL NOT NULL
+			)
+		''');
+		await base.execute(
+			'CREATE INDEX IF NOT EXISTS idx_purchase_alloc_compra '
+			'ON purchase_allocations(compra_id)',
 		);
 	}
 
@@ -1218,6 +1237,64 @@ class MigracionesEsquema {
 			return;
 		}
 		await MigracionIntegridadReferencial.aplicar(base);
+	}
+
+	/// v6.34: compras a nivel empresa con distribucion por tienda/almacen.
+	static Future<void> migrarVersion33A34(Database base) async {
+		await _crearTablaAsignacionesCompra(base);
+
+		// Backfill: compras legacy con tienda_id -> asignaciones a tienda.
+		await base.execute('''
+			INSERT INTO purchase_allocations (
+				compra_id, producto_id, destino_tipo, destino_id, cantidad
+			)
+			SELECT pl.compra_id, pl.producto_id, 'tienda', p.tienda_id, pl.cantidad
+			FROM purchase_lines pl
+			INNER JOIN purchases p ON p.id = pl.compra_id
+			WHERE p.tienda_id IS NOT NULL AND TRIM(p.tienda_id) != ''
+			AND NOT EXISTS (
+				SELECT 1 FROM purchase_allocations pa
+				WHERE pa.compra_id = pl.compra_id AND pa.producto_id = pl.producto_id
+			)
+		''');
+
+		final info = await base.rawQuery('PRAGMA table_info(purchases)');
+		final tiendaNotNull = info.any(
+			(fila) =>
+				fila['name'] == 'tienda_id' &&
+				(fila['notnull'] as int? ?? 0) == 1,
+		);
+		if (!tiendaNotNull) {
+			return;
+		}
+
+		await base.execute('PRAGMA foreign_keys=OFF');
+		await base.execute('''
+			CREATE TABLE purchases_v34 (
+				id TEXT PRIMARY KEY,
+				tienda_id TEXT REFERENCES stores(id),
+				proveedor_id TEXT NOT NULL REFERENCES proveedores(id),
+				fecha_compra TEXT NOT NULL,
+				notas TEXT NOT NULL DEFAULT '',
+				total REAL NOT NULL,
+				creada_en TEXT NOT NULL,
+				creado_por TEXT
+			)
+		''');
+		await base.execute('''
+			INSERT INTO purchases_v34 (
+				id, tienda_id, proveedor_id, fecha_compra, notas, total, creada_en, creado_por
+			)
+			SELECT
+				id, tienda_id, proveedor_id, fecha_compra, notas, total, creada_en, creado_por
+			FROM purchases
+		''');
+		await base.execute('DROP TABLE purchases');
+		await base.execute('ALTER TABLE purchases_v34 RENAME TO purchases');
+		await base.execute(
+			'CREATE INDEX IF NOT EXISTS idx_purchases_fecha ON purchases(fecha_compra DESC)',
+		);
+		await base.execute('PRAGMA foreign_keys=ON');
 	}
 
 	/// v6.23: codigo de barras unico por tienda entre productos activos.

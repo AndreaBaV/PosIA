@@ -510,7 +510,7 @@ class EsquemaPosPostgres {
 		await conexion.execute('''
 			CREATE TABLE IF NOT EXISTS purchases (
 				id TEXT PRIMARY KEY,
-				tienda_id TEXT NOT NULL,
+				tienda_id TEXT,
 				proveedor_id TEXT NOT NULL,
 				fecha_compra TEXT NOT NULL,
 				notas TEXT NOT NULL DEFAULT '',
@@ -531,12 +531,43 @@ class EsquemaPosPostgres {
 			)
 		''');
 		await conexion.execute('''
-			CREATE INDEX IF NOT EXISTS idx_purchases_tienda_fecha
-			ON purchases(tienda_id, fecha_compra DESC)
+			CREATE TABLE IF NOT EXISTS purchase_allocations (
+				id SERIAL PRIMARY KEY,
+				compra_id TEXT NOT NULL,
+				producto_id TEXT NOT NULL,
+				destino_tipo TEXT NOT NULL CHECK (destino_tipo IN ('tienda', 'almacen')),
+				destino_id TEXT NOT NULL,
+				cantidad DOUBLE PRECISION NOT NULL
+			)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_purchases_fecha
+			ON purchases(fecha_compra DESC)
 		''');
 		await conexion.execute('''
 			CREATE INDEX IF NOT EXISTS idx_purchase_lines_compra
 			ON purchase_lines(compra_id)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_purchase_alloc_compra
+			ON purchase_allocations(compra_id)
+		''');
+		await conexion.execute('''
+			ALTER TABLE purchases ALTER COLUMN tienda_id DROP NOT NULL
+		''');
+		await conexion.execute('''
+			INSERT INTO purchase_allocations (
+				compra_id, producto_id, destino_tipo, destino_id, cantidad
+			)
+			SELECT pl.compra_id, pl.producto_id, 'tienda', p.tienda_id, pl.cantidad
+			FROM purchase_lines pl
+			INNER JOIN purchases p ON p.id = pl.compra_id
+			WHERE p.tienda_id IS NOT NULL AND TRIM(p.tienda_id) <> ''
+			AND NOT EXISTS (
+				SELECT 1 FROM purchase_allocations pa
+				WHERE pa.compra_id = pl.compra_id
+				  AND pa.producto_id = pl.producto_id
+			)
 		''');
 		await conexion.execute('''
 			CREATE TABLE IF NOT EXISTS cash_shifts (

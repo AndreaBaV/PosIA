@@ -7,7 +7,7 @@ import 'package:sqflite/sqflite.dart';
 import '../utils/asegurador_padres_fk.dart';
 import '../utils/transaccion_sqlite.dart';
 
-/// Persiste compras y sus lineas de detalle.
+/// Persiste compras, lineas y asignaciones de inventario.
 class CompraRepository {
 	CompraRepository({required Database baseDatos})
 		: _baseDatos = baseDatos,
@@ -52,6 +52,11 @@ class CompraRepository {
 				where: 'compra_id = ?',
 				whereArgs: [compra.id],
 			);
+			await tx.delete(
+				'purchase_allocations',
+				where: 'compra_id = ?',
+				whereArgs: [compra.id],
+			);
 			for (final linea in compra.lineas) {
 				await tx.insert('purchase_lines', {
 					'compra_id': compra.id,
@@ -62,9 +67,19 @@ class CompraRepository {
 					'subtotal': linea.subtotal,
 				});
 			}
+			for (final asignacion in compra.asignaciones) {
+				await tx.insert('purchase_allocations', {
+					'compra_id': compra.id,
+					'producto_id': asignacion.productoId,
+					'destino_tipo': asignacion.destinoTipo,
+					'destino_id': asignacion.destinoId,
+					'cantidad': asignacion.cantidad,
+				});
+			}
 		});
 	}
 
+	/// Compras legacy filtradas por tienda destino historico.
 	Future<List<Compra>> listarPorTienda(String tiendaId, {int limite = 200}) async {
 		final filas = await _baseDatos.query(
 			'purchases',
@@ -80,8 +95,8 @@ class CompraRepository {
 		return resultado;
 	}
 
-	/// Lista compras recientes de todas las tiendas (para reencolar sync).
-	Future<List<Compra>> listarRecientes({int limite = 500}) async {
+	/// Todas las compras de la empresa (orden reciente).
+	Future<List<Compra>> listarTodas({int limite = 500}) async {
 		final filas = await _baseDatos.query(
 			'purchases',
 			orderBy: 'fecha_compra DESC, creada_en DESC',
@@ -93,6 +108,10 @@ class CompraRepository {
 		}
 		return resultado;
 	}
+
+	/// Alias para reencolar sync.
+	Future<List<Compra>> listarRecientes({int limite = 500}) =>
+		listarTodas(limite: limite);
 
 	Future<Compra?> obtenerPorId(String id) async {
 		final filas = await _baseDatos.query(
@@ -114,9 +133,14 @@ class CompraRepository {
 			where: 'compra_id = ?',
 			whereArgs: [id],
 		);
+		final asignacionesFilas = await _baseDatos.query(
+			'purchase_allocations',
+			where: 'compra_id = ?',
+			whereArgs: [id],
+		);
 		return Compra(
 			id: id,
-			tiendaId: fila['tienda_id'] as String,
+			tiendaId: fila['tienda_id'] as String?,
 			proveedorId: fila['proveedor_id'] as String,
 			fechaCompra: DateTime.parse(fila['fecha_compra'] as String),
 			notas: fila['notas'] as String? ?? '',
@@ -131,6 +155,16 @@ class CompraRepository {
 						cantidad: (l['cantidad'] as num).toDouble(),
 						costoUnitario: (l['costo_unitario'] as num).toDouble(),
 						subtotal: (l['subtotal'] as num).toDouble(),
+					),
+				)
+				.toList(),
+			asignaciones: asignacionesFilas
+				.map(
+					(a) => AsignacionInventarioCompra(
+						productoId: a['producto_id'] as String,
+						destinoTipo: a['destino_tipo'] as String,
+						destinoId: a['destino_id'] as String,
+						cantidad: (a['cantidad'] as num).toDouble(),
 					),
 				)
 				.toList(),

@@ -165,6 +165,14 @@ void main() {
 						productoId: producto.id,
 						cantidad: 10.0,
 						costoUnitario: 9.5,
+						asignaciones: [
+							AsignacionInventarioCompra(
+								productoId: producto.id,
+								destinoTipo: AsignacionInventarioCompra.destinoTienda,
+								destinoId: fixture.tiendaOrigenId,
+								cantidad: 10.0,
+							),
+						],
 					),
 				],
 			);
@@ -179,6 +187,60 @@ void main() {
 			expect(actualizado?.costoUnitario, 9.5);
 			final historial = await servicio.listarCompras();
 			expect(historial.any((c) => c.id == compra.id), isTrue);
+			await fixture.cerrar();
+		});
+
+		test('registrarCompra distribuye inventario entre tienda y almacen', () async {
+			final fixture = await FixtureAdmin.abrir();
+			final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
+			final proveedor = await servicio.registrarProveedor(nombre: 'Multi destino');
+			final almacen = await servicio.registrarAlmacen('CEDIS');
+			final producto = await servicio.registrarProductoCompleto(
+				AltaProductoRequest(
+					nombre: 'Mixto',
+					codigoBarras: '888',
+					precioBase: 20.0,
+					categoriaId: fixture.categoriaId,
+					stockInicial: 0.0,
+				),
+			);
+			final compra = await servicio.registrarCompra(
+				proveedorId: proveedor.id,
+				fechaCompra: DateTime.utc(2026, 7, 1),
+				lineas: [
+					LineaCompraSolicitud(
+						productoId: producto.id,
+						cantidad: 10.0,
+						costoUnitario: 8.0,
+						asignaciones: [
+							AsignacionInventarioCompra(
+								productoId: producto.id,
+								destinoTipo: AsignacionInventarioCompra.destinoTienda,
+								destinoId: fixture.tiendaOrigenId,
+								cantidad: 6.0,
+							),
+							AsignacionInventarioCompra(
+								productoId: producto.id,
+								destinoTipo: AsignacionInventarioCompra.destinoAlmacen,
+								destinoId: almacen.id,
+								cantidad: 4.0,
+							),
+						],
+					),
+				],
+			);
+			expect(compra.tiendaId, isNull);
+			expect(compra.asignaciones, hasLength(2));
+			final stockTienda = await fixture.inventarioRepository.obtenerStock(
+				producto.id,
+				fixture.tiendaOrigenId,
+			);
+			expect(stockTienda?.cantidad, 6.0);
+			final stockAlmacen = await fixture.almacenRepository.obtenerStock(
+				producto.id,
+				almacen.id,
+			);
+			expect(stockAlmacen?.cantidad, 4.0);
 			await fixture.cerrar();
 		});
 
@@ -281,6 +343,14 @@ void main() {
 						productoId: producto.id,
 						cantidad: 1.0,
 						costoUnitario: 5.0,
+						asignaciones: [
+							AsignacionInventarioCompra(
+								productoId: producto.id,
+								destinoTipo: AsignacionInventarioCompra.destinoTienda,
+								destinoId: fixture.tiendaOrigenId,
+								cantidad: 1.0,
+							),
+						],
 					),
 				],
 			);

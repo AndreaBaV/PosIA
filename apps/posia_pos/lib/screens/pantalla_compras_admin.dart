@@ -11,6 +11,7 @@ import '../providers/admin_providers.dart';
 import '../utils/documento_ticket_util.dart';
 import '../widgets/acciones_documento_ticket.dart';
 import '../widgets/dialogo_actualizar_precio_venta.dart';
+import '../widgets/editor_distribucion_inventario_compra.dart';
 
 class PantallaComprasAdmin extends ConsumerStatefulWidget {
 	const PantallaComprasAdmin({super.key});
@@ -28,8 +29,8 @@ class _PantallaComprasAdminState extends ConsumerState<PantallaComprasAdmin>
 	final _cantidadControllers = <String, TextEditingController>{};
 	final _costoControllers = <String, TextEditingController>{};
 	final _seleccionados = <String>{};
+	final _asignaciones = <String, List<FilaAsignacionCompra>>{};
 	String? _proveedorId;
-	String? _tiendaOperacionId;
 	DateTime _fechaCompra = DateTime.now();
 	String _filtroHistorial = '';
 	String _filtroProducto = '';
@@ -51,6 +52,11 @@ class _PantallaComprasAdminState extends ConsumerState<PantallaComprasAdmin>
 		}
 		for (final ctrl in _costoControllers.values) {
 			ctrl.dispose();
+		}
+		for (final filas in _asignaciones.values) {
+			for (final fila in filas) {
+				fila.cantidad.dispose();
+			}
 		}
 		super.dispose();
 	}
@@ -75,7 +81,7 @@ class _PantallaComprasAdminState extends ConsumerState<PantallaComprasAdmin>
 
 	@override
 	Widget build(BuildContext context) {
-		final datosAsync = ref.watch(comprasDatosAdminProvider(_tiendaOperacionId));
+		final datosAsync = ref.watch(comprasDatosAdminProvider);
 		return Scaffold(
 			resizeToAvoidBottomInset: true,
 			appBar: AppBar(
@@ -125,27 +131,12 @@ class _PantallaComprasAdminState extends ConsumerState<PantallaComprasAdmin>
 								padding: const EdgeInsets.fromLTRB(12.0, 12.0, 12.0, 0.0),
 								sliver: SliverList(
 									delegate: SliverChildListDelegate([
-										if (datos.tiendas.length > 1)
-											DropdownButtonFormField<String>(
-												initialValue: datos.tiendaId,
-												decoration: const InputDecoration(
-													labelText: 'Tienda',
-													border: OutlineInputBorder(),
-												),
-												items: datos.tiendas
-													.map(
-														(t) => DropdownMenuItem(
-															value: t.id,
-															child: Text(t.nombre),
-														),
-													)
-													.toList(),
-												onChanged: (v) => setState(() {
-													_tiendaOperacionId = v;
-													_seleccionados.clear();
-												}),
-											),
-										if (datos.tiendas.length > 1) const SizedBox(height: 8.0),
+										Text(
+											'Compra a nivel empresa. Distribuya el inventario '
+											'entre tiendas y almacenes.',
+											style: Theme.of(context).textTheme.bodySmall,
+										),
+										const SizedBox(height: 8.0),
 										DropdownButtonFormField<String>(
 											key: ValueKey(
 												datos.proveedores.map((p) => p.id).join(','),
@@ -220,8 +211,68 @@ class _PantallaComprasAdminState extends ConsumerState<PantallaComprasAdmin>
 							else
 								SliverList(
 									delegate: SliverChildBuilderDelegate(
-										(_, i) => _tileProductoCompra(productosVisibles[i]),
+										(_, i) => _tileProductoCompra(
+											productosVisibles[i],
+											datos,
+										),
 										childCount: productosVisibles.length,
+									),
+								),
+							if (_seleccionados.isNotEmpty)
+								SliverList(
+									delegate: SliverChildBuilderDelegate(
+										(_, i) {
+											final productoId = _seleccionados.elementAt(i);
+											final producto = datos.productos.firstWhere(
+												(p) => p.id == productoId,
+											);
+											final cantidad = double.tryParse(
+												_cantidadControllers[productoId]
+													?.text
+													.replaceAll(',', '.') ??
+													'',
+											) ?? 0.0;
+											final filas = _asignaciones.putIfAbsent(
+												productoId,
+												() => [
+													FilaAsignacionCompra(
+														destinoTipo:
+															AsignacionInventarioCompra.destinoTienda,
+														destinoId: datos.tiendaPredeterminadaId,
+														cantidad: TextEditingController(
+															text: cantidad > 0
+																? cantidad.toStringAsFixed(0)
+																: '1',
+														),
+													),
+												],
+											);
+											return EditorDistribucionInventarioCompra(
+												productoNombre: producto.nombre,
+												cantidadTotal: cantidad,
+												tiendas: datos.tiendas,
+												almacenes: datos.almacenes,
+												filas: filas,
+												alAgregar: () => setState(() {
+													filas.add(
+														FilaAsignacionCompra(
+															destinoTipo:
+																AsignacionInventarioCompra.destinoTienda,
+															destinoId: datos.tiendaPredeterminadaId,
+														),
+													);
+												}),
+												alEliminar: (index) => setState(() {
+													if (filas.length <= 1) {
+														return;
+													}
+													filas[index].cantidad.dispose();
+													filas.removeAt(index);
+												}),
+												alCambiar: () => setState(() {}),
+											);
+										},
+										childCount: _seleccionados.length,
 									),
 								),
 							SliverPadding(
@@ -265,7 +316,7 @@ class _PantallaComprasAdminState extends ConsumerState<PantallaComprasAdmin>
 		);
 	}
 
-	Widget _tileProductoCompra(Producto producto) {
+	Widget _tileProductoCompra(Producto producto, DatosComprasAdmin datos) {
 		final seleccionado = _seleccionados.contains(producto.id);
 		final cantCtrl = _controllerCantidad(producto.id, producto);
 		final costoCtrl = _controllerCosto(producto.id, producto);
@@ -275,8 +326,10 @@ class _PantallaComprasAdminState extends ConsumerState<PantallaComprasAdmin>
 				setState(() {
 					if (v == true) {
 						_seleccionados.add(producto.id);
+						_inicializarAsignacion(producto.id, datos, cantCtrl.text);
 					} else {
 						_seleccionados.remove(producto.id);
+						_liberarAsignacion(producto.id);
 					}
 				});
 			},
@@ -295,7 +348,11 @@ class _PantallaComprasAdminState extends ConsumerState<PantallaComprasAdmin>
 									isDense: true,
 									border: OutlineInputBorder(),
 								),
-								onChanged: (_) => setState(() {}),
+								onChanged: (_) => setState(() {
+									if (_seleccionados.contains(producto.id)) {
+										_sincronizarCantidadAsignacion(producto.id);
+									}
+								}),
 							),
 						),
 						const SizedBox(width: 8.0),
@@ -457,12 +514,58 @@ class _PantallaComprasAdminState extends ConsumerState<PantallaComprasAdmin>
 			final costo = double.tryParse(
 				_costoControllers[productoId]?.text.replaceAll(',', '.') ?? '',
 			) ?? 0.0;
+			final filas = _asignaciones[productoId] ?? [];
 			return LineaCompraSolicitud(
 				productoId: productoId,
 				cantidad: cantidad,
 				costoUnitario: costo,
+				asignaciones: asignacionesDesdeFilas(filas, productoId),
 			);
 		}).toList();
+	}
+
+	void _inicializarAsignacion(
+		String productoId,
+		DatosComprasAdmin datos,
+		String cantidadTexto,
+	) {
+		_liberarAsignacion(productoId);
+		_asignaciones[productoId] = [
+			FilaAsignacionCompra(
+				destinoTipo: AsignacionInventarioCompra.destinoTienda,
+				destinoId: datos.tiendaPredeterminadaId,
+				cantidad: TextEditingController(text: cantidadTexto),
+			),
+		];
+	}
+
+	void _liberarAsignacion(String productoId) {
+		final filas = _asignaciones.remove(productoId);
+		if (filas == null) {
+			return;
+		}
+		for (final fila in filas) {
+			fila.cantidad.dispose();
+		}
+	}
+
+	void _sincronizarCantidadAsignacion(String productoId) {
+		final filas = _asignaciones[productoId];
+		if (filas == null || filas.length != 1) {
+			return;
+		}
+		final cantidad = _cantidadControllers[productoId]?.text ?? '1';
+		filas.first.cantidad.text = cantidad;
+	}
+
+	String _etiquetaDestino(
+		AsignacionInventarioCompra asignacion,
+		DatosComprasAdmin datos,
+	) {
+		if (asignacion.esTienda) {
+			return 'Tienda: ${datos.nombresTienda[asignacion.destinoId] ?? asignacion.destinoId}';
+		}
+		return 'Almacén: ${datos.nombresAlmacen[asignacion.destinoId] ?? asignacion.destinoId}';
 	}
 
 	Future<void> _registrarCompra(DatosComprasAdmin datos, String proveedorId) async {
@@ -486,11 +589,15 @@ class _PantallaComprasAdminState extends ConsumerState<PantallaComprasAdmin>
 				lineas: _construirLineas(),
 				fechaCompra: fechaLocal,
 				notas: _notasController.text.trim(),
-				tiendaId: datos.tiendaId,
 				operador: operador,
 			);
-			ref.invalidate(comprasDatosAdminProvider(_tiendaOperacionId));
-			setState(_seleccionados.clear);
+			ref.invalidate(comprasDatosAdminProvider);
+			setState(() {
+				_seleccionados.clear();
+				for (final id in _asignaciones.keys.toList()) {
+					_liberarAsignacion(id);
+				}
+			});
 			_notasController.clear();
 			if (!mounted) {
 				return;
@@ -506,7 +613,7 @@ class _PantallaComprasAdminState extends ConsumerState<PantallaComprasAdmin>
 			if (!mounted) {
 				return;
 			}
-			ref.invalidate(comprasDatosAdminProvider(_tiendaOperacionId));
+			ref.invalidate(comprasDatosAdminProvider);
 			_tabs.animateTo(1);
 		} catch (error) {
 			if (!mounted) {
@@ -545,6 +652,20 @@ class _PantallaComprasAdminState extends ConsumerState<PantallaComprasAdmin>
 								style: const TextStyle(fontWeight: FontWeight.bold),
 							),
 							if (compra.notas.isNotEmpty) Text('Notas: ${compra.notas}'),
+							if (compra.asignaciones.isNotEmpty) ...[
+								const SizedBox(height: 8.0),
+								const Text(
+									'Distribución de inventario',
+									style: TextStyle(fontWeight: FontWeight.w600),
+								),
+								...compra.asignaciones.map(
+									(a) => Text(
+										'· ${_etiquetaDestino(a, datos)}: '
+										'${a.cantidad.toStringAsFixed(0)} u.',
+										style: const TextStyle(fontSize: 13.0),
+									),
+								),
+							],
 							const SizedBox(height: 12.0),
 							Expanded(
 								child: ListView(

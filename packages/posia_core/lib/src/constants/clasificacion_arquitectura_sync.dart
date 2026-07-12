@@ -552,7 +552,13 @@ abstract final class ClasificacionArquitecturaSync {
 			tipo: TipoSyncEvento.purchaseCompleted,
 			politica: PoliticaEventoSync.activo,
 			motivo: 'Compra',
-			tablasAfectadas: ['purchases', 'purchase_lines', 'stock_levels'],
+			tablasAfectadas: [
+				'purchases',
+				'purchase_lines',
+				'purchase_allocations',
+				'stock_levels',
+				'warehouse_stock',
+			],
 		),
 		ContratoEventoSync(
 			tipo: TipoSyncEvento.customerDiscountUpserted,

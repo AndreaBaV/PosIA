@@ -318,42 +318,53 @@ final proveedoresAdminProvider = FutureProvider<List<Proveedor>>((ref) async {
 	return servicio.listarProveedores();
 });
 
-/// Datos para pantalla de compras (historial, proveedores y productos por tienda).
+/// Datos para pantalla de compras (historial, proveedores, catalogo y destinos).
 class DatosComprasAdmin {
 	const DatosComprasAdmin({
 		required this.compras,
 		required this.proveedores,
 		required this.productos,
 		required this.tiendas,
-		required this.tiendaId,
+		required this.almacenes,
 		required this.nombresProveedor,
+		required this.nombresTienda,
+		required this.nombresAlmacen,
+		required this.tiendaPredeterminadaId,
 	});
 
 	final List<Compra> compras;
 	final List<Proveedor> proveedores;
 	final List<Producto> productos;
 	final List<Tienda> tiendas;
-	final String tiendaId;
+	final List<Almacen> almacenes;
 	final Map<String, String> nombresProveedor;
+	final Map<String, String> nombresTienda;
+	final Map<String, String> nombresAlmacen;
+	final String tiendaPredeterminadaId;
 }
 
-/// Compras, proveedores y catalogo por tienda para registro de compras.
-final comprasDatosAdminProvider = FutureProvider.family<DatosComprasAdmin, String?>(
-	(ref, tiendaOperacionId) async {
+/// Compras, proveedores y catalogo para registro de compras a nivel empresa.
+final comprasDatosAdminProvider = FutureProvider<DatosComprasAdmin>(
+	(ref) async {
 		final servicio = await ref.watch(servicioAdminProvider.future);
 		final operador = ref.watch(sesionUsuarioProvider);
 		final proveedores = await ref.watch(proveedoresAdminProvider.future);
 		final tiendas = await servicio.obtenerTiendasPermitidas(operador: operador);
-		final tiendaId = tiendaOperacionId ?? operador?.tiendaId ?? servicio.tiendaActivaId;
-		final compras = await servicio.listarCompras(tiendaId: tiendaId, operador: operador);
-		final productos = await servicio.listarProductosActivosPorTienda(tiendaId);
+		final almacenes = await servicio.listarAlmacenes();
+		final tiendaPredeterminadaId =
+			operador?.tiendaId ?? servicio.tiendaActivaId;
+		final compras = await servicio.listarCompras(operador: operador);
+		final productos = await servicio.listarProductosCatalogo();
 		return DatosComprasAdmin(
 			compras: compras,
 			proveedores: proveedores.where((p) => p.activo).toList(),
-			productos: productos,
+			productos: productos.where((p) => p.activo).toList(),
 			tiendas: tiendas,
-			tiendaId: tiendaId,
+			almacenes: almacenes.where((a) => a.activo).toList(),
 			nombresProveedor: {for (final p in proveedores) p.id: p.nombre},
+			nombresTienda: {for (final t in tiendas) t.id: t.nombre},
+			nombresAlmacen: {for (final a in almacenes) a.id: a.nombre},
+			tiendaPredeterminadaId: tiendaPredeterminadaId,
 		);
 	},
 );

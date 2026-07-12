@@ -30,12 +30,22 @@ Future<TicketDigitalContenido> obtenerTicketDigitalCompra({
 	required String nombreProveedor,
 	required ServicioAdmin servicio,
 }) async {
-	final nombreTienda = await _nombreTiendaPorId(servicio, compra.tiendaId);
-	final direccionTienda = await _direccionTiendaPorId(servicio, compra.tiendaId);
+	final tiendaId = compra.tiendaId ??
+		compra.asignaciones
+			.where((a) => a.esTienda)
+			.map((a) => a.destinoId)
+			.cast<String?>()
+			.firstOrNull;
+	final nombreTienda = tiendaId == null
+		? 'Empresa'
+		: await _nombreTiendaPorId(servicio, tiendaId);
+	final direccionTienda = tiendaId == null
+		? null
+		: await _direccionTiendaPorId(servicio, tiendaId);
 	return construirTicketDigitalCompra(
 		compra: compra,
 		nombreProveedor: nombreProveedor,
-		nombreTienda: nombreTienda ?? 'Tienda',
+		nombreTienda: nombreTienda ?? 'Empresa',
 		direccionTienda: direccionTienda,
 	);
 }
