@@ -798,7 +798,7 @@ abstract final class MigracionIntegridadReferencial {
 			ddl: '''
 				CREATE TABLE purchases_fk (
 					id TEXT PRIMARY KEY,
-					tienda_id TEXT NOT NULL REFERENCES stores(id),
+					tienda_id TEXT REFERENCES stores(id),
 					proveedor_id TEXT NOT NULL REFERENCES proveedores(id),
 					fecha_compra TEXT NOT NULL,
 					notas TEXT NOT NULL DEFAULT '',
@@ -830,6 +830,26 @@ abstract final class MigracionIntegridadReferencial {
 				id, compra_id, producto_id, nombre_producto, cantidad, costo_unitario, subtotal
 			''',
 		);
+
+		if (await _existeTabla(base, 'purchase_allocations')) {
+			await _rebuild(
+				base,
+				tabla: 'purchase_allocations',
+				ddl: '''
+					CREATE TABLE purchase_allocations_fk (
+						id INTEGER PRIMARY KEY AUTOINCREMENT,
+						compra_id TEXT NOT NULL REFERENCES purchases(id) ON DELETE CASCADE,
+						producto_id TEXT NOT NULL REFERENCES products(id),
+						destino_tipo TEXT NOT NULL CHECK (destino_tipo IN ('tienda', 'almacen')),
+						destino_id TEXT NOT NULL,
+						cantidad REAL NOT NULL
+					)
+				''',
+				columnas: '''
+					id, compra_id, producto_id, destino_tipo, destino_id, cantidad
+				''',
+			);
+		}
 
 		await _rebuild(
 			base,
@@ -1169,6 +1189,10 @@ abstract final class MigracionIntegridadReferencial {
 		await indice(
 			'purchase_lines',
 			'CREATE INDEX IF NOT EXISTS idx_purchase_lines_compra ON purchase_lines(compra_id)',
+		);
+		await indice(
+			'purchase_allocations',
+			'CREATE INDEX IF NOT EXISTS idx_purchase_alloc_compra ON purchase_allocations(compra_id)',
 		);
 		await indice(
 			'order_lines',

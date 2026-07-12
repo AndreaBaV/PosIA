@@ -1244,19 +1244,24 @@ class MigracionesEsquema {
 		await _crearTablaAsignacionesCompra(base);
 
 		// Backfill: compras legacy con tienda_id -> asignaciones a tienda.
-		await base.execute('''
-			INSERT INTO purchase_allocations (
-				compra_id, producto_id, destino_tipo, destino_id, cantidad
-			)
-			SELECT pl.compra_id, pl.producto_id, 'tienda', p.tienda_id, pl.cantidad
-			FROM purchase_lines pl
-			INNER JOIN purchases p ON p.id = pl.compra_id
-			WHERE p.tienda_id IS NOT NULL AND TRIM(p.tienda_id) != ''
-			AND NOT EXISTS (
-				SELECT 1 FROM purchase_allocations pa
-				WHERE pa.compra_id = pl.compra_id AND pa.producto_id = pl.producto_id
-			)
-		''');
+		if (await _existeTablaCompras(base)) {
+			await base.execute('''
+				INSERT INTO purchase_allocations (
+					compra_id, producto_id, destino_tipo, destino_id, cantidad
+				)
+				SELECT pl.compra_id, pl.producto_id, 'tienda', p.tienda_id, pl.cantidad
+				FROM purchase_lines pl
+				INNER JOIN purchases p ON p.id = pl.compra_id
+				WHERE p.tienda_id IS NOT NULL AND TRIM(p.tienda_id) != ''
+				AND NOT EXISTS (
+					SELECT 1 FROM purchase_allocations pa
+					WHERE pa.compra_id = pl.compra_id
+					  AND pa.producto_id = pl.producto_id
+					  AND pa.destino_tipo = 'tienda'
+					  AND pa.destino_id = p.tienda_id
+				)
+			''');
+		}
 
 		final info = await base.rawQuery('PRAGMA table_info(purchases)');
 		final tiendaNotNull = info.any(
@@ -1269,8 +1274,11 @@ class MigracionesEsquema {
 		}
 
 		await base.execute('PRAGMA foreign_keys=OFF');
+		await base.execute(
+			'ALTER TABLE purchases RENAME TO purchases_legacy_v34',
+		);
 		await base.execute('''
-			CREATE TABLE purchases_v34 (
+			CREATE TABLE purchases (
 				id TEXT PRIMARY KEY,
 				tienda_id TEXT REFERENCES stores(id),
 				proveedor_id TEXT NOT NULL REFERENCES proveedores(id),
@@ -1282,19 +1290,32 @@ class MigracionesEsquema {
 			)
 		''');
 		await base.execute('''
-			INSERT INTO purchases_v34 (
+			INSERT INTO purchases (
 				id, tienda_id, proveedor_id, fecha_compra, notas, total, creada_en, creado_por
 			)
 			SELECT
 				id, tienda_id, proveedor_id, fecha_compra, notas, total, creada_en, creado_por
-			FROM purchases
+			FROM purchases_legacy_v34
 		''');
-		await base.execute('DROP TABLE purchases');
-		await base.execute('ALTER TABLE purchases_v34 RENAME TO purchases');
+		await base.execute('DROP TABLE purchases_legacy_v34');
 		await base.execute(
 			'CREATE INDEX IF NOT EXISTS idx_purchases_fecha ON purchases(fecha_compra DESC)',
 		);
 		await base.execute('PRAGMA foreign_keys=ON');
+		final violaciones = await base.rawQuery('PRAGMA foreign_key_check');
+		if (violaciones.isNotEmpty) {
+			throw StateError(
+				'Integridad referencial fallida tras migracion v34: '
+				'${violaciones.first}',
+			);
+		}
+	}
+
+	static Future<bool> _existeTablaCompras(Database base) async {
+		final filas = await base.rawQuery(
+			"SELECT name FROM sqlite_master WHERE type='table' AND name='purchases'",
+		);
+		return filas.isNotEmpty;
 	}
 
 	/// v6.23: codigo de barras unico por tienda entre productos activos.
