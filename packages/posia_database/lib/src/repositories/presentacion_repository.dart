@@ -4,13 +4,17 @@ library;
 import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../utils/asegurador_padres_fk.dart';
 import '../utils/transaccion_sqlite.dart';
 
 /// Persiste catalogo de presentaciones comerciales.
 class PresentacionRepository {
-	PresentacionRepository({required Database baseDatos}) : _baseDatos = baseDatos;
+	PresentacionRepository({required Database baseDatos})
+		: _baseDatos = baseDatos,
+		  _padresFk = AseguradorPadresFk(baseDatos);
 
 	final Database _baseDatos;
+	final AseguradorPadresFk _padresFk;
 
 	Future<List<TipoPresentacion>> listarTiposActivos() async {
 		final filas = await _baseDatos.query(
@@ -101,6 +105,7 @@ class PresentacionRepository {
 		PresentacionProducto presentacion, {
 		DatabaseExecutor? db,
 	}) async {
+		await _padresFk.asegurarPadresDePresentacion(presentacion);
 		final exec = db ?? _baseDatos;
 		await exec.insert(
 			'presentaciones_producto',
@@ -125,6 +130,7 @@ class PresentacionRepository {
 		List<PresentacionProducto> presentaciones, {
 		DatabaseExecutor? db,
 	}) async {
+		await _padresFk.asegurarProducto(productoId);
 		await ejecutarEscrituraTransaccional(_baseDatos, db, (transaccion) async {
 			await transaccion.delete(
 				'presentaciones_producto',
@@ -132,6 +138,7 @@ class PresentacionRepository {
 				whereArgs: [productoId],
 			);
 			for (final presentacion in presentaciones) {
+				await _padresFk.asegurarPadresDePresentacion(presentacion);
 				await transaccion.insert(
 					'presentaciones_producto',
 					{

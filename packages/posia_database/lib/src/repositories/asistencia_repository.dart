@@ -4,16 +4,22 @@ library;
 import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../utils/asegurador_padres_fk.dart';
+
 /// Persiste desafios PIN y registros de entrada/salida.
 class AsistenciaRepository {
-	AsistenciaRepository({required Database baseDatos}) : _baseDatos = baseDatos;
+	AsistenciaRepository({required Database baseDatos})
+		: _baseDatos = baseDatos,
+		  _padresFk = AseguradorPadresFk(baseDatos);
 
 	final Database _baseDatos;
+	final AseguradorPadresFk _padresFk;
 
 	Future<void> guardarDesafio(
 		DesafioAsistencia desafio, {
 		DatabaseExecutor? db,
 	}) async {
+		await _padresFk.asegurarTienda(desafio.tiendaId);
 		final exec = db ?? _baseDatos;
 		await exec.insert(
 			'desafios_asistencia',
@@ -61,6 +67,7 @@ class AsistenciaRepository {
 	}
 
 	Future<void> guardarRegistro(RegistroAsistencia registro) async {
+		await _padresFk.asegurarPadresDeRegistroAsistencia(registro);
 		await _baseDatos.insert(
 			'registros_asistencia',
 			{

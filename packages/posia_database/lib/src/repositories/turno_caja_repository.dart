@@ -8,11 +8,16 @@ library;
 import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../utils/asegurador_padres_fk.dart';
+
 /// Persiste aperturas y cierres de caja.
 class TurnoCajaRepository {
-	TurnoCajaRepository({required Database baseDatos}) : _baseDatos = baseDatos;
+	TurnoCajaRepository({required Database baseDatos})
+		: _baseDatos = baseDatos,
+		  _padresFk = AseguradorPadresFk(baseDatos);
 
 	final Database _baseDatos;
+	final AseguradorPadresFk _padresFk;
 
 	Future<TurnoCaja?> obtenerPorId(String id, {DatabaseExecutor? db}) async {
 		final exec = db ?? _baseDatos;
@@ -45,6 +50,8 @@ class TurnoCajaRepository {
 	}
 
 	Future<void> guardar(TurnoCaja turno, {DatabaseExecutor? db}) async {
+		await _padresFk.asegurarTienda(turno.tiendaId);
+		await _padresFk.asegurarVendedor(turno.vendedorId, tiendaId: turno.tiendaId);
 		final exec = db ?? _baseDatos;
 		if (turno.estado == EstadoTurnoCaja.abierto) {
 			await exec.update(

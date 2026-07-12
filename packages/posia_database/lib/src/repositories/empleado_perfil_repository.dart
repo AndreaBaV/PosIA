@@ -4,11 +4,16 @@ library;
 import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../utils/asegurador_padres_fk.dart';
+
 /// Tarifa por hora y datos de nomina por usuario.
 class EmpleadoPerfilRepository {
-	EmpleadoPerfilRepository({required Database baseDatos}) : _baseDatos = baseDatos;
+	EmpleadoPerfilRepository({required Database baseDatos})
+		: _baseDatos = baseDatos,
+		  _padresFk = AseguradorPadresFk(baseDatos);
 
 	final Database _baseDatos;
+	final AseguradorPadresFk _padresFk;
 
 	Future<EmpleadoPerfil?> obtenerPorUsuario(String usuarioId) async {
 		final filas = await _baseDatos.query(
@@ -29,6 +34,7 @@ class EmpleadoPerfilRepository {
 	}
 
 	Future<void> guardar(EmpleadoPerfil perfil) async {
+		await _padresFk.asegurarUsuario(perfil.usuarioId);
 		await _baseDatos.insert(
 			'empleado_perfil',
 			{

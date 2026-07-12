@@ -4,14 +4,17 @@ library;
 import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../utils/asegurador_padres_fk.dart';
 import '../utils/transaccion_sqlite.dart';
 
 /// Persiste lotes de promocion y sus productos miembros.
 class LotePromocionRepository {
 	LotePromocionRepository({required Database baseDatos})
-		: _baseDatos = baseDatos;
+		: _baseDatos = baseDatos,
+		  _padresFk = AseguradorPadresFk(baseDatos);
 
 	final Database _baseDatos;
+	final AseguradorPadresFk _padresFk;
 
 	/// Lista lotes de promocion activos (con miembros).
 	Future<List<LotePromocion>> listarActivos({DatabaseExecutor? db}) async {
@@ -93,6 +96,7 @@ class LotePromocionRepository {
 		LotePromocion lote, {
 		DatabaseExecutor? db,
 	}) async {
+		await _padresFk.asegurarPadresDeLotePromocion(lote);
 		await ejecutarEscrituraTransaccional(_baseDatos, db, (tx) async {
 			await tx.insert(
 				'lotes_promocion',
@@ -133,6 +137,8 @@ class LotePromocionRepository {
 		String productoId, {
 		DatabaseExecutor? db,
 	}) async {
+		await _padresFk.asegurarLotePromocion(loteId);
+		await _padresFk.asegurarProducto(productoId);
 		final exec = db ?? _baseDatos;
 		await exec.insert(
 			'lote_promocion_miembros',

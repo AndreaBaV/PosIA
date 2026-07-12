@@ -4,11 +4,16 @@ library;
 import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../utils/asegurador_padres_fk.dart';
+
 /// Persiste almacenes y stock por almacen.
 class AlmacenRepository {
-	AlmacenRepository({required Database baseDatos}) : _baseDatos = baseDatos;
+	AlmacenRepository({required Database baseDatos})
+		: _baseDatos = baseDatos,
+		  _padresFk = AseguradorPadresFk(baseDatos);
 
 	final Database _baseDatos;
+	final AseguradorPadresFk _padresFk;
 
 	Future<List<Almacen>> listarActivos() async {
 		final filas = await _baseDatos.query(
@@ -41,6 +46,7 @@ class AlmacenRepository {
 	}
 
 	Future<void> guardar(Almacen almacen) async {
+		await _padresFk.asegurarTienda(almacen.tiendaId);
 		await _baseDatos.insert(
 			'almacenes',
 			{
@@ -75,6 +81,8 @@ class AlmacenRepository {
 	}
 
 	Future<void> guardarStock(StockAlmacen stock, {DatabaseExecutor? db}) async {
+		await _padresFk.asegurarProducto(stock.productoId);
+		await _padresFk.asegurarAlmacen(stock.almacenId);
 		final exec = db ?? _baseDatos;
 		await exec.insert(
 			'stock_almacen',

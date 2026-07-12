@@ -4,13 +4,20 @@ library;
 import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../utils/asegurador_padres_fk.dart';
+
 /// Persiste carritos apartados por tienda y caja.
 class TicketEsperaRepository {
-	TicketEsperaRepository({required Database baseDatos}) : _baseDatos = baseDatos;
+	TicketEsperaRepository({required Database baseDatos})
+		: _baseDatos = baseDatos,
+		  _padresFk = AseguradorPadresFk(baseDatos);
 
 	final Database _baseDatos;
+	final AseguradorPadresFk _padresFk;
 
 	Future<void> guardar(TicketEnEspera ticket) async {
+		await _padresFk.asegurarPadresDeTicketEspera(ticket);
+		await _padresFk.asegurarTicketEspera(ticket.id, tiendaId: ticket.tiendaId);
 		await _baseDatos.transaction((tx) async {
 			await tx.insert(
 				'held_tickets',

@@ -4,11 +4,16 @@ library;
 import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../utils/asegurador_padres_fk.dart';
+
 /// Persiste pedidos y lineas de detalle.
 class PedidoRepository {
-	PedidoRepository({required Database baseDatos}) : _baseDatos = baseDatos;
+	PedidoRepository({required Database baseDatos})
+		: _baseDatos = baseDatos,
+		  _padresFk = AseguradorPadresFk(baseDatos);
 
 	final Database _baseDatos;
+	final AseguradorPadresFk _padresFk;
 
 	/// Cuenta pedidos asociados a un cliente.
 	Future<int> contarPorCliente(String clienteId) async {
@@ -20,6 +25,8 @@ class PedidoRepository {
 	}
 
 	Future<void> guardar(Pedido pedido) async {
+		await _padresFk.asegurarPadresDePedido(pedido);
+		await _padresFk.asegurarPedido(pedido.id, tiendaId: pedido.tiendaId);
 		await _baseDatos.transaction((transaccion) async {
 			await transaccion.insert(
 				'orders',

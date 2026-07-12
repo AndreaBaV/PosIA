@@ -9,14 +9,19 @@ library;
 import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../utils/asegurador_padres_fk.dart';
+
 /// Implementa persistencia de lotes con caducidad para farmacia.
 class LoteFarmaciaRepository implements RepositorioLoteFarmacia {
 	/// Crea repositorio con conexion SQLite activa.
 	///
 	/// [baseDatos] Conexion local abierta.
-	LoteFarmaciaRepository({required Database baseDatos}) : _baseDatos = baseDatos;
+	LoteFarmaciaRepository({required Database baseDatos})
+		: _baseDatos = baseDatos,
+		  _padresFk = AseguradorPadresFk(baseDatos);
 
 	final Database _baseDatos;
+	final AseguradorPadresFk _padresFk;
 
 	@override
 	Future<List<LoteFarmacia>> listarDisponiblesPorProducto(
@@ -80,6 +85,8 @@ class LoteFarmaciaRepository implements RepositorioLoteFarmacia {
 
 	@override
 	Future<void> guardar(LoteFarmacia lote) async {
+		await _padresFk.asegurarProducto(lote.productoId, tiendaId: lote.tiendaId);
+		await _padresFk.asegurarTienda(lote.tiendaId);
 		await _baseDatos.insert(
 			'pharmacy_lots',
 			{

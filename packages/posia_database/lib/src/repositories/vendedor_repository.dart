@@ -8,11 +8,16 @@ library;
 import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../utils/asegurador_padres_fk.dart';
+
 /// Persiste personal de venta.
 class VendedorRepository {
-	VendedorRepository({required Database baseDatos}) : _baseDatos = baseDatos;
+	VendedorRepository({required Database baseDatos})
+		: _baseDatos = baseDatos,
+		  _padresFk = AseguradorPadresFk(baseDatos);
 
 	final Database _baseDatos;
+	final AseguradorPadresFk _padresFk;
 
 	Future<List<Vendedor>> listarActivos({String? tiendaId}) async {
 		if (tiendaId == null) {
@@ -86,6 +91,7 @@ class VendedorRepository {
 	}
 
 	Future<void> guardar(Vendedor vendedor) async {
+		await _padresFk.asegurarTienda(vendedor.tiendaId);
 		final duplicado = await obtenerPorCodigo(vendedor.codigo, excluirId: vendedor.id);
 		if (duplicado != null) {
 			throw StateError('Ya existe un vendedor con el codigo ${vendedor.codigo}');

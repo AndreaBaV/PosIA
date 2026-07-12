@@ -210,6 +210,11 @@ class UsuarioRepository {
 		}
 
 		try {
+			await _padresFk.asegurarTienda(usuario.tiendaId);
+			await _padresFk.asegurarRolPersonalizado(
+				usuario.rolPersonalizadoId,
+				tiendaId: usuario.tiendaId,
+			);
 			await _baseDatos.insert(
 				'usuarios',
 				{

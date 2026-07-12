@@ -4,13 +4,19 @@ library;
 import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../utils/asegurador_padres_fk.dart';
+
 /// Persiste calculos de nomina por periodo.
 class NominaRepository {
-	NominaRepository({required Database baseDatos}) : _baseDatos = baseDatos;
+	NominaRepository({required Database baseDatos})
+		: _baseDatos = baseDatos,
+		  _padresFk = AseguradorPadresFk(baseDatos);
 
 	final Database _baseDatos;
+	final AseguradorPadresFk _padresFk;
 
 	Future<void> guardarPeriodo(PeriodoNomina periodo, {DatabaseExecutor? db}) async {
+		await _padresFk.asegurarTienda(periodo.tiendaId);
 		final exec = db ?? _baseDatos;
 		await exec.insert(
 			'periodos_nomina',
@@ -43,6 +49,7 @@ class NominaRepository {
 	}
 
 	Future<void> guardarLinea(LineaNomina linea, {DatabaseExecutor? db}) async {
+		await _padresFk.asegurarPadresDeLineaNomina(linea);
 		final exec = db ?? _baseDatos;
 		await exec.insert(
 			'lineas_nomina',

@@ -4,13 +4,17 @@ library;
 import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../utils/asegurador_padres_fk.dart';
 import '../utils/transaccion_sqlite.dart';
 
 /// Persiste compras y sus lineas de detalle.
 class CompraRepository {
-	CompraRepository({required Database baseDatos}) : _baseDatos = baseDatos;
+	CompraRepository({required Database baseDatos})
+		: _baseDatos = baseDatos,
+		  _padresFk = AseguradorPadresFk(baseDatos);
 
 	final Database _baseDatos;
+	final AseguradorPadresFk _padresFk;
 
 	/// Cuenta compras asociadas a un proveedor.
 	Future<int> contarPorProveedor(String proveedorId) async {
@@ -22,6 +26,12 @@ class CompraRepository {
 	}
 
 	Future<void> guardar(Compra compra, {DatabaseExecutor? db}) async {
+		await _padresFk.asegurarPadresDeCompra(compra);
+		await _padresFk.asegurarCompra(
+			compra.id,
+			tiendaId: compra.tiendaId,
+			proveedorId: compra.proveedorId,
+		);
 		await ejecutarEscrituraTransaccional(_baseDatos, db, (tx) async {
 			await tx.insert(
 				'purchases',

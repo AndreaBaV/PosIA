@@ -4,11 +4,16 @@ library;
 import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../utils/asegurador_padres_fk.dart';
+
 /// Persiste cotizaciones y lineas de detalle.
 class CotizacionRepository {
-	CotizacionRepository({required Database baseDatos}) : _baseDatos = baseDatos;
+	CotizacionRepository({required Database baseDatos})
+		: _baseDatos = baseDatos,
+		  _padresFk = AseguradorPadresFk(baseDatos);
 
 	final Database _baseDatos;
+	final AseguradorPadresFk _padresFk;
 
 	/// Cuenta cotizaciones asociadas a un cliente.
 	Future<int> contarPorCliente(String clienteId) async {
@@ -20,6 +25,11 @@ class CotizacionRepository {
 	}
 
 	Future<void> guardar(Cotizacion cotizacion) async {
+		await _padresFk.asegurarPadresDeCotizacion(cotizacion);
+		await _padresFk.asegurarCotizacion(
+			cotizacion.id,
+			tiendaId: cotizacion.tiendaId,
+		);
 		await _baseDatos.transaction((transaccion) async {
 			await transaccion.insert(
 				'quotes',

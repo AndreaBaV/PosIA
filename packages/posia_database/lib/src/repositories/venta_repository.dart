@@ -9,6 +9,7 @@ library;
 import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../utils/asegurador_padres_fk.dart';
 import '../utils/transaccion_sqlite.dart';
 
 /// Persiste ventas y lineas de detalle en SQLite.
@@ -16,14 +17,18 @@ class VentaRepository {
 	/// Crea repositorio con conexion SQLite activa.
 	///
 	/// [baseDatos] Conexion local abierta.
-	VentaRepository({required Database baseDatos}) : _baseDatos = baseDatos;
+	VentaRepository({required Database baseDatos})
+		: _baseDatos = baseDatos,
+		  _padresFk = AseguradorPadresFk(baseDatos);
 
 	final Database _baseDatos;
+	final AseguradorPadresFk _padresFk;
 
 	/// Guarda venta completa con lineas en transaccion.
 	///
 	/// [venta] Venta cerrada a persistir.
 	Future<void> guardar(Venta venta, {DatabaseExecutor? db}) async {
+		await _padresFk.asegurarPadresDeVenta(venta);
 		await ejecutarEscrituraTransaccional(_baseDatos, db, (transaccion) async {
 			await transaccion.insert('sales', {
 				'id': venta.id,
@@ -135,6 +140,13 @@ class VentaRepository {
 
 	/// Reemplaza lineas, total y estado de una venta existente.
 	Future<void> actualizarVenta(Venta venta, {DatabaseExecutor? db}) async {
+		for (final linea in venta.lineas) {
+			await _padresFk.asegurarPadresDeLineaVenta(
+				ventaId: venta.id,
+				linea: linea,
+				tiendaId: venta.tiendaId,
+			);
+		}
 		await ejecutarEscrituraTransaccional(_baseDatos, db, (transaccion) async {
 			await transaccion.update(
 				'sales',

@@ -8,14 +8,19 @@ library;
 import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../utils/asegurador_padres_fk.dart';
+
 /// Ledger de entradas, salidas y ajustes.
 class MovimientoInventarioRepository {
 	MovimientoInventarioRepository({required Database baseDatos})
-		: _baseDatos = baseDatos;
+		: _baseDatos = baseDatos,
+		  _padresFk = AseguradorPadresFk(baseDatos);
 
 	final Database _baseDatos;
+	final AseguradorPadresFk _padresFk;
 
 	Future<void> guardar(MovimientoInventario movimiento, {DatabaseExecutor? db}) async {
+		await _padresFk.asegurarPadresDeMovimientoInventario(movimiento);
 		final exec = db ?? _baseDatos;
 		await exec.insert('inventory_movements', {
 			'id': movimiento.id,
