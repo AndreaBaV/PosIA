@@ -425,17 +425,22 @@ class ServicioAdmin {
     final miembrosPorLote = <String, List<String>>{};
     final metaPorLote =
         <String, ({double cantidadMinima, double precioUnitario})>{};
+    final categoriasCreadas = <String, String>{};
 
     for (var i = 0; i < total; i++) {
       alProgreso?.call(i + 1, total);
       final fila = filas[i];
       try {
-        final producto = await registrarProductoCompleto(fila.solicitud);
+        final solicitud = await _resolverCategoriaImportacion(
+          fila.solicitud,
+          categoriasCreadas: categoriasCreadas,
+        );
+        final producto = await registrarProductoCompleto(solicitud);
         importados++;
-        final codigoLote = fila.solicitud.lotePromocionCodigo?.trim();
+        final codigoLote = solicitud.lotePromocionCodigo?.trim();
         if (codigoLote != null && codigoLote.isNotEmpty) {
-          final piezas = fila.solicitud.piezasPorCaja;
-          final precioCaja = fila.solicitud.precioCaja;
+          final piezas = solicitud.piezasPorCaja;
+          final precioCaja = solicitud.precioCaja;
           if (piezas == null ||
               piezas <= 0 ||
               precioCaja == null ||
@@ -1355,6 +1360,44 @@ class ServicioAdmin {
 
   Future<List<Categoria>> listarCategorias() async {
     return _categoriaRepository?.listarTodas() ?? [];
+  }
+
+  /// Crea la categoria indicada en la solicitud de importacion si aún no existe.
+  Future<AltaProductoRequest> _resolverCategoriaImportacion(
+    AltaProductoRequest solicitud, {
+    required Map<String, String> categoriasCreadas,
+  }) async {
+    final aCrear = solicitud.categoriaACrear?.trim();
+    if (aCrear == null || aCrear.isEmpty) {
+      if (solicitud.categoriaId.trim().isEmpty) {
+        throw StateError('Categoria no resuelta para "${solicitud.nombre}"');
+      }
+      return solicitud;
+    }
+    final clave = normalizarTextoBusqueda(aCrear);
+    final cached = categoriasCreadas[clave];
+    if (cached != null) {
+      return solicitud.copiarCon(
+        categoriaId: cached,
+        limpiarCategoriaACrear: true,
+      );
+    }
+    final existentes = await listarCategorias();
+    for (final c in existentes.where((c) => c.activa)) {
+      if (normalizarTextoBusqueda(c.nombre) == clave) {
+        categoriasCreadas[clave] = c.id;
+        return solicitud.copiarCon(
+          categoriaId: c.id,
+          limpiarCategoriaACrear: true,
+        );
+      }
+    }
+    final creada = await registrarCategoria(nombre: aCrear);
+    categoriasCreadas[clave] = creada.id;
+    return solicitud.copiarCon(
+      categoriaId: creada.id,
+      limpiarCategoriaACrear: true,
+    );
   }
 
   Future<Categoria> registrarCategoria({

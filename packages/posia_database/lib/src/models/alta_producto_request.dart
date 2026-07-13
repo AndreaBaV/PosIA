@@ -26,6 +26,7 @@ class AltaProductoRequest {
 		this.codigoCaja = '',
 		this.lotePromocionCodigo,
 		this.presentaciones = const [],
+		this.categoriaACrear,
 	});
 
 	final String nombre;
@@ -55,6 +56,59 @@ class AltaProductoRequest {
 
 	/// Presentaciones adicionales (granel: gramos → factor a kilo).
 	final List<PresentacionImportacionSolicitud> presentaciones;
+
+	/// Si no es null, la categoria se crea al importar (aún no existe en catalogo).
+	final String? categoriaACrear;
+
+	AltaProductoRequest copiarCon({
+		String? nombre,
+		String? codigoBarras,
+		double? precioBase,
+		String? categoriaId,
+		UnidadMedida? unidadMedida,
+		int? piezasPorCaja,
+		int? unidadesPorBulto,
+		String? proveedorId,
+		String? notas,
+		bool? activo,
+		double? stockInicial,
+		double? stockMinimo,
+		List<EscalaMayoreo>? escalasMayoreo,
+		double? costoUnitario,
+		bool? permiteStockNegativo,
+		double? precioCaja,
+		String? codigoCaja,
+		String? lotePromocionCodigo,
+		List<PresentacionImportacionSolicitud>? presentaciones,
+		String? categoriaACrear,
+		bool limpiarCategoriaACrear = false,
+	}) {
+		return AltaProductoRequest(
+			nombre: nombre ?? this.nombre,
+			codigoBarras: codigoBarras ?? this.codigoBarras,
+			precioBase: precioBase ?? this.precioBase,
+			categoriaId: categoriaId ?? this.categoriaId,
+			unidadMedida: unidadMedida ?? this.unidadMedida,
+			piezasPorCaja: piezasPorCaja ?? this.piezasPorCaja,
+			unidadesPorBulto: unidadesPorBulto ?? this.unidadesPorBulto,
+			proveedorId: proveedorId ?? this.proveedorId,
+			notas: notas ?? this.notas,
+			activo: activo ?? this.activo,
+			stockInicial: stockInicial ?? this.stockInicial,
+			stockMinimo: stockMinimo ?? this.stockMinimo,
+			escalasMayoreo: escalasMayoreo ?? this.escalasMayoreo,
+			costoUnitario: costoUnitario ?? this.costoUnitario,
+			permiteStockNegativo:
+					permiteStockNegativo ?? this.permiteStockNegativo,
+			precioCaja: precioCaja ?? this.precioCaja,
+			codigoCaja: codigoCaja ?? this.codigoCaja,
+			lotePromocionCodigo: lotePromocionCodigo ?? this.lotePromocionCodigo,
+			presentaciones: presentaciones ?? this.presentaciones,
+			categoriaACrear: limpiarCategoriaACrear
+					? null
+					: (categoriaACrear ?? this.categoriaACrear),
+		);
+	}
 }
 
 /// Presentacion a crear al importar (factor relativo a la unidad base).

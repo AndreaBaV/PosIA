@@ -304,10 +304,9 @@ class ImportadorProductos {
         }
 
         final categoriaTexto = valores['categoria']?.trim() ?? '';
-        final categoriaId = _resolverCategoriaId(
+        final resolucionCategoria = _resolverCategoria(
           texto: categoriaTexto.isEmpty ? null : categoriaTexto,
           categoriasPorNombre: categoriasPorNombre,
-          errores: errores,
         );
 
         final precioTexto = valores['precio_base']?.trim() ?? '';
@@ -460,7 +459,7 @@ class ImportadorProductos {
 
         AltaProductoRequest? solicitud;
         if (errores.isEmpty &&
-            categoriaId != null &&
+            resolucionCategoria != null &&
             precioBase != null &&
             unidad != null &&
             stockInicial != null &&
@@ -469,7 +468,7 @@ class ImportadorProductos {
             nombre: nombre,
             codigoBarras: codigoBarras,
             precioBase: precioBase,
-            categoriaId: categoriaId,
+            categoriaId: resolucionCategoria.categoriaId,
             unidadMedida: unidad,
             piezasPorCaja: piezasPorCaja,
             unidadesPorBulto: unidadesPorBulto,
@@ -482,6 +481,7 @@ class ImportadorProductos {
             precioCaja: precioCaja,
             codigoCaja: codigoCaja,
             lotePromocionCodigo: tieneLote ? lotePromocionCodigo : null,
+            categoriaACrear: resolucionCategoria.categoriaACrear,
           );
         }
 
@@ -618,14 +618,13 @@ class ImportadorProductos {
         errores.add('Falta al menos una presentacion con gramos y precio');
       }
 
-      final categoriaId = _resolverCategoriaId(
+      final resolucionCategoria = _resolverCategoria(
         texto: grupo.categoriaTexto.isEmpty ? null : grupo.categoriaTexto,
         categoriasPorNombre: categoriasPorNombre,
-        errores: errores,
       );
 
       AltaProductoRequest? solicitud;
-      if (errores.isEmpty && categoriaId != null) {
+      if (errores.isEmpty && resolucionCategoria != null) {
         final precioKilo = _precioKiloDesdePresentaciones(grupo.presentaciones);
         final presentaciones = <PresentacionImportacionSolicitud>[
           PresentacionImportacionSolicitud(
@@ -654,10 +653,11 @@ class ImportadorProductos {
           nombre: grupo.nombre,
           codigoBarras: '',
           precioBase: precioKilo,
-          categoriaId: categoriaId,
+          categoriaId: resolucionCategoria.categoriaId,
           unidadMedida: UnidadMedida.kilogramo,
           notas: 'importacion:kg',
           presentaciones: presentaciones,
+          categoriaACrear: resolucionCategoria.categoriaACrear,
         );
       }
 
@@ -837,27 +837,114 @@ class ImportadorProductos {
     return {'si', 's', 'true', '1', 'yes', 'verdadero'}.contains(norm);
   }
 
-  static String? _resolverCategoriaId({
+  /// Resuelve categoria existente, marca creacion, o cae a la mas parecida a
+  /// abarrotes cuando la columna viene vacia.
+  static ({String categoriaId, String? categoriaACrear})? _resolverCategoria({
     required String? texto,
     required Map<String, Categoria> categoriasPorNombre,
-    required List<String> errores,
     String categoriaPorDefectoNombre = categoriaPorDefecto,
   }) {
-    final clave = texto == null || texto.trim().isEmpty
+    final textoLimpio = texto?.trim() ?? '';
+    final usaDefecto = textoLimpio.isEmpty;
+    final clave = usaDefecto
         ? normalizarTextoBusqueda(categoriaPorDefectoNombre)
-        : normalizarTextoBusqueda(texto.trim());
-    final categoria = categoriasPorNombre[clave];
-    if (categoria == null) {
-      if (texto == null || texto.trim().isEmpty) {
-        errores.add(
-          'Categoria por defecto "$categoriaPorDefectoNombre" no existe en el catalogo',
-        );
-      } else {
-        errores.add('Categoria no encontrada: "$texto"');
+        : normalizarTextoBusqueda(textoLimpio);
+
+    final exacta = categoriasPorNombre[clave];
+    if (exacta != null) {
+      return (categoriaId: exacta.id, categoriaACrear: null);
+    }
+
+    if (usaDefecto) {
+      final parecida = _categoriaMasParecida(
+        categoriaPorDefectoNombre,
+        categoriasPorNombre,
+      );
+      if (parecida != null) {
+        return (categoriaId: parecida.id, categoriaACrear: null);
       }
+      // Catalogo vacio: se creara "Abarrotes" al importar.
+      return (
+        categoriaId: '',
+        categoriaACrear: _tituloCategoria(categoriaPorDefectoNombre),
+      );
+    }
+
+    // Categoria nombrada inexistente: se crea al importar.
+    return (categoriaId: '', categoriaACrear: textoLimpio);
+  }
+
+  static Categoria? _categoriaMasParecida(
+    String objetivo,
+    Map<String, Categoria> categoriasPorNombre,
+  ) {
+    if (categoriasPorNombre.isEmpty) {
       return null;
     }
-    return categoria.id;
+    final objetivoNorm = normalizarTextoBusqueda(objetivo);
+    Categoria? mejorPorContencion;
+    for (final entrada in categoriasPorNombre.entries) {
+      if (entrada.key.contains(objetivoNorm) ||
+          objetivoNorm.contains(entrada.key)) {
+        mejorPorContencion = entrada.value;
+        break;
+      }
+    }
+    if (mejorPorContencion != null) {
+      return mejorPorContencion;
+    }
+
+    Categoria? mejor;
+    var mejorDist = 1 << 30;
+    for (final entrada in categoriasPorNombre.entries) {
+      final dist = _distanciaLevenshtein(objetivoNorm, entrada.key);
+      if (dist < mejorDist) {
+        mejorDist = dist;
+        mejor = entrada.value;
+      }
+    }
+    return mejor;
+  }
+
+  static int _distanciaLevenshtein(String a, String b) {
+    if (a == b) {
+      return 0;
+    }
+    if (a.isEmpty) {
+      return b.length;
+    }
+    if (b.isEmpty) {
+      return a.length;
+    }
+    final filas = List.generate(
+      a.length + 1,
+      (_) => List<int>.filled(b.length + 1, 0),
+    );
+    for (var i = 0; i <= a.length; i++) {
+      filas[i][0] = i;
+    }
+    for (var j = 0; j <= b.length; j++) {
+      filas[0][j] = j;
+    }
+    for (var i = 1; i <= a.length; i++) {
+      for (var j = 1; j <= b.length; j++) {
+        final costo = a[i - 1] == b[j - 1] ? 0 : 1;
+        filas[i][j] = [
+          filas[i - 1][j] + 1,
+          filas[i][j - 1] + 1,
+          filas[i - 1][j - 1] + costo,
+        ].reduce((x, y) => x < y ? x : y);
+      }
+    }
+    return filas[a.length][b.length];
+  }
+
+  static String _tituloCategoria(String texto) {
+    final t = texto.trim();
+    if (t.isEmpty) {
+      return 'Abarrotes';
+    }
+    return t[0].toUpperCase() + t.substring(1).toLowerCase();
   }
 
   static String _escaparCsv(String texto) {

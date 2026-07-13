@@ -112,8 +112,9 @@ class _PantallaImportarProductosAdminState
                   'Cargue un CSV o Excel (.xlsx). Hay dos plantillas: catalogo '
                   'general (pieza/caja) y por kilogramo (varias presentaciones '
                   'en gramos; el precio/kg viene de 1000 g o se deriva). '
-                  'La categoria es libre. En Excel con varias hojas, elija la '
-                  'hoja a importar (p. ej. Granel).',
+                  'Si la categoria no existe se crea al importar; si falta la '
+                  'columna se usa Abarrotes o la mas parecida. En Excel con '
+                  'varias hojas, elija la hoja a importar (p. ej. Granel).',
                 ),
                 const SizedBox(height: 16.0),
                 Wrap(
@@ -230,7 +231,8 @@ class _PantallaImportarProductosAdminState
         subtitle: ok
             ? Text(
                 '${fila.solicitud!.codigoBarras.isEmpty ? "Sin codigo" : fila.solicitud!.codigoBarras} · '
-                '${formatearMoneda(fila.solicitud!.precioBase)}',
+                '${formatearMoneda(fila.solicitud!.precioBase)}'
+                '${fila.solicitud!.categoriaACrear != null ? " · creará categoría «${fila.solicitud!.categoriaACrear}»" : ""}',
               )
             : Text(fila.errores.join('\n')),
         isThreeLine: !ok,
@@ -440,6 +442,7 @@ class _PantallaImportarProductosAdminState
     );
 
     ref.invalidate(productosCatalogoAdminProvider);
+    ref.invalidate(categoriasFormularioAdminProvider);
     await refrescarDatosMaestros(ref);
 
     if (!mounted) {

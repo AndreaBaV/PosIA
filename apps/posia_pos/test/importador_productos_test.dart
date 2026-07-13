@@ -91,7 +91,7 @@ Frijol 1kg,22,
       expect(analisis.filas.first.solicitud?.categoriaId, 'cat-abarrotes');
     });
 
-    test('detecta categoria inexistente cuando se indica explicitamente', () {
+    test('marca categoria inexistente para crearla al importar', () {
       final csv = '''
 nombre,precio_base,categoria
 Refresco,20,Desconocida
@@ -103,13 +103,44 @@ Refresco,20,Desconocida
         proveedores: const [],
         codigosBarrasExistentes: const {},
       );
-      expect(analisis.filasConError, 1);
-      expect(
-        analisis.filas.first.errores.any(
-          (e) => e.contains('Categoria no encontrada'),
+      expect(analisis.filasValidas, 1);
+      expect(analisis.filas.first.solicitud?.categoriaACrear, 'Desconocida');
+      expect(analisis.filas.first.solicitud?.categoriaId, '');
+    });
+
+    test('sin abarrotes usa la categoria mas parecida', () {
+      final sinAbarrotes = [
+        const Categoria(
+          id: 'cat-abarroteria',
+          nombre: 'Abarrotería',
+          icono: 'store',
+          colorHex: '#4CAF50',
+          orden: 1,
+          activa: true,
         ),
-        isTrue,
+        const Categoria(
+          id: 'cat-bebidas',
+          nombre: 'Bebidas',
+          icono: 'local_drink',
+          colorHex: '#FF5722',
+          orden: 2,
+          activa: true,
+        ),
+      ];
+      final csv = '''
+nombre,precio_base
+Arroz 1kg,28.50
+''';
+      final analisis = ImportadorProductos.analizarBytes(
+        bytes: utf8.encode(csv),
+        extension: 'csv',
+        categorias: sinAbarrotes,
+        proveedores: const [],
+        codigosBarrasExistentes: const {},
       );
+      expect(analisis.filasValidas, 1);
+      expect(analisis.filas.first.solicitud?.categoriaId, 'cat-abarroteria');
+      expect(analisis.filas.first.solicitud?.categoriaACrear, isNull);
     });
 
     test('detecta codigo de barras duplicado en archivo', () {
