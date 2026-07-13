@@ -105,7 +105,8 @@ class PresentacionRepository {
 		PresentacionProducto presentacion, {
 		DatabaseExecutor? db,
 	}) async {
-		await _padresFk.asegurarPadresDePresentacion(presentacion);
+		await (db == null ? _padresFk : AseguradorPadresFk(db))
+			.asegurarPadresDePresentacion(presentacion);
 		final exec = db ?? _baseDatos;
 		await exec.insert(
 			'presentaciones_producto',
@@ -130,7 +131,11 @@ class PresentacionRepository {
 		List<PresentacionProducto> presentaciones, {
 		DatabaseExecutor? db,
 	}) async {
-		await _padresFk.asegurarProducto(productoId);
+		final padres = db == null ? _padresFk : AseguradorPadresFk(db);
+		await padres.asegurarProducto(productoId);
+		for (final presentacion in presentaciones) {
+			await padres.asegurarPadresDePresentacion(presentacion);
+		}
 		await ejecutarEscrituraTransaccional(_baseDatos, db, (transaccion) async {
 			await transaccion.delete(
 				'presentaciones_producto',
@@ -138,17 +143,15 @@ class PresentacionRepository {
 				whereArgs: [productoId],
 			);
 			for (final presentacion in presentaciones) {
-				await _padresFk.asegurarPadresDePresentacion(presentacion);
 				await transaccion.insert(
 					'presentaciones_producto',
 					{
 						'id': presentacion.id,
-						'producto_id': productoId,
+						'producto_id': presentacion.productoId,
 						'tipo_presentacion_id': presentacion.tipoPresentacionId,
 						'nombre': presentacion.nombre,
 						'factor_a_base': presentacion.factorABase,
-						'es_presentacion_base':
-							presentacion.esPresentacionBase ? 1 : 0,
+						'es_presentacion_base': presentacion.esPresentacionBase ? 1 : 0,
 						'codigo_barras': presentacion.codigoBarras,
 						'precio': presentacion.precio,
 						'activo': presentacion.activo ? 1 : 0,

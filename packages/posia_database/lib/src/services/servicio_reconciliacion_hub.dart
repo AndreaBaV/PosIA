@@ -10,7 +10,6 @@ import '../repositories/config_repository.dart';
 import '../repositories/sync_state_repository.dart';
 import '../repositories/tienda_repository.dart';
 import '../seed/placeholders_ejemplo.dart';
-import '../utils/diagnostico_base_local.dart';
 import '../utils/limpiador_base_local.dart';
 
 class ServicioReconciliacionHub {
@@ -32,6 +31,11 @@ class ServicioReconciliacionHub {
 	final SyncStateRepository _syncStateRepository;
 	final TiendaRepository _tiendaRepository;
 
+	/// Reconstruye la base local desde Neon (fuente de verdad).
+	///
+	/// Empuja pendientes operativos, vacía datos locales, reinicia el cursor
+	/// y descarga el historial completo. La salud del hub no aborta el flujo
+	/// (igual que el orquestador): si hay red, se intenta el pull.
 	Future<ResultadoReconciliacionHub> reconciliar({
 		ReporteProgresoSync? alProgreso,
 	}) async {
@@ -48,44 +52,34 @@ class ServicioReconciliacionHub {
 				hubDisponible: false,
 			);
 		}
-		final hubOk = await clienteHub.verificarSalud();
-		if (!hubOk) {
-			return const ResultadoReconciliacionHub(
-				accion: AccionReconciliacionHub.omitida,
-				hubDisponible: false,
-			);
-		}
 
 		final ejemploEliminado = await LimpiadorBaseLocal.eliminarDatosEjemplo(
 			_baseDatos,
 		);
-		var diagnostico = await DiagnosticoBaseLocal.evaluar(_baseDatos);
 		final tiendasRemotas = await clienteHub.obtenerTiendas();
 		final tiendasLocales = await _tiendaRepository.listarTodas();
 		final tiendasCoinciden = _tiendasCoinciden(tiendasRemotas, tiendasLocales);
-		final hubTieneDatos = tiendasRemotas.isNotEmpty ||
-			await _hubTieneEventos(clienteHub);
 
-		var accion = AccionReconciliacionHub.incremental;
-		var limpioOperativos = false;
-		var cursorReiniciado = false;
+		alProgreso?.call(
+			const ProgresoSync(
+				fase: FaseProgresoSync.enviar,
+				indice: 0,
+				total: 0,
+				mensaje: 'Enviando cambios locales antes de reconstruir…',
+			),
+		);
+		await _syncOrchestrator.sincronizarPendientes(alProgreso: alProgreso);
 
-		final requierePullCompleto = hubTieneDatos &&
-			diagnostico.tieneDatosReales &&
-			!tiendasCoinciden;
-
-		if (requierePullCompleto) {
-			final eraReconstruccion =
-				diagnostico.tieneDatosReales && !tiendasCoinciden;
-			await _syncOrchestrator.sincronizarPendientes(alProgreso: alProgreso);
-			await LimpiadorBaseLocal.vaciarDatosOperativos(_baseDatos);
-			limpioOperativos = true;
-			await _syncStateRepository.guardarCursorHub(0);
-			cursorReiniciado = true;
-			accion = eraReconstruccion
-				? AccionReconciliacionHub.reconstruidaDesdeNube
-				: AccionReconciliacionHub.pullCompleto;
-		}
+		alProgreso?.call(
+			const ProgresoSync(
+				fase: FaseProgresoSync.preparar,
+				indice: 0,
+				total: 0,
+				mensaje: 'Limpiando base local…',
+			),
+		);
+		await LimpiadorBaseLocal.vaciarDatosOperativos(_baseDatos);
+		await _syncStateRepository.guardarCursorHub(0);
 
 		if (tiendasRemotas.isNotEmpty) {
 			for (final remota in tiendasRemotas) {
@@ -103,16 +97,16 @@ class ServicioReconciliacionHub {
 			}
 		}
 
-		final sync = cursorReiniciado
-			? await _syncOrchestrator.sincronizarDesdeOrigen(alProgreso: alProgreso)
-			: await _syncOrchestrator.sincronizarCompleto(alProgreso: alProgreso);
+		final sync = await _syncOrchestrator.sincronizarDesdeOrigen(
+			alProgreso: alProgreso,
+		);
 
 		return ResultadoReconciliacionHub(
-			accion: accion,
+			accion: AccionReconciliacionHub.reconstruidaDesdeNube,
 			hubDisponible: sync.hubDisponible,
 			datosEjemploEliminados: ejemploEliminado,
-			datosOperativosLimpiados: limpioOperativos,
-			cursorReiniciado: cursorReiniciado,
+			datosOperativosLimpiados: true,
+			cursorReiniciado: true,
 			tiendasCoinciden: tiendasCoinciden,
 			sync: sync,
 		);
@@ -125,12 +119,6 @@ class ServicioReconciliacionHub {
 		}
 		final claveApi = await _configRepository.obtenerValor(claveConfigHubApiKey);
 		return HubSyncClient(urlBase: hubUrl, claveApi: claveApi);
-	}
-
-	Future<bool> _hubTieneEventos(HubSyncClient clienteHub) async {
-		final resultado = await clienteHub.obtenerEventos(desdeSeq: 0);
-		return resultado.exitoso &&
-			(resultado.eventos.isNotEmpty || resultado.ultimoSeq > 0);
 	}
 
 	bool _tiendasCoinciden(List<TiendaHub> remotas, List<Tienda> locales) {

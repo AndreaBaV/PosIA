@@ -181,12 +181,13 @@ class SyncProgresoNotifier extends Notifier<EstadoSyncUi> {
 			AccionReconciliacionHub.pullCompleto =>
 				'Base local vacía: datos descargados desde la nube.',
 			AccionReconciliacionHub.reconstruidaDesdeNube =>
-				'Datos locales no coincidían con la nube: base reconstruida.',
+				'Base local reconstruida desde la nube.',
 			AccionReconciliacionHub.incremental =>
 				resultado.tiendasCoinciden
 					? 'Datos locales verificados con la nube.'
 					: 'Sincronización incremental completada.',
-			AccionReconciliacionHub.omitida => 'Reconciliación omitida.',
+			AccionReconciliacionHub.omitida =>
+				'Reconciliación omitida (hub no configurado).',
 		};
 		return '$accion Enviados: ${resultado.sync.eventosEnviados} · '
 			'Recibidos: ${resultado.sync.eventosRecibidos}';

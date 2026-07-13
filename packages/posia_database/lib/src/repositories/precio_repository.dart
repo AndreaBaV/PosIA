@@ -214,7 +214,8 @@ class PrecioRepository implements RepositorioPrecio {
 		List<EscalaMayoreo> escalas, {
 		DatabaseExecutor? db,
 	}) async {
-		await _padresFk.asegurarProducto(productoId);
+		await (db == null ? _padresFk : AseguradorPadresFk(db))
+			.asegurarProducto(productoId);
 		await ejecutarEscrituraTransaccional(_baseDatos, db, (transaccion) async {
 			await transaccion.delete(
 				'wholesale_tiers',

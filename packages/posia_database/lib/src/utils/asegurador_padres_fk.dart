@@ -10,7 +10,7 @@ import 'package:sqflite/sqflite.dart';
 class AseguradorPadresFk {
 	AseguradorPadresFk(this._baseDatos);
 
-	final Database _baseDatos;
+	final DatabaseExecutor _baseDatos;
 
 	static const _tiendaSync = 'tienda-sync';
 

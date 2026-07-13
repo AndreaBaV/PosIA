@@ -20,9 +20,13 @@ class TraspasoRepository {
 	final Database _baseDatos;
 	final AseguradorPadresFk _padresFk;
 
+	AseguradorPadresFk _padresPara(DatabaseExecutor? db) =>
+		db == null ? _padresFk : AseguradorPadresFk(db);
+
 	Future<void> guardar(Traspaso traspaso, {DatabaseExecutor? db}) async {
-		await _padresFk.asegurarPadresDeTraspaso(traspaso);
-		await _padresFk.asegurarTraspaso(traspaso.id);
+		final padres = _padresPara(db);
+		await padres.asegurarPadresDeTraspaso(traspaso);
+		await padres.asegurarTraspaso(traspaso.id);
 		await ejecutarEscrituraTransaccional(_baseDatos, db, (tx) async {
 			await tx.insert(
 				'transfers',

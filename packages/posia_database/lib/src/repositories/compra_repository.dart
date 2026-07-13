@@ -25,15 +25,17 @@ class CompraRepository {
 		return (filas.first['total'] as int?) ?? 0;
 	}
 
+	AseguradorPadresFk _padresPara(DatabaseExecutor? db) =>
+		db == null ? _padresFk : AseguradorPadresFk(db);
+
 	Future<void> guardar(Compra compra, {DatabaseExecutor? db}) async {
-		if (db == null) {
-			await _padresFk.asegurarPadresDeCompra(compra);
-			await _padresFk.asegurarCompra(
-				compra.id,
-				tiendaId: compra.tiendaId,
-				proveedorId: compra.proveedorId,
-			);
-		}
+		final padres = _padresPara(db);
+		await padres.asegurarPadresDeCompra(compra);
+		await padres.asegurarCompra(
+			compra.id,
+			tiendaId: compra.tiendaId,
+			proveedorId: compra.proveedorId,
+		);
 		await ejecutarEscrituraTransaccional(_baseDatos, db, (tx) async {
 			await tx.insert(
 				'purchases',

@@ -49,9 +49,13 @@ class TurnoCajaRepository {
 		return _mapear(filas.first);
 	}
 
+	AseguradorPadresFk _padresPara(DatabaseExecutor? db) =>
+		db == null ? _padresFk : AseguradorPadresFk(db);
+
 	Future<void> guardar(TurnoCaja turno, {DatabaseExecutor? db}) async {
-		await _padresFk.asegurarTienda(turno.tiendaId);
-		await _padresFk.asegurarVendedor(turno.vendedorId, tiendaId: turno.tiendaId);
+		final padres = _padresPara(db);
+		await padres.asegurarTienda(turno.tiendaId);
+		await padres.asegurarVendedor(turno.vendedorId, tiendaId: turno.tiendaId);
 		final exec = db ?? _baseDatos;
 		if (turno.estado == EstadoTurnoCaja.abierto) {
 			await exec.update(

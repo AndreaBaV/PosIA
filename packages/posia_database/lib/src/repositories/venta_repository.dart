@@ -24,11 +24,14 @@ class VentaRepository {
 	final Database _baseDatos;
 	final AseguradorPadresFk _padresFk;
 
+	AseguradorPadresFk _padresPara(DatabaseExecutor? db) =>
+		db == null ? _padresFk : AseguradorPadresFk(db);
+
 	/// Guarda venta completa con lineas en transaccion.
 	///
 	/// [venta] Venta cerrada a persistir.
 	Future<void> guardar(Venta venta, {DatabaseExecutor? db}) async {
-		await _padresFk.asegurarPadresDeVenta(venta);
+		await _padresPara(db).asegurarPadresDeVenta(venta);
 		await ejecutarEscrituraTransaccional(_baseDatos, db, (transaccion) async {
 			await transaccion.insert('sales', {
 				'id': venta.id,
@@ -140,8 +143,9 @@ class VentaRepository {
 
 	/// Reemplaza lineas, total y estado de una venta existente.
 	Future<void> actualizarVenta(Venta venta, {DatabaseExecutor? db}) async {
+		final padres = _padresPara(db);
 		for (final linea in venta.lineas) {
-			await _padresFk.asegurarPadresDeLineaVenta(
+			await padres.asegurarPadresDeLineaVenta(
 				ventaId: venta.id,
 				linea: linea,
 				tiendaId: venta.tiendaId,

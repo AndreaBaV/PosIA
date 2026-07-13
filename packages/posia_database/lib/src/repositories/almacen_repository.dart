@@ -80,11 +80,13 @@ class AlmacenRepository {
 		return _mapearStock(filas.first);
 	}
 
+	AseguradorPadresFk _padresPara(DatabaseExecutor? db) =>
+		db == null ? _padresFk : AseguradorPadresFk(db);
+
 	Future<void> guardarStock(StockAlmacen stock, {DatabaseExecutor? db}) async {
-		if (db == null) {
-			await _padresFk.asegurarProducto(stock.productoId);
-			await _padresFk.asegurarAlmacen(stock.almacenId);
-		}
+		final padres = _padresPara(db);
+		await padres.asegurarProducto(stock.productoId);
+		await padres.asegurarAlmacen(stock.almacenId);
 		final exec = db ?? _baseDatos;
 		await exec.insert(
 			'stock_almacen',

@@ -25,6 +25,7 @@ class AltaProductoRequest {
 		this.precioCaja,
 		this.codigoCaja = '',
 		this.lotePromocionCodigo,
+		this.presentaciones = const [],
 	});
 
 	final String nombre;
@@ -51,6 +52,24 @@ class AltaProductoRequest {
 
 	/// Codigo de lote de promocion del archivo (ej. "1"); null = sin lote.
 	final String? lotePromocionCodigo;
+
+	/// Presentaciones adicionales (granel: gramos → factor a kilo).
+	final List<PresentacionImportacionSolicitud> presentaciones;
+}
+
+/// Presentacion a crear al importar (factor relativo a la unidad base).
+class PresentacionImportacionSolicitud {
+	const PresentacionImportacionSolicitud({
+		required this.nombre,
+		required this.factorABase,
+		required this.precio,
+		this.esPresentacionBase = false,
+	});
+
+	final String nombre;
+	final double factorABase;
+	final double precio;
+	final bool esPresentacionBase;
 }
 
 /// Inventario agrupado por producto con existencias por tienda y almacén.

@@ -19,10 +19,11 @@ class MovimientoInventarioRepository {
 	final Database _baseDatos;
 	final AseguradorPadresFk _padresFk;
 
+	AseguradorPadresFk _padresPara(DatabaseExecutor? db) =>
+		db == null ? _padresFk : AseguradorPadresFk(db);
+
 	Future<void> guardar(MovimientoInventario movimiento, {DatabaseExecutor? db}) async {
-		if (db == null) {
-			await _padresFk.asegurarPadresDeMovimientoInventario(movimiento);
-		}
+		await _padresPara(db).asegurarPadresDeMovimientoInventario(movimiento);
 		final exec = db ?? _baseDatos;
 		await exec.insert('inventory_movements', {
 			'id': movimiento.id,

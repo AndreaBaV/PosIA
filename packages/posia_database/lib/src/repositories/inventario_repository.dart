@@ -45,13 +45,12 @@ class InventarioRepository implements RepositorioInventario {
 
 	@override
 	Future<void> guardarStock(StockNivel stock, {DatabaseExecutor? db}) async {
-		if (db == null) {
-			await _padresFk.asegurarProducto(
-				stock.productoId,
-				tiendaId: stock.tiendaId,
-			);
-			await _padresFk.asegurarTienda(stock.tiendaId);
-		}
+		final padres = db == null ? _padresFk : AseguradorPadresFk(db);
+		await padres.asegurarProducto(
+			stock.productoId,
+			tiendaId: stock.tiendaId,
+		);
+		await padres.asegurarTienda(stock.tiendaId);
 		final exec = db ?? _baseDatos;
 		await exec.insert(
 			'stock_levels',

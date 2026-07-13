@@ -102,6 +102,7 @@ class FixtureAdmin {
 		final base = await openDatabase(
 			inMemoryDatabasePath,
 			version: SCHEMA_VERSION,
+			singleInstance: false,
 			onCreate: (db, _) => MigracionesEsquema.crearEsquemaCompleto(db),
 		);
 		final tiendaRepo = TiendaRepository(baseDatos: base);

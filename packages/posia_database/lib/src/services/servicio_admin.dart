@@ -387,6 +387,13 @@ class ServicioAdmin {
         codigoCaja: req.codigoCaja,
         db: tx,
       );
+      if (req.presentaciones.isNotEmpty) {
+        await _aplicarPresentacionesImportacion(
+          producto: producto,
+          presentaciones: req.presentaciones,
+          db: tx,
+        );
+      }
     });
     await _registrarEventoProducto(producto);
     if (req.escalasMayoreo.isNotEmpty) {
@@ -520,6 +527,44 @@ class ServicioAdmin {
     );
     await _lotePromocionRepository.reemplazarLote(lote);
     await _registrarEventoLotePromocion(lote);
+  }
+
+  Future<void> _aplicarPresentacionesImportacion({
+    required Producto producto,
+    required List<PresentacionImportacionSolicitud> presentaciones,
+    DatabaseExecutor? db,
+  }) async {
+    final repo = _presentacionRepository;
+    if (repo == null || presentaciones.isEmpty) {
+      return;
+    }
+    final lista = <PresentacionProducto>[
+      for (final p in presentaciones)
+        PresentacionProducto(
+          id: _generadorId.v4(),
+          productoId: producto.id,
+          nombre: p.nombre,
+          factorABase: p.factorABase,
+          esPresentacionBase: p.esPresentacionBase,
+          precio: redondearMonto(p.precio),
+          activo: true,
+        ),
+    ];
+    if (!lista.any((p) => p.esPresentacionBase)) {
+      lista.insert(
+        0,
+        PresentacionProducto(
+          id: _generadorId.v4(),
+          productoId: producto.id,
+          nombre: '1 kg',
+          factorABase: 1,
+          esPresentacionBase: true,
+          precio: producto.precioBase,
+          activo: true,
+        ),
+      );
+    }
+    await repo.reemplazarPresentacionesProducto(producto.id, lista, db: db);
   }
 
   Future<void> _aplicarPrecioYCodigoCaja({
@@ -1120,20 +1165,14 @@ class ServicioAdmin {
     return encolados;
   }
 
-  /// Limpia placeholders, compara con la nube y descarga datos si hace falta.
+  /// Limpia placeholders, vacía la base local y descarga desde Neon.
   ///
-  /// Antes de reconciliar, limpia basura de reencolado. Solo reencola catalogo
-  /// si la cola operativa esta razonable; Neon es la fuente de verdad.
+  /// No reencola el catálogo local: Neon es la fuente de verdad. Solo descarta
+  /// basura de reencolado previo en la cola antes de reconciliar.
   Future<ResultadoReconciliacionHub> reconciliarConHub({
     ReporteProgresoSync? alProgreso,
   }) async {
-    final descartados =
-        await _syncEventRepository.descartarPendientesCatalogoEspejo();
-    final pendientes = await _syncEventRepository.contarPendientes();
-    // Tras limpiar basura, no reinyectar el catalogo local: se descarga de Neon.
-    if (descartados == 0 && pendientes < UMBRAL_NO_REENCOLAR_CATALOGO) {
-      await _reencolarCatalogoLocalPendiente(alProgreso: alProgreso);
-    }
+    await _syncEventRepository.descartarPendientesCatalogoEspejo();
     final servicio = ServicioReconciliacionHub(
       baseDatos: _baseDatos,
       configRepository: _configRepository,
