@@ -1,4 +1,4 @@
-/// Lector minimo de hojas XLSX (primera hoja) sin dependencias incompatibles.
+/// Lector minimo de hojas XLSX sin dependencias incompatibles.
 library;
 
 import 'dart:convert';
@@ -7,27 +7,109 @@ import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import 'package:xml/xml.dart';
 
-/// Lee la primera hoja de un archivo XLSX como filas de texto.
+/// Lee hojas de un archivo XLSX como filas de texto.
 class LectorXlsx {
 	const LectorXlsx._();
 
-	static List<List<String>> leerFilas(Uint8List bytes) {
+	/// Lee la primera hoja, o [nombreHoja] si se indica.
+	static List<List<String>> leerFilas(
+		Uint8List bytes, {
+		String? nombreHoja,
+	}) {
 		final archive = ZipDecoder().decodeBytes(bytes);
 		final sharedStrings = _leerCadenasCompartidas(archive);
-		final hoja = _buscarPrimeraHoja(archive);
-		if (hoja == null) {
+		final hojas = _listarHojas(archive);
+		if (hojas.isEmpty) {
 			throw FormatException('El archivo Excel no contiene hojas de calculo');
+		}
+		ArchiveFile? hoja;
+		if (nombreHoja != null && nombreHoja.trim().isNotEmpty) {
+			final clave = nombreHoja.trim().toLowerCase();
+			for (final entrada in hojas) {
+				if (entrada.$1.toLowerCase() == clave) {
+					hoja = entrada.$2;
+					break;
+				}
+			}
+			if (hoja == null) {
+				final nombres = hojas.map((h) => h.$1).join(', ');
+				throw FormatException(
+					'Hoja "$nombreHoja" no encontrada. Disponibles: $nombres',
+				);
+			}
+		} else {
+			hoja = hojas.first.$2;
 		}
 		return _parsearHoja(hoja, sharedStrings);
 	}
 
-	static ArchiveFile? _buscarPrimeraHoja(Archive archive) {
+	/// Nombres de hojas en orden del libro.
+	static List<String> listarNombresHojas(Uint8List bytes) {
+		final archive = ZipDecoder().decodeBytes(bytes);
+		return _listarHojas(archive).map((h) => h.$1).toList();
+	}
+
+	/// [(nombre, archivo XML de la hoja), ...]
+	static List<(String, ArchiveFile)> _listarHojas(Archive archive) {
+		final workbook = archive.files.cast<ArchiveFile?>().firstWhere(
+			(f) => f?.name == 'xl/workbook.xml',
+			orElse: () => null,
+		);
+		final rels = archive.files.cast<ArchiveFile?>().firstWhere(
+			(f) => f?.name == 'xl/_rels/workbook.xml.rels',
+			orElse: () => null,
+		);
+		if (workbook == null || rels == null) {
+			return _hojasPorPrefijo(archive);
+		}
+		final ridATarget = <String, String>{};
+		final docRels = XmlDocument.parse(_decodificarUtf8(rels.content));
+		for (final rel in docRels.findAllElements('Relationship')) {
+			final id = rel.getAttribute('Id');
+			final target = rel.getAttribute('Target');
+			if (id == null || target == null) {
+				continue;
+			}
+			final ruta = target.startsWith('xl/')
+				? target
+				: 'xl/${target.replaceFirst(RegExp(r'^/+'), '')}';
+			ridATarget[id] = ruta;
+		}
+		final docWb = XmlDocument.parse(_decodificarUtf8(workbook.content));
+		final resultado = <(String, ArchiveFile)>[];
+		for (final sheet in docWb.findAllElements('sheet')) {
+			final nombre = sheet.getAttribute('name') ?? '';
+			final rid = sheet.getAttribute('r:id') ??
+				sheet.getAttribute(
+					'{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id',
+				);
+			if (nombre.isEmpty || rid == null) {
+				continue;
+			}
+			final target = ridATarget[rid];
+			if (target == null) {
+				continue;
+			}
+			final archivo = archive.files.cast<ArchiveFile?>().firstWhere(
+				(f) => f?.name == target,
+				orElse: () => null,
+			);
+			if (archivo != null) {
+				resultado.add((nombre, archivo));
+			}
+		}
+		return resultado.isEmpty ? _hojasPorPrefijo(archive) : resultado;
+	}
+
+	static List<(String, ArchiveFile)> _hojasPorPrefijo(Archive archive) {
 		const prefijo = 'xl/worksheets/sheet';
 		final hojas = archive.files
 			.where((f) => f.name.startsWith(prefijo) && f.name.endsWith('.xml'))
 			.toList()
 			..sort((a, b) => a.name.compareTo(b.name));
-		return hojas.isEmpty ? null : hojas.first;
+		return [
+			for (var i = 0; i < hojas.length; i++) ('Hoja ${i + 1}', hojas[i]),
+		];
 	}
 
 	static List<String> _leerCadenasCompartidas(Archive archive) {
@@ -128,7 +210,6 @@ class LectorXlsx {
 		return indice - 1;
 	}
 
-	/// Los XML internos de XLSX estan en UTF-8; fromCharCodes rompe acentos.
 	static String _decodificarUtf8(List<int> bytes) {
 		var data = bytes;
 		if (data.length >= 3 &&

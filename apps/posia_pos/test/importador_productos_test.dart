@@ -183,5 +183,99 @@ Jalapeño enlatado,22.50,
       );
       expect(analisis.errorArchivo, contains('precio'));
     });
+
+    test('genera plantilla granel con encabezados esperados', () {
+      final csv = ImportadorProductos.generarPlantillaGranelCsv();
+      expect(
+        csv.startsWith(ImportadorProductos.encabezadosPlantillaGranel.join(',')),
+        isTrue,
+      );
+      expect(csv.contains('presentacion_gramos'), isTrue);
+      expect(csv.contains('Paprika'), isTrue);
+    });
+
+    test('agrupa presentaciones por kg y deriva precio/kg sin 1000g', () {
+      final categoriasMixtas = [
+        ...categorias,
+        const Categoria(
+          id: 'cat-especias',
+          nombre: 'Especias',
+          icono: 'spa',
+          colorHex: '#8D6E63',
+          orden: 3,
+          activa: true,
+        ),
+        const Categoria(
+          id: 'cat-dulces',
+          nombre: 'Dulces',
+          icono: 'cake',
+          colorHex: '#E91E63',
+          orden: 4,
+          activa: true,
+        ),
+      ];
+      final csv = '''
+nombre,presentacion_gramos,precio,categoria
+Paprika,100,15,Especias
+,250,35,Especias
+Sandia,250,18,Dulces
+,1000,72,Dulces
+Solo 500g,500,40,Abarrotes
+''';
+      final analisis = ImportadorProductos.analizarBytes(
+        bytes: utf8.encode(csv),
+        extension: 'csv',
+        categorias: categoriasMixtas,
+        proveedores: const [],
+        codigosBarrasExistentes: const {},
+      );
+      expect(analisis.archivoValido, isTrue);
+      expect(analisis.filasValidas, 3);
+
+      final paprika = analisis.filas[0].solicitud!;
+      expect(paprika.unidadMedida, UnidadMedida.kilogramo);
+      expect(paprika.categoriaId, 'cat-especias');
+      expect(paprika.precioBase, 140.0);
+      expect(paprika.presentaciones.length, 3);
+      expect(paprika.presentaciones.any((p) => p.esPresentacionBase), isTrue);
+      expect(
+        paprika.presentaciones.where((p) => !p.esPresentacionBase).length,
+        2,
+      );
+
+      final sandia = analisis.filas[1].solicitud!;
+      expect(sandia.categoriaId, 'cat-dulces');
+      expect(sandia.precioBase, 72.0);
+      expect(sandia.presentaciones.length, 2);
+
+      final solo500 = analisis.filas[2].solicitud!;
+      expect(solo500.categoriaId, 'cat-abarrotes');
+      expect(solo500.precioBase, 80.0);
+      expect(solo500.presentaciones.length, 2);
+      expect(
+        solo500.presentaciones
+            .firstWhere((p) => !p.esPresentacionBase)
+            .factorABase,
+        0.5,
+      );
+    });
+
+    test('detecta encabezado Presentacion en gramos (alias Excel)', () {
+      final csv = '''
+nombre,Presentación en gramos,precio,categoria
+Chile,100,12,Abarrotes
+''';
+      final analisis = ImportadorProductos.analizarBytes(
+        bytes: utf8.encode(csv),
+        extension: 'csv',
+        categorias: categorias,
+        proveedores: const [],
+        codigosBarrasExistentes: const {},
+      );
+      expect(analisis.filasValidas, 1);
+      expect(analisis.filas.first.solicitud?.unidadMedida, UnidadMedida.kilogramo);
+      expect(analisis.filas.first.solicitud?.precioBase, 120.0);
+      expect(analisis.filas.first.solicitud?.categoriaId, 'cat-abarrotes');
+    });
   });
 }

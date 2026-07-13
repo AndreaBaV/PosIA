@@ -109,9 +109,11 @@ class _PantallaImportarProductosAdminState
                 ),
                 const SizedBox(height: 8.0),
                 const Text(
-                  'Cargue un archivo CSV o Excel (.xlsx) con muchos productos. '
-                  'Use la plantilla. Solo son obligatorias las columnas nombre y '
-                  'precio; si falta categoría se asigna Abarrotes.',
+                  'Cargue un CSV o Excel (.xlsx). Hay dos plantillas: catalogo '
+                  'general (pieza/caja) y por kilogramo (varias presentaciones '
+                  'en gramos; el precio/kg viene de 1000 g o se deriva). '
+                  'La categoria es libre. En Excel con varias hojas, elija la '
+                  'hoja a importar (p. ej. Granel).',
                 ),
                 const SizedBox(height: 16.0),
                 Wrap(
@@ -126,7 +128,12 @@ class _PantallaImportarProductosAdminState
                     OutlinedButton.icon(
                       onPressed: _descargarPlantilla,
                       icon: const Icon(Icons.table_view),
-                      label: const Text('Plantilla CSV'),
+                      label: const Text('Plantilla catalogo'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _descargarPlantillaGranel,
+                      icon: const Icon(Icons.scale),
+                      label: const Text('Plantilla por kg'),
                     ),
                   ],
                 ),
@@ -291,7 +298,7 @@ class _PantallaImportarProductosAdminState
     final resultado = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: const ['csv', 'xlsx', 'txt'],
-      withData: kIsWeb,
+      withData: true,
     );
     if (resultado == null || resultado.files.isEmpty) {
       return;
@@ -307,6 +314,50 @@ class _PantallaImportarProductosAdminState
     await _analizarArchivoSeleccionado(archivo);
   }
 
+  Future<String?> _elegirHojaSiAplica(PlatformFile archivo) async {
+    final extension = _extensionArchivo(archivo.name).toLowerCase();
+    if (extension != 'xlsx') {
+      return null;
+    }
+    Uint8List? bytes = archivo.bytes;
+    if (bytes == null && archivo.path != null) {
+      bytes = await File(archivo.path!).readAsBytes();
+    }
+    if (bytes == null) {
+      return null;
+    }
+    final hojas = ImportadorProductos.listarHojasXlsx(bytes);
+    if (hojas.length <= 1) {
+      return hojas.isEmpty ? null : hojas.first;
+    }
+    final preferida = hojas.where((h) => h.toLowerCase() == 'granel').firstOrNull;
+    if (!mounted) {
+      return preferida;
+    }
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        return SimpleDialog(
+          title: const Text('Elegir hoja'),
+          children: [
+            for (final hoja in hojas)
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(ctx, hoja),
+                child: Text(
+                  hoja,
+                  style: TextStyle(
+                    fontWeight: hoja.toLowerCase() == 'granel'
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    ).then((elegida) => elegida ?? preferida);
+  }
+
   Future<void> _analizarArchivoSeleccionado(PlatformFile archivo) async {
     final servicio = await ref.read(servicioAdminProvider.future);
     final categorias = await servicio.listarCategorias();
@@ -317,6 +368,8 @@ class _PantallaImportarProductosAdminState
         .map((p) => p.codigoBarras.trim().toLowerCase())
         .toSet();
 
+    final nombreHoja = await _elegirHojaSiAplica(archivo);
+
     AnalisisImportacionProductos analisis;
     if (archivo.bytes != null) {
       final extension = _extensionArchivo(archivo.name);
@@ -326,6 +379,7 @@ class _PantallaImportarProductosAdminState
         categorias: categorias,
         proveedores: proveedores,
         codigosBarrasExistentes: codigosExistentes,
+        nombreHoja: nombreHoja,
       );
     } else if (archivo.path != null) {
       analisis = await ImportadorProductos.analizarArchivo(
@@ -333,6 +387,7 @@ class _PantallaImportarProductosAdminState
         categorias: categorias,
         proveedores: proveedores,
         codigosBarrasExistentes: codigosExistentes,
+        nombreHoja: nombreHoja,
       );
     } else {
       analisis = const AnalisisImportacionProductos(
@@ -344,7 +399,12 @@ class _PantallaImportarProductosAdminState
     if (!mounted) {
       return;
     }
-    setState(() => _analisis = analisis);
+    setState(() {
+      _analisis = analisis;
+      if (nombreHoja != null && nombreHoja.isNotEmpty) {
+        _nombreArchivo = '${archivo.name} · hoja "$nombreHoja"';
+      }
+    });
   }
 
   Future<void> _importar() async {
@@ -407,7 +467,26 @@ class _PantallaImportarProductosAdminState
   }
 
   Future<void> _descargarPlantilla() async {
-    final contenido = ImportadorProductos.generarPlantillaCsv();
+    await _guardarYCompartirPlantilla(
+      contenido: ImportadorProductos.generarPlantillaCsv(),
+      nombreArchivo: 'posia_plantilla_productos.csv',
+      asunto: 'Plantilla importacion productos POSIA',
+    );
+  }
+
+  Future<void> _descargarPlantillaGranel() async {
+    await _guardarYCompartirPlantilla(
+      contenido: ImportadorProductos.generarPlantillaGranelCsv(),
+      nombreArchivo: 'posia_plantilla_productos_granel.csv',
+      asunto: 'Plantilla importacion por kg POSIA',
+    );
+  }
+
+  Future<void> _guardarYCompartirPlantilla({
+    required String contenido,
+    required String nombreArchivo,
+    required String asunto,
+  }) async {
     if (kIsWeb) {
       PosiaNotificaciones.mostrarSnackBar(
         context,
@@ -420,15 +499,12 @@ class _PantallaImportarProductosAdminState
     final carpeta =
         await getDownloadsDirectory() ??
         await getApplicationDocumentsDirectory();
-    final ruta =
-        '${carpeta.path}${Platform.pathSeparator}posia_plantilla_productos.csv';
+    final ruta = '${carpeta.path}${Platform.pathSeparator}$nombreArchivo';
     await File(ruta).writeAsString(contenido);
     if (!mounted) {
       return;
     }
-    await Share.shareXFiles([
-      XFile(ruta),
-    ], subject: 'Plantilla importacion productos POSIA');
+    await Share.shareXFiles([XFile(ruta)], subject: asunto);
   }
 
   String _extensionArchivo(String nombre) {

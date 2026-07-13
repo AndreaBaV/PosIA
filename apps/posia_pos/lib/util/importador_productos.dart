@@ -69,6 +69,15 @@ class ImportadorProductos {
     'permite_stock_negativo',
   ];
 
+  /// Plantilla para productos por kg con varias presentaciones en gramos.
+  /// La categoria es libre (puede ser mixta); lo fijo es unidad kilogramo.
+  static const encabezadosPlantillaGranel = [
+    'nombre',
+    'presentacion_gramos',
+    'precio',
+    'categoria',
+  ];
+
   static const _aliasColumnas = <String, List<String>>{
     'nombre': ['nombre', 'name', 'producto', 'articulo', 'descripcion'],
     'codigo_barras': [
@@ -87,6 +96,13 @@ class ImportadorProductos {
       'precio_venta',
       'price',
       'pvp',
+    ],
+    'presentacion_gramos': [
+      'presentacion_gramos',
+      'presentacion en gramos',
+      'gramos',
+      'gr',
+      'g',
     ],
     'costo_unitario': ['costo_unitario', 'costo', 'cost', 'costo unitario'],
     'categoria': [
@@ -172,11 +188,32 @@ class ImportadorProductos {
     ].join('\n');
   }
 
+  /// Plantilla CSV: una fila por presentacion; nombre vacio = misma mercancia.
+  /// Categoria opcional/mixta; unidad siempre kilogramo.
+  static String generarPlantillaGranelCsv() {
+    final ejemplos = [
+      ['Paprika', '100', '15', 'Especias'],
+      ['', '250', '35', 'Especias'],
+      ['Sandia Miguelito', '250', '18', 'Dulces'],
+      ['', '1000', '72', 'Dulces'],
+      ['Ejemplo sin kilo (500g)', '500', '40', 'Abarrotes'],
+    ];
+    return [
+      encabezadosPlantillaGranel.join(','),
+      ...ejemplos.map((f) => f.map(_escaparCsv).join(',')),
+    ].join('\n');
+  }
+
+  /// Lista nombres de hojas si el archivo es .xlsx.
+  static List<String> listarHojasXlsx(Uint8List bytes) =>
+      LectorXlsx.listarNombresHojas(bytes);
+
   static Future<AnalisisImportacionProductos> analizarArchivo({
     required String rutaArchivo,
     required List<Categoria> categorias,
     required List<Proveedor> proveedores,
     required Set<String> codigosBarrasExistentes,
+    String? nombreHoja,
   }) async {
     final archivo = File(rutaArchivo);
     if (!await archivo.exists()) {
@@ -192,6 +229,7 @@ class ImportadorProductos {
       categorias: categorias,
       proveedores: proveedores,
       codigosBarrasExistentes: codigosBarrasExistentes,
+      nombreHoja: nombreHoja,
     );
   }
 
@@ -201,9 +239,10 @@ class ImportadorProductos {
     required List<Categoria> categorias,
     required List<Proveedor> proveedores,
     required Set<String> codigosBarrasExistentes,
+    String? nombreHoja,
   }) {
     try {
-      final filasCrudas = _leerFilas(bytes, extension);
+      final filasCrudas = _leerFilas(bytes, extension, nombreHoja: nombreHoja);
       if (filasCrudas.isEmpty) {
         return const AnalisisImportacionProductos(
           filas: [],
@@ -238,6 +277,15 @@ class ImportadorProductos {
         for (final p in proveedores.where((p) => p.activo))
           normalizarTextoBusqueda(p.nombre): p,
       };
+
+      if (mapaColumnas.containsKey('presentacion_gramos')) {
+        return _analizarGranel(
+          filasCrudas: filasCrudas,
+          mapaColumnas: mapaColumnas,
+          categoriasPorNombre: categoriasPorNombre,
+        );
+      }
+
       final codigosEnArchivo = <String>{};
       final filas = <FilaImportacionProducto>[];
       final metaLotes = <String, ({double cantidadMinima, double precioUnitario})>{};
@@ -467,16 +515,178 @@ class ImportadorProductos {
     }
   }
 
-  static List<List<String>> _leerFilas(Uint8List bytes, String extension) {
+  static List<List<String>> _leerFilas(
+    Uint8List bytes,
+    String extension, {
+    String? nombreHoja,
+  }) {
     final ext = extension.toLowerCase();
     if (ext == 'csv' || ext == 'txt') {
       final texto = _decodificarTexto(bytes);
       return _parsearCsv(texto);
     }
     if (ext == 'xlsx') {
-      return LectorXlsx.leerFilas(bytes);
+      return LectorXlsx.leerFilas(bytes, nombreHoja: nombreHoja);
     }
     throw FormatException('Formato no soportado (.$ext). Use .csv o .xlsx');
+  }
+
+  /// Agrupa filas granel (nombre vacio = misma mercancia) y deriva precio/kg.
+  static AnalisisImportacionProductos _analizarGranel({
+    required List<List<String>> filasCrudas,
+    required Map<String, int> mapaColumnas,
+    required Map<String, Categoria> categoriasPorNombre,
+  }) {
+    final grupos = <({
+      int numeroFila,
+      String nombre,
+      String categoriaTexto,
+      List<(double gramos, double precio)> presentaciones,
+    })>[];
+
+    String? nombreActual;
+    String categoriaActual = '';
+    int filaInicio = 0;
+    var presentacionesActuales = <(double, double)>[];
+
+    void cerrarGrupo() {
+      final nombre = nombreActual;
+      if (nombre == null || presentacionesActuales.isEmpty) {
+        return;
+      }
+      grupos.add((
+        numeroFila: filaInicio,
+        nombre: nombre,
+        categoriaTexto: categoriaActual,
+        presentaciones: List<(double, double)>.from(presentacionesActuales),
+      ));
+    }
+
+    for (var i = 1; i < filasCrudas.length; i++) {
+      final numeroFila = i + 1;
+      final celdas = filasCrudas[i];
+      if (_filaVacia(celdas)) {
+        continue;
+      }
+      final valores = _valoresFila(celdas, mapaColumnas);
+      final nombre = valores['nombre']?.trim() ?? '';
+      final gramos = parsearPrecioTexto(
+        valores['presentacion_gramos']?.trim() ?? '',
+      );
+      final precio = parsearPrecioTexto(valores['precio_base']?.trim() ?? '');
+      final categoriaTexto = valores['categoria']?.trim() ?? '';
+
+      if (nombre.isNotEmpty) {
+        cerrarGrupo();
+        nombreActual = nombre;
+        categoriaActual = categoriaTexto;
+        filaInicio = numeroFila;
+        presentacionesActuales = [];
+      } else if (nombreActual == null) {
+        grupos.add((
+          numeroFila: numeroFila,
+          nombre: '(sin nombre)',
+          categoriaTexto: categoriaTexto,
+          presentaciones: const [],
+        ));
+        continue;
+      } else if (categoriaTexto.isNotEmpty && categoriaActual.isEmpty) {
+        categoriaActual = categoriaTexto;
+      }
+
+      if (gramos == null || gramos <= 0 || precio == null || precio < 0) {
+        continue;
+      }
+      presentacionesActuales.add((gramos, precio));
+    }
+    cerrarGrupo();
+
+    if (grupos.isEmpty) {
+      return const AnalisisImportacionProductos(
+        filas: [],
+        errorArchivo: 'No hay productos granel para importar',
+      );
+    }
+
+    final filas = <FilaImportacionProducto>[];
+    for (final grupo in grupos) {
+      final errores = <String>[];
+      if (grupo.nombre == '(sin nombre)' || grupo.nombre.trim().isEmpty) {
+        errores.add('El nombre es obligatorio');
+      }
+      if (grupo.presentaciones.isEmpty) {
+        errores.add('Falta al menos una presentacion con gramos y precio');
+      }
+
+      final categoriaId = _resolverCategoriaId(
+        texto: grupo.categoriaTexto.isEmpty ? null : grupo.categoriaTexto,
+        categoriasPorNombre: categoriasPorNombre,
+        errores: errores,
+      );
+
+      AltaProductoRequest? solicitud;
+      if (errores.isEmpty && categoriaId != null) {
+        final precioKilo = _precioKiloDesdePresentaciones(grupo.presentaciones);
+        final presentaciones = <PresentacionImportacionSolicitud>[
+          PresentacionImportacionSolicitud(
+            nombre: '1 kg',
+            factorABase: 1,
+            precio: precioKilo,
+            esPresentacionBase: true,
+          ),
+        ];
+        for (final (gramos, precio) in grupo.presentaciones) {
+          if ((gramos - 1000).abs() < 0.01) {
+            continue;
+          }
+          final etiqueta = gramos == gramos.roundToDouble()
+              ? '${gramos.round()} g'
+              : '$gramos g';
+          presentaciones.add(
+            PresentacionImportacionSolicitud(
+              nombre: etiqueta,
+              factorABase: double.parse((gramos / 1000.0).toStringAsFixed(6)),
+              precio: precio,
+            ),
+          );
+        }
+        solicitud = AltaProductoRequest(
+          nombre: grupo.nombre,
+          codigoBarras: '',
+          precioBase: precioKilo,
+          categoriaId: categoriaId,
+          unidadMedida: UnidadMedida.kilogramo,
+          notas: 'importacion:kg',
+          presentaciones: presentaciones,
+        );
+      }
+
+      filas.add(
+        FilaImportacionProducto(
+          numeroFila: grupo.numeroFila,
+          nombre: grupo.nombre,
+          errores: errores,
+          solicitud: solicitud,
+        ),
+      );
+    }
+
+    return AnalisisImportacionProductos(filas: filas);
+  }
+
+  /// Precio por kilo: usa 1000 g si existe; si no, proyecta desde la mayor.
+  static double _precioKiloDesdePresentaciones(
+    List<(double gramos, double precio)> presentaciones,
+  ) {
+    for (final (gramos, precio) in presentaciones) {
+      if ((gramos - 1000).abs() < 0.01) {
+        return redondearMonto(precio);
+      }
+    }
+    final (gramosMax, precioMax) = presentaciones.reduce(
+      (a, b) => a.$1 >= b.$1 ? a : b,
+    );
+    return redondearMonto(precioMax * (1000.0 / gramosMax));
   }
 
   static String _extension(String ruta) {
@@ -631,15 +841,16 @@ class ImportadorProductos {
     required String? texto,
     required Map<String, Categoria> categoriasPorNombre,
     required List<String> errores,
+    String categoriaPorDefectoNombre = categoriaPorDefecto,
   }) {
     final clave = texto == null || texto.trim().isEmpty
-        ? normalizarTextoBusqueda(categoriaPorDefecto)
+        ? normalizarTextoBusqueda(categoriaPorDefectoNombre)
         : normalizarTextoBusqueda(texto.trim());
     final categoria = categoriasPorNombre[clave];
     if (categoria == null) {
       if (texto == null || texto.trim().isEmpty) {
         errores.add(
-          'Categoria por defecto "$categoriaPorDefecto" no existe en el catalogo',
+          'Categoria por defecto "$categoriaPorDefectoNombre" no existe en el catalogo',
         );
       } else {
         errores.add('Categoria no encontrada: "$texto"');
