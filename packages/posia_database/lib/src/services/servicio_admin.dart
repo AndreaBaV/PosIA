@@ -4806,7 +4806,9 @@ class ServicioAdmin {
         .map((e) => e.id)
         .toList();
     // ignore: unawaited_futures
-    _syncOrchestrator.sincronizarEventosPorIds(idsEmpaque).catchError((_) {});
+    _syncOrchestrator.sincronizarEventosPorIds(idsEmpaque).catchError(
+      (Object _) => const ResultadoEnvioHub(exitoso: false),
+    );
   }
 
   Future<void> _registrarEventoPresentacionesReemplazadas(
