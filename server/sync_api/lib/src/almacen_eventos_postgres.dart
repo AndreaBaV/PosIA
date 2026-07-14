@@ -18,7 +18,7 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 		: _urlConexion = urlConexion;
 
 	final String _urlConexion;
-	Pool? _pool;
+	Pool<Object>? _pool;
 
 	@override
 	Future<void> inicializar() async {
@@ -114,14 +114,14 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 		return AlmacenUsuariosPostgres(_obtenerPool);
 	}
 
-	Future<Pool> _obtenerPool() async {
+	Future<Pool<Object>> _obtenerPool() async {
 		final existente = _pool;
 		if (existente != null) {
 			return existente;
 		}
 		final uri = Uri.parse(_urlConexion);
 		final infoUsuario = uri.userInfo.split(':');
-		final pool = Pool.withEndpoints(
+		final pool = Pool<Object>.withEndpoints(
 			[
 				Endpoint(
 					host: uri.host,
@@ -168,7 +168,7 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 	}
 
 	/// Reproyecta eventos de roles/usuarios que quedaron solo en sync_events.
-	Future<void> _reproyectarEventosEspejoPendientes(Pool pool) async {
+	Future<void> _reproyectarEventosEspejoPendientes(Pool<Object> pool) async {
 		const claveMeta = 'mirror_backfill_roles_v1';
 		await pool.execute('''
 			CREATE TABLE IF NOT EXISTS schema_meta (
