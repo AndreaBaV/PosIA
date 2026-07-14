@@ -81,11 +81,10 @@ class SyncEventRepository implements LocalEventQueue {
 		return (filas.first['c'] as int?) ?? 0;
 	}
 
-	/// Descarta pendientes de catalogo espejo (basura por reencolados repetidos).
+	/// Descarta pendientes de catalogo espejo (reencolados duplicados).
 	///
-	/// Conserva ventas, ajustes de stock, traspasos, compras y demas operativos
-	/// que aun no se han enviado. Neon sigue siendo la fuente de verdad del
-	/// catalogo via pull del log `sync_events`.
+	/// Evitar en el ciclo normal de sync: elimina cambios locales aun no
+	/// subidos. Preferir [colapsarDuplicadosCatalogo].
 	@override
 	Future<int> descartarPendientesCatalogoEspejo() async {
 		final placeholders =
@@ -104,6 +103,7 @@ class SyncEventRepository implements LocalEventQueue {
 	/// Colapsa duplicados de catalogo: deja solo el mas reciente por tipo+entidad.
 	///
 	/// Util cuando ya hay miles de UUID distintos del mismo producto.
+	@override
 	Future<int> colapsarDuplicadosCatalogo() async {
 		final filas = await _baseDatos.query(
 			'sync_event_queue',

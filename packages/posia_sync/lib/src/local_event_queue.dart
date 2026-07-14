@@ -32,7 +32,14 @@ abstract class LocalEventQueue {
 
 	/// Descarta pendientes de catalogo espejo (reencolados duplicados).
 	///
-	/// Por defecto no hace nada; las implementaciones SQLite limpian basura
-	/// antes de empujar a Neon.
+	/// Peligroso en el ciclo normal de sync: borra cambios locales de catalogo
+	/// (empaques, productos, etc.) que aun no se han subido a Neon.
+	/// Preferir [colapsarDuplicadosCatalogo].
 	Future<int> descartarPendientesCatalogoEspejo() async => 0;
+
+	/// Deja un solo pendiente por tipo+entidad de catalogo (el mas reciente).
+	///
+	/// Conserva el cambio local mas nuevo para empujarlo; solo elimina
+	/// versiones antiguas duplicadas en cola.
+	Future<int> colapsarDuplicadosCatalogo() async => 0;
 }

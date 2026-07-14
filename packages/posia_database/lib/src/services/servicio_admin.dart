@@ -937,8 +937,7 @@ class ServicioAdmin {
   ///
   /// [incluirCatalogo] Si es true, reencola el catalogo local espejado en Neon
   /// antes de enviar. Se omite automaticamente si la cola ya esta saturada
-  /// (p. ej. tras pulsar "Sincronizar" muchas veces). Neon es la fuente de
-  /// verdad del catalogo via pull.
+  /// (p. ej. tras pulsar "Sincronizar" muchas veces).
   Future<ResultadoSync> sincronizarManual({
     ReporteProgresoSync? alProgreso,
     bool incluirCatalogo = true,
@@ -948,30 +947,26 @@ class ServicioAdmin {
         fase: FaseProgresoSync.preparar,
         indice: 0,
         total: 0,
-        mensaje: 'Limpiando cola local duplicada…',
+        mensaje: 'Colapsando catálogo duplicado en cola…',
       ),
     );
-    // Basura de reencolados repetidos: no empujar a Neon; el catalogo ya esta
-    // en la nube y se recibe por pull.
-    final descartados =
-        await _syncEventRepository.descartarPendientesCatalogoEspejo();
-    if (descartados > 0) {
+    // Solo elimina versiones viejas del mismo producto/entidad; conserva el
+    // pendiente mas reciente (p. ej. empaques recien guardados) para subirlo.
+    final colapsados = await _syncEventRepository.colapsarDuplicadosCatalogo();
+    if (colapsados > 0) {
       alProgreso?.call(
         ProgresoSync(
           fase: FaseProgresoSync.preparar,
           indice: 0,
           total: 0,
-          mensaje: 'Descartados $descartados eventos de catálogo duplicados…',
+          mensaje: 'Colapsados $colapsados eventos de catálogo duplicados…',
         ),
       );
     }
 
     final pendientes = await _syncEventRepository.contarPendientes();
-    // Si acabamos de tirar basura de reencolado, NO volver a empujar el
-    // catalogo local: Neon es la fuente de verdad.
-    final debeReencolar = incluirCatalogo &&
-        descartados == 0 &&
-        pendientes < UMBRAL_NO_REENCOLAR_CATALOGO;
+    final debeReencolar =
+        incluirCatalogo && pendientes < UMBRAL_NO_REENCOLAR_CATALOGO;
     if (debeReencolar) {
       alProgreso?.call(
         const ProgresoSync(
@@ -982,16 +977,14 @@ class ServicioAdmin {
         ),
       );
       await _reencolarCatalogoLocalPendiente(alProgreso: alProgreso);
-    } else if (incluirCatalogo &&
-        (descartados > 0 || pendientes >= UMBRAL_NO_REENCOLAR_CATALOGO)) {
+    } else if (incluirCatalogo && pendientes >= UMBRAL_NO_REENCOLAR_CATALOGO) {
       alProgreso?.call(
         ProgresoSync(
           fase: FaseProgresoSync.preparar,
           indice: 0,
           total: 0,
-          mensaje: descartados > 0
-              ? 'Catálogo local no se reencola (Neon es la fuente de verdad)…'
-              : 'Cola local alta ($pendientes): se omite reencolar catálogo…',
+          mensaje:
+              'Cola local alta ($pendientes): se omite reencolar catálogo…',
         ),
       );
     }
@@ -1172,12 +1165,12 @@ class ServicioAdmin {
 
   /// Limpia placeholders, vacía la base local y descarga desde Neon.
   ///
-  /// No reencola el catálogo local: Neon es la fuente de verdad. Solo descarta
-  /// basura de reencolado previo en la cola antes de reconciliar.
+  /// Empuja pendientes (incl. catálogo) antes de vaciar, para no perder
+  /// empaques/productos locales que aún no estaban en la nube.
   Future<ResultadoReconciliacionHub> reconciliarConHub({
     ReporteProgresoSync? alProgreso,
   }) async {
-    await _syncEventRepository.descartarPendientesCatalogoEspejo();
+    await _syncEventRepository.colapsarDuplicadosCatalogo();
     final servicio = ServicioReconciliacionHub(
       baseDatos: _baseDatos,
       configRepository: _configRepository,
@@ -5674,7 +5667,7 @@ class ServicioAdmin {
       factorABase: factorABase,
       esPresentacionBase: esPresentacionBase,
       codigoBarras: codigoBarras ?? '',
-      precio: precio,
+      precio: precio != null ? redondearMonto(precio) : null,
       activo: true,
     );
     await repo.guardarPresentacion(presentacion);

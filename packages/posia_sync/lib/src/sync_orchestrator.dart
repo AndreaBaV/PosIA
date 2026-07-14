@@ -178,26 +178,19 @@ class SyncOrchestrator {
     // No abortar el ciclo si /health falla: tras offline el hub puede despertar
     // lento, pero POST/GET /v1/events aún pueden funcionar.
     final hubOk = await clienteHub.verificarSalud();
-    // Neon es la fuente de verdad operativa multi-caja: pull primero para que
-    // las demas cajas reciban cambios aunque la cola local este saturada.
+    // Empujar primero los cambios locales (incl. empaques/presentaciones).
+    // Antes se descartaba todo el catálogo pendiente y luego el pull desde Neon
+    // sobrescribía SQLite: los bultos nuevos nunca llegaban a la nube y se
+    // perdían al reconstruir desde origen.
     alProgreso?.call(
       const ProgresoSync(
         fase: FaseProgresoSync.preparar,
         indice: 0,
         total: 0,
-        mensaje: 'Limpiando cola de catálogo duplicada…',
+        mensaje: 'Colapsando catálogo duplicado en cola…',
       ),
     );
-    await _colaLocal.descartarPendientesCatalogoEspejo();
-    alProgreso?.call(
-      const ProgresoSync(
-        fase: FaseProgresoSync.recibir,
-        indice: 0,
-        total: 0,
-        mensaje: 'Descargando cambios desde la nube…',
-      ),
-    );
-    final recibidos = await _ejecutarPull(clienteHub, alProgreso: alProgreso);
+    await _colaLocal.colapsarDuplicadosCatalogo();
     alProgreso?.call(
       const ProgresoSync(
         fase: FaseProgresoSync.enviar,
@@ -207,6 +200,15 @@ class SyncOrchestrator {
       ),
     );
     final enviados = await sincronizarPendientes(alProgreso: alProgreso);
+    alProgreso?.call(
+      const ProgresoSync(
+        fase: FaseProgresoSync.recibir,
+        indice: 0,
+        total: 0,
+        mensaje: 'Descargando cambios desde la nube…',
+      ),
+    );
+    final recibidos = await _ejecutarPull(clienteHub, alProgreso: alProgreso);
     alProgreso?.call(
       ProgresoSync(
         fase: FaseProgresoSync.listo,

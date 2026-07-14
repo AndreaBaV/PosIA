@@ -43,6 +43,9 @@ class ColaEventosMemoria implements LocalEventQueue {
 	@override
 	Future<int> descartarPendientesCatalogoEspejo() async => 0;
 
+	@override
+	Future<int> colapsarDuplicadosCatalogo() async => 0;
+
 	void _reemplazarEstado(String eventoId, EstadoSyncEvento estado) {
 		final indice = eventos.indexWhere((evento) => evento.id == eventoId);
 		if (indice >= 0) {

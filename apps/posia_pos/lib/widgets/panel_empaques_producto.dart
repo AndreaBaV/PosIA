@@ -453,7 +453,59 @@ class _PanelEmpaquesProductoState extends ConsumerState<PanelEmpaquesProducto> {
 								child: const Text('Cancelar'),
 							),
 							FilledButton(
-								onPressed: () => Navigator.pop(ctx, true),
+								onPressed: () {
+									final nombre = nombreController.text.trim();
+									final factor =
+										parsearPrecioTexto(factorController.text) ?? 0.0;
+									if (nombre.isEmpty || factor <= 0) {
+										PosiaNotificaciones.mostrarSnackBar(
+											ctx,
+											const SnackBar(
+												content: Text(
+													'Nombre y cantidad válida son obligatorios',
+												),
+												backgroundColor: PosiaColors.cancelar,
+											),
+										);
+										return;
+									}
+									final textoPrecio = precioController.text.trim();
+									final errorPrecio = CampoPrecioVenta.validarController(
+										precioController,
+										costoUnitario: widget.costoUnitario,
+										factorABase: factor > 0 ? factor : 1,
+										obligatorio: false,
+									);
+									if (errorPrecio != null && textoPrecio.isNotEmpty) {
+										PosiaNotificaciones.mostrarSnackBar(
+											ctx,
+											SnackBar(
+												content: Text(errorPrecio),
+												backgroundColor: PosiaColors.cancelar,
+											),
+										);
+										return;
+									}
+									if (_factorYaExiste(
+										factor,
+										excluirPresentacionId: existente?.id,
+										excluirIndicePendiente: indicePendiente,
+									)) {
+										PosiaNotificaciones.mostrarSnackBar(
+											ctx,
+											SnackBar(
+												content: Text(
+													existente != null || indicePendiente != null
+														? 'Ya existe otro empaque con ese factor'
+														: 'Ya existe un empaque con ese factor',
+												),
+												backgroundColor: PosiaColors.cancelar,
+											),
+										);
+										return;
+									}
+									Navigator.pop(ctx, true);
+								},
 								child: const Text('Guardar'),
 							),
 						],
@@ -472,43 +524,13 @@ class _PanelEmpaquesProductoState extends ConsumerState<PanelEmpaquesProducto> {
 
 		final nombre = nombreController.text.trim();
 		final factor = parsearPrecioTexto(factorController.text) ?? 0.0;
-		final textoPrecio = precioController.text;
-		final precio = parsearPrecioTexto(textoPrecio);
+		final precio = parsearPrecioTexto(precioController.text);
 		final codigo = codigoController.text.trim();
-		final errorPrecio = CampoPrecioVenta.validarController(
-			precioController,
-			costoUnitario: widget.costoUnitario,
-			factorABase: factor > 0 ? factor : 1,
-			obligatorio: false,
-		);
 
 		nombreController.dispose();
 		factorController.dispose();
 		codigoController.dispose();
 		precioController.dispose();
-
-		if (nombre.isEmpty || factor <= 0) {
-			_mostrarError('Nombre y cantidad válida son obligatorios');
-			return;
-		}
-		if (errorPrecio != null && textoPrecio.trim().isNotEmpty) {
-			_mostrarError(errorPrecio);
-			return;
-		}
-
-		final factorDuplicado = _factorYaExiste(
-			factor,
-			excluirPresentacionId: existente?.id,
-			excluirIndicePendiente: indicePendiente,
-		);
-		if (existente == null && indicePendiente == null && factorDuplicado) {
-			_mostrarError('Ya existe un empaque con ese factor');
-			return;
-		}
-		if (existente != null && factorDuplicado) {
-			_mostrarError('Ya existe otro empaque con ese factor');
-			return;
-		}
 
 		if (_esProductoNuevo) {
 			final lista = List<EmpaqueProductoDraft>.from(widget.empaquesPendientes);
