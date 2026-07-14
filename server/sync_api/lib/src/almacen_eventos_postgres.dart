@@ -40,14 +40,19 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 		var aceptados = 0;
 		for (final evento in eventos) {
 			try {
-				final insertado = await pool.runTx((tx) async {
-					final resultado = await tx.execute(
+				await pool.runTx((tx) async {
+					await tx.execute(
 						Sql.named('''
 							INSERT INTO sync_events
 								(id, store_id, device_id, type, payload, created_at)
 							VALUES
 								(@id, @storeId, @deviceId, @type, @payload, @createdAt)
-							ON CONFLICT (id) DO NOTHING
+							ON CONFLICT (id) DO UPDATE SET
+								store_id = EXCLUDED.store_id,
+								device_id = EXCLUDED.device_id,
+								type = EXCLUDED.type,
+								payload = EXCLUDED.payload,
+								created_at = EXCLUDED.created_at
 						'''),
 						parameters: {
 							'id': evento.id,
@@ -58,18 +63,9 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 							'createdAt': evento.creadoEn,
 						},
 					);
-					if (resultado.affectedRows <= 0) {
-						// Id duplicado: el evento ya esta en sync_events pero la tabla
-						// espejo pudo no haberse actualizado (hub antiguo sin proyector).
-						await ProyectorEventosPostgres(tx).aplicar(evento);
-						return true;
-					}
 					await ProyectorEventosPostgres(tx).aplicar(evento);
-					return true;
 				});
-				if (insertado) {
-					aceptados = aceptados + 1;
-				}
+				aceptados = aceptados + 1;
 			} on Object catch (error) {
 				stdout.writeln('Sync: error en ${evento.tipo} (${evento.id}): $error');
 			}

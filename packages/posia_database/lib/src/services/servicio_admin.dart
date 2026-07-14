@@ -4588,8 +4588,11 @@ class ServicioAdmin {
     String productoId,
     List<EscalaMayoreo> escalas,
   ) async {
+    // UUID: el log de Neon es append-only; un id espejo fijo deja el primer
+    // payload congelado (ON CONFLICT DO NOTHING) y otras cajas/rebuilds
+    // vuelven a proyectar escalas viejas.
     final evento = SyncEvent(
-      id: _idEventoEspejo(TipoSyncEvento.wholesaleTiersReplaced, productoId),
+      id: _generadorId.v4(),
       tiendaId: _tiendaActivaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.wholesaleTiersReplaced,
@@ -4783,17 +4786,23 @@ class ServicioAdmin {
       productoId,
       presentaciones,
     );
+    // Un solo pendiente por producto y empuje inmediato a Neon/hub.
+    await _syncEventRepository.colapsarDuplicadosCatalogo();
+    try {
+      await _syncOrchestrator.sincronizarPendientes();
+    } on Object {
+      // Queda en cola; el ciclo automatico lo reintenta.
+    }
   }
 
   Future<void> _registrarEventoPresentacionesReemplazadas(
     String productoId,
     List<PresentacionProducto> presentaciones,
   ) async {
+    // UUID por cambio: con id espejo fijo Neon conservaba solo el primer
+    // snapshot; empaques/precios nuevos no entraban al log ni a otras cajas.
     final evento = SyncEvent(
-      id: _idEventoEspejo(
-        TipoSyncEvento.productPresentationsReplaced,
-        productoId,
-      ),
+      id: _generadorId.v4(),
       tiendaId: _tiendaActivaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.productPresentationsReplaced,
