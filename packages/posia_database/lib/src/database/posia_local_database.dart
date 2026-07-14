@@ -215,8 +215,23 @@ class PosiaLocalDatabase {
 		}
 	}
 
-	/// Fase 2: v32 → v33. Si hay pendientes de sync, permanece en v32.
+	/// Fase 2: v32 → v33/v34. Si hay pendientes de sync, permanece en v32.
+	///
+	/// Comprueba la cola **antes** de pedir user_version=SCHEMA_VERSION: si se
+	/// lanza desde onUpgrade, sqflite cierra la BD ("during open, closing…") y
+	/// en hot restart eso asusta / a veces deja handles raros en Windows.
 	Future<Database> _abrirConIntegridadReferencial(String ruta) async {
+		final enV32 = await openDatabase(
+			ruta,
+			version: SCHEMA_VERSION_PRE_INTEGRIDAD,
+			onConfigure: _configurarConexionEscritura,
+		);
+		final pendientes = await _contarEventosSyncPendientes(enV32);
+		if (pendientes > 0) {
+			_migracionFkPendientePorSync = true;
+			return enV32;
+		}
+		await enV32.close();
 		try {
 			final db = await openDatabase(
 				ruta,
@@ -241,7 +256,6 @@ class PosiaLocalDatabase {
 				onConfigure: _configurarConexionEscritura,
 			);
 		} catch (error) {
-			// Algunas plataformas envuelven la excepcion de onUpgrade.
 			if (error.toString().contains('MigracionRequiereSyncHubException')) {
 				_migracionFkPendientePorSync = true;
 				return openDatabase(
@@ -251,6 +265,19 @@ class PosiaLocalDatabase {
 				);
 			}
 			rethrow;
+		}
+	}
+
+	Future<int> _contarEventosSyncPendientes(Database base) async {
+		try {
+			final filas = await base.rawQuery('''
+				SELECT COUNT(*) AS c
+				FROM sync_event_queue
+				WHERE estado IN ('pendiente', 'error')
+			''');
+			return (filas.first['c'] as int?) ?? 0;
+		} on Object {
+			return 0;
 		}
 	}
 

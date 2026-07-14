@@ -61,6 +61,57 @@ class SyncOrchestrator {
     await _colaLocal.encolar(evento);
   }
 
+  /// Empuja solo los ids indicados (p. ej. empaque recien guardado).
+  ///
+  /// Evita que la cola antigua (centenas de eventos en error) consuma los
+  /// 3 reintentos/timeouts y deje el evento nuevo sin enviar a Neon.
+  Future<ResultadoEnvioHub> sincronizarEventosPorIds(
+    Iterable<String> ids,
+  ) async {
+    final idSet = ids.where((id) => id.trim().isNotEmpty).toSet();
+    if (idSet.isEmpty) {
+      return const ResultadoEnvioHub(exitoso: false, error: 'sin ids');
+    }
+    final pendientes = await _colaLocal.obtenerPendientes();
+    final alvo = pendientes.where((e) => idSet.contains(e.id)).toList();
+    if (alvo.isEmpty) {
+      return const ResultadoEnvioHub(
+        exitoso: false,
+        error: 'ids no pendientes (colapsados o ya enviados)',
+      );
+    }
+    final tienda = alvo.first.tiendaId.trim().isNotEmpty
+        ? alvo.first.tiendaId
+        : _tiendaId;
+    final dispositivo = alvo.first.dispositivoId.trim().isNotEmpty
+        ? alvo.first.dispositivoId
+        : _dispositivoId;
+    if (tienda.trim().isEmpty || dispositivo.trim().isEmpty) {
+      for (final evento in alvo) {
+        await _colaLocal.marcarError(evento.id);
+      }
+      return const ResultadoEnvioHub(
+        exitoso: false,
+        error: 'tiendaId/dispositivoId vacio',
+      );
+    }
+    final resultado = await _transmitirLoteConDetalle(
+      alvo,
+      tiendaId: tienda,
+      dispositivoId: dispositivo,
+    );
+    if (resultado.exitoso) {
+      for (final evento in alvo) {
+        await _colaLocal.marcarEnviado(evento.id);
+      }
+    } else {
+      for (final evento in alvo) {
+        await _colaLocal.marcarError(evento.id);
+      }
+    }
+    return resultado;
+  }
+
   Future<int> sincronizarPendientes({ReporteProgresoSync? alProgreso}) async {
     final pendientes = await _colaLocal.obtenerPendientes();
     if (pendientes.isEmpty) {
@@ -279,23 +330,48 @@ class SyncOrchestrator {
     required String tiendaId,
     required String dispositivoId,
   }) async {
+    final r = await _transmitirLoteConDetalle(
+      eventos,
+      tiendaId: tiendaId,
+      dispositivoId: dispositivoId,
+    );
+    return r.exitoso;
+  }
+
+  Future<ResultadoEnvioHub> _transmitirLoteConDetalle(
+    List<SyncEvent> eventos, {
+    required String tiendaId,
+    required String dispositivoId,
+  }) async {
     if (eventos.isEmpty) {
-      return true;
+      return const ResultadoEnvioHub(exitoso: true);
     }
     var exitoLan = false;
-    var exitoHub = false;
     final clienteLan = _clienteLan;
     if (clienteLan != null) {
       exitoLan = await clienteLan.enviarEventos(eventos);
     }
     final clienteHub = _clienteHub;
-    if (clienteHub != null) {
-      exitoHub = await clienteHub.enviarEventos(
-        dispositivoId: dispositivoId,
-        tiendaId: tiendaId,
-        eventos: eventos,
+    if (clienteHub == null) {
+      return ResultadoEnvioHub(
+        exitoso: exitoLan,
+        error: exitoLan ? null : 'sin hub ni lan',
       );
     }
-    return exitoLan || exitoHub;
+    final hub = await clienteHub.enviarEventosConDetalle(
+      dispositivoId: dispositivoId,
+      tiendaId: tiendaId,
+      eventos: eventos,
+    );
+    if (exitoLan || hub.exitoso) {
+      return ResultadoEnvioHub(
+        exitoso: true,
+        statusCode: hub.statusCode,
+        aceptados: hub.aceptados,
+        esperados: hub.esperados,
+        error: hub.exitoso ? null : 'lan ok; hub: ${hub.error}',
+      );
+    }
+    return hub;
   }
 }

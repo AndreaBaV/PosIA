@@ -1,6 +1,7 @@
 /// Almacen de eventos sobre Postgres para produccion.
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -20,6 +21,10 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 	final String _urlConexion;
 	Pool<Object>? _pool;
 
+	/// Cola de escrituras: un solo lote a la vez evita saturar el pool
+	/// cuando varias cajas reintentan POST /v1/events en paralelo.
+	Future<void> _colaEscritura = Future<void>.value();
+
 	@override
 	Future<void> inicializar() async {
 		final pool = await _obtenerPool();
@@ -35,41 +40,72 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 	}
 
 	@override
-	Future<int> guardarLote(List<EventoHub> eventos) async {
-		final pool = await _obtenerPool();
-		var aceptados = 0;
-		for (final evento in eventos) {
+	Future<int> guardarLote(List<EventoHub> eventos) {
+		return _encolarEscritura(() => _guardarLoteInterno(eventos));
+	}
+
+	Future<T> _encolarEscritura<T>(Future<T> Function() trabajo) {
+		final resultado = Completer<T>();
+		_colaEscritura = _colaEscritura.then((_) async {
 			try {
-				await pool.runTx((tx) async {
-					await tx.execute(
-						Sql.named('''
-							INSERT INTO sync_events
-								(id, store_id, device_id, type, payload, created_at)
-							VALUES
-								(@id, @storeId, @deviceId, @type, @payload, @createdAt)
-							ON CONFLICT (id) DO UPDATE SET
-								store_id = EXCLUDED.store_id,
-								device_id = EXCLUDED.device_id,
-								type = EXCLUDED.type,
-								payload = EXCLUDED.payload,
-								created_at = EXCLUDED.created_at
-						'''),
-						parameters: {
-							'id': evento.id,
-							'storeId': evento.tiendaId,
-							'deviceId': evento.dispositivoId,
-							'type': evento.tipo,
-							'payload': jsonEncode(evento.payload),
-							'createdAt': evento.creadoEn,
-						},
-					);
-					await ProyectorEventosPostgres(tx).aplicar(evento);
-				});
-				aceptados = aceptados + 1;
-			} on Object catch (error) {
-				stdout.writeln('Sync: error en ${evento.tipo} (${evento.id}): $error');
+				resultado.complete(await trabajo());
+			} on Object catch (error, stack) {
+				resultado.completeError(error, stack);
 			}
+		});
+		return resultado.future;
+	}
+
+	Future<int> _guardarLoteInterno(List<EventoHub> eventos) async {
+		if (eventos.isEmpty) {
+			return 0;
 		}
+		final pool = await _obtenerPool();
+		final cronometro = Stopwatch()..start();
+		var aceptados = 0;
+		// Una sola conexion por lote: evita N adquisiciones del semaforo
+		// (cada pool.runTx pelea por un slot con connectTimeout ~15s).
+		await pool.withConnection((conexion) async {
+			for (final evento in eventos) {
+				try {
+					await conexion.runTx((tx) async {
+						await tx.execute(
+							Sql.named('''
+								INSERT INTO sync_events
+									(id, store_id, device_id, type, payload, created_at)
+								VALUES
+									(@id, @storeId, @deviceId, @type, @payload, @createdAt)
+								ON CONFLICT (id) DO UPDATE SET
+									store_id = EXCLUDED.store_id,
+									device_id = EXCLUDED.device_id,
+									type = EXCLUDED.type,
+									payload = EXCLUDED.payload,
+									created_at = EXCLUDED.created_at
+							'''),
+							parameters: {
+								'id': evento.id,
+								'storeId': evento.tiendaId,
+								'deviceId': evento.dispositivoId,
+								'type': evento.tipo,
+								'payload': jsonEncode(evento.payload),
+								'createdAt': evento.creadoEn,
+							},
+						);
+						await ProyectorEventosPostgres(tx).aplicar(evento);
+					});
+					aceptados = aceptados + 1;
+				} on Object catch (error) {
+					stdout.writeln(
+						'Sync: error en ${evento.tipo} (${evento.id}): $error',
+					);
+				}
+			}
+		});
+		cronometro.stop();
+		stdout.writeln(
+			'Sync: lote ${eventos.length} eventos, '
+			'$aceptados aceptados en ${cronometro.elapsed}',
+		);
 		return aceptados;
 	}
 
@@ -129,7 +165,11 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 			],
 			settings: PoolSettings(
 				sslMode: _resolverSsl(uri),
-				maxConnectionCount: 5,
+				// Lecturas (GET/auth) + 1 escritura serializada.
+				maxConnectionCount: 8,
+				// Default del driver es 15s; con colas de sync es insuficiente.
+				connectTimeout: const Duration(seconds: 90),
+				queryTimeout: const Duration(minutes: 2),
 			),
 		);
 		_pool = pool;

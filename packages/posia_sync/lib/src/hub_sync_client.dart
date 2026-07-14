@@ -20,6 +20,23 @@ class ResultadoPullHub {
   final bool exitoso;
 }
 
+/// Resultado de POST /v1/events al hub.
+class ResultadoEnvioHub {
+  const ResultadoEnvioHub({
+    required this.exitoso,
+    this.statusCode,
+    this.aceptados = 0,
+    this.esperados = 0,
+    this.error,
+  });
+
+  final bool exitoso;
+  final int? statusCode;
+  final int aceptados;
+  final int esperados;
+  final String? error;
+}
+
 class HubSyncClient {
   HubSyncClient({
     required String urlBase,
@@ -38,6 +55,20 @@ class HubSyncClient {
     required String tiendaId,
     required List<SyncEvent> eventos,
   }) async {
+    final r = await enviarEventosConDetalle(
+      dispositivoId: dispositivoId,
+      tiendaId: tiendaId,
+      eventos: eventos,
+    );
+    return r.exitoso;
+  }
+
+  /// Igual que [enviarEventos] pero con codigo HTTP / accepted para diagnostico.
+  Future<ResultadoEnvioHub> enviarEventosConDetalle({
+    required String dispositivoId,
+    required String tiendaId,
+    required List<SyncEvent> eventos,
+  }) async {
     final uri = Uri.parse('$_urlBase/v1/events');
     final cuerpo = jsonEncode({
       'deviceId': dispositivoId,
@@ -49,15 +80,29 @@ class HubSyncClient {
           .post(uri, headers: _construirCabeceras(), body: cuerpo)
           .timeout(const Duration(seconds: TIMEOUT_HUB_SYNC_SEGUNDOS));
       if (respuesta.statusCode < 200 || respuesta.statusCode >= 300) {
-        return false;
+        return ResultadoEnvioHub(
+          exitoso: false,
+          statusCode: respuesta.statusCode,
+          esperados: eventos.length,
+          error: respuesta.body.length > 200
+              ? respuesta.body.substring(0, 200)
+              : respuesta.body,
+        );
       }
       final json = jsonDecode(respuesta.body) as Map<String, Object?>;
       final aceptados = json['accepted'] as int? ?? 0;
-      // Solo cuenta como exito si el hub persistio y proyecto el evento.
-      // Antes, received > 0 marcaba enviado aunque accepted = 0 (fallo en Neon).
-      return aceptados >= eventos.length;
-    } on Object {
-      return false;
+      return ResultadoEnvioHub(
+        exitoso: aceptados >= eventos.length,
+        statusCode: respuesta.statusCode,
+        aceptados: aceptados,
+        esperados: eventos.length,
+      );
+    } on Object catch (error) {
+      return ResultadoEnvioHub(
+        exitoso: false,
+        esperados: eventos.length,
+        error: '$error',
+      );
     }
   }
 

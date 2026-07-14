@@ -647,18 +647,38 @@ class _PantallaFormularioProductoState
           ),
         ),
         const SizedBox(height: 12.0),
-        DropdownButtonFormField<String>(
-          key: ValueKey('cat-$_categoriaId'),
-          initialValue: _categoriaId,
-          items: categorias
-              .where((c) => c.activa)
-              .map((c) => DropdownMenuItem(value: c.id, child: Text(c.nombre)))
-              .toList(),
-          onChanged: (v) => setState(() => _categoriaId = v),
-          decoration: const InputDecoration(
-            labelText: 'Categoría *',
-            border: OutlineInputBorder(),
-          ),
+        Builder(
+          builder: (context) {
+            // Solo activas + la del producto si quedó huérfana (inactiva/borrada
+            // del listado). Flutter exige exactamente 1 item con el value.
+            final catsActivas = categorias.where((c) => c.activa).toList();
+            final itemsCat = <Categoria>[...catsActivas];
+            final idSel = _categoriaId;
+            if (idSel != null &&
+                idSel.isNotEmpty &&
+                !itemsCat.any((c) => c.id == idSel)) {
+              final huerfana = categorias.where((c) => c.id == idSel);
+              itemsCat.addAll(huerfana);
+            }
+            final valorCat = (idSel != null &&
+                    itemsCat.any((c) => c.id == idSel))
+                ? idSel
+                : itemsCat.firstOrNull?.id;
+            return DropdownButtonFormField<String>(
+              key: ValueKey('cat-$valorCat-${itemsCat.length}'),
+              initialValue: valorCat,
+              items: itemsCat
+                  .map(
+                    (c) => DropdownMenuItem(value: c.id, child: Text(c.nombre)),
+                  )
+                  .toList(),
+              onChanged: (v) => setState(() => _categoriaId = v),
+              decoration: const InputDecoration(
+                labelText: 'Categoría *',
+                border: OutlineInputBorder(),
+              ),
+            );
+          },
         ),
         const SizedBox(height: 12.0),
         DropdownButtonFormField<UnidadMedida>(
@@ -675,21 +695,30 @@ class _PantallaFormularioProductoState
         ),
         const SizedBox(height: 12.0),
         proveedores.when(
-          data: (lista) => DropdownButtonFormField<String?>(
-            key: ValueKey('prov-$_proveedorId'),
-            initialValue: _proveedorId,
-            items: [
-              const DropdownMenuItem(value: null, child: Text('Sin proveedor')),
-              ...lista.map(
-                (p) => DropdownMenuItem(value: p.id, child: Text(p.nombre)),
+          data: (lista) {
+            final idsProv = lista.map((p) => p.id).toList();
+            final idProv = _proveedorId;
+            final valorProv =
+                idProv == null || idsProv.contains(idProv) ? idProv : null;
+            return DropdownButtonFormField<String?>(
+              key: ValueKey('prov-$valorProv-${idsProv.length}'),
+              initialValue: valorProv,
+              items: [
+                const DropdownMenuItem(
+                  value: null,
+                  child: Text('Sin proveedor'),
+                ),
+                ...lista.map(
+                  (p) => DropdownMenuItem(value: p.id, child: Text(p.nombre)),
+                ),
+              ],
+              onChanged: (v) => setState(() => _proveedorId = v),
+              decoration: const InputDecoration(
+                labelText: 'Proveedor',
+                border: OutlineInputBorder(),
               ),
-            ],
-            onChanged: (v) => setState(() => _proveedorId = v),
-            decoration: const InputDecoration(
-              labelText: 'Proveedor',
-              border: OutlineInputBorder(),
-            ),
-          ),
+            );
+          },
           loading: () => const LinearProgressIndicator(),
           error: (e, _) => Text('$e'),
         ),

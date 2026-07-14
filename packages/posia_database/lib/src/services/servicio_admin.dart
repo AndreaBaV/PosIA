@@ -988,8 +988,9 @@ class ServicioAdmin {
         ),
       );
     }
-    final resultado =
-        await _syncOrchestrator.sincronizarCompleto(alProgreso: alProgreso);
+    final resultado = await _syncOrchestrator.sincronizarCompleto(
+      alProgreso: alProgreso,
+    );
     await PosiaLocalDatabase.obtenerInstancia()
         .completarMigracionIntegridadTrasSync();
     return resultado;
@@ -2507,8 +2508,7 @@ class ServicioAdmin {
         await _productoRepository.guardar(productosActualizados[i], db: tx);
       }
       for (final asignacion in asignaciones) {
-        final motivo =
-            'Compra ${compraId.substring(0, 8).toUpperCase()}';
+        final motivo = 'Compra ${compraId.substring(0, 8).toUpperCase()}';
         if (asignacion.destinoTipo == TipoDestinoCompra.tienda) {
           final stockActual = await _inventarioRepository.obtenerStock(
             asignacion.productoId,
@@ -4740,9 +4740,14 @@ class ServicioAdmin {
     await _syncOrchestrator.registrarEvento(evento);
   }
 
-  Future<void> _registrarEventoDescuentoCliente(DescuentoCliente descuento) async {
+  Future<void> _registrarEventoDescuentoCliente(
+    DescuentoCliente descuento,
+  ) async {
     final evento = SyncEvent(
-      id: _idEventoEspejo(TipoSyncEvento.customerDiscountUpserted, descuento.id),
+      id: _idEventoEspejo(
+        TipoSyncEvento.customerDiscountUpserted,
+        descuento.id,
+      ),
       tiendaId: _tiendaActivaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.customerDiscountUpserted,
@@ -4763,7 +4768,9 @@ class ServicioAdmin {
     await _syncOrchestrator.registrarEvento(evento);
   }
 
-  Future<void> _registrarEventoDescuentoClienteEliminado(String descuentoId) async {
+  Future<void> _registrarEventoDescuentoClienteEliminado(
+    String descuentoId,
+  ) async {
     final evento = SyncEvent(
       id: _generadorId.v4(),
       tiendaId: _tiendaActivaId,
@@ -4786,13 +4793,20 @@ class ServicioAdmin {
       productoId,
       presentaciones,
     );
-    // Un solo pendiente por producto y empuje inmediato a Neon/hub.
+    // Colapsar: deja el snapshot mas reciente por producto.
     await _syncEventRepository.colapsarDuplicadosCatalogo();
-    try {
-      await _syncOrchestrator.sincronizarPendientes();
-    } on Object {
-      // Queda en cola; el ciclo automatico lo reintenta.
-    }
+    // Empujar solo el evento de este producto (no la cola antigua completa).
+    final pendientes = await _syncEventRepository.obtenerPendientes();
+    final idsEmpaque = pendientes
+        .where(
+          (e) =>
+              e.tipo == TipoSyncEvento.productPresentationsReplaced &&
+              (e.payload['productoId']?.toString() == productoId),
+        )
+        .map((e) => e.id)
+        .toList();
+    // ignore: unawaited_futures
+    _syncOrchestrator.sincronizarEventosPorIds(idsEmpaque).catchError((_) {});
   }
 
   Future<void> _registrarEventoPresentacionesReemplazadas(
