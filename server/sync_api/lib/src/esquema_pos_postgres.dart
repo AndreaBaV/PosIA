@@ -11,7 +11,7 @@ class EsquemaPosPostgres {
 	EsquemaPosPostgres._();
 
 	/// Crea tablas operativas y log de sync si no existen.
-	static Future<void> crearEsquemaCompleto(Connection conexion) async {
+	static Future<void> crearEsquemaCompleto(Session conexion) async {
 		await conexion.execute('''
 			CREATE TABLE IF NOT EXISTS stores (
 				id TEXT PRIMARY KEY,
@@ -624,7 +624,7 @@ class EsquemaPosPostgres {
 		await _asegurarRetencionSyncEvents(conexion);
 	}
 
-	static Future<void> _asegurarIndices(Connection conexion) async {
+	static Future<void> _asegurarIndices(Session conexion) async {
 		await conexion.execute('''
 			CREATE UNIQUE INDEX IF NOT EXISTS idx_users_codigo_unico ON users(codigo)
 		''');
@@ -682,7 +682,7 @@ class EsquemaPosPostgres {
 	}
 
 	/// FKs DEFERRABLE: permiten proyectar lotes multi-fila y validar al COMMIT.
-	static Future<void> _asegurarClavesForaneas(Connection conexion) async {
+	static Future<void> _asegurarClavesForaneas(Session conexion) async {
 		const fks = <(String tabla, String nombre, String definicion)>[
 			(
 				'products',
@@ -859,7 +859,7 @@ class EsquemaPosPostgres {
 	}
 
 	/// Convierte timestamps de negocio TEXT ISO → TIMESTAMPTZ (idempotente).
-	static Future<void> _asegurarTiposTemporales(Connection conexion) async {
+	static Future<void> _asegurarTiposTemporales(Session conexion) async {
 		const columnas = <(String tabla, String columna, bool nullable)>[
 			('sales', 'creada_en', false),
 			('sales', 'credito_vence_en', true),
@@ -897,7 +897,7 @@ class EsquemaPosPostgres {
 	}
 
 	static Future<void> _convertirColumnaATimestamptz(
-		Connection conexion, {
+		Session conexion, {
 		required String tabla,
 		required String columna,
 		required bool nullable,
@@ -945,7 +945,7 @@ class EsquemaPosPostgres {
 	}
 
 	/// Indice + meta de retencion del log de sync.
-	static Future<void> _asegurarRetencionSyncEvents(Connection conexion) async {
+	static Future<void> _asegurarRetencionSyncEvents(Session conexion) async {
 		await conexion.execute('''
 			CREATE TABLE IF NOT EXISTS schema_meta (
 				clave TEXT PRIMARY KEY,
@@ -963,7 +963,7 @@ class EsquemaPosPostgres {
 	}
 
 	/// Purga eventos del hub mas antiguos que la ventana de retencion.
-	static Future<int> purgarEventosAntiguos(Connection conexion) async {
+	static Future<int> purgarEventosAntiguos(Session conexion) async {
 		final resultado = await conexion.execute(
 			Sql.named('''
 				DELETE FROM sync_events

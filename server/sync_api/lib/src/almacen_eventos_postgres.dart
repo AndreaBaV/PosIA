@@ -18,29 +18,29 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 		: _urlConexion = urlConexion;
 
 	final String _urlConexion;
-	Connection? _conexion;
+	Pool? _pool;
 
 	@override
 	Future<void> inicializar() async {
-		final conexion = await _abrirConexion();
-		await EsquemaPosPostgres.crearEsquemaCompleto(conexion);
-		final purgados = await EsquemaPosPostgres.purgarEventosAntiguos(conexion);
+		final pool = await _obtenerPool();
+		await EsquemaPosPostgres.crearEsquemaCompleto(pool);
+		final purgados = await EsquemaPosPostgres.purgarEventosAntiguos(pool);
 		if (purgados > 0) {
 			stdout.writeln(
 				'Sync: purgados $purgados eventos antiguos '
 				'(retencion ${DIAS_RETENCION_SYNC_EVENTS}d)',
 			);
 		}
-		await _reproyectarEventosEspejoPendientes(conexion);
+		await _reproyectarEventosEspejoPendientes(pool);
 	}
 
 	@override
 	Future<int> guardarLote(List<EventoHub> eventos) async {
-		final conexion = await _abrirConexion();
+		final pool = await _obtenerPool();
 		var aceptados = 0;
 		for (final evento in eventos) {
 			try {
-				final insertado = await conexion.runTx((tx) async {
+				final insertado = await pool.runTx((tx) async {
 					final resultado = await tx.execute(
 						Sql.named('''
 							INSERT INTO sync_events
@@ -83,8 +83,8 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 		String? excluirDispositivoId,
 		int limite = 500,
 	}) async {
-		final conexion = await _abrirConexion();
-		final resultado = await conexion.execute(
+		final pool = await _obtenerPool();
+		final resultado = await pool.execute(
 			Sql.named('''
 				SELECT seq, id, store_id, device_id, type, payload, created_at
 				FROM sync_events
@@ -104,39 +104,40 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 
 	@override
 	Future<void> cerrar() async {
-		await _conexion?.close();
-		_conexion = null;
+		await _pool?.close();
+		_pool = null;
 	}
 
 	Future<AlmacenUsuariosPostgres> obtenerAlmacenUsuarios() async {
 		// Proveedor en lugar de Connection fija: Neon cierra conexiones idle y
-		// auth debe reutilizar _abrirConexion() como el resto del almacen.
-		return AlmacenUsuariosPostgres(_abrirConexion);
+		// auth debe reutilizar _obtenerPool() como el resto del almacen.
+		return AlmacenUsuariosPostgres(_obtenerPool);
 	}
 
-	Future<Connection> _abrirConexion() async {
-		final existente = _conexion;
-		if (existente != null && !existente.isOpen) {
-			_conexion = null;
-		}
-		final activa = _conexion;
-		if (activa != null && activa.isOpen) {
-			return activa;
+	Future<Pool> _obtenerPool() async {
+		final existente = _pool;
+		if (existente != null) {
+			return existente;
 		}
 		final uri = Uri.parse(_urlConexion);
 		final infoUsuario = uri.userInfo.split(':');
-		final conexion = await Connection.open(
-			Endpoint(
-				host: uri.host,
-				port: uri.hasPort ? uri.port : 5432,
-				database: uri.pathSegments.isNotEmpty ? uri.pathSegments.first : 'posia_sync',
-				username: infoUsuario.isNotEmpty ? infoUsuario[0] : 'posia',
-				password: infoUsuario.length > 1 ? infoUsuario[1] : '',
+		final pool = Pool.withEndpoints(
+			[
+				Endpoint(
+					host: uri.host,
+					port: uri.hasPort ? uri.port : 5432,
+					database: uri.pathSegments.isNotEmpty ? uri.pathSegments.first : 'posia_sync',
+					username: infoUsuario.isNotEmpty ? infoUsuario[0] : 'posia',
+					password: infoUsuario.length > 1 ? infoUsuario[1] : '',
+				),
+			],
+			settings: PoolSettings(
+				sslMode: _resolverSsl(uri),
+				maxConnectionCount: 5,
 			),
-			settings: ConnectionSettings(sslMode: _resolverSsl(uri)),
 		);
-		_conexion = conexion;
-		return conexion;
+		_pool = pool;
+		return pool;
 	}
 
 	SslMode _resolverSsl(Uri uri) {
@@ -167,22 +168,22 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 	}
 
 	/// Reproyecta eventos de roles/usuarios que quedaron solo en sync_events.
-	Future<void> _reproyectarEventosEspejoPendientes(Connection conexion) async {
+	Future<void> _reproyectarEventosEspejoPendientes(Pool pool) async {
 		const claveMeta = 'mirror_backfill_roles_v1';
-		await conexion.execute('''
+		await pool.execute('''
 			CREATE TABLE IF NOT EXISTS schema_meta (
 				clave TEXT PRIMARY KEY,
 				valor TEXT NOT NULL
 			)
 		''');
-		final existente = await conexion.execute(
+		final existente = await pool.execute(
 			Sql.named('SELECT valor FROM schema_meta WHERE clave = @clave'),
 			parameters: {'clave': claveMeta},
 		);
 		if (existente.isNotEmpty) {
 			return;
 		}
-		final filas = await conexion.execute('''
+		final filas = await pool.execute('''
 			SELECT seq, id, store_id, device_id, type, payload, created_at
 			FROM sync_events
 			WHERE type IN ('customRoleUpserted', 'userUpserted')
@@ -191,7 +192,7 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 		for (final fila in filas) {
 			try {
 				final evento = _mapearFila(fila);
-				await conexion.runTx((tx) async {
+				await pool.runTx((tx) async {
 					await ProyectorEventosPostgres(tx).aplicar(evento);
 				});
 			} on Object catch (error) {
@@ -200,7 +201,7 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 				);
 			}
 		}
-		await conexion.execute(
+		await pool.execute(
 			Sql.named('''
 				INSERT INTO schema_meta (clave, valor)
 				VALUES (@clave, @valor)

@@ -9,7 +9,7 @@ import 'package:postgres/postgres.dart';
 class AlmacenUsuariosPostgres {
 	AlmacenUsuariosPostgres(this._obtenerConexion);
 
-	final Future<Connection> Function() _obtenerConexion;
+	final Future<Session> Function() _obtenerConexion;
 
 	Future<Map<String, Object?>?> obtenerPerfilPorCodigo(String codigo) async {
 		final limpio = ValidadorCodigoUsuario.normalizar(codigo);
