@@ -256,4 +256,15 @@ Segundo dominio extraído (CRUD producto, alta con presentaciones/escalas, inven
 - `ServicioAdmin` pasó de 5,067 a 4,602 líneas (−465). Su API pública no cambió: cada método sigue existiendo con la misma firma, delegando en `_catalogoProductos`. Se mantuvieron en `ServicioAdmin` los métodos que cruzan dominios: `importarProductosLote`/`_resolverCategoriaImportacion`/`_guardarLotePromocionImportado` (mezclan producto+categoría+lote-promoción) y el paso final `sincronizarPresentacionesProducto` tras `registrarProductoCompleto` (requiere `SyncEventRepository`, fuera de este dominio).
 - Verificado: `dart analyze` limpio en `posia_database` y `apps/posia_pos`, 78 tests en verde (incluye los específicos de duplicado de código de barras y validación de precio).
 
-Progreso ServicioAdmin: 5,810 → 5,067 → **4,602** líneas.
+Progreso ServicioAdmin: 5,810 → 5,067 → 4,602 líneas.
+
+### 10.7 Fase 3.3 — Extracción del dominio de almacenes
+
+Tercer dominio extraído: catálogo de almacenes e inventario/ajustes por almacén.
+
+- Nuevo: `packages/posia_database/lib/src/services/admin_almacenes.dart` — `AdminAlmacenes`. Dueño de `listarAlmacenes` (con siembra inicial), `registrarAlmacen`, `obtenerResumenAlmacenes`, `obtenerInventarioAlmacen`, `ajustarStockAlmacen`, `listarProductosConStockAlmacen`.
+- **No** se movieron `traspasarAlmacenATienda`/`traspasarAlmacenATiendaMultiple`/`traspasarAlmacenAAlmacenMultiple`: dependen de `_registrarEventoTraspasoAlmacen`, que a su vez necesita `TraspasoRepository` — cruzan hacia el dominio de Traspasos (aún no extraído, fase futura). Se quedan en `ServicioAdmin` como el resto de casos de cruce de dominio ya documentados.
+- `ServicioAdmin` pasó de 4,602 a 4,468 líneas (−134). API pública sin cambios.
+- Verificado: `dart analyze` limpio en `posia_database` y `apps/posia_pos`, 78 tests en verde.
+
+Progreso ServicioAdmin: 5,810 → 5,067 → 4,602 → **4,468** líneas.
