@@ -35,6 +35,16 @@ class Categoria {
 	/// Indica si se muestra en caja.
 	final bool activa;
 
+	/// Placeholder creado por integridad FK (sync fuera de orden).
+	///
+	/// No es una categoría de negocio; no debe proyectarse a Neon.
+	bool get esStubFk {
+		return nombre.trim() == 'Categoría' &&
+				icono == 'shopping_basket' &&
+				colorHex == '#4CAF50' &&
+				orden == 0;
+	}
+
 	/// Genera copia con campos opcionales reemplazados.
 	Categoria copiarCon({
 		String? id,

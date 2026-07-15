@@ -641,14 +641,29 @@ class AseguradorPadresFk {
 	}
 
 	Future<void> asegurarPadresDeTraspaso(Traspaso traspaso) async {
-		await asegurarTienda(traspaso.tiendaOrigenId);
-		await asegurarTienda(traspaso.tiendaDestinoId);
+		await _asegurarUbicacionTraspaso(traspaso.tiendaOrigenId);
+		await _asegurarUbicacionTraspaso(traspaso.tiendaDestinoId);
+		final tiendaOrigenReal = esAlmacenCodificadoEnTraspaso(traspaso.tiendaOrigenId)
+			? null
+			: traspaso.tiendaOrigenId;
 		for (final linea in traspaso.lineas) {
 			await asegurarProducto(
 				linea.productoId,
-				tiendaId: traspaso.tiendaOrigenId,
+				tiendaId: tiendaOrigenReal,
 			);
 		}
+	}
+
+	/// Origen/destino de un traspaso puede ser una tienda o, codificado con
+	/// [prefijoAlmacenTraspaso], un almacén — no crear una "tienda" falsa
+	/// cuando en realidad es un almacén (ver [codificarAlmacenEnTraspaso]).
+	Future<void> _asegurarUbicacionTraspaso(String ubicacionId) async {
+		final almacenId = decodificarAlmacenEnTraspaso(ubicacionId);
+		if (almacenId != null) {
+			await asegurarAlmacen(almacenId);
+			return;
+		}
+		await asegurarTienda(ubicacionId);
 	}
 
 	Future<void> asegurarPadresDeCompra(Compra compra) async {

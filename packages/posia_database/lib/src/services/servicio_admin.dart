@@ -1007,9 +1007,11 @@ class ServicioAdmin {
       return 0;
     }
 
-    final tiendas = await _tiendaRepository.listarTodas();
+    final tiendas =
+        (await _tiendaRepository.listarTodas()).where((t) => !t.esStubFk).toList();
     final almacenes = await listarAlmacenes();
-    final categorias = await listarCategorias();
+    final categorias =
+        (await listarCategorias()).where((c) => !c.esStubFk).toList();
     final tiposPresentacion = await listarTiposPresentacion();
     final productos = await listarProductosCatalogo();
     final clientes = await listarClientes();
@@ -4365,6 +4367,10 @@ class ServicioAdmin {
   }
 
   Future<void> _registrarEventoCategoria(Categoria categoria) async {
+    // Stubs FK ("Categoría") no son catálogo real; no contaminar Neon/categories.
+    if (categoria.esStubFk) {
+      return;
+    }
     final evento = SyncEvent(
       id: _idEventoEspejo(TipoSyncEvento.categoryUpserted, categoria.id),
       tiendaId: _tiendaActivaId,
@@ -5083,6 +5089,10 @@ class ServicioAdmin {
   }
 
   Future<void> _registrarEventoTienda(Tienda tienda) async {
+    // Stubs FK ("Tienda") no son sucursales reales; no contaminar Neon/stores.
+    if (tienda.esStubFk) {
+      return;
+    }
     final evento = SyncEvent(
       id: _idEventoEspejo(TipoSyncEvento.storeUpserted, tienda.id),
       tiendaId: _tiendaActivaId,

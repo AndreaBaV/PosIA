@@ -228,4 +228,14 @@ DDL capturado antes de borrar (ver historial de este chat / commit correspondien
 
 `orderUpserted`, `variantUpserted`, `lotePromocionReplaced`, `customerDiscountUpserted`, `customerProductPriceUpserted` nunca han sido enviados por ninguna tienda (cero eventos en `sync_events`). Sus tablas en Neon (`orders`, `product_variants`, `lotes_promocion`, `customer_discounts`, `customer_product_prices`) siguen en 0 filas — son features genuinamente no usadas todavía, no un bug de sync. No se tocan.
 
+### 10.4 Registros corruptos en Neon por stubs FK que sí se proyectaron (limpiado)
+
+El usuario reportó tiendas "Tienda", categorías "Categoría" y proveedores "Proveedor" duplicados en la consola de Neon, más categorías duplicadas por nombre (Abarrotes, Aceite/Aceites, Frutos Secos, Semillas). Investigado y confirmado: `_reencolarCatalogoLocalPendiente` solo filtraba proveedores-stub (`esStubFk`); tiendas y categorías-stub se reenviaban sin filtro. Además, `AseguradorPadresFk.asegurarPadresDeTraspaso` creaba una "tienda" falsa (`almacen:alm-1`) cuando el traspaso tenía un almacén como origen/destino, porque no usaba `esAlmacenCodificadoEnTraspaso`/`decodificarAlmacenEnTraspaso` (ya existentes en `traspaso_util.dart`) antes de llamar `asegurarTienda`.
+
+Acciones tomadas (autorizadas explícitamente por el usuario):
+
+- Datos en Neon: fusionadas categorías duplicadas (Abarrotes 134→canónico de 230; Aceite+Aceites→canónico de 16; Frutos Secos 1→canónico de 7; Semillas 17→canónico de 29), reasignando productos antes de borrar el duplicado. Las 4 categorías-stub ("Categoría", 28 productos en total) reasignadas a la categoría canónica de Semillas y borradas. Los 5 proveedores-stub renombrados a "Proveedor 1".."Proveedor 5" (tenían productos/compras reales apuntándoles; no se podían borrar). Las 2 tiendas-stub huérfanas (`tienda-sync`, `almacen:alm-1`, 0 referencias reales verificadas contra 13 tablas) borradas. Script: `server/sync_api/bin/limpieza_placeholders_neon.dart`.
+- Código: agregado `esStubFk` a `Categoria` y `Tienda` (mismo patrón que `Proveedor`), consultado en `_registrarEventoCategoria`/`_registrarEventoTienda` y en el filtro de `_reencolarCatalogoLocalPendiente`. Corregido `asegurarPadresDeTraspaso` para reconocer traspasos con destino/origen a almacén.
+- `categories` 28→19, `stores` 5→3, `suppliers` sigue en 5 (renombrados, no borrados), `products` se mantiene en 639 (solo se reasignó `categoria_id`, ningún producto se perdió).
+
 Sigue pendiente la Fase 3+ de este documento (modularización de `ServicioAdmin` por dominio) — no se ha empezado.
