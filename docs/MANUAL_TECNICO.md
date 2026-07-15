@@ -320,6 +320,7 @@ verán "Clave API inválida" al primer login.
 | SSL error | `?sslmode=require` en Neon |
 | Timeout primera sync | Hub suspendido por inactividad — esperar ~30 s y reintentar |
 | Sin URL hub | Caja opera 100 % offline |
+| "No se pudo contactar el servidor" en un solo dispositivo, sin logs en Northflank | La petición **nunca llegó** al hub. Causas frecuentes: (1) tu laptop entra con **cache local offline** y no toca el servidor; (2) URL incorrecta en Configuración técnica del cliente; (3) firewall/DNS/antivirus HTTPS en la red del local. En el dispositivo del cliente: Configuración técnica → **Probar conexión** y comparar el host mostrado con la URL pública de Northflank. Si Probar conexión falla y no hay request en logs, el bloqueo es de red local, no del backend. |
 
 ---
 

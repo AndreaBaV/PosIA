@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:posia_core/posia_core.dart';
-import 'package:posia_database/posia_database.dart';
 import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
@@ -329,8 +328,7 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
         await _gestorBiometria.eliminarPerfil(perfil.usuarioId);
         await _prepararBiometria();
         setState(() {
-          _mensajeError =
-              intento.motivoFallo?.mensajeUsuario ?? 'PIN desactualizado';
+          _mensajeError = intento.mensajeUsuario;
         });
         return;
       }
@@ -380,8 +378,7 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
       }
       if (!busqueda.exitoso) {
         setState(() {
-          _mensajeError =
-              busqueda.motivoFallo?.mensajeUsuario ?? 'Usuario no encontrado';
+          _mensajeError = busqueda.mensajeUsuario;
         });
         return;
       }
@@ -423,8 +420,7 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
         }
         setState(() {
           _pinController.clear();
-          _mensajeError =
-              intento.motivoFallo?.mensajeUsuario ?? 'Contraseña incorrecta';
+          _mensajeError = intento.mensajeUsuario;
         });
         return;
       }

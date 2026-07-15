@@ -529,6 +529,7 @@ Al compilar el release se embeben hub y API key (ver manual técnico §11). Cada
 | Micrófono en productos (Windows) | El dictado de alta solo funciona en iPhone/Android |
 | "1 caja" agrega cantidad incorrecta | Revisa `piezas_por_caja` del producto en catalogo |
 | Sync no funciona | Revisa URL, API Key y que el servidor este activo |
+| "No se pudo contactar el servidor" (cliente nuevo) | En Configuración técnica usa **Probar conexión**. Si falla y Northflank no muestra logs, la laptop del cliente no alcanza el hub (URL, internet, firewall). Tu equipo puede seguir entrando con datos locales guardados de un login anterior. |
 | No imprime en red | Verifica IP y puerto 9100; usa modo "ambos" como respaldo |
 | App no abre en Windows | Ejecuta desde carpeta `Release` completa con DLLs |
 | Microfono bloqueado en iPhone | Ajustes → POSIA → activar Microfono |

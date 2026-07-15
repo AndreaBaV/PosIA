@@ -7,6 +7,29 @@ Historial consolidado de versiones e implementaciones.
 
 ---
 
+## 2026-07-15 — Diagnóstico: hub inalcanzable sin logs en Northflank
+
+### Problema
+En un dispositivo el login funciona y en otro aparece *"No se pudo
+contactar el servidor"*, sin ninguna petición en los logs del hub.
+La causa habitual es que la máquina que "sí entra" usa la **copia local
+offline** tras un login previo, mientras el dispositivo nuevo nunca
+alcanza la URL pública (DNS, firewall, SSL intercept, URL mal
+configurada, o hub suspendido).
+
+### Cambios
+- `DiagnosticoConexionHub` + `HubSyncClient.diagnosticarConexion()` /
+  `resumirErrorConexionHub`: traduce timeout, DNS y SSL a mensajes
+  accionables e incluye el host de destino.
+- Configuración técnica: botón **Probar conexión** (timeout de
+  despertar 60 s) sin guardar la configuración.
+- Login: el error de hub inalcanzable ahora muestra la pista técnica
+  debajo del mensaje.
+- Manual técnico y de usuario: fila de diagnóstico para el caso sin
+  logs en Northflank.
+
+---
+
 ## 2026-07-01 — Fix: doble teclado y mensajes ocultos en diálogos de captura (Android/iOS)
 
 ### Problema

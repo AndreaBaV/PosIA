@@ -50,6 +50,9 @@ class HubSyncClient {
   final String? _claveApi;
   final http.Client _clienteHttp;
 
+  /// URL base del hub (sin barra final esperada).
+  String get urlBase => _urlBase;
+
   Future<bool> enviarEventos({
     required String dispositivoId,
     required String tiendaId,
@@ -548,14 +551,36 @@ class HubSyncClient {
   }
 
   Future<bool> mantenerHubVivo() async {
+    final diagnostico = await diagnosticarConexion();
+    return diagnostico.exitoso;
+  }
+
+  /// Ping a `/v1/health` con detalle para diagnostico en Configuración técnica.
+  ///
+  /// Usa el timeout largo de despertar: el plan gratuito de Northflank/Render
+  /// puede suspender el contenedor y tardar hasta ~60 s en volver.
+  Future<DiagnosticoConexionHub> diagnosticarConexion() async {
     final uri = Uri.parse('$_urlBase/v1/health');
     try {
       final respuesta = await _clienteHttp
           .get(uri, headers: _construirCabeceras())
           .timeout(const Duration(seconds: TIMEOUT_HUB_DESPERTAR_SEGUNDOS));
-      return respuesta.statusCode >= 200 && respuesta.statusCode < 300;
-    } on Object {
-      return false;
+      if (respuesta.statusCode >= 200 && respuesta.statusCode < 300) {
+        return DiagnosticoConexionHub.ok(
+          url: _urlBase,
+          codigoHttp: respuesta.statusCode,
+        );
+      }
+      return DiagnosticoConexionHub.fallo(
+        url: _urlBase,
+        codigoHttp: respuesta.statusCode,
+        detalle: 'HTTP ${respuesta.statusCode}',
+      );
+    } on Object catch (error) {
+      return DiagnosticoConexionHub.fallo(
+        url: _urlBase,
+        detalle: '$error',
+      );
     }
   }
 
