@@ -1319,6 +1319,9 @@ Future<void> ejecutarCotizacionCaja(BuildContext context, WidgetRef ref) async {
 		}
 		return;
 	}
+	if (!context.mounted) {
+		return;
+	}
 	final nombreController = TextEditingController();
 	final notasController = TextEditingController();
 	final datos = await showDialog<({String nombre, String notas})>(
