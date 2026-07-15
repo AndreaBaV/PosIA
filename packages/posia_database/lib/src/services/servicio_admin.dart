@@ -65,8 +65,10 @@ import 'admin_catalogo_productos.dart';
 import 'admin_categorias.dart';
 import 'admin_clientes.dart';
 import 'admin_compras.dart';
+import 'admin_listas_precios.dart';
 import 'admin_pedidos_cotizaciones.dart';
 import 'admin_proveedores.dart';
+import 'admin_reportes.dart';
 import 'admin_traspasos.dart';
 import 'admin_vendedores.dart';
 import 'servicio_corte_caja.dart';
@@ -212,6 +214,18 @@ class ServicioAdmin {
       categoriaRepository: categoriaRepository,
     );
     _vendedores = AdminVendedores(vendedorRepository: vendedorRepository);
+    _reportes = AdminReportes(
+      ventaRepository: ventaRepository,
+      vendedores: _vendedores,
+    );
+    _listasPrecios = AdminListasPrecios(
+      productoRepository: productoRepository,
+      emisorEventos: _emisorEventos,
+      catalogoProductos: _catalogoProductos,
+      clientes: _clientes,
+      precioRepository: precioRepository,
+      clienteRepository: clienteRepository,
+    );
   }
 
   final TiendaRepository _tiendaRepository;
@@ -250,6 +264,8 @@ class ServicioAdmin {
   late final AdminTraspasos _traspasos;
   late final AdminCategorias _categorias;
   late final AdminVendedores _vendedores;
+  late final AdminReportes _reportes;
+  late final AdminListasPrecios _listasPrecios;
   MotorPrecio? _motorPrecioCache;
 
   MotorPrecio? get _motorPrecio {
@@ -2961,114 +2977,46 @@ class ServicioAdmin {
 
   // --- Reportes ---
 
-  Future<List<ResumenVendedor>> obtenerResumenPorVendedor(
-    FiltroVentas filtro,
-  ) async {
-    final ventas = await _ventaRepository.listarConFiltro(filtro);
-    final vendedores = await listarVendedores();
-    final nombres = {for (final v in vendedores) v.id: v.nombre};
-    final acumulado = <String, ResumenVendedor>{};
-    for (final venta in ventas) {
-      if (venta.estado != EstadoVenta.completada) {
-        continue;
-      }
-      final vendedorId = venta.vendedorId ?? 'sin-vendedor';
-      final previo = acumulado[vendedorId];
-      acumulado[vendedorId] = ResumenVendedor(
-        vendedorId: vendedorId,
-        nombreVendedor: nombres[vendedorId] ?? 'Sin vendedor',
-        cantidadVentas: (previo?.cantidadVentas ?? 0) + 1,
-        totalVendido: redondearMonto(
-          (previo?.totalVendido ?? 0.0) + venta.total,
-        ),
-      );
-    }
-    final lista = acumulado.values.toList()
-      ..sort((a, b) => b.totalVendido.compareTo(a.totalVendido));
-    return lista;
+  Future<List<ResumenVendedor>> obtenerResumenPorVendedor(FiltroVentas filtro) {
+    return _reportes.obtenerResumenPorVendedor(filtro);
   }
 
   Future<List<ResumenProductoVenta>> obtenerResumenPorProducto(
     FiltroVentas filtro,
-  ) async {
-    return _ventaRepository.resumenPorProducto(filtro);
+  ) {
+    return _reportes.obtenerResumenPorProducto(filtro);
   }
 
-  Future<List<ResumenVentasHora>> obtenerResumenPorHora(
-    FiltroVentas filtro,
-  ) async {
-    return _ventaRepository.resumenPorHora(filtro);
+  Future<List<ResumenVentasHora>> obtenerResumenPorHora(FiltroVentas filtro) {
+    return _reportes.obtenerResumenPorHora(filtro);
   }
 
   Future<Map<MetodoPago, double>> obtenerTotalesPorMetodoPago(
     FiltroVentas filtro,
-  ) async {
-    return _ventaRepository.totalesPorMetodoPago(filtro);
+  ) {
+    return _reportes.obtenerTotalesPorMetodoPago(filtro);
   }
 
-  Future<List<ListaPrecios>> listarListasPrecios() async {
-    return _precioRepository?.listarTodasListas() ?? [];
+  Future<List<ListaPrecios>> listarListasPrecios() {
+    return _listasPrecios.listarListasPrecios();
   }
 
-  Future<ListaPrecios> registrarListaPrecios(String nombre) async {
-    final repo = _precioRepository;
-    if (repo == null) {
-      throw StateError('Repositorio de precios no disponible');
-    }
-    final lista = ListaPrecios(id: _generadorId.v4(), nombre: nombre.trim());
-    await repo.guardarLista(lista);
-    await _emisorEventos.listaPrecios(lista);
-    return lista;
+  Future<ListaPrecios> registrarListaPrecios(String nombre) {
+    return _listasPrecios.registrarListaPrecios(nombre);
   }
 
   Future<void> guardarPrecioLista(
     String listaId,
     String productoId,
     double precio,
-  ) async {
-    final producto = await _productoRepository.obtenerPorId(productoId);
-    if (producto == null) {
-      throw StateError('Producto no encontrado');
-    }
-    _catalogoProductos.validarPrecioVenta(precio, producto.costoUnitario);
-    final precioRedondeado = redondearMonto(precio);
-    await _precioRepository?.guardarPrecioLista(
-      listaId,
-      productoId,
-      precioRedondeado,
-    );
-    await _emisorEventos.itemListaPrecios(
-      listaId: listaId,
-      productoId: productoId,
-      precioUnitario: precioRedondeado,
-    );
+  ) {
+    return _listasPrecios.guardarPrecioLista(listaId, productoId, precio);
   }
 
   Future<ResumenPreciosProducto?> obtenerResumenPreciosProducto(
     String productoId,
-  ) async {
-    final producto = await _productoRepository.obtenerPorId(productoId);
-    if (producto == null) {
-      return null;
-    }
-    final repo = _precioRepository;
-    final listas = await repo?.listarTodasListas() ?? [];
-    final clientes = await listarClientes();
-    final preciosLista =
-        await repo?.listarPreciosProductoEnListas(productoId) ?? {};
-    final preciosCliente =
-        await repo?.listarPreciosProductoPorCliente(productoId) ?? [];
-    return ResumenPreciosProducto(
-      productoId: producto.id,
-      nombreProducto: producto.nombre,
-      costoUnitario: producto.costoUnitario,
-      precioGenerico: producto.precioBase,
-      precioMinimo: calcularPrecioMinimoVenta(producto.costoUnitario),
-      preciosPorLista: preciosLista,
-      preciosPorCliente: preciosCliente,
-      nombresListas: {for (final l in listas) l.id: l.nombre},
-      nombresClientes: {for (final c in clientes) c.id: c.nombre},
-    );
+  ) {
+    return _listasPrecios.obtenerResumenPreciosProducto(productoId);
   }
 
   Future<void> establecerPrecioProducto({
@@ -3104,53 +3052,24 @@ class ServicioAdmin {
     }
   }
 
-  Future<void> eliminarListaPrecios(String listaId) async {
-    await _precioRepository?.eliminarLista(listaId);
-    await _emisorEventos.listaPreciosEliminada(listaId);
+  Future<void> eliminarListaPrecios(String listaId) {
+    return _listasPrecios.eliminarListaPrecios(listaId);
   }
 
-  Future<List<Cliente>> listarClientesPorLista(String listaId) async {
-    return _clienteRepository?.listarPorLista(listaId) ?? [];
+  Future<List<Cliente>> listarClientesPorLista(String listaId) {
+    return _listasPrecios.listarClientesPorLista(listaId);
   }
 
-  Future<List<ItemListaPrecios>> listarItemsListaPrecios(String listaId) async {
-    final repo = _precioRepository;
-    if (repo == null) {
-      return [];
-    }
-    final precios = await repo.listarPreciosDeLista(listaId);
-    final items = <ItemListaPrecios>[];
-    for (final entry in precios.entries) {
-      final producto = await _productoRepository.obtenerPorId(entry.key);
-      if (producto == null || !producto.activo) {
-        continue;
-      }
-      items.add(ItemListaPrecios(producto: producto, precioLista: entry.value));
-    }
-    items.sort((a, b) => a.producto.nombre.compareTo(b.producto.nombre));
-    return items;
+  Future<List<ItemListaPrecios>> listarItemsListaPrecios(String listaId) {
+    return _listasPrecios.listarItemsListaPrecios(listaId);
   }
 
-  Future<void> eliminarProductoDeLista(
-    String listaId,
-    String productoId,
-  ) async {
-    await _precioRepository?.eliminarPrecioDeLista(listaId, productoId);
-    await _emisorEventos.itemListaPreciosEliminado(
-      listaId: listaId,
-      productoId: productoId,
-    );
+  Future<void> eliminarProductoDeLista(String listaId, String productoId) {
+    return _listasPrecios.eliminarProductoDeLista(listaId, productoId);
   }
 
-  Future<void> establecerFavoritoProducto(
-    String productoId,
-    bool favorito,
-  ) async {
-    await _productoRepository.establecerFavoritoCaja(productoId, favorito);
-    final producto = await _productoRepository.obtenerPorId(productoId);
-    if (producto != null) {
-      await _emisorEventos.producto(producto);
-    }
+  Future<void> establecerFavoritoProducto(String productoId, bool favorito) {
+    return _catalogoProductos.establecerFavoritoProducto(productoId, favorito);
   }
 
   Future<void> _registrarEventoPedido(

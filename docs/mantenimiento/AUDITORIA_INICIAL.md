@@ -351,4 +351,17 @@ Décimo paso: dominio Vendedores (proyección local de usuarios para UX de caja,
 - `ServicioAdmin` pasó de 3,703 a 3,665 líneas (−38).
 - Verificado: `dart analyze` limpio, 78 tests en verde, `flutter analyze` limpio en `apps/posia_pos` (confirma que quitar `registrarVendedor` de la API pública no rompió nada).
 
-Progreso ServicioAdmin: 5,810 → 5,067 → 4,602 → 4,468 → 4,452 → 4,313 → 4,117 → 4,027 → 3,754 → 3,703 → **3,665** líneas (−2,145 desde el inicio, −37%).
+Progreso ServicioAdmin: 5,810 → 5,067 → 4,602 → 4,468 → 4,452 → 4,313 → 4,117 → 4,027 → 3,754 → 3,703 → 3,665 líneas (−2,145 desde el inicio, −37%).
+
+### 10.15 Fase 3.11 — Reportes de ventas y listas de precios
+
+Undécimo paso. La sección `// --- Reportes ---` del archivo original mezclaba reportes de ventas de verdad con todo el dominio de listas de precios, más varios helpers privados de otros dominios (`_registrarEventoUsuario`, `_registrarEventoTraspasoAlmacen`, `_resolverCodigoUsuarioDisponible`, etc.) que se quedaron donde estaban por acumulación histórica — no son reportes, no se tocaron.
+
+- Nuevo: `packages/posia_database/lib/src/services/admin_reportes.dart` — `AdminReportes`. Dueño de `obtenerResumenPorVendedor/Producto/Hora` y `obtenerTotalesPorMetodoPago`. Compone `AdminVendedores` (para nombres de vendedor en el resumen).
+- Nuevo: `packages/posia_database/lib/src/services/admin_listas_precios.dart` — `AdminListasPrecios`. Dueño del catálogo de listas de precios, sus items, y el resumen consolidado de precios por producto. Compone `AdminCatalogoProductos` (validación) y `AdminClientes` (nombres de cliente en el resumen).
+- `establecerPrecioProducto` se quedó en `ServicioAdmin`: orquesta tres dominios según el alcance elegido (genérico → producto, por lista → esta clase, por cliente → clientes).
+- `establecerFavoritoProducto` se movió directo a `AdminCatalogoProductos` (es un producto, no un reporte ni una lista de precios — estaba ahí por accidente de ubicación).
+- `ServicioAdmin` pasó de 3,665 a 3,584 líneas (−81).
+- Verificado: `dart analyze` limpio, 78 tests en verde, `flutter analyze` limpio en `apps/posia_pos`.
+
+Progreso ServicioAdmin: 5,810 → 5,067 → 4,602 → 4,468 → 4,452 → 4,313 → 4,117 → 4,027 → 3,754 → 3,703 → 3,665 → **3,584** líneas (−2,226 desde el inicio, −38%).

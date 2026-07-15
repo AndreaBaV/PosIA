@@ -711,4 +711,15 @@ class AdminCatalogoProductos {
 		await _varianteRepository?.guardar(variante);
 		await _emisorEventos.variante(variante);
 	}
+
+	Future<void> establecerFavoritoProducto(
+		String productoId,
+		bool favorito,
+	) async {
+		await _productoRepository.establecerFavoritoCaja(productoId, favorito);
+		final producto = await _productoRepository.obtenerPorId(productoId);
+		if (producto != null) {
+			await _emisorEventos.producto(producto);
+		}
+	}
 }
