@@ -247,3 +247,13 @@ Primer paso de la modularización de `ServicioAdmin` (cambio #1 recomendado en l
 - Verificado: `dart analyze` limpio en `posia_database` y en `apps/posia_pos` (que consume el paquete), 78 tests de `posia_database` en verde.
 
 Sigue pendiente el resto de la Fase 3 (dividir `ServicioAdmin` por dominio: productos, almacenes, usuarios/roles, clientes/precios, compras/proveedores, pedidos/cotizaciones, traspasos, config/reportes) y las Fases 4-6 (UI grande, paquetes satélite, barrido de código muerto).
+
+### 10.6 Fase 3.2 — Extracción del catálogo de productos
+
+Segundo dominio extraído (CRUD producto, alta con presentaciones/escalas, inventario consolidado/agrupado):
+
+- Nuevo: `packages/posia_database/lib/src/services/admin_catalogo_productos.dart` — `AdminCatalogoProductos`. Dueño único de: listar/obtener producto, `registrarProductoCompleto`, `actualizarProducto`, eliminar/reactivar/eliminar-permanente, `registrarProducto` (legacy), inventario consolidado y agrupado por tienda/almacén, y las validaciones `validarPrecioVenta`/`validarCodigoBarrasUnico` (antes privadas y duplicadas en el flujo de variantes y precios especiales de cliente — ahora un solo lugar, llamado también desde esas secciones de `ServicioAdmin`). Incluye `asegurarPresentacionBase` (antes vivía huérfana cerca de "Presentaciones", solo la usaba producto).
+- `ServicioAdmin` pasó de 5,067 a 4,602 líneas (−465). Su API pública no cambió: cada método sigue existiendo con la misma firma, delegando en `_catalogoProductos`. Se mantuvieron en `ServicioAdmin` los métodos que cruzan dominios: `importarProductosLote`/`_resolverCategoriaImportacion`/`_guardarLotePromocionImportado` (mezclan producto+categoría+lote-promoción) y el paso final `sincronizarPresentacionesProducto` tras `registrarProductoCompleto` (requiere `SyncEventRepository`, fuera de este dominio).
+- Verificado: `dart analyze` limpio en `posia_database` y `apps/posia_pos`, 78 tests en verde (incluye los específicos de duplicado de código de barras y validación de precio).
+
+Progreso ServicioAdmin: 5,810 → 5,067 → **4,602** líneas.
