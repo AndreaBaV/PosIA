@@ -62,6 +62,7 @@ import '../services/servicio_reconciliacion_hub.dart';
 import '../sync/admin_emisor_eventos_sync.dart';
 import 'admin_almacenes.dart';
 import 'admin_catalogo_productos.dart';
+import 'admin_categorias.dart';
 import 'admin_clientes.dart';
 import 'admin_compras.dart';
 import 'admin_pedidos_cotizaciones.dart';
@@ -118,7 +119,6 @@ class ServicioAdmin {
        _syncEventRepository = syncEventRepository,
        _syncOrchestrator = syncOrchestrator,
        _configRepository = configRepository,
-       _categoriaRepository = categoriaRepository,
        _clienteRepository = clienteRepository,
        _descuentoClienteRepository = descuentoClienteRepository,
        _vendedorRepository = vendedorRepository,
@@ -129,7 +129,6 @@ class ServicioAdmin {
        _precioRepository = precioRepository,
        _movimientoRepository = movimientoRepository,
        _traspasoRepository = traspasoRepository,
-       _varianteRepository = varianteRepository,
        _almacenRepository = almacenRepository,
        _presentacionRepository = presentacionRepository,
        _lotePromocionRepository =
@@ -207,6 +206,10 @@ class ServicioAdmin {
       traspasoRepository: traspasoRepository,
       movimientoRepository: movimientoRepository,
     );
+    _categorias = AdminCategorias(
+      emisorEventos: _emisorEventos,
+      categoriaRepository: categoriaRepository,
+    );
   }
 
   final TiendaRepository _tiendaRepository;
@@ -216,7 +219,6 @@ class ServicioAdmin {
   final SyncEventRepository _syncEventRepository;
   final SyncOrchestrator _syncOrchestrator;
   final ConfigRepository _configRepository;
-  final CategoriaRepository? _categoriaRepository;
   final ClienteRepository? _clienteRepository;
   final DescuentoClienteRepository? _descuentoClienteRepository;
   final VendedorRepository? _vendedorRepository;
@@ -227,7 +229,6 @@ class ServicioAdmin {
   final PrecioRepository? _precioRepository;
   final MovimientoInventarioRepository? _movimientoRepository;
   final TraspasoRepository? _traspasoRepository;
-  final VarianteRepository? _varianteRepository;
   final AlmacenRepository? _almacenRepository;
   final PresentacionRepository? _presentacionRepository;
   final LotePromocionRepository _lotePromocionRepository;
@@ -245,6 +246,7 @@ class ServicioAdmin {
   late final AdminCompras _compras;
   late final AdminPedidosCotizaciones _pedidosCotizaciones;
   late final AdminTraspasos _traspasos;
+  late final AdminCategorias _categorias;
   MotorPrecio? _motorPrecioCache;
 
   MotorPrecio? get _motorPrecio {
@@ -1052,8 +1054,8 @@ class ServicioAdmin {
 
   // --- Categorias ---
 
-  Future<List<Categoria>> listarCategorias() async {
-    return _categoriaRepository?.listarTodas() ?? [];
+  Future<List<Categoria>> listarCategorias() {
+    return _categorias.listarCategorias();
   }
 
   /// Crea la categoria indicada en la solicitud de importacion si aún no existe.
@@ -1098,58 +1100,25 @@ class ServicioAdmin {
     required String nombre,
     String icono = 'shopping_basket',
     String colorHex = '#4CAF50',
-  }) async {
-    final repo = _categoriaRepository;
-    if (repo == null) {
-      throw StateError('Repositorio de categorias no configurado');
-    }
-    final existentes = await repo.listarTodas();
-    final categoria = Categoria(
-      id: _generadorId.v4(),
+  }) {
+    return _categorias.registrarCategoria(
       nombre: nombre,
       icono: icono,
       colorHex: colorHex,
-      orden: existentes.length,
-      activa: true,
     );
-    await repo.guardar(categoria);
-    await _emisorEventos.categoria(categoria);
-    return categoria;
   }
 
-  Future<void> actualizarCategoria(Categoria categoria) async {
-    await _categoriaRepository?.guardar(categoria);
-    await _emisorEventos.categoria(categoria);
+  Future<void> actualizarCategoria(Categoria categoria) {
+    return _categorias.actualizarCategoria(categoria);
   }
 
   /// Reordena categorias segun lista de ids.
-  Future<void> reordenarCategorias(List<String> idsOrdenados) async {
-    final repo = _categoriaRepository;
-    if (repo == null) {
-      return;
-    }
-    for (var i = 0; i < idsOrdenados.length; i++) {
-      final todas = await repo.listarTodas();
-      final categoria = todas.where((c) => c.id == idsOrdenados[i]).firstOrNull;
-      if (categoria != null) {
-        await repo.guardar(categoria.copiarCon(orden: i));
-        await _emisorEventos.categoria(categoria.copiarCon(orden: i));
-      }
-    }
+  Future<void> reordenarCategorias(List<String> idsOrdenados) {
+    return _categorias.reordenarCategorias(idsOrdenados);
   }
 
-  Future<void> eliminarCategoria(String categoriaId) async {
-    final repo = _categoriaRepository;
-    if (repo == null) {
-      throw StateError('Repositorio de categorias no configurado');
-    }
-    final todas = await repo.listarTodas();
-    final categoria = todas.where((c) => c.id == categoriaId).firstOrNull;
-    if (categoria == null) {
-      return;
-    }
-    await repo.guardar(categoria.copiarCon(activa: false));
-    await _emisorEventos.categoria(categoria.copiarCon(activa: false));
+  Future<void> eliminarCategoria(String categoriaId) {
+    return _categorias.eliminarCategoria(categoriaId);
   }
 
   Future<Producto> asignarCategoriaProducto(
@@ -1164,8 +1133,8 @@ class ServicioAdmin {
 
   // --- Variantes ---
 
-  Future<List<VarianteProducto>> listarVariantes(String productoPadreId) async {
-    return _varianteRepository?.listarPorProductoPadre(productoPadreId) ?? [];
+  Future<List<VarianteProducto>> listarVariantes(String productoPadreId) {
+    return _catalogoProductos.listarVariantes(productoPadreId);
   }
 
   Future<VarianteProducto> registrarVariante({
@@ -1174,38 +1143,18 @@ class ServicioAdmin {
     required String sku,
     required String codigoBarras,
     required double precioBase,
-  }) async {
-    final repo = _varianteRepository;
-    if (repo == null) {
-      throw StateError('Repositorio de variantes no configurado');
-    }
-    final padre = await _productoRepository.obtenerPorId(productoPadreId);
-    if (padre != null) {
-      _catalogoProductos.validarPrecioVenta(precioBase, padre.costoUnitario);
-    }
-    final variante = VarianteProducto(
-      id: _generadorId.v4(),
+  }) {
+    return _catalogoProductos.registrarVariante(
       productoPadreId: productoPadreId,
       nombre: nombre,
       sku: sku,
       codigoBarras: codigoBarras,
       precioBase: precioBase,
-      activo: true,
     );
-    await repo.guardar(variante);
-    await _emisorEventos.variante(variante);
-    return variante;
   }
 
-  Future<void> actualizarVariante(VarianteProducto variante) async {
-    final padre = await _productoRepository.obtenerPorId(
-      variante.productoPadreId,
-    );
-    if (padre != null) {
-      _catalogoProductos.validarPrecioVenta(variante.precioBase, padre.costoUnitario);
-    }
-    await _varianteRepository?.guardar(variante);
-    await _emisorEventos.variante(variante);
+  Future<void> actualizarVariante(VarianteProducto variante) {
+    return _catalogoProductos.actualizarVariante(variante);
   }
 
   // --- Clientes ---

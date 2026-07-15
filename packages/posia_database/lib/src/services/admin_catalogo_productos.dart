@@ -665,4 +665,50 @@ class AdminCatalogoProductos {
 			cantidadLocal: referencia?.cantidad ?? 0.0,
 		);
 	}
+
+	// --- Variantes ---
+
+	Future<List<VarianteProducto>> listarVariantes(String productoPadreId) async {
+		return _varianteRepository?.listarPorProductoPadre(productoPadreId) ?? [];
+	}
+
+	Future<VarianteProducto> registrarVariante({
+		required String productoPadreId,
+		required String nombre,
+		required String sku,
+		required String codigoBarras,
+		required double precioBase,
+	}) async {
+		final repo = _varianteRepository;
+		if (repo == null) {
+			throw StateError('Repositorio de variantes no configurado');
+		}
+		final padre = await _productoRepository.obtenerPorId(productoPadreId);
+		if (padre != null) {
+			validarPrecioVenta(precioBase, padre.costoUnitario);
+		}
+		final variante = VarianteProducto(
+			id: _generadorId.v4(),
+			productoPadreId: productoPadreId,
+			nombre: nombre,
+			sku: sku,
+			codigoBarras: codigoBarras,
+			precioBase: precioBase,
+			activo: true,
+		);
+		await repo.guardar(variante);
+		await _emisorEventos.variante(variante);
+		return variante;
+	}
+
+	Future<void> actualizarVariante(VarianteProducto variante) async {
+		final padre = await _productoRepository.obtenerPorId(
+			variante.productoPadreId,
+		);
+		if (padre != null) {
+			validarPrecioVenta(variante.precioBase, padre.costoUnitario);
+		}
+		await _varianteRepository?.guardar(variante);
+		await _emisorEventos.variante(variante);
+	}
 }

@@ -328,4 +328,16 @@ Octavo dominio extraído. La sección `// --- Traspasos ---` del archivo origina
 - `ServicioAdmin` pasó de 4,027 a 3,754 líneas (−273).
 - Verificado: `dart analyze` limpio, 78 tests en verde, `flutter analyze` limpio en `apps/posia_pos`.
 
-Progreso ServicioAdmin: 5,810 → 5,067 → 4,602 → 4,468 → 4,452 → 4,313 → 4,117 → 4,027 → **3,754** líneas (−2,056 desde el inicio, −35%).
+Progreso ServicioAdmin: 5,810 → 5,067 → 4,602 → 4,468 → 4,452 → 4,313 → 4,117 → 4,027 → 3,754 líneas (−2,056 desde el inicio, −35%).
+
+### 10.13 Fase 3.9 — Categorías y Variantes
+
+Noveno paso: dos dominios chicos, ambos satélites de Producto.
+
+- Nuevo: `packages/posia_database/lib/src/services/admin_categorias.dart` — `AdminCategorias`. Dueño de `listarCategorias`, `registrarCategoria`, `actualizarCategoria`, `reordenarCategorias`, `eliminarCategoria`. `_resolverCategoriaImportacion` y `asignarCategoriaProducto` se quedaron en `ServicioAdmin` (cruzan hacia Producto/Importación).
+- Variantes (`listarVariantes`, `registrarVariante`, `actualizarVariante`) se movieron directo a `AdminCatalogoProductos` en vez de crear una clase nueva de 3 métodos: una variante es, conceptualmente, un sub-recurso de producto, y ya dependía de `validarPrecioVenta` (misma clase).
+- Limpieza: `_categoriaRepository` y `_varianteRepository` quedaron muertos en `ServicioAdmin` tras esto — eliminados (mismo patrón que `_proveedorRepository` en la Fase 3.6).
+- `ServicioAdmin` pasó de 3,754 a 3,703 líneas (−51; la mayoría de las líneas de estos dominios ya se habían movido o eran delegación mínima).
+- Verificado: `dart analyze` limpio, 78 tests en verde, `flutter analyze` limpio en `apps/posia_pos`.
+
+Progreso ServicioAdmin: 5,810 → 5,067 → 4,602 → 4,468 → 4,452 → 4,313 → 4,117 → 4,027 → 3,754 → **3,703** líneas (−2,107 desde el inicio, −36%).
