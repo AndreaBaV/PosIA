@@ -317,4 +317,15 @@ Séptimo dominio extraído: consulta, asignación y cambios de estado de pedidos
 
 **Nota:** el motor de precios (`MotorPrecio`/`resolverPrecioComercial`) es ahora el bloqueo recurrente para extraer Pedidos/Cotizaciones/Ventas completas. Buen candidato para una futura Fase 3.x: "AdminPricing" o similar, que le quitaría esta atadura a varios dominios a la vez.
 
-Progreso ServicioAdmin: 5,810 → 5,067 → 4,602 → 4,468 → 4,452 → 4,313 → 4,117 → **4,027** líneas (−1,783 desde el inicio, −31%).
+Progreso ServicioAdmin: 5,810 → 5,067 → 4,602 → 4,468 → 4,452 → 4,313 → 4,117 → 4,027 líneas (−1,783 desde el inicio, −31%).
+
+### 10.12 Fase 3.8 — Extracción del dominio de traspasos (entre tiendas)
+
+Octavo dominio extraído. La sección `// --- Traspasos ---` del archivo original en realidad mezclaba tres cosas por acumulación histórica: gestión de Tiendas (CRUD, importación desde hub), administración de Ventas (`eliminarVenta`, listados), y los traspasos de mercancía en sí. Solo se extrajo lo tercero — lo demás se queda donde estaba, sin relación real con "Traspasos".
+
+- Nuevo: `packages/posia_database/lib/src/services/admin_traspasos.dart` — `AdminTraspasos`. Dueño de `listarTraspasos`, `realizarTraspaso`/`realizarTraspasoMultiple` (traspaso directo en un paso), `solicitarTraspaso`/`recibirTraspaso` (flujo de dos pasos), y `_registrarAuditoriaInventario` (bitácora de movimientos, exclusiva de este dominio — se confirmó que no se usaba en ningún otro lado antes de moverla).
+- Traspasos con almacén (`traspasarAlmacenA*`) siguen en `ServicioAdmin` desde la Fase 3.3 — dominio relacionado pero distinto, con su propio `_registrarEventoTraspasoAlmacen`.
+- `ServicioAdmin` pasó de 4,027 a 3,754 líneas (−273).
+- Verificado: `dart analyze` limpio, 78 tests en verde, `flutter analyze` limpio en `apps/posia_pos`.
+
+Progreso ServicioAdmin: 5,810 → 5,067 → 4,602 → 4,468 → 4,452 → 4,313 → 4,117 → 4,027 → **3,754** líneas (−2,056 desde el inicio, −35%).
