@@ -291,4 +291,16 @@ Quinto dominio extraído: clientes, su historial de compras, descuentos y precio
 - `ServicioAdmin` pasó de 4,452 a 4,313 líneas (−139).
 - Verificado: `dart analyze` limpio, 78 tests en verde.
 
-Progreso ServicioAdmin: 5,810 → 5,067 → 4,602 → 4,468 → 4,452 → **4,313** líneas (−1,497 desde el inicio, −26%).
+Progreso ServicioAdmin: 5,810 → 5,067 → 4,602 → 4,468 → 4,452 → 4,313 líneas (−1,497 desde el inicio, −26%).
+
+### 10.10 Fase 3.6 — Extracción del dominio de compras
+
+Sexto dominio extraído: alta de compra (con recepción a tienda o almacén) e historial.
+
+- Nuevo: `packages/posia_database/lib/src/services/admin_compras.dart` — `AdminCompras`. Dueño de `obtenerAlmacenPorDefectoCompra`, `registrarCompra` (resuelve ubicaciones, valida, actualiza costo/proveedor de cada producto, mueve stock a tienda o almacén, registra movimiento de inventario, emite eventos), `listarCompras`, `obtenerCompra`. Compone `AdminAlmacenes` (para el almacén por defecto) igual que `AdminClientes` compone `AdminCatalogoProductos`.
+- El chequeo de permiso por tienda (`_validarPermisoTienda`, dominio Usuarios) se resolvió llamando directo a `PermisosUsuario.puedeGestionarTienda` (la política en sí, sin estado ni repos) en vez de arrastrar una dependencia hacia el `ServicioAdmin` que aún tiene Usuarios sin extraer.
+- Limpieza adicional: el campo `_proveedorRepository` en `ServicioAdmin` quedó muerto tras esta extracción (ya nadie lo leía directo, solo se pasaba a los servicios de dominio) — se eliminó junto con su inicialización.
+- `ServicioAdmin` pasó de 4,313 a 4,117 líneas (−196).
+- Verificado: `dart analyze` limpio (incluyendo el warning de campo muerto ya resuelto), 78 tests en verde.
+
+Progreso ServicioAdmin: 5,810 → 5,067 → 4,602 → 4,468 → 4,452 → 4,313 → **4,117** líneas (−1,693 desde el inicio, −29%).
