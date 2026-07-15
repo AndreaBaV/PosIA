@@ -329,8 +329,7 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
         await _gestorBiometria.eliminarPerfil(perfil.usuarioId);
         await _prepararBiometria();
         setState(() {
-          _mensajeError =
-              intento.motivoFallo?.mensajeUsuario ?? 'PIN desactualizado';
+          _mensajeError = intento.mensajeUsuario;
         });
         return;
       }
@@ -380,8 +379,7 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
       }
       if (!busqueda.exitoso) {
         setState(() {
-          _mensajeError =
-              busqueda.motivoFallo?.mensajeUsuario ?? 'Usuario no encontrado';
+          _mensajeError = busqueda.mensajeUsuario;
         });
         return;
       }
@@ -423,8 +421,7 @@ class _PantallaInicioSesionState extends ConsumerState<PantallaInicioSesion> {
         }
         setState(() {
           _pinController.clear();
-          _mensajeError =
-              intento.motivoFallo?.mensajeUsuario ?? 'Contraseña incorrecta';
+          _mensajeError = intento.mensajeUsuario;
         });
         return;
       }

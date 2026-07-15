@@ -70,6 +70,110 @@ enum EstadoAuthHub {
 	inalcanzable,
 }
 
+/// Resultado de un ping diagnostico a `/v1/health`.
+///
+/// Sirve para distinguir "la peticion nunca salio del dispositivo" (sin logs
+/// en Northflank/Render) de "el hub respondio con un codigo HTTP".
+class DiagnosticoConexionHub {
+	const DiagnosticoConexionHub({
+		required this.url,
+		required this.exitoso,
+		this.codigoHttp,
+		this.detalle,
+	});
+
+	factory DiagnosticoConexionHub.ok({
+		required String url,
+		required int codigoHttp,
+	}) {
+		return DiagnosticoConexionHub(
+			url: url,
+			exitoso: true,
+			codigoHttp: codigoHttp,
+		);
+	}
+
+	factory DiagnosticoConexionHub.fallo({
+		required String url,
+		int? codigoHttp,
+		String? detalle,
+	}) {
+		return DiagnosticoConexionHub(
+			url: url,
+			exitoso: false,
+			codigoHttp: codigoHttp,
+			detalle: detalle,
+		);
+	}
+
+	final String url;
+	final bool exitoso;
+	final int? codigoHttp;
+	final String? detalle;
+
+	/// Host de la URL configurada (para mostrar en UI sin la clave API).
+	String get host {
+		final host = Uri.tryParse(url)?.host;
+		if (host != null && host.isNotEmpty) {
+			return host;
+		}
+		return url;
+	}
+
+	/// Texto accionable para tecnico / pantalla de login.
+	String get mensajeUsuario {
+		if (exitoso) {
+			return 'Conexión OK con $host (HTTP $codigoHttp).';
+		}
+		return resumirErrorConexionHub(detalle, urlBase: url);
+	}
+}
+
+/// Traduce excepciones de red a un mensaje corto y accionable.
+///
+/// Si no hay detalle (p. ej. solo un codigo HTTP), reporta al menos el host
+/// de destino para verificar que el dispositivo apunta al hub correcto.
+String resumirErrorConexionHub(String? detalle, {String? urlBase}) {
+	final host = Uri.tryParse(urlBase ?? '')?.host;
+	final destino = (host != null && host.isNotEmpty) ? host : (urlBase ?? '');
+	final prefijo = destino.isEmpty ? '' : 'Destino: $destino. ';
+	if (detalle == null || detalle.trim().isEmpty) {
+		return '${prefijo}No hubo respuesta del hub. '
+			'Si en Northflank/Render no aparecen logs, la petición no llegó al servidor '
+			'(URL, DNS, firewall o red del local).';
+	}
+	final d = detalle.toLowerCase();
+	if (d.contains('timeout') || d.contains('timed out')) {
+		return '${prefijo}Tiempo de espera agotado. '
+			'El hub puede estar suspendido por inactividad, o la red del dispositivo '
+			'bloquea la salida HTTPS. Espera ~1 min y usa "Probar conexión".';
+	}
+	if (d.contains('failed host lookup') ||
+		d.contains('name resolution') ||
+		d.contains('nodename nor servname') ||
+		d.contains('getaddrinfo')) {
+		return '${prefijo}No se pudo resolver el dominio. '
+			'Revisa la URL en Configuración técnica y el DNS de la red.';
+	}
+	if (d.contains('handshake') ||
+		d.contains('certificate') ||
+		d.contains('ssl') ||
+		d.contains('tls') ||
+		d.contains('certificate_verify_failed')) {
+		return '${prefijo}Error SSL/TLS. Un antivirus o proxy del cliente puede '
+			'interceptar HTTPS; prueba otra red o desactiva la inspección HTTPS.';
+	}
+	if (d.contains('connection refused') ||
+		d.contains('connection reset') ||
+		d.contains('network is unreachable') ||
+		d.contains('software caused connection abort')) {
+		return '${prefijo}La conexión fue rechazada o interrumpida. '
+			'Revisa firewall del local y que el servicio esté desplegado.';
+	}
+	final corto = detalle.length > 140 ? '${detalle.substring(0, 140)}…' : detalle;
+	return '$prefijo$corto';
+}
+
 /// Resultado tipado de consultar un perfil en el hub.
 ///
 /// Distingue "usuario no existe" (404) de "no pudimos preguntar" (401, 5xx,

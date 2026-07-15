@@ -55,7 +55,15 @@ class ServicioAutenticacion {
 			return const BusquedaPerfilAuth.fallo(MotivoFalloAuth.hubNoConfigurado);
 		}
 		// El hub respondio: interpretar el motivo real.
-		return BusquedaPerfilAuth.fallo(_mapearErrorConsulta(consultaHub!));
+		final motivo = _mapearErrorConsulta(consultaHub!);
+		return BusquedaPerfilAuth.fallo(
+			motivo,
+			detalleTecnico: _detalleSiHubInalcanzable(
+				motivo,
+				consultaHub.detalle,
+				hub.urlBase,
+			),
+		);
 	}
 
 	Future<IntentoAutenticacionAuth> autenticar(String codigo, String pin) async {
@@ -95,7 +103,15 @@ class ServicioAutenticacion {
 		if (hub == null) {
 			return const IntentoAutenticacionAuth.fallo(MotivoFalloAuth.hubNoConfigurado);
 		}
-		return IntentoAutenticacionAuth.fallo(_mapearErrorLogin(intentoHub!));
+		final motivo = _mapearErrorLogin(intentoHub!);
+		return IntentoAutenticacionAuth.fallo(
+			motivo,
+			detalleTecnico: _detalleSiHubInalcanzable(
+				motivo,
+				intentoHub.detalle,
+				hub.urlBase,
+			),
+		);
 	}
 
 	static const _reintentosHubTransitorio = 2;
@@ -164,6 +180,18 @@ class ServicioAutenticacion {
 			case null:
 				return MotivoFalloAuth.hubNoDisponible;
 		}
+	}
+
+	String? _detalleSiHubInalcanzable(
+		MotivoFalloAuth motivo,
+		String? detalle,
+		String urlBase,
+	) {
+		if (motivo != MotivoFalloAuth.hubNoDisponible) {
+			return null;
+		}
+		final resumen = resumirErrorConexionHub(detalle, urlBase: urlBase);
+		return resumen.trim().isEmpty ? null : resumen;
 	}
 
 	Future<ResultadoAutenticacion?> _autenticarLocal(String codigo, String pin) async {

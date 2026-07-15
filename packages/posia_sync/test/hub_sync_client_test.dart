@@ -128,6 +128,7 @@ void main() {
 			expect(resultado.exitoso, isFalse);
 			expect(resultado.definitivoNoEncontrado, isFalse);
 			expect(resultado.estado, EstadoAuthHub.inalcanzable);
+			expect(resultado.detalle, contains('TimeoutException'));
 		});
 
 		test('500 se traduce a inalcanzable, no a noEncontrado', () async {
@@ -138,6 +139,46 @@ void main() {
 			final resultado = await hub.consultarPerfil('1001');
 			expect(resultado.definitivoNoEncontrado, isFalse);
 			expect(resultado.estado, EstadoAuthHub.inalcanzable);
+		});
+	});
+
+	group('diagnosticarConexion', () {
+		test('200 en /v1/health se traduce a exitoso', () async {
+			final cliente = MockClient((request) async {
+				expect(request.url.path, '/v1/health');
+				return http.Response('{"ok":true}', 200);
+			});
+			final hub = HubSyncClient(
+				urlBase: 'https://api.ejemplo.code.run',
+				clienteHttp: cliente,
+			);
+			final diagnostico = await hub.diagnosticarConexion();
+			expect(diagnostico.exitoso, isTrue);
+			expect(diagnostico.host, 'api.ejemplo.code.run');
+			expect(diagnostico.mensajeUsuario, contains('Conexión OK'));
+		});
+
+		test('timeout explica destino y ausencia de logs en el proveedor', () async {
+			final cliente = MockClient((request) async {
+				throw TimeoutException('simulado');
+			});
+			final hub = HubSyncClient(
+				urlBase: 'https://api.ejemplo.code.run',
+				clienteHttp: cliente,
+			);
+			final diagnostico = await hub.diagnosticarConexion();
+			expect(diagnostico.exitoso, isFalse);
+			expect(diagnostico.mensajeUsuario, contains('api.ejemplo.code.run'));
+			expect(diagnostico.mensajeUsuario, contains('Tiempo de espera'));
+		});
+
+		test('fallo DNS explica resolucion de dominio', () async {
+			final texto = resumirErrorConexionHub(
+				'SocketException: Failed host lookup: api.ejemplo.code.run',
+				urlBase: 'https://api.ejemplo.code.run',
+			);
+			expect(texto, contains('resolver el dominio'));
+			expect(texto, contains('api.ejemplo.code.run'));
 		});
 	});
 

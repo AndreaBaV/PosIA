@@ -35,6 +35,7 @@ class _PantallaInstalacionTecnicoState extends ConsumerState<PantallaInstalacion
 	final _pinTecnicoConfirmacionController = TextEditingController();
 	bool _conectarNube = true;
 	bool _guardando = false;
+	bool _probandoConexion = false;
 	String? _mensaje;
 	bool _datosCargados = false;
 
@@ -131,6 +132,22 @@ class _PantallaInstalacionTecnicoState extends ConsumerState<PantallaInstalacion
 							prefixIcon: Icon(Icons.key_outlined),
 						),
 					),
+					const SizedBox(height: 12.0),
+					OutlinedButton.icon(
+						onPressed: (_guardando || _probandoConexion) ? null : _probarConexion,
+						icon: _probandoConexion
+							? const SizedBox(
+								width: 18.0,
+								height: 18.0,
+								child: CircularProgressIndicator(strokeWidth: 2.0),
+							)
+							: const Icon(Icons.wifi_tethering),
+						label: Text(
+							_probandoConexion
+								? 'Probando (hasta 60 s si el hub estaba dormido)...'
+								: 'Probar conexión',
+						),
+					),
 				],
 				if (!_conectarNube && !widget.reconfiguracion) ...[
 					const SizedBox(height: 16.0),
@@ -221,7 +238,7 @@ class _PantallaInstalacionTecnicoState extends ConsumerState<PantallaInstalacion
 					Text(
 						_mensaje!,
 						style: TextStyle(
-							color: _mensaje!.startsWith('Listo')
+							color: _mensajeExitoso(_mensaje!)
 								? PosiaColors.cobrar
 								: PosiaColors.cancelar,
 						),
@@ -261,6 +278,37 @@ class _PantallaInstalacionTecnicoState extends ConsumerState<PantallaInstalacion
 				],
 			],
 		);
+	}
+
+	bool _mensajeExitoso(String mensaje) {
+		return mensaje.startsWith('Listo') || mensaje.startsWith('Conexión OK');
+	}
+
+	Future<void> _probarConexion() async {
+		setState(() {
+			_probandoConexion = true;
+			_mensaje = null;
+		});
+		try {
+			final servicio = await ref.read(servicioConfigDispositivoProvider.future);
+			final diagnostico = await servicio.probarConexionHub(
+				hubUrl: _hubUrlController.text,
+				hubApiKey: _hubApiKeyController.text,
+			);
+			if (!mounted) {
+				return;
+			}
+			setState(() => _mensaje = diagnostico.mensajeUsuario);
+		} on Object catch (error) {
+			if (!mounted) {
+				return;
+			}
+			setState(() => _mensaje = '$error');
+		} finally {
+			if (mounted) {
+				setState(() => _probandoConexion = false);
+			}
+		}
 	}
 
 	Future<void> _finalizarInstalacion() async {

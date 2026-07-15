@@ -20,6 +20,23 @@ class ServicioConfiguracionDispositivo {
 		return (await _config.obtenerValor(claveConfigHubApiKey)) ?? '';
 	}
 
+	/// Prueba URL + clave sin guardar. Timeout largo para despertar hub suspendido.
+	Future<DiagnosticoConexionHub> probarConexionHub({
+		required String hubUrl,
+		String hubApiKey = '',
+	}) async {
+		final url = hubUrl.trim().replaceAll(RegExp(r'/+$'), '');
+		if (url.isEmpty) {
+			return const DiagnosticoConexionHub(
+				url: '',
+				exitoso: false,
+				detalle: 'Ingresa la URL del hub.',
+			);
+		}
+		final cliente = HubSyncClient(urlBase: url, claveApi: hubApiKey.trim());
+		return cliente.diagnosticarConexion();
+	}
+
 	/// Guarda URL y clave del hub; no modifica el tenant (se resuelve al login).
 	Future<bool> guardarConexionHub({
 		String hubUrl = '',
@@ -51,13 +68,9 @@ class ServicioConfiguracionDispositivo {
 			final url = hubUrl.trim().replaceAll(RegExp(r'/+$'), '');
 			final clave = hubApiKey.trim();
 			final cliente = HubSyncClient(urlBase: url, claveApi: clave);
-			final responde = await cliente.mantenerHubVivo();
-			if (!responde) {
-				throw StateError(
-					'No se pudo conectar a $url. Verifique la URL (sin barra final), '
-					'que el servidor esté desplegado y, si el hub estaba suspendido '
-					'por inactividad, espere ~1 min y reintente.',
-				);
+			final diagnostico = await cliente.diagnosticarConexion();
+			if (!diagnostico.exitoso) {
+				throw StateError(diagnostico.mensajeUsuario);
 			}
 			await _config.guardarHubUrl(url);
 			await _config.guardarHubApiKey(clave);
