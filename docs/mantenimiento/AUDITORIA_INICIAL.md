@@ -280,4 +280,15 @@ Cuarto dominio extraído: catálogo de proveedores.
 
 **Nota sobre Usuarios/Roles (siguiente en la lista original):** se evaluó y se decidió **no** extraerlo en esta pasada. Es el dominio de mayor riesgo (auth + PIN + permisos + sync inmediato al hub, "Riesgo Medio-alto" ya señalado en la sección 3), y su código real cruza fuertemente hacia Tiendas/Config (`cambiarTiendaActiva`, `_asegurarTiendasAdministrador`, `_sincronizarTiendasDesdeHub`), Vendedores (`_sincronizarVendedorVinculado`) y Hub (`_resolverCodigoUsuarioDisponible`, `_sincronizarInmediatoConHub`). Forzar la extracción ahora, sin poder probar login/PIN en un dispositivo real durante esta sesión, es más riesgo que beneficio. Queda pendiente para una pasada dedicada con prueba manual de login en laptop + móvil antes de fusionar.
 
-Progreso ServicioAdmin: 5,810 → 5,067 → 4,602 → 4,468 → **4,452** líneas.
+Progreso ServicioAdmin: 5,810 → 5,067 → 4,602 → 4,468 → 4,452 líneas.
+
+### 10.9 Fase 3.5 — Extracción del dominio de clientes
+
+Quinto dominio extraído: clientes, su historial de compras, descuentos y precios especiales por cliente-producto (los tres vivían juntos en el archivo original, mismo criterio se mantuvo al extraerlos).
+
+- Nuevo: `packages/posia_database/lib/src/services/admin_clientes.dart` — `AdminClientes`. Dueño de CRUD de cliente, `listarVentasCliente`/`obtenerResumenCliente` (lectura de historial), CRUD de descuentos con su validación, y CRUD de precios especiales cliente-producto (que valida contra `AdminCatalogoProductos.validarPrecioVenta` — primer caso de un dominio nuevo consumiendo la validación reutilizable creada en la Fase 3.2).
+- `obtenerVendedor` se quedó en `ServicioAdmin`: estaba mezclado en la sección Clientes pero es dominio de Vendedor, no vale la pena reubicarlo sin extraer Vendedores completo.
+- `ServicioAdmin` pasó de 4,452 a 4,313 líneas (−139).
+- Verificado: `dart analyze` limpio, 78 tests en verde.
+
+Progreso ServicioAdmin: 5,810 → 5,067 → 4,602 → 4,468 → 4,452 → **4,313** líneas (−1,497 desde el inicio, −26%).

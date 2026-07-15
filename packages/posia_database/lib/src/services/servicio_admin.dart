@@ -62,6 +62,7 @@ import '../services/servicio_reconciliacion_hub.dart';
 import '../sync/admin_emisor_eventos_sync.dart';
 import 'admin_almacenes.dart';
 import 'admin_catalogo_productos.dart';
+import 'admin_clientes.dart';
 import 'admin_proveedores.dart';
 import 'servicio_corte_caja.dart';
 
@@ -165,6 +166,18 @@ class ServicioAdmin {
       proveedorRepository: proveedorRepository,
       compraRepository: compraRepository,
     );
+    _clientes = AdminClientes(
+      productoRepository: productoRepository,
+      ventaRepository: ventaRepository,
+      emisorEventos: _emisorEventos,
+      catalogoProductos: _catalogoProductos,
+      tiendaActivaId: tiendaActivaId,
+      clienteRepository: clienteRepository,
+      descuentoClienteRepository: descuentoClienteRepository,
+      precioRepository: precioRepository,
+      pedidoRepository: pedidoRepository,
+      cotizacionRepository: cotizacionRepository,
+    );
   }
 
   final TiendaRepository _tiendaRepository;
@@ -200,6 +213,7 @@ class ServicioAdmin {
   late final AdminCatalogoProductos _catalogoProductos;
   late final AdminAlmacenes _almacenes;
   late final AdminProveedores _proveedores;
+  late final AdminClientes _clientes;
   MotorPrecio? _motorPrecioCache;
 
   MotorPrecio? get _motorPrecio {
@@ -1165,118 +1179,51 @@ class ServicioAdmin {
 
   // --- Clientes ---
 
-  Future<List<Cliente>> listarClientes() async {
-    return _clienteRepository?.listarTodos() ?? [];
+  Future<List<Cliente>> listarClientes() {
+    return _clientes.listarClientes();
   }
 
   Future<Cliente> registrarCliente({
     required String nombre,
     bool creditoHabilitado = false,
-  }) async {
-    final repo = _clienteRepository;
-    if (repo == null) {
-      throw StateError('Repositorio de clientes no configurado');
-    }
-    final cliente = Cliente(
-      id: _generadorId.v4(),
+  }) {
+    return _clientes.registrarCliente(
       nombre: nombre,
-      listaPreciosId: null,
       creditoHabilitado: creditoHabilitado,
-      activo: true,
     );
-    await repo.guardar(cliente);
-    await _emisorEventos.cliente(cliente);
-    return cliente;
   }
 
-  Future<void> actualizarCliente(Cliente cliente) async {
-    await _clienteRepository?.guardar(cliente);
-    await _emisorEventos.cliente(cliente);
+  Future<void> actualizarCliente(Cliente cliente) {
+    return _clientes.actualizarCliente(cliente);
   }
 
   /// Elimina un cliente sin historial de ventas, pedidos ni cotizaciones.
   ///
   /// Lanza [StateError] si el cliente tiene movimientos registrados.
-  Future<void> eliminarCliente(String clienteId) async {
-    final repo = _clienteRepository;
-    if (repo == null) {
-      throw StateError('Repositorio de clientes no configurado');
-    }
-    if (await _ventaRepository.contarPorCliente(clienteId) > 0) {
-      throw StateError(
-        'No se puede eliminar: el cliente tiene ventas registradas',
-      );
-    }
-    if (await (_pedidoRepository?.contarPorCliente(clienteId) ??
-            Future.value(0)) >
-        0) {
-      throw StateError(
-        'No se puede eliminar: el cliente tiene pedidos registrados',
-      );
-    }
-    if (await (_cotizacionRepository?.contarPorCliente(clienteId) ??
-            Future.value(0)) >
-        0) {
-      throw StateError(
-        'No se puede eliminar: el cliente tiene cotizaciones registradas',
-      );
-    }
-    await repo.eliminar(clienteId);
+  Future<void> eliminarCliente(String clienteId) {
+    return _clientes.eliminarCliente(clienteId);
   }
 
-  Future<Cliente?> obtenerCliente(String clienteId) async {
-    return _clienteRepository?.obtenerPorId(clienteId);
+  Future<Cliente?> obtenerCliente(String clienteId) {
+    return _clientes.obtenerCliente(clienteId);
   }
 
   Future<Vendedor?> obtenerVendedor(String vendedorId) async {
     return _vendedorRepository?.obtenerPorId(vendedorId);
   }
 
-  Future<List<Venta>> listarVentasCliente(
-    String clienteId, {
-    int dias = 90,
-  }) async {
-    final hasta = DateTime.now().toUtc();
-    final desde = hasta.subtract(Duration(days: dias));
-    return _ventaRepository.listarConFiltro(
-      FiltroVentas(
-        tiendaId: _tiendaActivaId,
-        desde: desde,
-        hasta: hasta,
-        clienteId: clienteId,
-      ),
-    );
+  Future<List<Venta>> listarVentasCliente(String clienteId, {int dias = 90}) {
+    return _clientes.listarVentasCliente(clienteId, dias: dias);
   }
 
-  Future<ResumenCliente> obtenerResumenCliente(String clienteId) async {
-    final ventas = await listarVentasCliente(clienteId, dias: 365);
-    var total = 0.0;
-    var cantidad = 0;
-    DateTime? ultima;
-    for (final venta in ventas) {
-      if (venta.estado != EstadoVenta.completada) {
-        continue;
-      }
-      cantidad = cantidad + 1;
-      total = total + venta.total;
-      if (ultima == null || venta.creadaEn.isAfter(ultima)) {
-        ultima = venta.creadaEn;
-      }
-    }
-    return ResumenCliente(
-      clienteId: clienteId,
-      cantidadVentas: cantidad,
-      totalComprado: redondearMonto(total),
-      ultimaCompraEn: ultima,
-    );
+  Future<ResumenCliente> obtenerResumenCliente(String clienteId) {
+    return _clientes.obtenerResumenCliente(clienteId);
   }
 
   // --- Descuentos de cliente ---
 
-  Future<List<DescuentoCliente>> listarDescuentosCliente(
-    String clienteId,
-  ) async {
-    return _descuentoClienteRepository?.listarPorCliente(clienteId) ?? [];
+  Future<List<DescuentoCliente>> listarDescuentosCliente(String clienteId) {
+    return _clientes.listarDescuentosCliente(clienteId);
   }
 
   Future<DescuentoCliente> registrarDescuentoCliente({
@@ -1287,135 +1234,49 @@ class ServicioAdmin {
     String? productoId,
     double? umbral,
     String descripcion = '',
-  }) async {
-    final repo = _descuentoClienteRepository;
-    if (repo == null) {
-      throw StateError('Repositorio de descuentos no configurado');
-    }
-    _validarDescuentoCliente(
-      tipo: tipo,
-      valor: valor,
-      condicion: condicion,
-      productoId: productoId,
-      umbral: umbral,
-    );
-    final descuento = DescuentoCliente(
-      id: _generadorId.v4(),
+  }) {
+    return _clientes.registrarDescuentoCliente(
       clienteId: clienteId,
       tipo: tipo,
       valor: valor,
       condicion: condicion,
       productoId: productoId,
       umbral: umbral,
-      activo: true,
-      descripcion: descripcion.trim(),
+      descripcion: descripcion,
     );
-    await repo.guardar(descuento);
-    await _emisorEventos.descuentoCliente(descuento);
-    return descuento;
   }
 
-  Future<void> actualizarDescuentoCliente(DescuentoCliente descuento) async {
-    final repo = _descuentoClienteRepository;
-    if (repo == null) {
-      return;
-    }
-    _validarDescuentoCliente(
-      tipo: descuento.tipo,
-      valor: descuento.valor,
-      condicion: descuento.condicion,
-      productoId: descuento.productoId,
-      umbral: descuento.umbral,
-    );
-    await repo.guardar(descuento);
-    await _emisorEventos.descuentoCliente(descuento);
+  Future<void> actualizarDescuentoCliente(DescuentoCliente descuento) {
+    return _clientes.actualizarDescuentoCliente(descuento);
   }
 
-  Future<void> eliminarDescuentoCliente(String descuentoId) async {
-    await _descuentoClienteRepository?.eliminar(descuentoId);
-    await _emisorEventos.descuentoClienteEliminado(descuentoId);
+  Future<void> eliminarDescuentoCliente(String descuentoId) {
+    return _clientes.eliminarDescuentoCliente(descuentoId);
   }
 
   Future<List<PrecioClienteProducto>> listarPreciosEspecialesCliente(
     String clienteId,
-  ) async {
-    return _precioRepository?.listarPreciosPorCliente(clienteId) ?? [];
+  ) {
+    return _clientes.listarPreciosEspecialesCliente(clienteId);
   }
 
   Future<void> guardarPrecioEspecialCliente({
     required String clienteId,
     required String productoId,
     required double precioUnitario,
-  }) async {
-    final repo = _precioRepository;
-    if (repo == null) {
-      throw StateError('Repositorio de precios no configurado');
-    }
-    final producto = await _productoRepository.obtenerPorId(productoId);
-    if (producto == null) {
-      throw StateError('Producto no encontrado');
-    }
-    _catalogoProductos.validarPrecioVenta(precioUnitario, producto.costoUnitario);
-    await repo.guardarPrecioClienteProducto(
-      PrecioClienteProducto(
-        clienteId: clienteId,
-        productoId: productoId,
-        precioUnitario: redondearMonto(precioUnitario),
-      ),
-    );
-    await _emisorEventos.precioClienteProducto(
+  }) {
+    return _clientes.guardarPrecioEspecialCliente(
       clienteId: clienteId,
       productoId: productoId,
-      precioUnitario: redondearMonto(precioUnitario),
+      precioUnitario: precioUnitario,
     );
   }
 
   Future<void> eliminarPrecioEspecialCliente(
     String clienteId,
     String productoId,
-  ) async {
-    await _precioRepository?.eliminarPrecioClienteProducto(
-      clienteId,
-      productoId,
-    );
-    await _emisorEventos.precioClienteProductoEliminado(
-      clienteId: clienteId,
-      productoId: productoId,
-    );
-  }
-
-  void _validarDescuentoCliente({
-    required TipoDescuentoCliente tipo,
-    required double valor,
-    required CondicionDescuentoCliente condicion,
-    String? productoId,
-    double? umbral,
-  }) {
-    if (valor <= 0) {
-      throw StateError('El valor del descuento debe ser mayor a cero');
-    }
-    if ((tipo == TipoDescuentoCliente.porcentajeGeneral ||
-            tipo == TipoDescuentoCliente.porcentajeProducto) &&
-        valor > 100) {
-      throw StateError('El porcentaje no puede superar 100');
-    }
-    if (tipo.esPorProducto && productoId == null) {
-      throw StateError('Seleccione un producto');
-    }
-    if (condicion != CondicionDescuentoCliente.siempre &&
-        (umbral == null || umbral <= 0)) {
-      throw StateError('Indique el umbral de la regla');
-    }
-    if (condicion == CondicionDescuentoCliente.cantidadMinima &&
-        tipo.esGeneral) {
-      throw StateError(
-        'La cantidad minima aplica solo a descuentos por producto',
-      );
-    }
-    if (condicion == CondicionDescuentoCliente.montoTicketMinimo &&
-        tipo.esPorProducto) {
-      throw StateError('El monto minimo aplica solo a descuentos generales');
-    }
+  ) {
+    return _clientes.eliminarPrecioEspecialCliente(clienteId, productoId);
   }
 
   // --- Vendedores ---
