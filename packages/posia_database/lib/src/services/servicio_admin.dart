@@ -64,6 +64,7 @@ import 'admin_almacenes.dart';
 import 'admin_catalogo_productos.dart';
 import 'admin_clientes.dart';
 import 'admin_compras.dart';
+import 'admin_pedidos_cotizaciones.dart';
 import 'admin_proveedores.dart';
 import 'servicio_corte_caja.dart';
 
@@ -189,6 +190,13 @@ class ServicioAdmin {
       almacenRepository: almacenRepository,
       movimientoRepository: movimientoRepository,
     );
+    _pedidosCotizaciones = AdminPedidosCotizaciones(
+      emisorEventos: _emisorEventos,
+      tiendaActivaId: tiendaActivaId,
+      pedidoRepository: pedidoRepository,
+      cotizacionRepository: cotizacionRepository,
+      usuarioRepository: usuarioRepository,
+    );
   }
 
   final TiendaRepository _tiendaRepository;
@@ -225,6 +233,7 @@ class ServicioAdmin {
   late final AdminProveedores _proveedores;
   late final AdminClientes _clientes;
   late final AdminCompras _compras;
+  late final AdminPedidosCotizaciones _pedidosCotizaciones;
   MotorPrecio? _motorPrecioCache;
 
   MotorPrecio? get _motorPrecio {
@@ -1893,110 +1902,68 @@ class ServicioAdmin {
     return _compras.obtenerCompra(compraId);
   }
 
-  // --- Pedidos ---
-
+  /// Usado por [registrarPedido]; el resto de operaciones de pedido viven en
+  /// [_pedidosCotizaciones], que tiene su propia copia (evita el acople
+  /// inverso hacia ServicioAdmin).
   void _validarGestionPedidos(Usuario? operador) {
     if (operador != null && !PermisosUsuario.puedeGestionarPedidos(operador)) {
       throw StateError('Sin permiso para gestionar pedidos');
     }
   }
 
-  Future<List<Usuario>> listarEmpleadosParaAsignacion({
-    Usuario? operador,
-  }) async {
-    final usuarios = await listarUsuarios(operador: operador);
-    return usuarios
-        .where(
-          (u) =>
-              u.activo &&
-              u.rol == RolUsuario.empleado &&
-              (operador == null ||
-                  PermisosUsuario.puedeGestionarTodasLasTiendas(operador) ||
-                  u.tiendaId == operador.tiendaId),
-        )
-        .toList();
+  // --- Pedidos ---
+
+  Future<List<Usuario>> listarEmpleadosParaAsignacion({Usuario? operador}) {
+    return _pedidosCotizaciones.listarEmpleadosParaAsignacion(
+      operador: operador,
+    );
   }
 
   Future<List<Pedido>> listarPedidosRecibidos({
     String? tiendaId,
     Usuario? operador,
-  }) async {
-    _validarGestionPedidos(operador);
-    final repo = _pedidoRepository;
-    if (repo == null) {
-      return [];
-    }
-    final destino = tiendaId ?? _tiendaActivaId;
-    _validarPermisoTienda(operador, destino);
-    return repo.listarPorTienda(destino, soloSinAsignar: true);
+  }) {
+    return _pedidosCotizaciones.listarPedidosRecibidos(
+      tiendaId: tiendaId,
+      operador: operador,
+    );
   }
 
   Future<List<Pedido>> listarPedidosTienda({
     String? tiendaId,
     Usuario? operador,
-  }) async {
-    _validarGestionPedidos(operador);
-    final repo = _pedidoRepository;
-    if (repo == null) {
-      return [];
-    }
-    final destino = tiendaId ?? _tiendaActivaId;
-    _validarPermisoTienda(operador, destino);
-    return repo.listarPorTienda(destino);
-  }
-
-  Future<List<Pedido>> listarPedidosAsignadosA(Usuario empleado) async {
-    final repo = _pedidoRepository;
-    if (repo == null) {
-      return [];
-    }
-    return repo.listarPorEmpleado(empleado.id);
-  }
-
-  /// Pedidos entregados para mostrar en historial de operaciones.
-  Future<List<Pedido>> listarPedidosEntregadosHistorial({int dias = 7}) async {
-    final repo = _pedidoRepository;
-    if (repo == null) {
-      return [];
-    }
-    final desde = DateTime.now().toUtc().subtract(Duration(days: dias));
-    return repo.listarEntregadosPorTiendaEnPeriodo(
-      _tiendaActivaId,
-      desde: desde,
+  }) {
+    return _pedidosCotizaciones.listarPedidosTienda(
+      tiendaId: tiendaId,
+      operador: operador,
     );
   }
 
-  Future<Pedido?> obtenerPedido(String pedidoId) async {
-    return _pedidoRepository?.obtenerPorId(pedidoId);
+  Future<List<Pedido>> listarPedidosAsignadosA(Usuario empleado) {
+    return _pedidosCotizaciones.listarPedidosAsignadosA(empleado);
+  }
+
+  /// Pedidos entregados para mostrar en historial de operaciones.
+  Future<List<Pedido>> listarPedidosEntregadosHistorial({int dias = 7}) {
+    return _pedidosCotizaciones.listarPedidosEntregadosHistorial(dias: dias);
+  }
+
+  Future<Pedido?> obtenerPedido(String pedidoId) {
+    return _pedidosCotizaciones.obtenerPedido(pedidoId);
   }
 
   // --- Cotizaciones ---
 
-  Future<List<Cotizacion>> listarCotizaciones({int dias = 30}) async {
-    final repo = _cotizacionRepository;
-    if (repo == null) {
-      return [];
-    }
-    final desde = DateTime.now().toUtc().subtract(Duration(days: dias));
-    return repo.listarPorTienda(_tiendaActivaId, desde: desde);
+  Future<List<Cotizacion>> listarCotizaciones({int dias = 30}) {
+    return _pedidosCotizaciones.listarCotizaciones(dias: dias);
   }
 
-  Future<Cotizacion?> obtenerCotizacion(String cotizacionId) async {
-    return _cotizacionRepository?.obtenerPorId(cotizacionId);
+  Future<Cotizacion?> obtenerCotizacion(String cotizacionId) {
+    return _pedidosCotizaciones.obtenerCotizacion(cotizacionId);
   }
 
-  Future<bool> eliminarCotizacion(String cotizacionId) async {
-    final repo = _cotizacionRepository;
-    if (repo == null) {
-      return false;
-    }
-    final cotizacion = await repo.obtenerPorId(cotizacionId);
-    if (cotizacion == null) {
-      return false;
-    }
-    await repo.eliminar(cotizacionId);
-    await _emisorEventos.cotizacionEliminada(cotizacionId);
-    return true;
+  Future<bool> eliminarCotizacion(String cotizacionId) {
+    return _pedidosCotizaciones.eliminarCotizacion(cotizacionId);
   }
 
   /// Registra cotizacion desde administracion (sin carrito de caja).
@@ -2177,38 +2144,11 @@ class ServicioAdmin {
     required String empleadoUsuarioId,
     Usuario? operador,
   }) async {
-    _validarGestionPedidos(operador);
-    final repo = _pedidoRepository;
-    if (repo == null) {
-      throw StateError('Repositorio de pedidos no configurado');
-    }
-    final pedido = await repo.obtenerPorId(pedidoId);
-    if (pedido == null) {
-      throw StateError('Pedido no encontrado');
-    }
-    _validarPermisoTienda(operador, pedido.tiendaId);
-    if (!pedido.puedeAsignarse) {
-      throw StateError('El pedido no puede asignarse en su estado actual');
-    }
-    final empleado = await _usuarioRepository?.obtenerPorId(empleadoUsuarioId);
-    if (empleado == null || !empleado.activo) {
-      throw StateError('Empleado no encontrado');
-    }
-    if (empleado.rol != RolUsuario.empleado) {
-      throw StateError('Solo puede asignarse a empleados');
-    }
-    if (operador != null &&
-        !PermisosUsuario.puedeGestionarTodasLasTiendas(operador) &&
-        empleado.tiendaId != operador.tiendaId) {
-      throw StateError('El empleado no pertenece a su tienda');
-    }
-    final actualizado = pedido.copiarCon(
-      estado: EstadoPedido.asignado,
-      asignadoAUsuarioId: empleado.id,
-      asignadoAUsuarioNombre: empleado.nombre,
-      asignadoEn: DateTime.now().toUtc(),
+    final actualizado = await _pedidosCotizaciones.asignarPedido(
+      pedidoId: pedidoId,
+      empleadoUsuarioId: empleadoUsuarioId,
+      operador: operador,
     );
-    await repo.guardar(actualizado);
     await _registrarEventoPedido(actualizado);
     return actualizado;
   }
@@ -2217,29 +2157,10 @@ class ServicioAdmin {
     required String pedidoId,
     Usuario? operador,
   }) async {
-    final repo = _pedidoRepository;
-    if (repo == null) {
-      throw StateError('Repositorio de pedidos no configurado');
-    }
-    final pedido = await repo.obtenerPorId(pedidoId);
-    if (pedido == null) {
-      throw StateError('Pedido no encontrado');
-    }
-    if (operador != null &&
-        operador.rol == RolUsuario.empleado &&
-        pedido.asignadoAUsuarioId != operador.id) {
-      throw StateError('Este pedido no esta asignado a usted');
-    }
-    if (operador != null &&
-        operador.rol != RolUsuario.empleado &&
-        !PermisosUsuario.puedeGestionarPedidos(operador)) {
-      throw StateError('Sin permiso');
-    }
-    if (!pedido.puedeMarcarseEntregado) {
-      throw StateError('El pedido no puede marcarse como entregado');
-    }
-    final actualizado = pedido.copiarCon(estado: EstadoPedido.entregado);
-    await repo.guardar(actualizado);
+    final actualizado = await _pedidosCotizaciones.marcarPedidoEntregado(
+      pedidoId: pedidoId,
+      operador: operador,
+    );
     await _registrarEventoPedido(actualizado);
     return actualizado;
   }
@@ -2248,21 +2169,10 @@ class ServicioAdmin {
     required String pedidoId,
     Usuario? operador,
   }) async {
-    _validarGestionPedidos(operador);
-    final repo = _pedidoRepository;
-    if (repo == null) {
-      throw StateError('Repositorio de pedidos no configurado');
-    }
-    final pedido = await repo.obtenerPorId(pedidoId);
-    if (pedido == null) {
-      throw StateError('Pedido no encontrado');
-    }
-    _validarPermisoTienda(operador, pedido.tiendaId);
-    if (pedido.estado == EstadoPedido.entregado) {
-      throw StateError('No se puede cancelar un pedido entregado');
-    }
-    final actualizado = pedido.copiarCon(estado: EstadoPedido.cancelado);
-    await repo.guardar(actualizado);
+    final actualizado = await _pedidosCotizaciones.cancelarPedido(
+      pedidoId: pedidoId,
+      operador: operador,
+    );
     await _registrarEventoPedido(actualizado);
     return actualizado;
   }

@@ -303,4 +303,18 @@ Sexto dominio extraído: alta de compra (con recepción a tienda o almacén) e h
 - `ServicioAdmin` pasó de 4,313 a 4,117 líneas (−196).
 - Verificado: `dart analyze` limpio (incluyendo el warning de campo muerto ya resuelto), 78 tests en verde.
 
-Progreso ServicioAdmin: 5,810 → 5,067 → 4,602 → 4,468 → 4,452 → 4,313 → **4,117** líneas (−1,693 desde el inicio, −29%).
+Progreso ServicioAdmin: 5,810 → 5,067 → 4,602 → 4,468 → 4,452 → 4,313 → 4,117 líneas (−1,693 desde el inicio, −29%).
+
+### 10.11 Fase 3.7 — Extracción del dominio de pedidos/cotizaciones
+
+Séptimo dominio extraído: consulta, asignación y cambios de estado de pedidos, y consulta/eliminación de cotizaciones.
+
+- Nuevo: `packages/posia_database/lib/src/services/admin_pedidos_cotizaciones.dart` — `AdminPedidosCotizaciones`. Dueño de `listarEmpleadosParaAsignacion`, `listarPedidos*`, `obtenerPedido`, `asignarPedido`, `marcarPedidoEntregado`, `cancelarPedido`, `listarCotizaciones`, `obtenerCotizacion`, `eliminarCotizacion`.
+- **No** se movieron `registrarPedido`/`registrarCotizacion` (las altas): dependen de `resolverPrecioComercial`, que es un motor de precios (`MotorPrecio`) todavía embebido directo en `ServicioAdmin` sin su propio dominio extraído. Moverlas habría significado duplicar el motor de precios o crear un acople inverso (la nueva clase llamando de vuelta a `ServicioAdmin`); se dejaron donde están, consistente con el criterio ya usado (compras con permisos de tienda, etc.).
+- Los 3 métodos que cambian estado de pedido (`asignarPedido`/`marcarPedidoEntregado`/`cancelarPedido`) delegan la mutación a `AdminPedidosCotizaciones` pero el *push inmediato* del evento se quedó en `ServicioAdmin` vía `_registrarEventoPedido` (que además de emitir, empuja al hub de inmediato) — para no cambiar el comportamiento de sincronización.
+- `ServicioAdmin` pasó de 4,117 a 4,027 líneas (−90; el dominio movido es más chico de lo que parece porque `registrarPedido`/`registrarCotizacion`, las partes más largas, se quedaron).
+- Verificado: `dart analyze` limpio, 78 tests en verde, `flutter analyze` limpio en `apps/posia_pos`.
+
+**Nota:** el motor de precios (`MotorPrecio`/`resolverPrecioComercial`) es ahora el bloqueo recurrente para extraer Pedidos/Cotizaciones/Ventas completas. Buen candidato para una futura Fase 3.x: "AdminPricing" o similar, que le quitaría esta atadura a varios dominios a la vez.
+
+Progreso ServicioAdmin: 5,810 → 5,067 → 4,602 → 4,468 → 4,452 → 4,313 → 4,117 → **4,027** líneas (−1,783 desde el inicio, −31%).
