@@ -851,9 +851,10 @@ class ProyectorEventosPostgres {
     if (id.isEmpty || pinCredencial == null) {
       return;
     }
-    final actualizadoEn =
-        p['actualizadoEn'] as String? ??
-        evento.creadoEn.toUtc().toIso8601String();
+    final actualizadoEn = _textoTemporal(
+      p['actualizadoEn'],
+      fallback: evento.creadoEn.toUtc().toIso8601String(),
+    );
     final codigo = ValidadorCodigoUsuario.normalizar(
       p['codigo'] as String? ?? '',
     );
@@ -865,8 +866,9 @@ class ProyectorEventosPostgres {
       parameters: {'id': id},
     );
     if (existente.isNotEmpty) {
-      final local =
-          existente.first.toColumnMap()['actualizado_en'] as String? ?? '';
+      final local = _textoTemporal(
+        existente.first.toColumnMap()['actualizado_en'],
+      );
       if (local.compareTo(actualizadoEn) > 0) {
         return;
       }
@@ -902,11 +904,12 @@ class ProyectorEventosPostgres {
         'codigo': codigo,
         'rol': p['rol'] ?? 'empleado',
         'tienda': p['tiendaId'],
-        'activo': (p['activo'] as bool? ?? true) ? 1 : 0,
+        'activo': _boolInt(p['activo'], defaultValue: true),
         'credencial': pinCredencial,
-        'creado':
-            p['creadoEn'] as String? ??
-            evento.creadoEn.toUtc().toIso8601String(),
+        'creado': _textoTemporal(
+          p['creadoEn'],
+          fallback: evento.creadoEn.toUtc().toIso8601String(),
+        ),
         'actualizado': actualizadoEn,
         'rolPersonalizado': p['rolPersonalizadoId'],
       },
@@ -967,7 +970,7 @@ class ProyectorEventosPostgres {
     }
     final cols = conflicto.first.toColumnMap();
     final otroId = cols['id'] as String? ?? '';
-    final otroActualizado = cols['actualizado_en'] as String? ?? '';
+    final otroActualizado = _textoTemporal(cols['actualizado_en']);
     if (otroId.isEmpty || otroActualizado.compareTo(actualizadoEn) >= 0) {
       return;
     }
@@ -1806,7 +1809,21 @@ class ProyectorEventosPostgres {
     if (valor is bool) {
       return valor ? 1 : 0;
     }
+    if (valor is num) {
+      return valor != 0 ? 1 : 0;
+    }
     return defaultValue ? 1 : 0;
+  }
+
+  /// Normaliza TIMESTAMPTZ (DateTime) o TEXT ISO a cadena comparable.
+  String _textoTemporal(Object? valor, {String fallback = ''}) {
+    if (valor is DateTime) {
+      return valor.toUtc().toIso8601String();
+    }
+    if (valor is String && valor.isNotEmpty) {
+      return valor;
+    }
+    return fallback;
   }
 
   String? _extraerPinCredencial(Map<String, Object?> payload) {

@@ -205,7 +205,9 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 
 	/// Reproyecta eventos de roles/usuarios que quedaron solo en sync_events.
 	Future<void> _reproyectarEventosEspejoPendientes(Pool<Object> pool) async {
-		const claveMeta = 'mirror_backfill_roles_v1';
+		// v2: users.creado_en/actualizado_en pasaron a TIMESTAMPTZ; el proyector
+		// casteaba DateTime as String? y tumaba userUpserted (y lotes con proveedores).
+		const claveMeta = 'mirror_backfill_roles_v2';
 		await pool.execute('''
 			CREATE TABLE IF NOT EXISTS schema_meta (
 				clave TEXT PRIMARY KEY,
@@ -222,7 +224,12 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 		final filas = await pool.execute('''
 			SELECT seq, id, store_id, device_id, type, payload, created_at
 			FROM sync_events
-			WHERE type IN ('customRoleUpserted', 'userUpserted')
+			WHERE type IN (
+				'customRoleUpserted',
+				'userUpserted',
+				'supplierUpserted',
+				'supplierDeleted'
+			)
 			ORDER BY seq ASC
 		''');
 		for (final fila in filas) {
