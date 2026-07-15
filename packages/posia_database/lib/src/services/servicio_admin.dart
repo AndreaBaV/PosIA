@@ -62,6 +62,7 @@ import '../services/servicio_reconciliacion_hub.dart';
 import '../sync/admin_emisor_eventos_sync.dart';
 import 'admin_almacenes.dart';
 import 'admin_catalogo_productos.dart';
+import 'admin_proveedores.dart';
 import 'servicio_corte_caja.dart';
 
 /// Coordina operaciones del panel de administracion minimalista.
@@ -159,6 +160,11 @@ class ServicioAdmin {
       emisorEventos: _emisorEventos,
       almacenRepository: almacenRepository,
     );
+    _proveedores = AdminProveedores(
+      emisorEventos: _emisorEventos,
+      proveedorRepository: proveedorRepository,
+      compraRepository: compraRepository,
+    );
   }
 
   final TiendaRepository _tiendaRepository;
@@ -193,6 +199,7 @@ class ServicioAdmin {
   final AdminEmisorEventosSync _emisorEventos;
   late final AdminCatalogoProductos _catalogoProductos;
   late final AdminAlmacenes _almacenes;
+  late final AdminProveedores _proveedores;
   MotorPrecio? _motorPrecioCache;
 
   MotorPrecio? get _motorPrecio {
@@ -1934,59 +1941,36 @@ class ServicioAdmin {
 
   // --- Proveedores ---
 
-  Future<List<Proveedor>> listarProveedores() async {
-    final todos = await _proveedorRepository?.listarTodos() ?? [];
-    return todos.where((p) => !p.esStubFk).toList();
+  Future<List<Proveedor>> listarProveedores() {
+    return _proveedores.listarProveedores();
   }
 
   Future<Proveedor> registrarProveedor({
     required String nombre,
     String contacto = '',
     String telefono = '',
-  }) async {
-    final repo = _proveedorRepository;
-    if (repo == null) {
-      throw StateError('Repositorio de proveedores no configurado');
-    }
-    final proveedor = Proveedor(
-      id: _generadorId.v4(),
+  }) {
+    return _proveedores.registrarProveedor(
       nombre: nombre,
       contacto: contacto,
       telefono: telefono,
-      activo: true,
     );
-    await repo.guardar(proveedor);
-    await _emisorEventos.proveedor(proveedor);
-    return proveedor;
   }
 
-  Future<void> actualizarProveedor(Proveedor proveedor) async {
-    await _proveedorRepository?.guardar(proveedor);
-    await _emisorEventos.proveedor(proveedor);
+  Future<void> actualizarProveedor(Proveedor proveedor) {
+    return _proveedores.actualizarProveedor(proveedor);
   }
 
   /// Elimina un proveedor sin compras registradas.
   ///
   /// Los productos vinculados quedan sin proveedor asignado.
   /// Lanza [StateError] si el proveedor tiene compras en el historial.
-  Future<void> eliminarProveedor(String proveedorId) async {
-    final repo = _proveedorRepository;
-    if (repo == null) {
-      throw StateError('Repositorio de proveedores no configurado');
-    }
-    if (await (_compraRepository?.contarPorProveedor(proveedorId) ??
-            Future.value(0)) >
-        0) {
-      throw StateError(
-        'No se puede eliminar: el proveedor tiene compras registradas',
-      );
-    }
-    await repo.eliminar(proveedorId);
-    await _emisorEventos.proveedorEliminado(proveedorId);
+  Future<void> eliminarProveedor(String proveedorId) {
+    return _proveedores.eliminarProveedor(proveedorId);
   }
 
-  Future<Proveedor?> obtenerProveedor(String proveedorId) async {
-    return _proveedorRepository?.obtenerPorId(proveedorId);
+  Future<Proveedor?> obtenerProveedor(String proveedorId) {
+    return _proveedores.obtenerProveedor(proveedorId);
   }
 
   Future<void> vincularProductoProveedor(
