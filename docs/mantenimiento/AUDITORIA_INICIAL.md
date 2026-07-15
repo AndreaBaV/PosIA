@@ -201,3 +201,31 @@ Esos cambios son **correctivos de sync**, no de modularización. Conviene:
 - Lo “no funcional / incompleto” más claro hoy: **sync LAN deshabilitado** (`clienteLan: null`), no un cementerio de archivos huérfanos.
 
 Cuando quieras empezar el cambio #1 (emisor de eventos), se puede hacer en un commit dedicado sobre esta misma rama.
+
+---
+
+## 10. Actualización 2026-07-15 — rama `refactor/arquitectura-2026-07`
+
+Al retomar esta auditoría se encontró, auditando Neon **en vivo** (no solo el código), que el problema no era únicamente tablas huérfanas: había pérdida real de datos de producción por un bug de sincronización.
+
+### 10.1 Bug de pérdida de datos (corregido, commit `00dfaf0`)
+
+`_registrarEventoCompra` (compras) y `ServicioAsistencia._emitirEvento` (asistencia) generaban el ID del evento con un UUID aleatorio en vez de uno determinístico. Cada reintento de sync creaba un evento "nuevo" que el hub nunca reconocía como el mismo, dejando nómina/asistencia varadas en `sync_events` sin proyectarse a Neon (y generando una tormenta de reintentos en compras: 62 eventos para solo 2 compras reales). Mismo bug que ya tenía nómina, corregido en el mismo commit con el patrón ya usado en el resto de emisores (`_idEventoEspejo`).
+
+Recuperado con backfill de un solo uso (`server/sync_api/bin/backfill_ops_varados.dart`, ya ejecutado): `employee_profiles` 0→2, `payroll_periods` 0→2, `attendance_challenges` 0→1, `attendance_records` 0→2. El servidor también reproyecta esto automáticamente en cada arranque desde ahora (`_reproyectarEventosEspejoPendientes` ampliado).
+
+### 10.2 Tablas huérfanas eliminadas de Neon (`public`)
+
+Confirmadas sin datos (0 filas), sin eventos de sync jamás enviados para su dominio, y explícitamente excluidas por el propio código (`MapaTablasSync.soloLocal` / renombre pre-existente):
+
+- `proveedores` — duplicado huérfano; el código ya renombra `proveedores`(sqlite)→`suppliers`(neon).
+- `vendedores` — marcada `soloLocal` en el código, nunca debió sincronizarse.
+- `pharmacy_lots` — marcada `soloLocal` en el código, nunca debió sincronizarse.
+
+DDL capturado antes de borrar (ver historial de este chat / commit correspondiente). Esquema restante verificado: 38 tablas intactas, `dart analyze` y tests de `posia_database`/`posia_core`/`server/sync_api` en verde.
+
+### 10.3 Nota de alcance
+
+`orderUpserted`, `variantUpserted`, `lotePromocionReplaced`, `customerDiscountUpserted`, `customerProductPriceUpserted` nunca han sido enviados por ninguna tienda (cero eventos en `sync_events`). Sus tablas en Neon (`orders`, `product_variants`, `lotes_promocion`, `customer_discounts`, `customer_product_prices`) siguen en 0 filas — son features genuinamente no usadas todavía, no un bug de sync. No se tocan.
+
+Sigue pendiente la Fase 3+ de este documento (modularización de `ServicioAdmin` por dominio) — no se ha empezado.
