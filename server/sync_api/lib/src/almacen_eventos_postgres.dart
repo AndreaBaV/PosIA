@@ -203,17 +203,51 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 		);
 	}
 
-	/// Reproyecta eventos de roles/usuarios que quedaron solo en sync_events.
+	/// Reproyecta eventos que quedaron solo en sync_events (nunca aplicados a
+	/// su tabla espejo). Cada backfill corre una sola vez, marcado en
+	/// schema_meta; agregar un backfill nuevo no repite los anteriores.
 	Future<void> _reproyectarEventosEspejoPendientes(Pool<Object> pool) async {
-		// v2: users.creado_en/actualizado_en pasaron a TIMESTAMPTZ; el proyector
-		// casteaba DateTime as String? y tumaba userUpserted (y lotes con proveedores).
-		const claveMeta = 'mirror_backfill_roles_v2';
 		await pool.execute('''
 			CREATE TABLE IF NOT EXISTS schema_meta (
 				clave TEXT PRIMARY KEY,
 				valor TEXT NOT NULL
 			)
 		''');
+		// v2: users.creado_en/actualizado_en pasaron a TIMESTAMPTZ; el proyector
+		// casteaba DateTime as String? y tumaba userUpserted (y lotes con proveedores).
+		await _reproyectarPorTipos(
+			pool: pool,
+			claveMeta: 'mirror_backfill_roles_v2',
+			tipos: [
+				'customRoleUpserted',
+				'userUpserted',
+				'supplierUpserted',
+				'supplierDeleted',
+			],
+		);
+		// v1: _registrarEventoCompra y ServicioAsistencia usaban IDs de evento
+		// aleatorios; cada reintento de sync creaba un evento "nuevo" que nunca
+		// convergia, dejando compras/nomina/asistencia varadas en sync_events
+		// sin proyectarse (ver docs/mantenimiento/AUDITORIA_INICIAL.md).
+		await _reproyectarPorTipos(
+			pool: pool,
+			claveMeta: 'mirror_backfill_ops_v1',
+			tipos: [
+				'purchaseCompleted',
+				'payrollPeriodClosed',
+				'employeeProfileUpserted',
+				'attendanceChallengeCreated',
+				'attendanceCheckedIn',
+				'attendanceCheckedOut',
+			],
+		);
+	}
+
+	Future<void> _reproyectarPorTipos({
+		required Pool<Object> pool,
+		required String claveMeta,
+		required List<String> tipos,
+	}) async {
 		final existente = await pool.execute(
 			Sql.named('SELECT valor FROM schema_meta WHERE clave = @clave'),
 			parameters: {'clave': claveMeta},
@@ -221,15 +255,14 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 		if (existente.isNotEmpty) {
 			return;
 		}
+		// `tipos` son literales internos fijos (nunca entrada de usuario); se
+		// listan inline porque el driver no soporta bien parámetros de array
+		// con Sql.named en este proyecto.
+		final listaTipos = tipos.map((t) => "'$t'").join(', ');
 		final filas = await pool.execute('''
 			SELECT seq, id, store_id, device_id, type, payload, created_at
 			FROM sync_events
-			WHERE type IN (
-				'customRoleUpserted',
-				'userUpserted',
-				'supplierUpserted',
-				'supplierDeleted'
-			)
+			WHERE type IN ($listaTipos)
 			ORDER BY seq ASC
 		''');
 		for (final fila in filas) {
@@ -240,7 +273,7 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 				});
 			} on Object catch (error) {
 				stdout.writeln(
-					'Sync backfill: error en ${fila.toColumnMap()['type']}: $error',
+					'Sync backfill ($claveMeta): error en ${fila.toColumnMap()['type']}: $error',
 				);
 			}
 		}

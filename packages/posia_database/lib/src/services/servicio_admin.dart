@@ -4473,7 +4473,7 @@ class ServicioAdmin {
 
   Future<void> _registrarEventoCompra(Compra compra) async {
     final evento = SyncEvent(
-      id: _generadorId.v4(),
+      id: _idEventoEspejo(TipoSyncEvento.purchaseCompleted, compra.id),
       tiendaId: (compra.tiendaId != null && compra.tiendaId!.isNotEmpty)
           ? compra.tiendaId!
           : _tiendaActivaId,

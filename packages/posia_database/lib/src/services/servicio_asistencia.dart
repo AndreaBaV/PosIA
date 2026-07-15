@@ -77,6 +77,7 @@ class ServicioAsistencia {
 		});
 		await _emitirEvento(
 			TipoSyncEvento.attendanceChallengeCreated,
+			claveEntidad: desafio.id,
 			{
 				'id': desafio.id,
 				'tiendaId': desafio.tiendaId,
@@ -172,6 +173,7 @@ class ServicioAsistencia {
 		await _asistenciaRepository.guardarRegistro(salida);
 		await _emitirEvento(
 			TipoSyncEvento.attendanceCheckedOut,
+			claveEntidad: salida.id,
 			{
 				'registroId': salida.id,
 				'usuarioId': salida.usuarioId,
@@ -240,6 +242,7 @@ class ServicioAsistencia {
 		await _asistenciaRepository.guardarRegistro(registro);
 		await _emitirEvento(
 			TipoSyncEvento.attendanceCheckedIn,
+			claveEntidad: registro.id,
 			{
 				'id': registro.id,
 				'usuarioId': registro.usuarioId,
@@ -256,15 +259,16 @@ class ServicioAsistencia {
 
 	Future<void> _emitirEvento(
 		TipoSyncEvento tipo,
-		Map<String, Object?> payload,
-	) async {
+		Map<String, Object?> payload, {
+		required String claveEntidad,
+	}) async {
 		final sync = _syncOrchestrator;
 		if (sync == null) {
 			return;
 		}
 		await sync.registrarEvento(
 			SyncEvent(
-				id: _generadorId.v4(),
+				id: _idEventoEspejo(tipo, claveEntidad),
 				tiendaId: _tiendaId,
 				dispositivoId: _dispositivoId,
 				tipo: tipo,
@@ -273,5 +277,14 @@ class ServicioAsistencia {
 				estado: EstadoSyncEvento.pendiente,
 			),
 		);
+	}
+
+	/// ID de evento determinístico: reintentos de sync no duplican el evento.
+	String _idEventoEspejo(TipoSyncEvento tipo, String claveEntidad) {
+		final clave = claveEntidad.trim();
+		if (clave.isEmpty) {
+			return _generadorId.v4();
+		}
+		return '${tipo.name}:$clave';
 	}
 }
