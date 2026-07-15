@@ -96,6 +96,8 @@ class ServicioInicioSesion {
 				}
 				if (!LimpiadorCacheLocal.seLimpioEnEsteArranque) {
 					try {
+						await contenedorActivo.servicioNomina?.reencolarPerfilesParaSync();
+						await contenedorActivo.servicioNomina?.reencolarPeriodosParaSync();
 						await contenedorActivo.servicioAdmin.sincronizarManual(
 							incluirCatalogo: true,
 						);

@@ -113,6 +113,8 @@ final sincronizadorAutomaticoProvider = FutureProvider<SincronizadorAutomatico>(
 					.completarMigracionIntegridadTrasSync();
 				return;
 			}
+			await contenedor.servicioNomina?.reencolarPerfilesParaSync();
+			await contenedor.servicioNomina?.reencolarPeriodosParaSync();
 			await contenedor.servicioAdmin.sincronizarManual(incluirCatalogo: true);
 		},
 	);

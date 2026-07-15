@@ -6,6 +6,7 @@ import 'package:posia_database/posia_database.dart';
 import 'package:posia_sync/posia_sync.dart';
 
 import 'admin_providers.dart';
+import 'app_providers.dart';
 
 /// Estado visible de una sincronizacion en curso o recien terminada.
 class EstadoSyncUi {
@@ -60,8 +61,12 @@ class SyncProgresoNotifier extends Notifier<EstadoSyncUi> {
 			),
 		);
 		try {
-			final servicio = await ref.read(servicioAdminProvider.future);
-			final resultado = await servicio.sincronizarManual(alProgreso: _reportar);
+			final contenedor = await ref.read(contenedorServiciosProvider.future);
+			await contenedor.servicioNomina?.reencolarPerfilesParaSync();
+			await contenedor.servicioNomina?.reencolarPeriodosParaSync();
+			final resultado = await contenedor.servicioAdmin.sincronizarManual(
+				alProgreso: _reportar,
+			);
 			final mensaje = resultado.hubDisponible
 				? 'Enviados: ${resultado.eventosEnviados} · '
 					'Recibidos: ${resultado.eventosRecibidos}'

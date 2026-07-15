@@ -27,6 +27,20 @@ class Proveedor {
 	final String notas;
 	final int diasCredito;
 
+	/// Placeholder creado por integridad FK (sync fuera de orden).
+	///
+	/// No es un proveedor de negocio; no debe proyectarse a Neon.
+	bool get esStubFk {
+		if (notas.trim() == '__stub_fk__') {
+			return true;
+		}
+		return nombre.trim() == 'Proveedor' &&
+				contacto.trim().isEmpty &&
+				telefono.trim().isEmpty &&
+				email.trim().isEmpty &&
+				rfc.trim().isEmpty;
+	}
+
 	Proveedor copiarWith({
 		String? id,
 		String? nombre,

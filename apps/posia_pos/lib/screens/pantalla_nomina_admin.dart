@@ -65,7 +65,7 @@ class _PantallaNominaAdminState extends ConsumerState<PantallaNominaAdmin> {
 
 	Widget _construirContenido(BuildContext context, _DatosNomina datos) {
 		if (datos.periodos.isEmpty) {
-			return _estadoVacio(context);
+			return _estadoVacio(context, datos);
 		}
 		final lineas = _lineasFiltradas(datos);
 		final resumenes = _agruparPorEmpleado(lineas, datos.nombres);
@@ -145,47 +145,85 @@ class _PantallaNominaAdminState extends ConsumerState<PantallaNominaAdmin> {
 		);
 	}
 
-	Widget _estadoVacio(BuildContext context) {
-		return Center(
-			child: Padding(
-				padding: const EdgeInsets.all(32.0),
-				child: Column(
-					mainAxisAlignment: MainAxisAlignment.center,
-					children: [
-						Icon(
-							Icons.payments_outlined,
-							size: 72.0,
-							color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.5),
-						),
-						const SizedBox(height: 16.0),
-						Text(
-							'Sin períodos de nómina',
-							style: Theme.of(context).textTheme.titleLarge,
-						),
-						const SizedBox(height: 8.0),
-						Text(
-							'Calcule la nómina semanal a partir de las entradas '
-							'de asistencia y las tarifas en Equipo.',
-							textAlign: TextAlign.center,
-							style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-								color: Theme.of(context).colorScheme.outline,
+	Widget _estadoVacio(BuildContext context, _DatosNomina datos) {
+		final conTarifa = datos.empleados
+			.where((u) => datos.tarifasPorUsuario.containsKey(u.id))
+			.toList();
+		final sinTarifa = datos.empleados
+			.where((u) => !datos.tarifasPorUsuario.containsKey(u.id))
+			.toList();
+		return ListView(
+			padding: const EdgeInsets.all(24.0),
+			children: [
+				Icon(
+					Icons.payments_outlined,
+					size: 64.0,
+					color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.5),
+				),
+				const SizedBox(height: 16.0),
+				Text(
+					'Sin períodos de nómina',
+					textAlign: TextAlign.center,
+					style: Theme.of(context).textTheme.titleLarge,
+				),
+				const SizedBox(height: 8.0),
+				Text(
+					'Calcule la nómina a partir de asistencia y las tarifas de Equipo. '
+					'Solo entran empleados con tarifa > 0 y horas registradas.',
+					textAlign: TextAlign.center,
+					style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+						color: Theme.of(context).colorScheme.outline,
+					),
+				),
+				const SizedBox(height: 20.0),
+				if (conTarifa.isNotEmpty) ...[
+					Text(
+						'Tarifas configuradas (${conTarifa.length})',
+						style: Theme.of(context).textTheme.titleSmall,
+					),
+					const SizedBox(height: 8.0),
+					...conTarifa.map(
+						(u) => ListTile(
+							dense: true,
+							contentPadding: EdgeInsets.zero,
+							title: Text(u.nombre),
+							trailing: Text(
+								'${formatearMoneda(datos.tarifasPorUsuario[u.id]!)}/h',
+								style: TextStyle(
+									color: Colors.teal.shade700,
+									fontWeight: FontWeight.w600,
+								),
 							),
 						),
-						const SizedBox(height: 24.0),
-						FilledButton.icon(
-							onPressed: _calculando ? null : () => _mostrarCalcularPeriodo(context),
-							icon: _calculando
-								? const SizedBox(
-									width: 18.0,
-									height: 18.0,
-									child: CircularProgressIndicator(strokeWidth: 2.0),
-								)
-								: const Icon(Icons.calculate),
-							label: Text(_calculando ? 'Calculando...' : 'Calcular última semana'),
+					),
+				],
+				if (sinTarifa.isNotEmpty) ...[
+					const SizedBox(height: 12.0),
+					Text(
+						'Sin tarifa en Equipo (${sinTarifa.length})',
+						style: Theme.of(context).textTheme.titleSmall?.copyWith(
+							color: Theme.of(context).colorScheme.error,
 						),
-					],
+					),
+					const SizedBox(height: 4.0),
+					Text(
+						sinTarifa.map((u) => u.nombre).join(', '),
+						style: Theme.of(context).textTheme.bodySmall,
+					),
+				],
+				const SizedBox(height: 24.0),
+				FilledButton.icon(
+					onPressed: _calculando ? null : () => _mostrarCalcularPeriodo(context),
+					icon: _calculando
+						? const SizedBox(
+							width: 18.0,
+							height: 18.0,
+							child: CircularProgressIndicator(strokeWidth: 2.0),
+						)
+						: const Icon(Icons.calculate),
+					label: Text(_calculando ? 'Calculando...' : 'Calcular última semana'),
 				),
-			),
+			],
 		);
 	}
 
@@ -950,12 +988,14 @@ class _DatosNomina {
 		required this.lineasPorPeriodo,
 		required this.nombres,
 		required this.empleados,
+		required this.tarifasPorUsuario,
 	});
 
 	final List<PeriodoNomina> periodos;
 	final Map<String, List<LineaNomina>> lineasPorPeriodo;
 	final Map<String, String> nombres;
 	final List<Usuario> empleados;
+	final Map<String, double> tarifasPorUsuario;
 }
 
 final _datosNominaProvider = FutureProvider<_DatosNomina>((ref) async {
@@ -967,6 +1007,7 @@ final _datosNominaProvider = FutureProvider<_DatosNomina>((ref) async {
 			lineasPorPeriodo: {},
 			nombres: {},
 			empleados: [],
+			tarifasPorUsuario: {},
 		);
 	}
 	final servicio = await ref.watch(servicioAdminProvider.future);
@@ -977,6 +1018,7 @@ final _datosNominaProvider = FutureProvider<_DatosNomina>((ref) async {
 		.toList()
 	  ..sort((a, b) => a.nombre.compareTo(b.nombre));
 	final nombres = {for (final u in usuarios) u.id: u.nombre};
+	final perfiles = await nomina.listarPerfiles();
 	final lineasPorPeriodo = <String, List<LineaNomina>>{};
 	for (final p in periodos) {
 		lineasPorPeriodo[p.id] = await nomina.listarLineasPeriodo(p.id);
@@ -986,5 +1028,9 @@ final _datosNominaProvider = FutureProvider<_DatosNomina>((ref) async {
 		lineasPorPeriodo: lineasPorPeriodo,
 		nombres: nombres,
 		empleados: empleados,
+		tarifasPorUsuario: {
+			for (final p in perfiles)
+				if (p.tarifaHora > 0) p.usuarioId: p.tarifaHora,
+		},
 	);
 });

@@ -248,13 +248,14 @@ class ServicioCorteCaja {
 		return _turnoRepository.listarPorTienda(_tiendaId, limite: limite);
 	}
 
-	Future<void> _publicarTurno(TurnoCaja turno) async {
+	Future<void> _publicarTurno(TurnoCaja turno, {bool empujarAhora = true}) async {
 		final sync = _syncOrchestrator;
 		if (sync == null || !sync.tieneHubConfigurado()) {
+			// Sin hub no hay espejo Neon; el turno queda solo en SQLite local.
 			return;
 		}
 		final evento = SyncEvent(
-			id: _generadorId.v4(),
+			id: 'cashShiftUpserted:${turno.id}',
 			tiendaId: turno.tiendaId,
 			dispositivoId: _cajaId,
 			tipo: TipoSyncEvento.cashShiftUpserted,
@@ -263,8 +264,19 @@ class ServicioCorteCaja {
 			estado: EstadoSyncEvento.pendiente,
 		);
 		await sync.registrarEvento(evento);
-		unawaited(sync.sincronizarPendientes());
+		if (empujarAhora) {
+			unawaited(sync.sincronizarPendientes());
+		}
 	}
+
+	/// Encola el turno para proyección a Neon (`cash_shifts`).
+	///
+	/// Usado en apertura/cierre y al reencolar catálogo histórico.
+	Future<void> publicarTurnoParaSync(
+		TurnoCaja turno, {
+		bool empujarAhora = true,
+	}) =>
+			_publicarTurno(turno, empujarAhora: empujarAhora);
 
 	Map<String, Object?> _payloadTurno(TurnoCaja turno) {
 		return {

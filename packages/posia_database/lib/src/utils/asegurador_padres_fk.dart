@@ -89,6 +89,7 @@ class AseguradorPadresFk {
 		if (await _existe('proveedores', proveedorId)) {
 			return;
 		}
+		// Stub FK local: no debe subirse al catálogo Neon como proveedor real.
 		await _baseDatos.insert(
 			'proveedores',
 			{
@@ -100,7 +101,7 @@ class AseguradorPadresFk {
 				'email': '',
 				'rfc': '',
 				'direccion': '',
-				'notas': '',
+				'notas': '__stub_fk__',
 				'dias_credito': 0,
 			},
 			conflictAlgorithm: ConflictAlgorithm.ignore,

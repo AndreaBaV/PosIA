@@ -171,6 +171,18 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 										maxLines: 2,
 										overflow: TextOverflow.ellipsis,
 									),
+									if (u.rol != RolUsuario.administrador &&
+										datos.tarifasPorUsuario[u.id] != null)
+										Padding(
+											padding: const EdgeInsets.only(top: 2.0),
+											child: Text(
+												'Tarifa ${formatearMoneda(datos.tarifasPorUsuario[u.id]!)}/h',
+												style: Theme.of(context).textTheme.bodySmall?.copyWith(
+													color: Colors.teal.shade700,
+													fontWeight: FontWeight.w500,
+												),
+											),
+										),
 									if (u.rol != RolUsuario.administrador)
 										Padding(
 											padding: const EdgeInsets.only(top: 2.0),
@@ -257,10 +269,9 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 		}
 		_tarifaController.clear();
 		if (editando != null) {
-			final contenedor = await ref.read(contenedorServiciosProvider.future);
-			final perfil = await contenedor.servicioNomina?.obtenerPerfil(editando.id);
-			if (perfil != null && perfil.tarifaHora > 0) {
-				_tarifaController.text = perfil.tarifaHora.toStringAsFixed(2);
+			final tarifa = datos.tarifasPorUsuario[editando.id];
+			if (tarifa != null && tarifa > 0) {
+				_tarifaController.text = tarifa.toStringAsFixed(2);
 			}
 		}
 		if (!mounted) {
@@ -551,7 +562,6 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 			}
 			ref.invalidate(_usuariosAdminProvider);
 			ref.invalidate(empleadosAsignacionProvider);
-			await refrescarDatosMaestros(ref);
 			if (ctx.mounted) {
 				Navigator.pop(ctx);
 			}
@@ -592,7 +602,6 @@ class _PantallaUsuariosAdminState extends ConsumerState<PantallaUsuariosAdmin> {
 			);
 			ref.invalidate(_usuariosAdminProvider);
 			ref.invalidate(empleadosAsignacionProvider);
-			await refrescarDatosMaestros(ref);
 			if (mounted) {
 				PosiaNotificaciones.mostrarSnackBar(context, 
 					SnackBar(
@@ -624,6 +633,7 @@ class _DatosUsuarios {
 		required this.nombresTienda,
 		required this.rolesPersonalizados,
 		required this.nombresRolPersonalizado,
+		required this.tarifasPorUsuario,
 	});
 
 	final List<Usuario> usuarios;
@@ -631,18 +641,17 @@ class _DatosUsuarios {
 	final Map<String, String> nombresTienda;
 	final List<RolPersonalizado> rolesPersonalizados;
 	final Map<String, String> nombresRolPersonalizado;
+	final Map<String, double> tarifasPorUsuario;
 }
 
 final _usuariosAdminProvider = FutureProvider<_DatosUsuarios>((ref) async {
 	final servicio = await ref.watch(servicioAdminProvider.future);
-	final hubUrl = await servicio.obtenerHubUrl();
-	if (hubUrl.isNotEmpty) {
-		await servicio.repararSincronizacionUsuarios();
-	}
+	final contenedor = await ref.watch(contenedorServiciosProvider.future);
 	final operador = ref.watch(sesionUsuarioProvider);
 	final usuarios = await servicio.listarUsuarios(operador: operador);
 	final tiendas = await servicio.obtenerTiendasPermitidas(operador: operador);
 	final rolesPersonalizados = await servicio.listarRolesPersonalizadosActivos();
+	final perfiles = await contenedor.servicioNomina?.listarPerfiles() ?? const [];
 	return _DatosUsuarios(
 		usuarios: usuarios,
 		tiendas: tiendas,
@@ -650,6 +659,10 @@ final _usuariosAdminProvider = FutureProvider<_DatosUsuarios>((ref) async {
 		rolesPersonalizados: rolesPersonalizados,
 		nombresRolPersonalizado: {
 			for (final r in rolesPersonalizados) r.id: r.nombre,
+		},
+		tarifasPorUsuario: {
+			for (final p in perfiles)
+				if (p.tarifaHora > 0) p.usuarioId: p.tarifaHora,
 		},
 	);
 });

@@ -49,29 +49,57 @@ class ServicioNomina {
 			actualizadoEn: DateTime.now().toUtc(),
 		);
 		await _empleadoPerfilRepository.guardar(perfil);
-		final sync = _syncOrchestrator;
-		if (sync != null) {
-			await sync.registrarEvento(
-				SyncEvent(
-					id: _generadorId.v4(),
-					tiendaId: _tiendaId,
-					dispositivoId: _dispositivoId,
-					tipo: TipoSyncEvento.employeeProfileUpserted,
-					payload: {
-						'usuarioId': usuarioId,
-						'tarifaHora': perfil.tarifaHora,
-						'tipoPago': perfil.tipoPago,
-						'actualizadoEn': perfil.actualizadoEn.toIso8601String(),
-					},
-					creadoEn: DateTime.now().toUtc(),
-					estado: EstadoSyncEvento.pendiente,
-				),
-			);
-		}
+		await _publicarPerfil(perfil);
 	}
 
 	Future<EmpleadoPerfil?> obtenerPerfil(String usuarioId) {
 		return _empleadoPerfilRepository.obtenerPorUsuario(usuarioId);
+	}
+
+	Future<List<EmpleadoPerfil>> listarPerfiles() {
+		return _empleadoPerfilRepository.listarTodos();
+	}
+
+	/// Reencola perfiles locales para proyeccion a Neon (`employee_profiles`).
+	///
+	/// Solo encola; el push ocurre en el siguiente [sincronizarPendientes] /
+	/// [sincronizarManual] del orquestador.
+	Future<int> reencolarPerfilesParaSync() async {
+		final perfiles = await _empleadoPerfilRepository.listarTodos();
+		for (final perfil in perfiles) {
+			await _publicarPerfil(perfil, empujarAhora: false);
+		}
+		return perfiles.length;
+	}
+
+	Future<void> _publicarPerfil(
+		EmpleadoPerfil perfil, {
+		bool empujarAhora = true,
+	}) async {
+		final sync = _syncOrchestrator;
+		if (sync == null || !sync.tieneHubConfigurado()) {
+			return;
+		}
+		final eventoId = 'employeeProfileUpserted:${perfil.usuarioId}';
+		await sync.registrarEvento(
+			SyncEvent(
+				id: eventoId,
+				tiendaId: _tiendaId,
+				dispositivoId: _dispositivoId,
+				tipo: TipoSyncEvento.employeeProfileUpserted,
+				payload: {
+					'usuarioId': perfil.usuarioId,
+					'tarifaHora': perfil.tarifaHora,
+					'tipoPago': perfil.tipoPago,
+					'actualizadoEn': perfil.actualizadoEn.toIso8601String(),
+				},
+				creadoEn: DateTime.now().toUtc(),
+				estado: EstadoSyncEvento.pendiente,
+			),
+		);
+		if (empujarAhora) {
+			await sync.sincronizarEventosPorIds([eventoId]);
+		}
 	}
 
 	Future<List<PeriodoNomina>> listarPeriodos() {
@@ -154,10 +182,11 @@ class ServicioNomina {
 			}
 		});
 		final sync = _syncOrchestrator;
-		if (sync != null) {
+		if (sync != null && sync.tieneHubConfigurado()) {
+			final eventoId = 'payrollPeriodClosed:$periodoId';
 			await sync.registrarEvento(
 				SyncEvent(
-					id: _generadorId.v4(),
+					id: eventoId,
 					tiendaId: _tiendaId,
 					dispositivoId: _dispositivoId,
 					tipo: TipoSyncEvento.payrollPeriodClosed,
@@ -175,8 +204,53 @@ class ServicioNomina {
 					estado: EstadoSyncEvento.pendiente,
 				),
 			);
+			await sync.sincronizarEventosPorIds([eventoId]);
 		}
 		return periodo;
+	}
+
+	/// Reencola periodos de nomina locales hacia Neon.
+	Future<int> reencolarPeriodosParaSync() async {
+		final periodos = await listarPeriodos();
+		final sync = _syncOrchestrator;
+		if (sync == null || !sync.tieneHubConfigurado()) {
+			return 0;
+		}
+		for (final periodo in periodos) {
+			final lineas = await listarLineasPeriodo(periodo.id);
+			final eventoId = 'payrollPeriodClosed:${periodo.id}';
+			await sync.registrarEvento(
+				SyncEvent(
+					id: eventoId,
+					tiendaId: periodo.tiendaId ?? _tiendaId,
+					dispositivoId: _dispositivoId,
+					tipo: TipoSyncEvento.payrollPeriodClosed,
+					payload: {
+						'periodoId': periodo.id,
+						'tiendaId': periodo.tiendaId ?? _tiendaId,
+						'inicioEn': periodo.inicioEn.toIso8601String(),
+						'finEn': periodo.finEn.toIso8601String(),
+						'cerradoPor': periodo.cerradoPor,
+						'cerradoEn': periodo.cerradoEn?.toIso8601String(),
+						'estado': periodo.estado,
+						'lineas': [
+							for (final linea in lineas)
+								{
+									'id': linea.id,
+									'usuarioId': linea.usuarioId,
+									'horasTrabajadas': linea.horasTrabajadas,
+									'tarifaHora': linea.tarifaHora,
+									'montoBruto': linea.montoBruto,
+									'montoNeto': linea.montoNeto,
+								},
+						],
+					},
+					creadoEn: DateTime.now().toUtc(),
+					estado: EstadoSyncEvento.pendiente,
+				),
+			);
+		}
+		return periodos.length;
 	}
 
 	Future<List<LineaNomina>> listarLineasPeriodo(String periodoId) {

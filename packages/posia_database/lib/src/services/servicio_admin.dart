@@ -1016,13 +1016,20 @@ class ServicioAdmin {
     final listas = await listarListasPrecios();
     final roles = await _rolPersonalizadoRepository?.listarTodos() ?? [];
     final usuarios = await _usuarioRepository?.listarTodos() ?? [];
-    final lotes = await _lotePromocionRepository.listarActivos();
+    final lotes = await _lotePromocionRepository.listarTodos();
     final preciosCliente =
         await _precioRepository?.listarTodosPreciosClienteProducto() ?? [];
     final descuentosCliente =
         await _descuentoClienteRepository?.listarTodos() ?? [];
-    final proveedores = await listarProveedores();
+    final proveedores =
+        (await listarProveedores()).where((p) => !p.esStubFk).toList();
     final compras = await _compraRepository?.listarRecientes() ?? [];
+    final turnosCaja =
+        await _servicioCorteCaja?.listarTurnosRecientes(limite: 200) ??
+        const <TurnoCaja>[];
+    final pedidos =
+        await _pedidoRepository?.listarPorTienda(_tiendaActivaId) ??
+        const <Pedido>[];
 
     var totalEstimado =
         tiendas.length +
@@ -1038,7 +1045,9 @@ class ServicioAdmin {
         preciosCliente.length +
         descuentosCliente.length +
         proveedores.length +
-        compras.length;
+        compras.length +
+        turnosCaja.length +
+        pedidos.length;
     // Presentaciones, escalas, variantes e items de lista se cuentan al vuelo.
     var encolados = 0;
 
@@ -1100,7 +1109,7 @@ class ServicioAdmin {
       reportar('Productos y precios ($encolados)…');
     }
     for (final lote in lotes) {
-      await _registrarEventoLotePromocion(lote);
+      await _registrarEventoLotePromocion(lote, empujarInmediato: false);
       encolados++;
       reportar('Lotes promoción ($encolados)…');
     }
@@ -1158,6 +1167,19 @@ class ServicioAdmin {
       await _registrarEventoCompra(compra);
       encolados++;
       reportar('Compras ($encolados)…');
+    }
+    final corte = _servicioCorteCaja;
+    if (corte != null) {
+      for (final turno in turnosCaja) {
+        await corte.publicarTurnoParaSync(turno, empujarAhora: false);
+        encolados++;
+        reportar('Cortes de caja ($encolados)…');
+      }
+    }
+    for (final pedido in pedidos) {
+      await _registrarEventoPedido(pedido, empujarInmediato: false);
+      encolados++;
+      reportar('Pedidos ($encolados)…');
     }
 
     reportar('Catálogo listo ($encolados eventos)…');
@@ -2287,7 +2309,8 @@ class ServicioAdmin {
   // --- Proveedores ---
 
   Future<List<Proveedor>> listarProveedores() async {
-    return _proveedorRepository?.listarTodos() ?? [];
+    final todos = await _proveedorRepository?.listarTodos() ?? [];
+    return todos.where((p) => !p.esStubFk).toList();
   }
 
   Future<Proveedor> registrarProveedor({
@@ -4408,6 +4431,10 @@ class ServicioAdmin {
   }
 
   Future<void> _registrarEventoProveedor(Proveedor proveedor) async {
+    // Stubs FK ("Proveedor") no son catálogo real; no contaminar Neon/suppliers.
+    if (proveedor.esStubFk) {
+      return;
+    }
     final evento = SyncEvent(
       id: _idEventoEspejo(TipoSyncEvento.supplierUpserted, proveedor.id),
       tiendaId: _tiendaActivaId,
@@ -4540,9 +4567,12 @@ class ServicioAdmin {
     await _syncOrchestrator.registrarEvento(evento);
   }
 
-  Future<void> _registrarEventoPedido(Pedido pedido) async {
+  Future<void> _registrarEventoPedido(
+    Pedido pedido, {
+    bool empujarInmediato = true,
+  }) async {
     final evento = SyncEvent(
-      id: _generadorId.v4(),
+      id: _idEventoEspejo(TipoSyncEvento.orderUpserted, pedido.id),
       tiendaId: pedido.tiendaId,
       dispositivoId: _cajaId,
       tipo: TipoSyncEvento.orderUpserted,
@@ -4582,6 +4612,9 @@ class ServicioAdmin {
       estado: EstadoSyncEvento.pendiente,
     );
     await _syncOrchestrator.registrarEvento(evento);
+    if (empujarInmediato) {
+      await _syncOrchestrator.sincronizarEventosPorIds([evento.id]);
+    }
   }
 
   Future<void> _registrarEventoEscalasMayoreo(
@@ -4613,7 +4646,10 @@ class ServicioAdmin {
     await _syncOrchestrator.registrarEvento(evento);
   }
 
-  Future<void> _registrarEventoLotePromocion(LotePromocion lote) async {
+  Future<void> _registrarEventoLotePromocion(
+    LotePromocion lote, {
+    bool empujarInmediato = true,
+  }) async {
     final evento = SyncEvent(
       id: _idEventoEspejo(TipoSyncEvento.lotePromocionReplaced, lote.id),
       tiendaId: _tiendaActivaId,
@@ -4632,6 +4668,9 @@ class ServicioAdmin {
       estado: EstadoSyncEvento.pendiente,
     );
     await _syncOrchestrator.registrarEvento(evento);
+    if (empujarInmediato) {
+      await _syncOrchestrator.sincronizarEventosPorIds([evento.id]);
+    }
   }
 
   Future<void> _registrarEventoListaPrecios(ListaPrecios lista) async {
