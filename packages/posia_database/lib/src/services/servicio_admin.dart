@@ -59,6 +59,7 @@ import '../utils/limpiador_base_local.dart';
 import '../utils/sincronizador_vendedor_usuario.dart';
 import '../models/resultado_reconciliacion_hub.dart';
 import '../services/servicio_reconciliacion_hub.dart';
+import '../sync/admin_emisor_eventos_sync.dart';
 import 'servicio_corte_caja.dart';
 
 /// Coordina operaciones del panel de administracion minimalista.
@@ -132,7 +133,12 @@ class ServicioAdmin {
        _servicioCorteCaja = servicioCorteCaja,
        _baseDatos = baseDatos,
        _tiendaActivaId = tiendaActivaId,
-       _cajaId = cajaId;
+       _cajaId = cajaId,
+       _emisorEventos = AdminEmisorEventosSync(
+         syncOrchestrator: syncOrchestrator,
+         tiendaActivaId: tiendaActivaId,
+         cajaId: cajaId,
+       );
 
   final TiendaRepository _tiendaRepository;
   final VentaRepository _ventaRepository;
@@ -163,6 +169,7 @@ class ServicioAdmin {
   final String _tiendaActivaId;
   final String _cajaId;
   final Uuid _generadorId = const Uuid();
+  final AdminEmisorEventosSync _emisorEventos;
   MotorPrecio? _motorPrecioCache;
 
   MotorPrecio? get _motorPrecio {
@@ -395,9 +402,9 @@ class ServicioAdmin {
         );
       }
     });
-    await _registrarEventoProducto(producto);
+    await _emisorEventos.producto(producto);
     if (req.escalasMayoreo.isNotEmpty) {
-      await _registrarEventoEscalasMayoreo(
+      await _emisorEventos.escalasMayoreo(
         producto.id,
         req.escalasMayoreo
             .map(
@@ -672,9 +679,9 @@ class ServicioAdmin {
         }
       }
     });
-    await _registrarEventoProducto(actualizado);
+    await _emisorEventos.producto(actualizado);
     if (escalasMayoreo != null) {
-      await _registrarEventoEscalasMayoreo(actualizado.id, escalasMayoreo);
+      await _emisorEventos.escalasMayoreo(actualizado.id, escalasMayoreo);
     }
     return actualizado;
   }
@@ -688,7 +695,7 @@ class ServicioAdmin {
       return false;
     }
     await _productoRepository.guardar(producto.copiarCon(activo: false));
-    await _registrarEventoProducto(producto.copiarCon(activo: false));
+    await _emisorEventos.producto(producto.copiarCon(activo: false));
     return true;
   }
 
@@ -699,7 +706,7 @@ class ServicioAdmin {
     }
     final reactivado = producto.copiarCon(activo: true);
     await _productoRepository.guardar(reactivado);
-    await _registrarEventoProducto(reactivado);
+    await _emisorEventos.producto(reactivado);
     return true;
   }
 
@@ -786,7 +793,7 @@ class ServicioAdmin {
         db: tx,
       );
     });
-    await _registrarEventoProducto(producto);
+    await _emisorEventos.producto(producto);
     return producto;
   }
 
@@ -1067,27 +1074,27 @@ class ServicioAdmin {
     reportar('Preparando catálogo local…');
 
     for (final tienda in tiendas) {
-      await _registrarEventoTienda(tienda);
+      await _emisorEventos.tienda(tienda);
       encolados++;
       reportar('Tiendas ($encolados)…');
     }
     for (final almacen in almacenes) {
-      await _registrarEventoAlmacen(almacen);
+      await _emisorEventos.almacen(almacen);
       encolados++;
       reportar('Almacenes ($encolados)…');
     }
     for (final categoria in categorias) {
-      await _registrarEventoCategoria(categoria);
+      await _emisorEventos.categoria(categoria);
       encolados++;
       reportar('Categorías ($encolados)…');
     }
     for (final tipo in tiposPresentacion) {
-      await _registrarEventoTipoPresentacion(tipo);
+      await _emisorEventos.tipoPresentacion(tipo);
       encolados++;
       reportar('Tipos presentación ($encolados)…');
     }
     for (final producto in productos) {
-      await _registrarEventoProducto(producto);
+      await _emisorEventos.producto(producto);
       encolados++;
       final escalas =
           await _precioRepository?.listarEscalasMayoreoPersistidas(
@@ -1095,7 +1102,7 @@ class ServicioAdmin {
           ) ??
           [];
       if (escalas.isNotEmpty) {
-        await _registrarEventoEscalasMayoreo(producto.id, escalas);
+        await _emisorEventos.escalasMayoreo(producto.id, escalas);
         encolados++;
         totalEstimado++;
       }
@@ -1104,7 +1111,7 @@ class ServicioAdmin {
       totalEstimado++;
       final variantes = await listarVariantes(producto.id);
       for (final variante in variantes) {
-        await _registrarEventoVariante(variante);
+        await _emisorEventos.variante(variante);
         encolados++;
         totalEstimado++;
       }
@@ -1116,17 +1123,17 @@ class ServicioAdmin {
       reportar('Lotes promoción ($encolados)…');
     }
     for (final cliente in clientes) {
-      await _registrarEventoCliente(cliente);
+      await _emisorEventos.cliente(cliente);
       encolados++;
       reportar('Clientes ($encolados)…');
     }
     for (final lista in listas) {
-      await _registrarEventoListaPrecios(lista);
+      await _emisorEventos.listaPrecios(lista);
       encolados++;
       final items =
           await _precioRepository?.listarPreciosDeLista(lista.id) ?? {};
       for (final entrada in items.entries) {
-        await _registrarEventoItemListaPrecios(
+        await _emisorEventos.itemListaPrecios(
           listaId: lista.id,
           productoId: entrada.key,
           precioUnitario: entrada.value,
@@ -1137,7 +1144,7 @@ class ServicioAdmin {
       reportar('Listas de precios ($encolados)…');
     }
     for (final precio in preciosCliente) {
-      await _registrarEventoPrecioClienteProducto(
+      await _emisorEventos.precioClienteProducto(
         clienteId: precio.clienteId,
         productoId: precio.productoId,
         precioUnitario: precio.precioUnitario,
@@ -1146,12 +1153,12 @@ class ServicioAdmin {
       reportar('Precios cliente ($encolados)…');
     }
     for (final descuento in descuentosCliente) {
-      await _registrarEventoDescuentoCliente(descuento);
+      await _emisorEventos.descuentoCliente(descuento);
       encolados++;
       reportar('Descuentos cliente ($encolados)…');
     }
     for (final rol in roles) {
-      await _registrarEventoRolPersonalizado(rol);
+      await _emisorEventos.rolPersonalizado(rol);
       encolados++;
       reportar('Roles ($encolados)…');
     }
@@ -1161,12 +1168,12 @@ class ServicioAdmin {
       reportar('Usuarios ($encolados)…');
     }
     for (final proveedor in proveedores) {
-      await _registrarEventoProveedor(proveedor);
+      await _emisorEventos.proveedor(proveedor);
       encolados++;
       reportar('Proveedores ($encolados)…');
     }
     for (final compra in compras) {
-      await _registrarEventoCompra(compra);
+      await _emisorEventos.compra(compra);
       encolados++;
       reportar('Compras ($encolados)…');
     }
@@ -1231,7 +1238,7 @@ class ServicioAdmin {
     if (rolesRepo != null) {
       final roles = await rolesRepo.listarTodos();
       for (final rol in roles) {
-        await _registrarEventoRolPersonalizado(rol);
+        await _emisorEventos.rolPersonalizado(rol);
       }
     }
     return sincronizarManual(alProgreso: alProgreso);
@@ -1437,13 +1444,13 @@ class ServicioAdmin {
       activa: true,
     );
     await repo.guardar(categoria);
-    await _registrarEventoCategoria(categoria);
+    await _emisorEventos.categoria(categoria);
     return categoria;
   }
 
   Future<void> actualizarCategoria(Categoria categoria) async {
     await _categoriaRepository?.guardar(categoria);
-    await _registrarEventoCategoria(categoria);
+    await _emisorEventos.categoria(categoria);
   }
 
   /// Reordena categorias segun lista de ids.
@@ -1457,7 +1464,7 @@ class ServicioAdmin {
       final categoria = todas.where((c) => c.id == idsOrdenados[i]).firstOrNull;
       if (categoria != null) {
         await repo.guardar(categoria.copiarCon(orden: i));
-        await _registrarEventoCategoria(categoria.copiarCon(orden: i));
+        await _emisorEventos.categoria(categoria.copiarCon(orden: i));
       }
     }
   }
@@ -1473,7 +1480,7 @@ class ServicioAdmin {
       return;
     }
     await repo.guardar(categoria.copiarCon(activa: false));
-    await _registrarEventoCategoria(categoria.copiarCon(activa: false));
+    await _emisorEventos.categoria(categoria.copiarCon(activa: false));
   }
 
   Future<Producto> asignarCategoriaProducto(
@@ -1482,7 +1489,7 @@ class ServicioAdmin {
   ) async {
     final actualizado = producto.copiarCon(categoriaId: categoriaId);
     await _productoRepository.guardar(actualizado);
-    await _registrarEventoProducto(actualizado);
+    await _emisorEventos.producto(actualizado);
     return actualizado;
   }
 
@@ -1517,7 +1524,7 @@ class ServicioAdmin {
       activo: true,
     );
     await repo.guardar(variante);
-    await _registrarEventoVariante(variante);
+    await _emisorEventos.variante(variante);
     return variante;
   }
 
@@ -1529,7 +1536,7 @@ class ServicioAdmin {
       _validarPrecioVenta(variante.precioBase, padre.costoUnitario);
     }
     await _varianteRepository?.guardar(variante);
-    await _registrarEventoVariante(variante);
+    await _emisorEventos.variante(variante);
   }
 
   // --- Clientes ---
@@ -1554,13 +1561,13 @@ class ServicioAdmin {
       activo: true,
     );
     await repo.guardar(cliente);
-    await _registrarEventoCliente(cliente);
+    await _emisorEventos.cliente(cliente);
     return cliente;
   }
 
   Future<void> actualizarCliente(Cliente cliente) async {
     await _clienteRepository?.guardar(cliente);
-    await _registrarEventoCliente(cliente);
+    await _emisorEventos.cliente(cliente);
   }
 
   /// Elimina un cliente sin historial de ventas, pedidos ni cotizaciones.
@@ -1680,7 +1687,7 @@ class ServicioAdmin {
       descripcion: descripcion.trim(),
     );
     await repo.guardar(descuento);
-    await _registrarEventoDescuentoCliente(descuento);
+    await _emisorEventos.descuentoCliente(descuento);
     return descuento;
   }
 
@@ -1697,12 +1704,12 @@ class ServicioAdmin {
       umbral: descuento.umbral,
     );
     await repo.guardar(descuento);
-    await _registrarEventoDescuentoCliente(descuento);
+    await _emisorEventos.descuentoCliente(descuento);
   }
 
   Future<void> eliminarDescuentoCliente(String descuentoId) async {
     await _descuentoClienteRepository?.eliminar(descuentoId);
-    await _registrarEventoDescuentoClienteEliminado(descuentoId);
+    await _emisorEventos.descuentoClienteEliminado(descuentoId);
   }
 
   Future<List<PrecioClienteProducto>> listarPreciosEspecialesCliente(
@@ -1732,7 +1739,7 @@ class ServicioAdmin {
         precioUnitario: redondearMonto(precioUnitario),
       ),
     );
-    await _registrarEventoPrecioClienteProducto(
+    await _emisorEventos.precioClienteProducto(
       clienteId: clienteId,
       productoId: productoId,
       precioUnitario: redondearMonto(precioUnitario),
@@ -1747,7 +1754,7 @@ class ServicioAdmin {
       clienteId,
       productoId,
     );
-    await _registrarEventoPrecioClienteProductoEliminado(
+    await _emisorEventos.precioClienteProductoEliminado(
       clienteId: clienteId,
       productoId: productoId,
     );
@@ -1945,7 +1952,7 @@ class ServicioAdmin {
       }
     }
     await repo.guardar(rol);
-    await _registrarEventoRolPersonalizado(rol);
+    await _emisorEventos.rolPersonalizado(rol);
     await _sincronizarInmediatoConHub();
     return rol;
   }
@@ -1987,7 +1994,7 @@ class ServicioAdmin {
       throw StateError('Rol personalizado no encontrado');
     }
     await repo.guardar(existente.copiarCon(activo: false));
-    await _registrarEventoRolPersonalizado(existente.copiarCon(activo: false));
+    await _emisorEventos.rolPersonalizado(existente.copiarCon(activo: false));
     await _sincronizarInmediatoConHub();
   }
 
@@ -2332,13 +2339,13 @@ class ServicioAdmin {
       activo: true,
     );
     await repo.guardar(proveedor);
-    await _registrarEventoProveedor(proveedor);
+    await _emisorEventos.proveedor(proveedor);
     return proveedor;
   }
 
   Future<void> actualizarProveedor(Proveedor proveedor) async {
     await _proveedorRepository?.guardar(proveedor);
-    await _registrarEventoProveedor(proveedor);
+    await _emisorEventos.proveedor(proveedor);
   }
 
   /// Elimina un proveedor sin compras registradas.
@@ -2358,7 +2365,7 @@ class ServicioAdmin {
       );
     }
     await repo.eliminar(proveedorId);
-    await _registrarEventoProveedorEliminado(proveedorId);
+    await _emisorEventos.proveedorEliminado(proveedorId);
   }
 
   Future<Proveedor?> obtenerProveedor(String proveedorId) async {
@@ -2598,9 +2605,9 @@ class ServicioAdmin {
     });
 
     for (final producto in productosActualizados) {
-      await _registrarEventoProducto(producto);
+      await _emisorEventos.producto(producto);
     }
-    await _registrarEventoCompra(compra);
+    await _emisorEventos.compra(compra);
     return compra;
   }
 
@@ -2722,7 +2729,7 @@ class ServicioAdmin {
       return false;
     }
     await repo.eliminar(cotizacionId);
-    await _registrarEventoCotizacionEliminada(cotizacionId);
+    await _emisorEventos.cotizacionEliminada(cotizacionId);
     return true;
   }
 
@@ -2792,7 +2799,7 @@ class ServicioAdmin {
       lineas: lineasResueltas,
     );
     await repo.guardar(cotizacion);
-    await _registrarEventoCotizacion(cotizacion);
+    await _emisorEventos.cotizacion(cotizacion);
     return cotizacion;
   }
 
@@ -3215,7 +3222,7 @@ class ServicioAdmin {
     if (turnoActualizado != null) {
       await _servicioCorteCaja?.notificarTurnoActualizado(turnoActualizado!);
     }
-    await _registrarEventoVentaCompletada(venta);
+    await _emisorEventos.ventaCompletada(venta);
     return venta;
   }
 
@@ -3381,7 +3388,7 @@ class ServicioAdmin {
     if (turnoActualizado != null) {
       await _servicioCorteCaja?.notificarTurnoActualizado(turnoActualizado!);
     }
-    await _registrarEventoDevolucionParcial(
+    await _emisorEventos.devolucionParcial(
       venta,
       lineasDevueltas,
       montoDevuelto,
@@ -3428,7 +3435,7 @@ class ServicioAdmin {
     if (turnoActualizado != null) {
       await _servicioCorteCaja?.notificarTurnoActualizado(turnoActualizado!);
     }
-    await _registrarEventoAnulacion(venta);
+    await _emisorEventos.anulacion(venta);
     return true;
   }
 
@@ -3556,13 +3563,13 @@ class ServicioAdmin {
       activa: true,
     );
     await _tiendaRepository.guardar(tienda);
-    await _registrarEventoTienda(tienda);
+    await _emisorEventos.tienda(tienda);
     return tienda;
   }
 
   Future<void> actualizarTienda(Tienda tienda) async {
     await _tiendaRepository.guardar(tienda);
-    await _registrarEventoTienda(tienda);
+    await _emisorEventos.tienda(tienda);
   }
 
   Future<void> desactivarTienda(String tiendaId) async {
@@ -3580,7 +3587,7 @@ class ServicioAdmin {
       radioMetrosAsistencia: tienda.radioMetrosAsistencia,
     );
     await _tiendaRepository.guardar(inactiva);
-    await _registrarEventoTienda(inactiva);
+    await _emisorEventos.tienda(inactiva);
   }
 
   Future<bool> eliminarTienda(String tiendaId) async {
@@ -3833,7 +3840,7 @@ class ServicioAdmin {
       }
       await repo.guardar(traspaso, db: tx);
     });
-    await _registrarEventoTraspaso(traspaso, TipoSyncEvento.transferCompleted);
+    await _emisorEventos.traspaso(traspaso, TipoSyncEvento.transferCompleted);
     return traspaso;
   }
 
@@ -3923,7 +3930,7 @@ class ServicioAdmin {
       }
       await repo.guardar(completado, db: tx);
     });
-    await _registrarEventoTraspaso(
+    await _emisorEventos.traspaso(
       completado,
       TipoSyncEvento.transferCompleted,
     );
@@ -4053,7 +4060,7 @@ class ServicioAdmin {
         db: tx,
       );
     });
-    await _registrarEventoAjusteStock(
+    await _emisorEventos.ajusteStock(
       productoId,
       delta,
       motivoLimpio,
@@ -4196,7 +4203,7 @@ class ServicioAdmin {
     }
     final lista = ListaPrecios(id: _generadorId.v4(), nombre: nombre.trim());
     await repo.guardarLista(lista);
-    await _registrarEventoListaPrecios(lista);
+    await _emisorEventos.listaPrecios(lista);
     return lista;
   }
 
@@ -4216,7 +4223,7 @@ class ServicioAdmin {
       productoId,
       precioRedondeado,
     );
-    await _registrarEventoItemListaPrecios(
+    await _emisorEventos.itemListaPrecios(
       listaId: listaId,
       productoId: productoId,
       precioUnitario: precioRedondeado,
@@ -4319,7 +4326,7 @@ class ServicioAdmin {
 
   Future<void> eliminarListaPrecios(String listaId) async {
     await _precioRepository?.eliminarLista(listaId);
-    await _registrarEventoListaPreciosEliminada(listaId);
+    await _emisorEventos.listaPreciosEliminada(listaId);
   }
 
   Future<List<Cliente>> listarClientesPorLista(String listaId) async {
@@ -4349,7 +4356,7 @@ class ServicioAdmin {
     String productoId,
   ) async {
     await _precioRepository?.eliminarPrecioDeLista(listaId, productoId);
-    await _registrarEventoItemListaPreciosEliminado(
+    await _emisorEventos.itemListaPreciosEliminado(
       listaId: listaId,
       productoId: productoId,
     );
@@ -4362,470 +4369,28 @@ class ServicioAdmin {
     await _productoRepository.establecerFavoritoCaja(productoId, favorito);
     final producto = await _productoRepository.obtenerPorId(productoId);
     if (producto != null) {
-      await _registrarEventoProducto(producto);
+      await _emisorEventos.producto(producto);
     }
-  }
-
-  Future<void> _registrarEventoCategoria(Categoria categoria) async {
-    // Stubs FK ("Categoría") no son catálogo real; no contaminar Neon/categories.
-    if (categoria.esStubFk) {
-      return;
-    }
-    final evento = SyncEvent(
-      id: _idEventoEspejo(TipoSyncEvento.categoryUpserted, categoria.id),
-      tiendaId: _tiendaActivaId,
-      dispositivoId: _cajaId,
-      tipo: TipoSyncEvento.categoryUpserted,
-      payload: {
-        'id': categoria.id,
-        'nombre': categoria.nombre,
-        'icono': categoria.icono,
-        'colorHex': categoria.colorHex,
-        'orden': categoria.orden,
-        'activa': categoria.activa,
-      },
-      creadoEn: DateTime.now().toUtc(),
-      estado: EstadoSyncEvento.pendiente,
-    );
-    await _syncOrchestrator.registrarEvento(evento);
-  }
-
-  Future<void> _registrarEventoRolPersonalizado(RolPersonalizado rol) async {
-    final evento = SyncEvent(
-      id: _idEventoEspejo(TipoSyncEvento.customRoleUpserted, rol.id),
-      tiendaId: _tiendaActivaId,
-      dispositivoId: _cajaId,
-      tipo: TipoSyncEvento.customRoleUpserted,
-      payload: {
-        'id': rol.id,
-        'nombre': rol.nombre,
-        'descripcion': rol.descripcion,
-        'permisosAdmin': rol.permisosAdmin,
-        'categoriasPermitidas': rol.categoriasPermitidas,
-        'activo': rol.activo,
-        'tiendaId': rol.tiendaId,
-      },
-      creadoEn: DateTime.now().toUtc(),
-      estado: EstadoSyncEvento.pendiente,
-    );
-    await _syncOrchestrator.registrarEvento(evento);
-  }
-
-  Future<void> _registrarEventoCliente(Cliente cliente) async {
-    final evento = SyncEvent(
-      id: _idEventoEspejo(TipoSyncEvento.customerUpserted, cliente.id),
-      tiendaId: _tiendaActivaId,
-      dispositivoId: _cajaId,
-      tipo: TipoSyncEvento.customerUpserted,
-      payload: {
-        'id': cliente.id,
-        'nombre': cliente.nombre,
-        'listaPreciosId': cliente.listaPreciosId,
-        'creditoHabilitado': cliente.creditoHabilitado,
-        'activo': cliente.activo,
-        'telefono': cliente.telefono,
-        'email': cliente.email,
-        'rfc': cliente.rfc,
-        'direccion': cliente.direccion,
-        'notas': cliente.notas,
-        'diasCredito': cliente.diasCredito,
-      },
-      creadoEn: DateTime.now().toUtc(),
-      estado: EstadoSyncEvento.pendiente,
-    );
-    await _syncOrchestrator.registrarEvento(evento);
-  }
-
-  Future<void> _registrarEventoProveedor(Proveedor proveedor) async {
-    // Stubs FK ("Proveedor") no son catálogo real; no contaminar Neon/suppliers.
-    if (proveedor.esStubFk) {
-      return;
-    }
-    final evento = SyncEvent(
-      id: _idEventoEspejo(TipoSyncEvento.supplierUpserted, proveedor.id),
-      tiendaId: _tiendaActivaId,
-      dispositivoId: _cajaId,
-      tipo: TipoSyncEvento.supplierUpserted,
-      payload: {
-        'id': proveedor.id,
-        'nombre': proveedor.nombre,
-        'contacto': proveedor.contacto,
-        'telefono': proveedor.telefono,
-        'activo': proveedor.activo,
-        'email': proveedor.email,
-        'rfc': proveedor.rfc,
-        'direccion': proveedor.direccion,
-        'notas': proveedor.notas,
-        'diasCredito': proveedor.diasCredito,
-      },
-      creadoEn: DateTime.now().toUtc(),
-      estado: EstadoSyncEvento.pendiente,
-    );
-    await _syncOrchestrator.registrarEvento(evento);
-  }
-
-  Future<void> _registrarEventoProveedorEliminado(String proveedorId) async {
-    final evento = SyncEvent(
-      id: _generadorId.v4(),
-      tiendaId: _tiendaActivaId,
-      dispositivoId: _cajaId,
-      tipo: TipoSyncEvento.supplierDeleted,
-      payload: {'id': proveedorId},
-      creadoEn: DateTime.now().toUtc(),
-      estado: EstadoSyncEvento.pendiente,
-    );
-    await _syncOrchestrator.registrarEvento(evento);
-  }
-
-  Future<void> _registrarEventoCompra(Compra compra) async {
-    final evento = SyncEvent(
-      id: _idEventoEspejo(TipoSyncEvento.purchaseCompleted, compra.id),
-      tiendaId: (compra.tiendaId != null && compra.tiendaId!.isNotEmpty)
-          ? compra.tiendaId!
-          : _tiendaActivaId,
-      dispositivoId: _cajaId,
-      tipo: TipoSyncEvento.purchaseCompleted,
-      payload: {
-        'id': compra.id,
-        'tiendaId': compra.tiendaId,
-        'proveedorId': compra.proveedorId,
-        'fechaCompra': compra.fechaCompra.toIso8601String(),
-        'notas': compra.notas,
-        'total': compra.total,
-        'creadaEn': compra.creadaEn.toIso8601String(),
-        'creadoPor': compra.creadoPor,
-        'lineas': compra.lineas
-            .map(
-              (l) => {
-                'productoId': l.productoId,
-                'nombreProducto': l.nombreProducto,
-                'cantidad': l.cantidad,
-                'costoUnitario': l.costoUnitario,
-                'subtotal': l.subtotal,
-              },
-            )
-            .toList(),
-        'asignaciones': compra.asignaciones
-            .map(
-              (a) => {
-                'id': a.id,
-                'productoId': a.productoId,
-                'destinoTipo': a.destinoTipo.name,
-                'destinoId': a.destinoId,
-                'cantidad': a.cantidad,
-              },
-            )
-            .toList(),
-      },
-      creadoEn: DateTime.now().toUtc(),
-      estado: EstadoSyncEvento.pendiente,
-    );
-    await _syncOrchestrator.registrarEvento(evento);
-  }
-
-  Future<void> _registrarEventoCotizacion(Cotizacion cotizacion) async {
-    final evento = SyncEvent(
-      id: _generadorId.v4(),
-      tiendaId: cotizacion.tiendaId,
-      dispositivoId: _cajaId,
-      tipo: TipoSyncEvento.quoteUpserted,
-      payload: {
-        'id': cotizacion.id,
-        'tiendaId': cotizacion.tiendaId,
-        'nombre': cotizacion.nombre,
-        'clienteId': cotizacion.clienteId,
-        'nombreCliente': cotizacion.nombreCliente,
-        'total': cotizacion.total,
-        'notas': cotizacion.notas,
-        'vigenciaDias': cotizacion.vigenciaDias,
-        'creadaEn': cotizacion.creadaEn.toIso8601String(),
-        'cajaId': cotizacion.cajaId,
-        'vendedorId': cotizacion.vendedorId,
-        'lineas': cotizacion.lineas
-            .map(
-              (linea) => {
-                'productoId': linea.productoId,
-                'nombreProducto': linea.nombreProducto,
-                'cantidad': linea.cantidad,
-                'precioUnitario': linea.precioUnitario,
-                'reglaPrecio': linea.reglaPrecio.name,
-                'subtotal': linea.subtotal,
-              },
-            )
-            .toList(),
-      },
-      creadoEn: cotizacion.creadaEn,
-      estado: EstadoSyncEvento.pendiente,
-    );
-    await _syncOrchestrator.registrarEvento(evento);
-  }
-
-  Future<void> _registrarEventoCotizacionEliminada(String cotizacionId) async {
-    final evento = SyncEvent(
-      id: _generadorId.v4(),
-      tiendaId: _tiendaActivaId,
-      dispositivoId: _cajaId,
-      tipo: TipoSyncEvento.quoteDeleted,
-      payload: {'id': cotizacionId},
-      creadoEn: DateTime.now().toUtc(),
-      estado: EstadoSyncEvento.pendiente,
-    );
-    await _syncOrchestrator.registrarEvento(evento);
   }
 
   Future<void> _registrarEventoPedido(
     Pedido pedido, {
     bool empujarInmediato = true,
   }) async {
-    final evento = SyncEvent(
-      id: _idEventoEspejo(TipoSyncEvento.orderUpserted, pedido.id),
-      tiendaId: pedido.tiendaId,
-      dispositivoId: _cajaId,
-      tipo: TipoSyncEvento.orderUpserted,
-      payload: {
-        'id': pedido.id,
-        'tiendaId': pedido.tiendaId,
-        'clienteId': pedido.clienteId,
-        'nombreEntrega': pedido.nombreEntrega,
-        'telefonoEntrega': pedido.telefonoEntrega,
-        'direccionEntrega': pedido.direccionEntrega,
-        'esCredito': pedido.esCredito,
-        'creditoDias': pedido.creditoDias,
-        'creditoVenceEn': pedido.creditoVenceEn?.toIso8601String(),
-        'metodoPago': pedido.metodoPago.name,
-        'total': pedido.total,
-        'notas': pedido.notas,
-        'estado': pedido.estado.name,
-        'asignadoAUsuarioId': pedido.asignadoAUsuarioId,
-        'asignadoAUsuarioNombre': pedido.asignadoAUsuarioNombre,
-        'asignadoEn': pedido.asignadoEn?.toIso8601String(),
-        'creadoEn': pedido.creadoEn.toIso8601String(),
-        'creadoPorUsuarioId': pedido.creadoPorUsuarioId,
-        'ventaId': pedido.ventaId,
-        'lineas': pedido.lineas
-            .map(
-              (linea) => {
-                'productoId': linea.productoId,
-                'nombreProducto': linea.nombreProducto,
-                'cantidad': linea.cantidad,
-                'precioUnitario': linea.precioUnitario,
-                'subtotal': linea.subtotal,
-              },
-            )
-            .toList(),
-      },
-      creadoEn: pedido.creadoEn,
-      estado: EstadoSyncEvento.pendiente,
-    );
-    await _syncOrchestrator.registrarEvento(evento);
+    final eventoId = await _emisorEventos.pedido(pedido);
     if (empujarInmediato) {
-      await _syncOrchestrator.sincronizarEventosPorIds([evento.id]);
+      await _syncOrchestrator.sincronizarEventosPorIds([eventoId]);
     }
-  }
-
-  Future<void> _registrarEventoEscalasMayoreo(
-    String productoId,
-    List<EscalaMayoreo> escalas,
-  ) async {
-    // UUID: el log de Neon es append-only; un id espejo fijo deja el primer
-    // payload congelado (ON CONFLICT DO NOTHING) y otras cajas/rebuilds
-    // vuelven a proyectar escalas viejas.
-    final evento = SyncEvent(
-      id: _generadorId.v4(),
-      tiendaId: _tiendaActivaId,
-      dispositivoId: _cajaId,
-      tipo: TipoSyncEvento.wholesaleTiersReplaced,
-      payload: {
-        'productoId': productoId,
-        'escalas': escalas
-            .map(
-              (escala) => {
-                'cantidadMinima': escala.cantidadMinima,
-                'precioUnitario': escala.precioUnitario,
-              },
-            )
-            .toList(),
-      },
-      creadoEn: DateTime.now().toUtc(),
-      estado: EstadoSyncEvento.pendiente,
-    );
-    await _syncOrchestrator.registrarEvento(evento);
   }
 
   Future<void> _registrarEventoLotePromocion(
     LotePromocion lote, {
     bool empujarInmediato = true,
   }) async {
-    final evento = SyncEvent(
-      id: _idEventoEspejo(TipoSyncEvento.lotePromocionReplaced, lote.id),
-      tiendaId: _tiendaActivaId,
-      dispositivoId: _cajaId,
-      tipo: TipoSyncEvento.lotePromocionReplaced,
-      payload: {
-        'id': lote.id,
-        'codigoExterno': lote.codigoExterno,
-        'nombre': lote.nombre,
-        'cantidadMinima': lote.cantidadMinima,
-        'precioUnitario': lote.precioUnitario,
-        'activo': lote.activo,
-        'productoIds': lote.productoIds,
-      },
-      creadoEn: DateTime.now().toUtc(),
-      estado: EstadoSyncEvento.pendiente,
-    );
-    await _syncOrchestrator.registrarEvento(evento);
+    final eventoId = await _emisorEventos.lotePromocion(lote);
     if (empujarInmediato) {
-      await _syncOrchestrator.sincronizarEventosPorIds([evento.id]);
+      await _syncOrchestrator.sincronizarEventosPorIds([eventoId]);
     }
-  }
-
-  Future<void> _registrarEventoListaPrecios(ListaPrecios lista) async {
-    final evento = SyncEvent(
-      id: _idEventoEspejo(TipoSyncEvento.priceListUpserted, lista.id),
-      tiendaId: _tiendaActivaId,
-      dispositivoId: _cajaId,
-      tipo: TipoSyncEvento.priceListUpserted,
-      payload: {'id': lista.id, 'nombre': lista.nombre, 'activa': lista.activa},
-      creadoEn: DateTime.now().toUtc(),
-      estado: EstadoSyncEvento.pendiente,
-    );
-    await _syncOrchestrator.registrarEvento(evento);
-  }
-
-  Future<void> _registrarEventoListaPreciosEliminada(String listaId) async {
-    final evento = SyncEvent(
-      id: _generadorId.v4(),
-      tiendaId: _tiendaActivaId,
-      dispositivoId: _cajaId,
-      tipo: TipoSyncEvento.priceListDeleted,
-      payload: {'id': listaId},
-      creadoEn: DateTime.now().toUtc(),
-      estado: EstadoSyncEvento.pendiente,
-    );
-    await _syncOrchestrator.registrarEvento(evento);
-  }
-
-  Future<void> _registrarEventoItemListaPrecios({
-    required String listaId,
-    required String productoId,
-    required double precioUnitario,
-  }) async {
-    final evento = SyncEvent(
-      id: _idEventoEspejo(
-        TipoSyncEvento.priceListItemUpserted,
-        '$listaId:$productoId',
-      ),
-      tiendaId: _tiendaActivaId,
-      dispositivoId: _cajaId,
-      tipo: TipoSyncEvento.priceListItemUpserted,
-      payload: {
-        'listaPreciosId': listaId,
-        'productoId': productoId,
-        'precioUnitario': precioUnitario,
-      },
-      creadoEn: DateTime.now().toUtc(),
-      estado: EstadoSyncEvento.pendiente,
-    );
-    await _syncOrchestrator.registrarEvento(evento);
-  }
-
-  Future<void> _registrarEventoItemListaPreciosEliminado({
-    required String listaId,
-    required String productoId,
-  }) async {
-    final evento = SyncEvent(
-      id: _generadorId.v4(),
-      tiendaId: _tiendaActivaId,
-      dispositivoId: _cajaId,
-      tipo: TipoSyncEvento.priceListItemDeleted,
-      payload: {'listaPreciosId': listaId, 'productoId': productoId},
-      creadoEn: DateTime.now().toUtc(),
-      estado: EstadoSyncEvento.pendiente,
-    );
-    await _syncOrchestrator.registrarEvento(evento);
-  }
-
-  Future<void> _registrarEventoPrecioClienteProducto({
-    required String clienteId,
-    required String productoId,
-    required double precioUnitario,
-  }) async {
-    final evento = SyncEvent(
-      id: _idEventoEspejo(
-        TipoSyncEvento.customerProductPriceUpserted,
-        '$clienteId:$productoId',
-      ),
-      tiendaId: _tiendaActivaId,
-      dispositivoId: _cajaId,
-      tipo: TipoSyncEvento.customerProductPriceUpserted,
-      payload: {
-        'clienteId': clienteId,
-        'productoId': productoId,
-        'precioUnitario': precioUnitario,
-      },
-      creadoEn: DateTime.now().toUtc(),
-      estado: EstadoSyncEvento.pendiente,
-    );
-    await _syncOrchestrator.registrarEvento(evento);
-  }
-
-  Future<void> _registrarEventoPrecioClienteProductoEliminado({
-    required String clienteId,
-    required String productoId,
-  }) async {
-    final evento = SyncEvent(
-      id: _generadorId.v4(),
-      tiendaId: _tiendaActivaId,
-      dispositivoId: _cajaId,
-      tipo: TipoSyncEvento.customerProductPriceDeleted,
-      payload: {'clienteId': clienteId, 'productoId': productoId},
-      creadoEn: DateTime.now().toUtc(),
-      estado: EstadoSyncEvento.pendiente,
-    );
-    await _syncOrchestrator.registrarEvento(evento);
-  }
-
-  Future<void> _registrarEventoDescuentoCliente(
-    DescuentoCliente descuento,
-  ) async {
-    final evento = SyncEvent(
-      id: _idEventoEspejo(
-        TipoSyncEvento.customerDiscountUpserted,
-        descuento.id,
-      ),
-      tiendaId: _tiendaActivaId,
-      dispositivoId: _cajaId,
-      tipo: TipoSyncEvento.customerDiscountUpserted,
-      payload: {
-        'id': descuento.id,
-        'clienteId': descuento.clienteId,
-        'tipo': descuento.tipo.name,
-        'valor': descuento.valor,
-        'productoId': descuento.productoId,
-        'condicion': descuento.condicion.name,
-        'umbral': descuento.umbral,
-        'activo': descuento.activo,
-        'descripcion': descuento.descripcion,
-      },
-      creadoEn: DateTime.now().toUtc(),
-      estado: EstadoSyncEvento.pendiente,
-    );
-    await _syncOrchestrator.registrarEvento(evento);
-  }
-
-  Future<void> _registrarEventoDescuentoClienteEliminado(
-    String descuentoId,
-  ) async {
-    final evento = SyncEvent(
-      id: _generadorId.v4(),
-      tiendaId: _tiendaActivaId,
-      dispositivoId: _cajaId,
-      tipo: TipoSyncEvento.customerDiscountDeleted,
-      payload: {'id': descuentoId},
-      creadoEn: DateTime.now().toUtc(),
-      estado: EstadoSyncEvento.pendiente,
-    );
-    await _syncOrchestrator.registrarEvento(evento);
   }
 
   Future<void> sincronizarPresentacionesProducto(String productoId) async {
@@ -4834,7 +4399,7 @@ class ServicioAdmin {
       return;
     }
     final presentaciones = await repo.listarPorProducto(productoId);
-    await _registrarEventoPresentacionesReemplazadas(
+    await _emisorEventos.presentacionesReemplazadas(
       productoId,
       presentaciones,
     );
@@ -4854,126 +4419,6 @@ class ServicioAdmin {
     _syncOrchestrator.sincronizarEventosPorIds(idsEmpaque).catchError(
       (Object _) => const ResultadoEnvioHub(exitoso: false),
     );
-  }
-
-  Future<void> _registrarEventoPresentacionesReemplazadas(
-    String productoId,
-    List<PresentacionProducto> presentaciones,
-  ) async {
-    // UUID por cambio: con id espejo fijo Neon conservaba solo el primer
-    // snapshot; empaques/precios nuevos no entraban al log ni a otras cajas.
-    final evento = SyncEvent(
-      id: _generadorId.v4(),
-      tiendaId: _tiendaActivaId,
-      dispositivoId: _cajaId,
-      tipo: TipoSyncEvento.productPresentationsReplaced,
-      payload: {
-        'productoId': productoId,
-        'presentaciones': presentaciones
-            .map(
-              (p) => {
-                'id': p.id,
-                'tipoPresentacionId': p.tipoPresentacionId,
-                'nombre': p.nombre,
-                'factorABase': p.factorABase,
-                'esPresentacionBase': p.esPresentacionBase,
-                'codigoBarras': p.codigoBarras,
-                'precio': p.precio,
-                'activo': p.activo,
-              },
-            )
-            .toList(),
-      },
-      creadoEn: DateTime.now().toUtc(),
-      estado: EstadoSyncEvento.pendiente,
-    );
-    await _syncOrchestrator.registrarEvento(evento);
-  }
-
-  Future<void> _registrarEventoVentaCompletada(Venta venta) async {
-    final evento = SyncEvent(
-      id: _generadorId.v4(),
-      tiendaId: _tiendaActivaId,
-      dispositivoId: _cajaId,
-      tipo: TipoSyncEvento.saleCompleted,
-      payload: {
-        'ventaId': venta.id,
-        'total': venta.total,
-        'metodoPago': venta.metodoPago.name,
-        'clienteId': venta.clienteId,
-        'creditoDias': venta.creditoDias,
-        'creditoVenceEn': venta.creditoVenceEn?.toIso8601String(),
-        'lineas': venta.lineas
-            .map(
-              (linea) => {
-                'productoId': linea.productoId,
-                'nombreProducto': linea.nombreProducto,
-                'cantidad': linea.cantidad,
-                'precioUnitario': linea.precioUnitario,
-                'reglaPrecio': linea.reglaPrecio.name,
-                'loteId': linea.loteId,
-                'etiquetaLote': linea.etiquetaLote,
-              },
-            )
-            .toList(),
-      },
-      creadoEn: venta.creadaEn,
-      estado: EstadoSyncEvento.pendiente,
-    );
-    await _syncOrchestrator.registrarEvento(evento);
-  }
-
-  Future<void> _registrarEventoAnulacion(Venta venta) async {
-    final evento = SyncEvent(
-      id: _generadorId.v4(),
-      tiendaId: _tiendaActivaId,
-      dispositivoId: _cajaId,
-      tipo: TipoSyncEvento.saleVoided,
-      payload: {
-        'ventaId': venta.id,
-        'total': venta.total,
-        'tiendaId': venta.tiendaId,
-      },
-      creadoEn: DateTime.now().toUtc(),
-      estado: EstadoSyncEvento.pendiente,
-    );
-    await _syncOrchestrator.registrarEvento(evento);
-  }
-
-  Future<void> _registrarEventoTraspaso(
-    Traspaso traspaso,
-    TipoSyncEvento tipo, {
-    String? almacenOrigenId,
-    String? almacenDestinoId,
-  }) async {
-    final evento = SyncEvent(
-      id: _generadorId.v4(),
-      tiendaId: _tiendaActivaId,
-      dispositivoId: _cajaId,
-      tipo: tipo,
-      payload: {
-        'traspasoId': traspaso.id,
-        'tiendaOrigenId': traspaso.tiendaOrigenId,
-        'tiendaDestinoId': traspaso.tiendaDestinoId,
-        if (almacenOrigenId != null && almacenOrigenId.isNotEmpty)
-          'almacenOrigenId': almacenOrigenId,
-        if (almacenDestinoId != null && almacenDestinoId.isNotEmpty)
-          'almacenDestinoId': almacenDestinoId,
-        'estado': traspaso.estado.name,
-        'lineas': traspaso.lineas
-            .map(
-              (l) => {
-                'productoId': l.productoId,
-                'cantidadSolicitada': l.cantidadSolicitada,
-                'cantidadRecibida': l.cantidadRecibida,
-              },
-            )
-            .toList(),
-      },
-      creadoEn: DateTime.now().toUtc(),
-      estado: EstadoSyncEvento.pendiente,
-    );
-    await _syncOrchestrator.registrarEvento(evento);
   }
 
   Future<void> _registrarEventoTraspasoAlmacen({
@@ -5020,99 +4465,12 @@ class ServicioAdmin {
     if (repo != null) {
       await repo.guardar(traspaso);
     }
-    await _registrarEventoTraspaso(
+    await _emisorEventos.traspaso(
       traspaso,
       TipoSyncEvento.transferCompleted,
       almacenOrigenId: almacenOrigenId,
       almacenDestinoId: almacenDestinoId,
     );
-  }
-
-  Future<void> _registrarEventoVariante(VarianteProducto variante) async {
-    final evento = SyncEvent(
-      id: _idEventoEspejo(TipoSyncEvento.variantUpserted, variante.id),
-      tiendaId: _tiendaActivaId,
-      dispositivoId: _cajaId,
-      tipo: TipoSyncEvento.variantUpserted,
-      payload: {
-        'id': variante.id,
-        'productoPadreId': variante.productoPadreId,
-        'nombre': variante.nombre,
-        'sku': variante.sku,
-        'codigoBarras': variante.codigoBarras,
-        'precioBase': variante.precioBase,
-        'activo': variante.activo,
-      },
-      creadoEn: DateTime.now().toUtc(),
-      estado: EstadoSyncEvento.pendiente,
-    );
-    await _syncOrchestrator.registrarEvento(evento);
-  }
-
-  Future<void> _registrarEventoAjusteStock(
-    String productoId,
-    double delta,
-    String motivo, {
-    required String tiendaId,
-  }) async {
-    final evento = SyncEvent(
-      id: _generadorId.v4(),
-      tiendaId: tiendaId,
-      dispositivoId: _cajaId,
-      tipo: TipoSyncEvento.stockAdjusted,
-      payload: {'productoId': productoId, 'delta': delta, 'motivo': motivo},
-      creadoEn: DateTime.now().toUtc(),
-      estado: EstadoSyncEvento.pendiente,
-    );
-    await _syncOrchestrator.registrarEvento(evento);
-  }
-
-  Future<void> _registrarEventoDevolucionParcial(
-    Venta venta,
-    List<Map<String, Object?>> lineas,
-    double montoDevuelto,
-  ) async {
-    final evento = SyncEvent(
-      id: _generadorId.v4(),
-      tiendaId: _tiendaActivaId,
-      dispositivoId: _cajaId,
-      tipo: TipoSyncEvento.salePartialReturn,
-      payload: {
-        'ventaId': venta.id,
-        'montoDevuelto': montoDevuelto,
-        'lineas': lineas,
-      },
-      creadoEn: DateTime.now().toUtc(),
-      estado: EstadoSyncEvento.pendiente,
-    );
-    await _syncOrchestrator.registrarEvento(evento);
-  }
-
-  Future<void> _registrarEventoTienda(Tienda tienda) async {
-    // Stubs FK ("Tienda") no son sucursales reales; no contaminar Neon/stores.
-    if (tienda.esStubFk) {
-      return;
-    }
-    final evento = SyncEvent(
-      id: _idEventoEspejo(TipoSyncEvento.storeUpserted, tienda.id),
-      tiendaId: _tiendaActivaId,
-      dispositivoId: _cajaId,
-      tipo: TipoSyncEvento.storeUpserted,
-      payload: {
-        'id': tienda.id,
-        'nombre': tienda.nombre,
-        'direccion': tienda.direccion,
-        'activa': tienda.activa,
-        'latitud': tienda.latitud,
-        'longitud': tienda.longitud,
-        'radioMetros': tienda.radioMetrosAsistencia,
-        // Compatibilidad con eventos/clientes previos.
-        'radioMetrosAsistencia': tienda.radioMetrosAsistencia,
-      },
-      creadoEn: DateTime.now().toUtc(),
-      estado: EstadoSyncEvento.pendiente,
-    );
-    await _syncOrchestrator.registrarEvento(evento);
   }
 
   Future<HubSyncClient?> _clienteHubOpcional() async {
@@ -5181,6 +4539,8 @@ class ServicioAdmin {
     return rolPersonalizado.id;
   }
 
+  /// [usuario.id] debe existir en [_usuarioRepository]: el evento necesita el
+  /// snapshot (pin/timestamps) que no vive en el modelo de dominio.
   Future<void> _registrarEventoUsuario(Usuario usuario) async {
     final repo = _usuarioRepository;
     if (repo == null) {
@@ -5190,70 +4550,7 @@ class ServicioAdmin {
     if (snapshot == null) {
       return;
     }
-    final evento = SyncEvent(
-      id: _idEventoEspejo(TipoSyncEvento.userUpserted, usuario.id),
-      tiendaId: _tiendaActivaId,
-      dispositivoId: _cajaId,
-      tipo: TipoSyncEvento.userUpserted,
-      payload: {
-        'id': usuario.id,
-        'nombre': usuario.nombre,
-        'codigo': usuario.codigo,
-        'rol': usuario.rol.name,
-        'tiendaId': usuario.tiendaId,
-        'rolPersonalizadoId': usuario.rolPersonalizadoId,
-        'activo': usuario.activo,
-        'pinCredencial': snapshot.pinCredencial,
-        'creadoEn': snapshot.creadoEn,
-        'actualizadoEn': snapshot.actualizadoEn,
-      },
-      creadoEn: DateTime.now().toUtc(),
-      estado: EstadoSyncEvento.pendiente,
-    );
-    await _syncOrchestrator.registrarEvento(evento);
-  }
-
-  /// Encola evento productUpserted para replicar catalogo.
-  ///
-  /// [producto] Producto recien guardado.
-  Future<void> _registrarEventoProducto(Producto producto) async {
-    final evento = SyncEvent(
-      id: _idEventoEspejo(TipoSyncEvento.productUpserted, producto.id),
-      tiendaId: _tiendaActivaId,
-      dispositivoId: _cajaId,
-      tipo: TipoSyncEvento.productUpserted,
-      payload: {
-        'id': producto.id,
-        'nombre': producto.nombre,
-        'codigoBarras': producto.codigoBarras,
-        'precioBase': producto.precioBase,
-        'unidadMedida': producto.unidadMedida.name,
-        'rutaImagen': producto.rutaImagen,
-        'activo': producto.activo,
-        'tiendaId': producto.tiendaId,
-        'moduloVertical': producto.moduloVertical.name,
-        'categoriaId': producto.categoriaId,
-        'piezasPorCaja': producto.piezasPorCaja,
-        'unidadesPorBulto': producto.unidadesPorBulto,
-        'proveedorId': producto.proveedorId,
-        'notas': producto.notas,
-        'costoUnitario': producto.costoUnitario,
-        'favoritoCaja': producto.favoritoCaja,
-        'permiteStockNegativo': producto.permiteStockNegativo,
-      },
-      creadoEn: DateTime.now().toUtc(),
-      estado: EstadoSyncEvento.pendiente,
-    );
-    await _syncOrchestrator.registrarEvento(evento);
-  }
-
-  /// Id estable para upserts de catalogo: reencolar reemplaza, no duplica.
-  String _idEventoEspejo(TipoSyncEvento tipo, String claveEntidad) {
-    final clave = claveEntidad.trim();
-    if (clave.isEmpty) {
-      return _generadorId.v4();
-    }
-    return '${tipo.name}:$clave';
+    await _emisorEventos.usuario(usuario, snapshot: snapshot);
   }
 
   // --- Almacenes ---
@@ -5296,7 +4593,7 @@ class ServicioAdmin {
       activo: true,
     );
     await repo.guardar(almacen);
-    await _registrarEventoAlmacen(almacen);
+    await _emisorEventos.almacen(almacen);
     return almacen;
   }
 
@@ -5621,28 +4918,6 @@ class ServicioAdmin {
     );
   }
 
-  Future<void> _registrarEventoAlmacen(Almacen almacen) async {
-    await _syncOrchestrator.registrarEvento(
-      SyncEvent(
-        id: _idEventoEspejo(TipoSyncEvento.warehouseUpserted, almacen.id),
-        tiendaId: _tiendaActivaId,
-        dispositivoId: _cajaId,
-        tipo: TipoSyncEvento.warehouseUpserted,
-        payload: {
-          'id': almacen.id,
-          'nombre': almacen.nombre,
-          'tiendaId': almacen.tiendaId,
-          'activo': almacen.activo,
-          'latitud': almacen.latitud,
-          'longitud': almacen.longitud,
-          'radioMetros': almacen.radioMetros,
-        },
-        creadoEn: DateTime.now().toUtc(),
-        estado: EstadoSyncEvento.pendiente,
-      ),
-    );
-  }
-
   // --- Presentaciones ---
 
   Future<List<TipoPresentacion>> listarTiposPresentacion() async {
@@ -5664,26 +4939,8 @@ class ServicioAdmin {
       activo: true,
     );
     await repo.guardarTipo(tipo);
-    await _registrarEventoTipoPresentacion(tipo);
+    await _emisorEventos.tipoPresentacion(tipo);
     return tipo;
-  }
-
-  Future<void> _registrarEventoTipoPresentacion(TipoPresentacion tipo) async {
-    final evento = SyncEvent(
-      id: _idEventoEspejo(TipoSyncEvento.presentationTypeUpserted, tipo.id),
-      tiendaId: _tiendaActivaId,
-      dispositivoId: _cajaId,
-      tipo: TipoSyncEvento.presentationTypeUpserted,
-      payload: {
-        'id': tipo.id,
-        'nombre': tipo.nombre,
-        'unidad': tipo.unidad,
-        'activo': tipo.activo,
-      },
-      creadoEn: DateTime.now().toUtc(),
-      estado: EstadoSyncEvento.pendiente,
-    );
-    await _syncOrchestrator.registrarEvento(evento);
   }
 
   Future<List<PresentacionProducto>> listarPresentacionesProducto(

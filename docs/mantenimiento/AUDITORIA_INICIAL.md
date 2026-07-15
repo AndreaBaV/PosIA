@@ -238,4 +238,12 @@ Acciones tomadas (autorizadas explícitamente por el usuario):
 - Código: agregado `esStubFk` a `Categoria` y `Tienda` (mismo patrón que `Proveedor`), consultado en `_registrarEventoCategoria`/`_registrarEventoTienda` y en el filtro de `_reencolarCatalogoLocalPendiente`. Corregido `asegurarPadresDeTraspaso` para reconocer traspasos con destino/origen a almacén.
 - `categories` 28→19, `stores` 5→3, `suppliers` sigue en 5 (renombrados, no borrados), `products` se mantiene en 639 (solo se reasignó `categoria_id`, ningún producto se perdió).
 
-Sigue pendiente la Fase 3+ de este documento (modularización de `ServicioAdmin` por dominio) — no se ha empezado.
+### 10.5 Fase 3.1 — Extracción del emisor de eventos sync
+
+Primer paso de la modularización de `ServicioAdmin` (cambio #1 recomendado en la sección 3): se extrajo la construcción de todos los `SyncEvent` a una clase dedicada.
+
+- Nuevo: `packages/posia_database/lib/src/sync/admin_emisor_eventos_sync.dart` — `AdminEmisorEventosSync`, único lugar que arma el payload de cada evento hacia Neon (30 métodos: categoría, rol, cliente, proveedor, compra, cotización, pedido, escalas mayoreo, lote promoción, listas de precios, precios/descuentos de cliente, presentaciones, venta, anulación, devolución parcial, traspaso, variante, ajuste de stock, tienda, usuario, producto, almacén, tipo de presentación). Incluye `_idEventoEspejo` (IDs estables) y los guards `esStubFk` para categoría/proveedor/tienda.
+- `ServicioAdmin` pasó de 5,810 a 5,067 líneas (−743). Queda como fachada: construye `_emisorEventos` en el constructor y delega. Los métodos que mezclan lógica de negocio con emisión (`_registrarEventoUsuario` necesita el snapshot del repositorio; `_registrarEventoPedido`/`_registrarEventoLotePromocion` necesitan empujar inmediato condicionalmente; `_registrarEventoTraspasoAlmacen` arma y persiste el `Traspaso` antes de emitir) se quedaron como wrappers delgados en `ServicioAdmin`, no se forzó su extracción.
+- Verificado: `dart analyze` limpio en `posia_database` y en `apps/posia_pos` (que consume el paquete), 78 tests de `posia_database` en verde.
+
+Sigue pendiente el resto de la Fase 3 (dividir `ServicioAdmin` por dominio: productos, almacenes, usuarios/roles, clientes/precios, compras/proveedores, pedidos/cotizaciones, traspasos, config/reportes) y las Fases 4-6 (UI grande, paquetes satélite, barrido de código muerto).
