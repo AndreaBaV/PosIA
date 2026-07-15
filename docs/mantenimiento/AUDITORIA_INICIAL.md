@@ -364,4 +364,16 @@ Undécimo paso. La sección `// --- Reportes ---` del archivo original mezclaba 
 - `ServicioAdmin` pasó de 3,665 a 3,584 líneas (−81).
 - Verificado: `dart analyze` limpio, 78 tests en verde, `flutter analyze` limpio en `apps/posia_pos`.
 
-Progreso ServicioAdmin: 5,810 → 5,067 → 4,602 → 4,468 → 4,452 → 4,313 → 4,117 → 4,027 → 3,754 → 3,703 → 3,665 → **3,584** líneas (−2,226 desde el inicio, −38%).
+Progreso ServicioAdmin: 5,810 → 5,067 → 4,602 → 4,468 → 4,452 → 4,313 → 4,117 → 4,027 → 3,754 → 3,703 → 3,665 → 3,584 líneas (−2,226 desde el inicio, −38%).
+
+### 10.16 Fase 3.12 — Movimientos de inventario y alertas de faltante
+
+Duodécimo paso: movimientos manuales de stock a nivel tienda (ajuste/salida — las entradas van por Compras), configuración de stock mínimo, y alertas de faltante.
+
+- Nuevo: `packages/posia_database/lib/src/services/admin_inventario_movimientos.dart` — `AdminInventarioMovimientos`. Dueño de `registrarMovimientoInventario`, `listarMovimientosInventario`, `configurarStockMinimo`, `obtenerAlertasFaltantes`.
+- `obtenerServicioCorteCaja()` (sección "Corte de caja") no se tocó: ya era un accesor de una línea a `ServicioCorteCaja`, que es su propia clase desde antes de este refactor.
+- Limpieza: `_movimientoRepository` quedó muerto en `ServicioAdmin` tras esta extracción (ya lo consumían directo `AdminCompras`, `AdminTraspasos` y ahora esta clase) — eliminado.
+- `ServicioAdmin` pasó de 3,584 a 3,474 líneas (−110).
+- Verificado: `dart analyze` limpio, 78 tests en verde, `flutter analyze` limpio en `apps/posia_pos`.
+
+Progreso ServicioAdmin: 5,810 → 5,067 → 4,602 → 4,468 → 4,452 → 4,313 → 4,117 → 4,027 → 3,754 → 3,703 → 3,665 → 3,584 → **3,474** líneas (−2,336 desde el inicio, −40%).

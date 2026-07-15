@@ -65,6 +65,7 @@ import 'admin_catalogo_productos.dart';
 import 'admin_categorias.dart';
 import 'admin_clientes.dart';
 import 'admin_compras.dart';
+import 'admin_inventario_movimientos.dart';
 import 'admin_listas_precios.dart';
 import 'admin_pedidos_cotizaciones.dart';
 import 'admin_proveedores.dart';
@@ -130,7 +131,6 @@ class ServicioAdmin {
        _pedidoRepository = pedidoRepository,
        _cotizacionRepository = cotizacionRepository,
        _precioRepository = precioRepository,
-       _movimientoRepository = movimientoRepository,
        _traspasoRepository = traspasoRepository,
        _almacenRepository = almacenRepository,
        _presentacionRepository = presentacionRepository,
@@ -226,6 +226,15 @@ class ServicioAdmin {
       precioRepository: precioRepository,
       clienteRepository: clienteRepository,
     );
+    _inventarioMovimientos = AdminInventarioMovimientos(
+      inventarioRepository: inventarioRepository,
+      productoRepository: productoRepository,
+      tiendaRepository: tiendaRepository,
+      emisorEventos: _emisorEventos,
+      baseDatos: baseDatos,
+      tiendaActivaId: tiendaActivaId,
+      movimientoRepository: movimientoRepository,
+    );
   }
 
   final TiendaRepository _tiendaRepository;
@@ -243,7 +252,6 @@ class ServicioAdmin {
   final PedidoRepository? _pedidoRepository;
   final CotizacionRepository? _cotizacionRepository;
   final PrecioRepository? _precioRepository;
-  final MovimientoInventarioRepository? _movimientoRepository;
   final TraspasoRepository? _traspasoRepository;
   final AlmacenRepository? _almacenRepository;
   final PresentacionRepository? _presentacionRepository;
@@ -266,6 +274,7 @@ class ServicioAdmin {
   late final AdminVendedores _vendedores;
   late final AdminReportes _reportes;
   late final AdminListasPrecios _listasPrecios;
+  late final AdminInventarioMovimientos _inventarioMovimientos;
   MotorPrecio? _motorPrecioCache;
 
   MotorPrecio? get _motorPrecio {
@@ -2816,99 +2825,26 @@ class ServicioAdmin {
     String? proveedorId,
     String? tiendaId,
     Usuario? operador,
-  }) async {
-    final repo = _movimientoRepository;
-    if (repo == null) {
-      throw StateError('Repositorio de movimientos no configurado');
-    }
-    final tiendaDestino = tiendaId ?? _tiendaActivaId;
-    _validarPermisoTienda(operador, tiendaDestino);
-    if (tipo == TipoMovimientoInventario.entrada) {
-      throw StateError('Registre las entradas en la seccion Compras');
-    }
-    final motivoLimpio = motivo.trim();
-    if (!esMotivoInventarioValido(tipo, motivoLimpio)) {
-      throw StateError('Seleccione un motivo válido del catálogo');
-    }
-    final stockActual = await _inventarioRepository.obtenerStock(
-      productoId,
-      tiendaDestino,
-    );
-    final anterior = stockActual?.cantidad ?? 0.0;
-    double nuevo;
-    double delta;
-    if (tipo == TipoMovimientoInventario.ajuste) {
-      nuevo = cantidad;
-      delta = nuevo - anterior;
-    } else if (tipo == TipoMovimientoInventario.salida) {
-      if (anterior < cantidad) {
-        throw StateError('Stock insuficiente');
-      }
-      nuevo = anterior - cantidad;
-      delta = -cantidad;
-    } else {
-      nuevo = anterior + cantidad;
-      delta = cantidad;
-    }
-    final ahora = DateTime.now().toUtc();
-    await _enTransaccion((tx) async {
-      final stockEnTx = await _inventarioRepository.obtenerStock(
-        productoId,
-        tiendaDestino,
-        db: tx,
-      );
-      final baseAnterior = stockEnTx?.cantidad ?? anterior;
-      final cantidadFinal = tipo == TipoMovimientoInventario.ajuste
-          ? cantidad
-          : baseAnterior + delta;
-      await _inventarioRepository.guardarStock(
-        StockNivel(
-          productoId: productoId,
-          tiendaId: tiendaDestino,
-          cantidad: cantidadFinal,
-          actualizadoEn: ahora,
-          stockMinimo:
-              stockEnTx?.stockMinimo ?? stockActual?.stockMinimo ?? 0.0,
-        ),
-        db: tx,
-      );
-      await repo.guardar(
-        MovimientoInventario(
-          id: _generadorId.v4(),
-          productoId: productoId,
-          tiendaId: tiendaDestino,
-          tipo: tipo,
-          cantidad: cantidad,
-          cantidadAnterior: baseAnterior,
-          cantidadNueva: cantidadFinal,
-          motivo: motivoLimpio,
-          referenciaId: null,
-          proveedorId: proveedorId,
-          creadoEn: ahora,
-          creadoPor: operador?.id,
-        ),
-        db: tx,
-      );
-    });
-    await _emisorEventos.ajusteStock(
-      productoId,
-      delta,
-      motivoLimpio,
-      tiendaId: tiendaDestino,
+  }) {
+    return _inventarioMovimientos.registrarMovimientoInventario(
+      productoId: productoId,
+      tipo: tipo,
+      cantidad: cantidad,
+      motivo: motivo,
+      proveedorId: proveedorId,
+      tiendaId: tiendaId,
+      operador: operador,
     );
   }
 
   Future<List<MovimientoInventario>> listarMovimientosInventario({
     String? tiendaId,
     Usuario? operador,
-  }) async {
-    final repo = _movimientoRepository;
-    if (repo == null) {
-      return [];
-    }
-    final tiendaDestino = tiendaId ?? operador?.tiendaId ?? _tiendaActivaId;
-    _validarPermisoTienda(operador, tiendaDestino);
-    return repo.listarPorTienda(tiendaDestino);
+  }) {
+    return _inventarioMovimientos.listarMovimientosInventario(
+      tiendaId: tiendaId,
+      operador: operador,
+    );
   }
 
   Future<void> configurarStockMinimo(
@@ -2916,63 +2852,17 @@ class ServicioAdmin {
     double stockMinimo, {
     String? tiendaId,
     Usuario? operador,
-  }) async {
-    final tiendaDestino = tiendaId ?? _tiendaActivaId;
-    _validarPermisoTienda(operador, tiendaDestino);
-    final stock = await _inventarioRepository.obtenerStock(
+  }) {
+    return _inventarioMovimientos.configurarStockMinimo(
       productoId,
-      tiendaDestino,
-    );
-    if (stock == null) {
-      final ahora = DateTime.now().toUtc();
-      await _inventarioRepository.guardarStock(
-        StockNivel(
-          productoId: productoId,
-          tiendaId: tiendaDestino,
-          cantidad: 0.0,
-          actualizadoEn: ahora,
-          stockMinimo: stockMinimo,
-        ),
-      );
-      return;
-    }
-    await _inventarioRepository.guardarStock(
-      StockNivel(
-        productoId: productoId,
-        tiendaId: tiendaDestino,
-        cantidad: stock.cantidad,
-        actualizadoEn: stock.actualizadoEn,
-        stockMinimo: stockMinimo,
-      ),
+      stockMinimo,
+      tiendaId: tiendaId,
+      operador: operador,
     );
   }
 
-  Future<List<AlertaFaltante>> obtenerAlertasFaltantes({
-    String? tiendaId,
-  }) async {
-    final tiendas = await _tiendaRepository.listarActivas();
-    final ids = tiendaId != null
-        ? [tiendaId]
-        : tiendas.map((t) => t.id).toList();
-    final alertas = <AlertaFaltante>[];
-    for (final id in ids) {
-      final bajoMinimo = await _inventarioRepository.listarBajoMinimo(id);
-      final productos = await _productoRepository.listarActivosPorTienda(id);
-      final nombres = {for (final p in productos) p.id: p.nombre};
-      alertas.addAll(
-        bajoMinimo.map(
-          (stock) => AlertaFaltante(
-            productoId: stock.productoId,
-            nombreProducto: nombres[stock.productoId] ?? stock.productoId,
-            cantidadActual: stock.cantidad,
-            stockMinimo: stock.stockMinimo,
-            tiendaId: stock.tiendaId,
-          ),
-        ),
-      );
-    }
-    alertas.sort((a, b) => a.cantidadActual.compareTo(b.cantidadActual));
-    return alertas;
+  Future<List<AlertaFaltante>> obtenerAlertasFaltantes({String? tiendaId}) {
+    return _inventarioMovimientos.obtenerAlertasFaltantes(tiendaId: tiendaId);
   }
 
   // --- Reportes ---
