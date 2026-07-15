@@ -68,6 +68,7 @@ import 'admin_compras.dart';
 import 'admin_pedidos_cotizaciones.dart';
 import 'admin_proveedores.dart';
 import 'admin_traspasos.dart';
+import 'admin_vendedores.dart';
 import 'servicio_corte_caja.dart';
 
 /// Coordina operaciones del panel de administracion minimalista.
@@ -210,6 +211,7 @@ class ServicioAdmin {
       emisorEventos: _emisorEventos,
       categoriaRepository: categoriaRepository,
     );
+    _vendedores = AdminVendedores(vendedorRepository: vendedorRepository);
   }
 
   final TiendaRepository _tiendaRepository;
@@ -247,6 +249,7 @@ class ServicioAdmin {
   late final AdminPedidosCotizaciones _pedidosCotizaciones;
   late final AdminTraspasos _traspasos;
   late final AdminCategorias _categorias;
+  late final AdminVendedores _vendedores;
   MotorPrecio? _motorPrecioCache;
 
   MotorPrecio? get _motorPrecio {
@@ -1261,53 +1264,12 @@ class ServicioAdmin {
 
   // --- Vendedores ---
 
-  Future<List<Vendedor>> listarVendedores({Usuario? operador}) async {
-    final repo = _vendedorRepository;
-    if (repo == null) {
-      return [];
-    }
-    if (operador == null ||
-        PermisosUsuario.puedeGestionarTodasLasTiendas(operador)) {
-      return repo.listarTodos();
-    }
-    return repo.listarTodos(tiendaId: operador.tiendaId);
+  Future<List<Vendedor>> listarVendedores({Usuario? operador}) {
+    return _vendedores.listarVendedores(operador: operador);
   }
 
-  Future<Vendedor> registrarVendedor({
-    required String nombre,
-    String? tiendaId,
-    Usuario? operador,
-  }) async {
-    throw StateError(
-      'Use registrarUsuario para dar de alta personal. '
-      'Cada cuenta crea automaticamente su vendedor al iniciar sesion.',
-    );
-  }
-
-  Future<void> actualizarVendedor(
-    Vendedor vendedor, {
-    Usuario? operador,
-  }) async {
-    final repo = _vendedorRepository;
-    if (repo == null) {
-      return;
-    }
-    final existente = await repo.obtenerPorId(vendedor.id);
-    if (existente == null) {
-      return;
-    }
-    if (operador != null &&
-        !PermisosUsuario.puedeGestionarTodasLasTiendas(operador) &&
-        existente.tiendaId != operador.tiendaId) {
-      throw StateError('Sin permiso para editar este vendedor');
-    }
-    await repo.guardar(
-      vendedor.copiarCon(
-        nombre: vendedor.nombre.trim(),
-        codigo: existente.codigo,
-        tiendaId: existente.tiendaId,
-      ),
-    );
+  Future<void> actualizarVendedor(Vendedor vendedor, {Usuario? operador}) {
+    return _vendedores.actualizarVendedor(vendedor, operador: operador);
   }
 
   // --- Usuarios ---

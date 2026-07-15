@@ -340,4 +340,15 @@ Noveno paso: dos dominios chicos, ambos satélites de Producto.
 - `ServicioAdmin` pasó de 3,754 a 3,703 líneas (−51; la mayoría de las líneas de estos dominios ya se habían movido o eran delegación mínima).
 - Verificado: `dart analyze` limpio, 78 tests en verde, `flutter analyze` limpio en `apps/posia_pos`.
 
-Progreso ServicioAdmin: 5,810 → 5,067 → 4,602 → 4,468 → 4,452 → 4,313 → 4,117 → 4,027 → 3,754 → **3,703** líneas (−2,107 desde el inicio, −36%).
+Progreso ServicioAdmin: 5,810 → 5,067 → 4,602 → 4,468 → 4,452 → 4,313 → 4,117 → 4,027 → 3,754 → 3,703 líneas (−2,107 desde el inicio, −36%).
+
+### 10.14 Fase 3.10 — Vendedores + primer código muerto real eliminado
+
+Décimo paso: dominio Vendedores (proyección local de usuarios para UX de caja, `soloLocal` — nunca se sincroniza a Neon).
+
+- Nuevo: `packages/posia_database/lib/src/services/admin_vendedores.dart` — `AdminVendedores`. Dueño de `listarVendedores`, `actualizarVendedor`.
+- **`registrarVendedor` se eliminó por completo** (no se movió): el cuerpo del método siempre lanzaba `StateError` ("Use registrarUsuario...") — era un stub deprecado. Se confirmó con `grep` en todo el repo que ningún caller lo invoca (ni pantallas, ni providers, ni el propio `ServicioAdmin`). Primer caso real de "método muerto" encontrado y removido en esta refactorización, no solo movido.
+- `ServicioAdmin` pasó de 3,703 a 3,665 líneas (−38).
+- Verificado: `dart analyze` limpio, 78 tests en verde, `flutter analyze` limpio en `apps/posia_pos` (confirma que quitar `registrarVendedor` de la API pública no rompió nada).
+
+Progreso ServicioAdmin: 5,810 → 5,067 → 4,602 → 4,468 → 4,452 → 4,313 → 4,117 → 4,027 → 3,754 → 3,703 → **3,665** líneas (−2,145 desde el inicio, −37%).
