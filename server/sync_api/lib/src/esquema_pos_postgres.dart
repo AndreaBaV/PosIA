@@ -273,6 +273,26 @@ class EsquemaPosPostgres {
 			ON lote_promocion_miembros(producto_id)
 		''');
 		await conexion.execute('''
+			CREATE TABLE IF NOT EXISTS combos (
+				id TEXT PRIMARY KEY,
+				nombre TEXT NOT NULL DEFAULT '',
+				precio_combo DOUBLE PRECISION NOT NULL,
+				activo INTEGER NOT NULL DEFAULT 1
+			)
+		''');
+		await conexion.execute('''
+			CREATE TABLE IF NOT EXISTS combo_miembros (
+				combo_id TEXT NOT NULL,
+				producto_id TEXT NOT NULL,
+				cantidad_requerida DOUBLE PRECISION NOT NULL DEFAULT 1,
+				PRIMARY KEY (combo_id, producto_id)
+			)
+		''');
+		await conexion.execute('''
+			CREATE INDEX IF NOT EXISTS idx_combo_miembros_producto
+			ON combo_miembros(producto_id)
+		''');
+		await conexion.execute('''
 			CREATE TABLE IF NOT EXISTS price_lists (
 				id TEXT PRIMARY KEY,
 				nombre TEXT NOT NULL,
@@ -752,6 +772,16 @@ class EsquemaPosPostgres {
 			(
 				'lote_promocion_miembros',
 				'fk_lote_miembros_producto',
+				'FOREIGN KEY (producto_id) REFERENCES products(id) ON DELETE CASCADE',
+			),
+			(
+				'combo_miembros',
+				'fk_combo_miembros_combo',
+				'FOREIGN KEY (combo_id) REFERENCES combos(id) ON DELETE CASCADE',
+			),
+			(
+				'combo_miembros',
+				'fk_combo_miembros_producto',
 				'FOREIGN KEY (producto_id) REFERENCES products(id) ON DELETE CASCADE',
 			),
 			(

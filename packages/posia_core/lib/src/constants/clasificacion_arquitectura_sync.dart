@@ -489,6 +489,12 @@ abstract final class ClasificacionArquitecturaSync {
 			tablasAfectadas: ['lotes_promocion', 'lote_promocion_miembros'],
 		),
 		ContratoEventoSync(
+			tipo: TipoSyncEvento.comboReplaced,
+			politica: PoliticaEventoSync.activo,
+			motivo: 'Combo de precio fijo',
+			tablasAfectadas: ['combos', 'combo_miembros'],
+		),
+		ContratoEventoSync(
 			tipo: TipoSyncEvento.productPresentationsReplaced,
 			politica: PoliticaEventoSync.activo,
 			motivo: 'Reemplazo atomico de empaques',

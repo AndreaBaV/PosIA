@@ -25,6 +25,7 @@ import '../screens/pantalla_movimientos_inventario.dart';
 import '../screens/pantalla_nomina_admin.dart';
 import '../screens/pantalla_pedidos_admin.dart';
 import '../screens/pantalla_productos_admin.dart';
+import '../screens/pantalla_promociones_admin.dart';
 import '../screens/pantalla_proveedores_admin.dart';
 import '../screens/pantalla_reportes_admin.dart';
 import '../screens/pantalla_roles_personalizados_admin.dart';
@@ -293,6 +294,19 @@ List<EntradaMenuAdmin> construirCatalogoMenuAdmin(
 			palabrasClave: [
 				'lista precios', 'mayoreo', 'menudeo', 'distribuidor', 'precio especial',
 				'cliente', 'descuento lista',
+			],
+		),
+		EntradaMenuAdmin(
+			clave: 'promociones',
+			seccion: 'Catálogo',
+			titulo: 'Promociones',
+			subtitulo: 'Lotes de mayoreo y combos',
+			icono: Icons.local_offer,
+			color: Colors.pink,
+			destino: PantallaPromocionesAdmin(),
+			palabrasClave: [
+				'promocion', 'lote', 'mayoreo', 'combo', 'oferta', 'descuento',
+				'kit', 'paquete', 'sopas', 'familia', 'variantes',
 			],
 		),
 		EntradaMenuAdmin(

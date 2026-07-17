@@ -125,4 +125,7 @@ enum TipoSyncEvento {
 
 	/// Descuento comercial de cliente eliminado.
 	customerDiscountDeleted,
+
+	/// Combo de precio fijo creado o reemplazado (miembros incluidos).
+	comboReplaced,
 }

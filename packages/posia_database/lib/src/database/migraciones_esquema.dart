@@ -609,6 +609,7 @@ class MigracionesEsquema {
 		// Install fresco: FKs reales (cola vacia). Upgrade usa fase 2 en open.
 		await migrarVersion32A33(base);
 		await migrarVersion33A34(base);
+		await migrarVersion34A35(base);
 	}
 
 	/// Tabla guia `ejemplo` en bases ya existentes (v10 → v11).
@@ -1328,6 +1329,30 @@ class MigracionesEsquema {
 		} finally {
 			await base.execute('PRAGMA foreign_keys = ON');
 		}
+	}
+
+	/// v6.35: combos de precio fijo (llevar productos distintos a precio total).
+	static Future<void> migrarVersion34A35(Database base) async {
+		await base.execute('''
+			CREATE TABLE IF NOT EXISTS combos (
+				id TEXT PRIMARY KEY,
+				nombre TEXT NOT NULL DEFAULT '',
+				precio_combo REAL NOT NULL,
+				activo INTEGER NOT NULL DEFAULT 1
+			)
+		''');
+		await base.execute('''
+			CREATE TABLE IF NOT EXISTS combo_miembros (
+				combo_id TEXT NOT NULL REFERENCES combos(id) ON DELETE CASCADE,
+				producto_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+				cantidad_requerida REAL NOT NULL DEFAULT 1,
+				PRIMARY KEY (combo_id, producto_id)
+			)
+		''');
+		await base.execute('''
+			CREATE INDEX IF NOT EXISTS idx_combo_miembros_producto
+			ON combo_miembros(producto_id)
+		''');
 	}
 
 	/// v6.23: codigo de barras unico por tienda entre productos activos.

@@ -55,6 +55,8 @@ class ProyectorEventosPostgres {
         await _escalasMayoreo(evento);
       case 'lotePromocionReplaced':
         await _lotePromocion(evento);
+      case 'comboReplaced':
+        await _combo(evento);
       case 'priceListUpserted':
         await _listaPrecios(evento);
       case 'priceListDeleted':
@@ -1231,6 +1233,61 @@ class ProyectorEventosPostgres {
 					ON CONFLICT (lote_id, producto_id) DO NOTHING
 				'''),
         parameters: {'lote': id, 'producto': productoId},
+      );
+    }
+  }
+
+  Future<void> _combo(EventoHub evento) async {
+    final p = evento.payload;
+    final id = p['id'] as String? ?? '';
+    if (id.isEmpty) {
+      return;
+    }
+    await _sesion.execute(
+      Sql.named('''
+				INSERT INTO combos (id, nombre, precio_combo, activo)
+				VALUES (@id, @nombre, @precio, @activo)
+				ON CONFLICT (id) DO UPDATE SET
+					nombre = EXCLUDED.nombre,
+					precio_combo = EXCLUDED.precio_combo,
+					activo = EXCLUDED.activo
+			'''),
+      parameters: {
+        'id': id,
+        'nombre': p['nombre'] ?? '',
+        'precio': _dbl(p['precioCombo']),
+        'activo': _boolInt(p['activo'], defaultValue: true),
+      },
+    );
+    await _sesion.execute(
+      Sql.named('DELETE FROM combo_miembros WHERE combo_id = @id'),
+      parameters: {'id': id},
+    );
+    final miembros = p['miembros'];
+    if (miembros is! List) {
+      return;
+    }
+    for (final crudo in miembros) {
+      if (crudo is! Map) {
+        continue;
+      }
+      final productoId = crudo['productoId']?.toString() ?? '';
+      if (productoId.isEmpty) {
+        continue;
+      }
+      final cantidadRequerida = _dbl(crudo['cantidadRequerida']);
+      await _sesion.execute(
+        Sql.named('''
+					INSERT INTO combo_miembros (combo_id, producto_id, cantidad_requerida)
+					VALUES (@combo, @producto, @cantidad)
+					ON CONFLICT (combo_id, producto_id) DO UPDATE SET
+						cantidad_requerida = EXCLUDED.cantidad_requerida
+				'''),
+        parameters: {
+          'combo': id,
+          'producto': productoId,
+          'cantidad': cantidadRequerida == 0 ? 1.0 : cantidadRequerida,
+        },
       );
     }
   }

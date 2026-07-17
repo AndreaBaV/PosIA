@@ -265,6 +265,24 @@ void invalidarListasPrecios(WidgetRef ref) {
 	ref.invalidate(detalleListaPreciosProvider);
 }
 
+/// Lotes de promocion (mayoreo cruzado entre productos) para administracion.
+final lotesPromocionAdminProvider = FutureProvider<List<LotePromocion>>((ref) async {
+	final servicio = await ref.watch(servicioAdminProvider.future);
+	return servicio.listarLotesPromocion();
+});
+
+/// Combos de precio fijo para administracion.
+final combosAdminProvider = FutureProvider<List<Combo>>((ref) async {
+	final servicio = await ref.watch(servicioAdminProvider.future);
+	return servicio.listarCombos();
+});
+
+/// Invalida cache de promociones (lotes y combos) tras cambios.
+void invalidarPromociones(WidgetRef ref) {
+	ref.invalidate(lotesPromocionAdminProvider);
+	ref.invalidate(combosAdminProvider);
+}
+
 /// Clientes para administracion.
 final clientesAdminProvider = FutureProvider<List<Cliente>>((ref) async {
 	final servicio = await ref.watch(servicioAdminProvider.future);

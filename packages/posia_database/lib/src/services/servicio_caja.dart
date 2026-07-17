@@ -17,6 +17,7 @@ import 'package:uuid/uuid.dart';
 
 import '../repositories/categoria_repository.dart';
 import '../repositories/cliente_repository.dart';
+import '../repositories/combo_repository.dart';
 import '../repositories/cotizacion_repository.dart';
 import '../repositories/inventario_repository.dart';
 import '../repositories/lote_farmacia_repository.dart';
@@ -50,6 +51,7 @@ class ServicioCaja {
     required InventarioRepository inventarioRepository,
     LoteFarmaciaRepository? loteFarmaciaRepository,
     LotePromocionRepository? lotePromocionRepository,
+    ComboRepository? comboRepository,
     required Database baseDatos,
     VarianteRepository? varianteRepository,
     PresentacionRepository? presentacionRepository,
@@ -72,6 +74,7 @@ class ServicioCaja {
        _loteFarmaciaRepository = loteFarmaciaRepository,
        _lotePromocionRepository = lotePromocionRepository ??
            LotePromocionRepository(baseDatos: baseDatos),
+       _comboRepository = comboRepository ?? ComboRepository(baseDatos: baseDatos),
        _baseDatos = baseDatos,
        _varianteRepository = varianteRepository,
        _presentacionRepository = presentacionRepository,
@@ -94,6 +97,7 @@ class ServicioCaja {
   final InventarioRepository _inventarioRepository;
   final LoteFarmaciaRepository? _loteFarmaciaRepository;
   final LotePromocionRepository _lotePromocionRepository;
+  final ComboRepository _comboRepository;
   final Database _baseDatos;
   final VarianteRepository? _varianteRepository;
   final PresentacionRepository? _presentacionRepository;
@@ -116,6 +120,7 @@ class ServicioCaja {
   Cliente? _clienteActivo;
   Vendedor? _vendedorActivo;
   double _descuentoTicket = 0.0;
+  double _descuentoCombos = 0.0;
   final Uuid _generadorId = const Uuid();
 
   /// Expone servicio de carniceria para UI especializada.
@@ -486,6 +491,7 @@ class ServicioCaja {
         _lineasCarrito[indice].producto.id;
     _lineasCarrito.removeAt(indice);
     await _recalcularPreciosLotePromocion(productoId);
+    await _recalcularDescuentoCombos();
     _ajustarDescuentoTicketAlCarrito();
   }
 
@@ -574,6 +580,7 @@ class ServicioCaja {
     if (linea.reglaPrecio != ReglaPrecio.precioManual) {
       await _recalcularPreciosLotePromocion(productoId);
     }
+    await _recalcularDescuentoCombos();
 
     final actual = _lineasCarrito[indice];
     final maxDescuento = calcularDescuentoMaximoLinea(actual);
@@ -632,6 +639,7 @@ class ServicioCaja {
     _lineasCarrito.clear();
     _clienteActivo = null;
     _descuentoTicket = 0.0;
+    _descuentoCombos = 0.0;
   }
 
   /// Lista tickets apartados en esta tienda y caja.
@@ -709,6 +717,7 @@ class ServicioCaja {
     }
     _descuentoTicket = redondearMonto(ticket.descuentoTicket);
     _ajustarDescuentoTicketAlCarrito();
+    await _recalcularDescuentoCombos();
     await repo.eliminar(ticketId);
   }
 
@@ -729,7 +738,7 @@ class ServicioCaja {
   /// Retorna monto total redondeado en MXN.
   double calcularTotalCarrito() {
     final subtotal = calcularSubtotalConDescuentosLinea(_lineasCarrito);
-    final neto = subtotal - _descuentoTicket;
+    final neto = subtotal - _descuentoTicket - _descuentoCombos;
     return redondearMonto(neto < 0.0 ? 0.0 : neto);
   }
 
@@ -759,9 +768,12 @@ class ServicioCaja {
           ),
         )
         .toList();
+    final descuentoTicketConCombos = redondearMonto(
+      _descuentoTicket + _descuentoCombos,
+    );
     final total = Venta.calcularTotalDesdeLineas(
       lineasVenta,
-      descuentoTicket: _descuentoTicket,
+      descuentoTicket: descuentoTicketConCombos,
     );
     double? montoEfectivo;
     double? montoTarjeta;
@@ -802,7 +814,7 @@ class ServicioCaja {
       creadaEn: DateTime.now().toUtc(),
       vendedorId: _vendedorActivo?.id,
       turnoCajaId: turno?.id,
-      descuentoTicket: _descuentoTicket,
+      descuentoTicket: descuentoTicketConCombos,
       montoEfectivo: montoEfectivo,
       montoTarjeta: montoTarjeta,
       montoTransferencia: montoTransferencia,
@@ -1050,6 +1062,7 @@ class ServicioCaja {
                   lineaActual.etiquetaLote,
             );
             await _recalcularPreciosLotePromocion(idPrecio);
+            await _recalcularDescuentoCombos();
             return;
           }
           _lineasCarrito[indiceExistente] = lineaActual.copiarCon(
@@ -1058,6 +1071,7 @@ class ServicioCaja {
                 lineaActual.etiquetaLote,
           );
           await _recalcularPreciosLotePromocion(idPrecio);
+          await _recalcularDescuentoCombos();
           return;
         }
       }
@@ -1075,6 +1089,7 @@ class ServicioCaja {
       ),
     );
     await _recalcularPreciosLotePromocion(idPrecio);
+    await _recalcularDescuentoCombos();
   }
 
   Future<void> _sincronizarClienteEnCarrito() async {
@@ -1158,6 +1173,26 @@ class ServicioCaja {
         reglaPrecio: resultado.reglaAplicada,
       );
     }
+  }
+
+  /// Recalcula el descuento total por combos completos en el carrito actual.
+  ///
+  /// A diferencia de lotes de promocion (un solo producto/familia), un combo
+  /// depende de multiples productos a la vez, asi que se recalcula sobre
+  /// todo el carrito en cada mutacion en vez de estar acotado a un SKU.
+  Future<void> _recalcularDescuentoCombos() async {
+    final activos = await _comboRepository.listarActivos();
+    _descuentoCombos = calcularDescuentoCombos(activos, _lineasCarrito);
+  }
+
+  /// Descuento total (MXN) por combos completos en el carrito activo.
+  double obtenerDescuentoCombos() => _descuentoCombos;
+
+  /// Combos que completaron al menos un set en el carrito activo, para
+  /// mostrar en la UI cuales aplicaron y cuanto ahorraron.
+  Future<List<ComboAplicado>> obtenerCombosAplicadosEnCarrito() async {
+    final activos = await _comboRepository.listarActivos();
+    return combosAplicadosEnCarrito(activos, _lineasCarrito);
   }
 
   Future<double> _cantidadParaEscalaLinea(LineaCarrito linea) async {

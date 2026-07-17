@@ -547,6 +547,36 @@ class AseguradorPadresFk {
 		}
 		final tienda = tiendaId?.trim().isNotEmpty == true ? tiendaId!.trim() : _tiendaSync;
 		await asegurarTienda(tienda);
+		final variante = await _variantePorId(productoId);
+		if (variante != null) {
+			// El carrito ya trata el id de una variante como si fuera un
+			// producto (ver ServicioCaja.agregarVariante) — el stub FK debe
+			// reflejar los datos reales de la variante, no un placeholder en
+			// blanco, para no ensuciar el catalogo con "Producto" genericos.
+			final nombrePadre = await _nombreProducto(variante['producto_padre_id']! as String);
+			await _baseDatos.insert(
+				'products',
+				{
+					'id': productoId,
+					'nombre': nombrePadre != null
+						? '$nombrePadre - ${variante['nombre']}'
+						: variante['nombre'] as String,
+					'codigo_barras': variante['codigo_barras'],
+					'precio_base': variante['precio_base'],
+					'unidad_medida': UnidadMedida.pieza.name,
+					'ruta_imagen': '',
+					'activo': variante['activo'],
+					'tienda_id': tienda,
+					'modulo_vertical': ModuloVertical.general.name,
+					'notas': '',
+					'costo_unitario': 0.0,
+					'favorito_caja': 0,
+					'permite_stock_negativo': 1,
+				},
+				conflictAlgorithm: ConflictAlgorithm.ignore,
+			);
+			return;
+		}
 		await _baseDatos.insert(
 			'products',
 			{
@@ -566,6 +596,27 @@ class AseguradorPadresFk {
 			},
 			conflictAlgorithm: ConflictAlgorithm.ignore,
 		);
+	}
+
+	Future<Map<String, Object?>?> _variantePorId(String id) async {
+		final filas = await _baseDatos.query(
+			'product_variants',
+			where: 'id = ?',
+			whereArgs: [id],
+			limit: 1,
+		);
+		return filas.isEmpty ? null : filas.first;
+	}
+
+	Future<String?> _nombreProducto(String productoId) async {
+		final filas = await _baseDatos.query(
+			'products',
+			columns: ['nombre'],
+			where: 'id = ?',
+			whereArgs: [productoId],
+			limit: 1,
+		);
+		return filas.isEmpty ? null : filas.first['nombre'] as String?;
 	}
 
 	Future<void> asegurarLoteFarmacia(
@@ -740,6 +791,32 @@ class AseguradorPadresFk {
 		await asegurarLotePromocion(lote.id);
 		for (final productoId in lote.productoIds) {
 			await asegurarProducto(productoId);
+		}
+	}
+
+	Future<void> asegurarCombo(String? comboId) async {
+		if (comboId == null || comboId.trim().isEmpty) {
+			return;
+		}
+		if (await _existe('combos', comboId)) {
+			return;
+		}
+		await _baseDatos.insert(
+			'combos',
+			{
+				'id': comboId,
+				'nombre': 'Combo',
+				'precio_combo': 0.0,
+				'activo': 1,
+			},
+			conflictAlgorithm: ConflictAlgorithm.ignore,
+		);
+	}
+
+	Future<void> asegurarPadresDeCombo(Combo combo) async {
+		await asegurarCombo(combo.id);
+		for (final miembro in combo.miembros) {
+			await asegurarProducto(miembro.productoId);
 		}
 	}
 

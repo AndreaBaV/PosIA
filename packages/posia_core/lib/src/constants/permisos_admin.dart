@@ -23,6 +23,7 @@ class PermisosAdmin {
 	static const importarProductos = 'importar_productos';
 	static const claveEtiquetas = 'etiquetas';
 	static const precios = 'precios';
+	static const promociones = 'promociones';
 
 	static const existencias = 'existencias';
 	static const compras = 'compras';
@@ -56,6 +57,7 @@ class PermisosAdmin {
 		importarProductos,
 		claveEtiquetas,
 		precios,
+		promociones,
 		existencias,
 		compras,
 		movimientos,
@@ -86,6 +88,7 @@ class PermisosAdmin {
 		importarProductos: 'Importar productos',
 		claveEtiquetas: 'Etiquetas',
 		precios: 'Listas de precios',
+		promociones: 'Promociones',
 		existencias: 'Existencias',
 		compras: 'Compras',
 		movimientos: 'Movimientos',
@@ -110,6 +113,7 @@ class PermisosAdmin {
 			importarProductos,
 			claveEtiquetas,
 			precios,
+			promociones,
 		],
 		'Inventario': [
 			existencias,

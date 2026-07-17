@@ -33,6 +33,7 @@ import '../models/stock_por_tienda.dart';
 import '../models/stock_por_almacen.dart';
 import '../repositories/categoria_repository.dart';
 import '../repositories/cliente_repository.dart';
+import '../repositories/combo_repository.dart';
 import '../repositories/compra_repository.dart';
 import '../repositories/config_repository.dart';
 import '../repositories/cotizacion_repository.dart';
@@ -68,6 +69,7 @@ import 'admin_compras.dart';
 import 'admin_inventario_movimientos.dart';
 import 'admin_listas_precios.dart';
 import 'admin_pedidos_cotizaciones.dart';
+import 'admin_promociones.dart';
 import 'admin_proveedores.dart';
 import 'admin_reportes.dart';
 import 'admin_traspasos.dart';
@@ -111,6 +113,7 @@ class ServicioAdmin {
     AlmacenRepository? almacenRepository,
     PresentacionRepository? presentacionRepository,
     LotePromocionRepository? lotePromocionRepository,
+    ComboRepository? comboRepository,
     RolPersonalizadoRepository? rolPersonalizadoRepository,
     ServicioCorteCaja? servicioCorteCaja,
     required Database baseDatos,
@@ -137,6 +140,7 @@ class ServicioAdmin {
        _lotePromocionRepository =
            lotePromocionRepository ??
            LotePromocionRepository(baseDatos: baseDatos),
+       _comboRepository = comboRepository ?? ComboRepository(baseDatos: baseDatos),
        _rolPersonalizadoRepository = rolPersonalizadoRepository,
        _servicioCorteCaja = servicioCorteCaja,
        _baseDatos = baseDatos,
@@ -235,6 +239,14 @@ class ServicioAdmin {
       tiendaActivaId: tiendaActivaId,
       movimientoRepository: movimientoRepository,
     );
+    _promociones = AdminPromociones(
+      lotePromocionRepository: _lotePromocionRepository,
+      comboRepository: _comboRepository,
+      emisorEventos: _emisorEventos,
+      syncOrchestrator: syncOrchestrator,
+      productoRepository: productoRepository,
+      varianteRepository: varianteRepository,
+    );
   }
 
   final TiendaRepository _tiendaRepository;
@@ -256,6 +268,7 @@ class ServicioAdmin {
   final AlmacenRepository? _almacenRepository;
   final PresentacionRepository? _presentacionRepository;
   final LotePromocionRepository _lotePromocionRepository;
+  final ComboRepository _comboRepository;
   final RolPersonalizadoRepository? _rolPersonalizadoRepository;
   final ServicioCorteCaja? _servicioCorteCaja;
   final Database _baseDatos;
@@ -275,6 +288,7 @@ class ServicioAdmin {
   late final AdminReportes _reportes;
   late final AdminListasPrecios _listasPrecios;
   late final AdminInventarioMovimientos _inventarioMovimientos;
+  late final AdminPromociones _promociones;
   MotorPrecio? _motorPrecioCache;
 
   MotorPrecio? get _motorPrecio {
@@ -485,7 +499,7 @@ class ServicioAdmin {
         continue;
       }
       try {
-        await _guardarLotePromocionImportado(
+        await _promociones.registrarLoteDesdeImportacion(
           codigoExterno: entrada.key,
           cantidadMinima: meta.cantidadMinima,
           precioUnitario: meta.precioUnitario,
@@ -508,33 +522,67 @@ class ServicioAdmin {
     );
   }
 
-  Future<void> _guardarLotePromocionImportado({
-    required String codigoExterno,
+  /// Lista lotes de promoción (mayoreo cruzado entre productos).
+  Future<List<LotePromocion>> listarLotesPromocion() =>
+      _promociones.listarLotesPromocion();
+
+  /// Obtiene un lote de promoción por id.
+  Future<LotePromocion?> obtenerLotePromocion(String id) =>
+      _promociones.obtenerLotePromocion(id);
+
+  /// Sugiere miembros para un lote a partir de la familia de un producto
+  /// (el producto mismo más sus variantes activas).
+  Future<List<MiembroPromocion>> sugerirMiembrosDeFamilia(String productoPadreId) =>
+      _promociones.sugerirMiembrosDeFamilia(productoPadreId);
+
+  /// Resuelve nombres para mostrar de una lista de ids miembro.
+  Future<List<MiembroPromocion>> nombresDeMiembrosPromocion(List<String> productoIds) =>
+      _promociones.nombresDeMiembros(productoIds);
+
+  /// Crea o actualiza un lote de promoción desde la UI de administración.
+  Future<LotePromocion> guardarLotePromocion({
+    String? id,
+    required String nombre,
     required double cantidadMinima,
     required double precioUnitario,
     required List<String> productoIds,
-  }) async {
-    final existente = await _lotePromocionRepository.obtenerPorCodigoExterno(
-      codigoExterno,
-    );
-    final miembros = <String>{
-      ...?existente?.productoIds,
-      ...productoIds,
-    }.toList();
-    final lote = LotePromocion(
-      id: existente?.id ?? _generadorId.v4(),
-      codigoExterno: codigoExterno,
-      nombre: existente?.nombre.isNotEmpty == true
-          ? existente!.nombre
-          : 'Lote promocion $codigoExterno',
-      cantidadMinima: cantidadMinima,
-      precioUnitario: precioUnitario,
-      activo: true,
-      productoIds: miembros,
-    );
-    await _lotePromocionRepository.reemplazarLote(lote);
-    await _registrarEventoLotePromocion(lote);
-  }
+    bool activo = true,
+  }) => _promociones.guardarLotePromocion(
+    id: id,
+    nombre: nombre,
+    cantidadMinima: cantidadMinima,
+    precioUnitario: precioUnitario,
+    productoIds: productoIds,
+    activo: activo,
+  );
+
+  /// Desactiva un lote de promoción (baja lógica).
+  Future<void> eliminarLotePromocion(String id) =>
+      _promociones.eliminarLotePromocion(id);
+
+  /// Lista combos de precio fijo (llevar productos distintos).
+  Future<List<Combo>> listarCombos() => _promociones.listarCombos();
+
+  /// Obtiene un combo por id.
+  Future<Combo?> obtenerCombo(String id) => _promociones.obtenerCombo(id);
+
+  /// Crea o actualiza un combo de precio fijo desde la UI de administración.
+  Future<Combo> guardarCombo({
+    String? id,
+    required String nombre,
+    required double precioCombo,
+    required List<ComboMiembro> miembros,
+    bool activo = true,
+  }) => _promociones.guardarCombo(
+    id: id,
+    nombre: nombre,
+    precioCombo: precioCombo,
+    miembros: miembros,
+    activo: activo,
+  );
+
+  /// Desactiva un combo (baja lógica).
+  Future<void> eliminarCombo(String id) => _promociones.eliminarCombo(id);
 
   Future<Producto> actualizarProducto(
     Producto producto, {

@@ -352,6 +352,34 @@ class AdminEmisorEventosSync {
 		return evento.id;
 	}
 
+	/// Retorna el id del evento encolado (para empujarlo de inmediato si aplica).
+	Future<String> combo(Combo combo) async {
+		final evento = SyncEvent(
+			id: _idEventoEspejo(TipoSyncEvento.comboReplaced, combo.id),
+			tiendaId: _tiendaActivaId,
+			dispositivoId: _cajaId,
+			tipo: TipoSyncEvento.comboReplaced,
+			payload: {
+				'id': combo.id,
+				'nombre': combo.nombre,
+				'precioCombo': combo.precioCombo,
+				'activo': combo.activo,
+				'miembros': combo.miembros
+					.map(
+						(m) => {
+							'productoId': m.productoId,
+							'cantidadRequerida': m.cantidadRequerida,
+						},
+					)
+					.toList(),
+			},
+			creadoEn: DateTime.now().toUtc(),
+			estado: EstadoSyncEvento.pendiente,
+		);
+		await _emitir(evento);
+		return evento.id;
+	}
+
 	Future<void> listaPrecios(ListaPrecios lista) {
 		return _emitir(
 			SyncEvent(

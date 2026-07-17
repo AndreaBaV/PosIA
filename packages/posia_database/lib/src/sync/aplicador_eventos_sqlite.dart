@@ -28,6 +28,7 @@ import '../repositories/rol_personalizado_repository.dart';
 import '../repositories/tienda_repository.dart';
 import '../repositories/traspaso_repository.dart';
 import '../repositories/inventario_repository.dart';
+import '../repositories/combo_repository.dart';
 import '../repositories/lote_promocion_repository.dart';
 import '../repositories/producto_repository.dart';
 import '../repositories/usuario_repository.dart';
@@ -330,6 +331,8 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 				await _aplicarEscalasMayoreoRemotas(evento);
 			case TipoSyncEvento.lotePromocionReplaced:
 				await _aplicarLotePromocionRemoto(evento);
+			case TipoSyncEvento.comboReplaced:
+				await _aplicarComboRemoto(evento);
 			case TipoSyncEvento.priceListUpserted:
 				await _aplicarListaPreciosRemota(evento);
 			case TipoSyncEvento.priceListDeleted:
@@ -1263,6 +1266,34 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			productoIds: productoIds,
 		);
 		await LotePromocionRepository(baseDatos: _baseDatos).reemplazarLote(lote);
+	}
+
+	Future<void> _aplicarComboRemoto(SyncEvent evento) async {
+		final p = evento.payload;
+		final id = p['id'] as String? ?? '';
+		if (id.isEmpty) {
+			return;
+		}
+		final miembrosCrudos = p['miembros'] as List<Object?>? ?? [];
+		final miembros = miembrosCrudos
+			.whereType<Map<Object?, Object?>>()
+			.map((cruda) {
+				final mapa = Map<String, Object?>.from(cruda);
+				return ComboMiembro(
+					productoId: mapa['productoId'] as String? ?? '',
+					cantidadRequerida: (mapa['cantidadRequerida'] as num?)?.toDouble() ?? 1.0,
+				);
+			})
+			.where((m) => m.productoId.isNotEmpty)
+			.toList();
+		final combo = Combo(
+			id: id,
+			nombre: p['nombre'] as String? ?? '',
+			precioCombo: (p['precioCombo'] as num?)?.toDouble() ?? 0.0,
+			activo: p['activo'] as bool? ?? true,
+			miembros: miembros,
+		);
+		await ComboRepository(baseDatos: _baseDatos).reemplazarCombo(combo);
 	}
 
 	Future<void> _aplicarProveedorRemoto(SyncEvent evento) async {
