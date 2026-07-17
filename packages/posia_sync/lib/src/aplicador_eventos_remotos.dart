@@ -15,4 +15,14 @@ abstract class AplicadorEventosRemotos {
 
 	/// Aplica varios eventos; la implementación SQLite usa una sola transacción.
 	Future<void> aplicarLote(List<SyncEvent> eventos);
+
+	/// Corrige localmente duplicados/placeholders que hayan quedado en la base
+	/// de este dispositivo (por ejemplo, de antes de que existiera un fix), sin
+	/// depender de que llegue un evento nuevo que los "choque".
+	///
+	/// Es una operación puramente local: no emite eventos ni escribe en el
+	/// hub. Cualquier dispositivo, sin importar cómo se haya ensuciado su
+	/// copia local, converge a un estado limpio en su siguiente sync — no
+	/// requiere reinstalar la app ni borrar la base local a mano.
+	Future<void> autoSanarCatalogoLocal();
 }

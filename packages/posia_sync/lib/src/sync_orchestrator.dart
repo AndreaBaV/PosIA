@@ -260,6 +260,11 @@ class SyncOrchestrator {
       ),
     );
     final recibidos = await _ejecutarPull(clienteHub, alProgreso: alProgreso);
+    // Corrige localmente duplicados/placeholders que este dispositivo ya
+    // tenía guardados (no solo los que un evento nuevo "choca" al llegar).
+    // Corre en cada sync completo, haya o no eventos nuevos: así cualquier
+    // dispositivo converge solo, sin reinstalar ni borrar datos a mano.
+    await _aplicadorRemoto?.autoSanarCatalogoLocal();
     alProgreso?.call(
       ProgresoSync(
         fase: FaseProgresoSync.listo,

@@ -69,6 +69,9 @@ class AplicadorMemoria implements AplicadorEventosRemotos {
 			await aplicarEvento(evento);
 		}
 	}
+
+	@override
+	Future<void> autoSanarCatalogoLocal() async {}
 }
 
 /// Cursor en memoria para pruebas.

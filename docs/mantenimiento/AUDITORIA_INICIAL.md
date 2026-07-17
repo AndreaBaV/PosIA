@@ -395,3 +395,20 @@ Además se expuso `descartarCatalogoEnCola()` (+ botón "Descartar catálogo en 
 Verificado: `dart analyze` limpio en los 3 paquetes + server, 78 tests `posia_database`, 7 tests `server/sync_api`, `flutter analyze` limpio en `apps/posia_pos`.
 
 **Pendiente de que el usuario ejecute** (no lo puedo hacer yo): `git push` a `main` para que Northflank redespliegue el server con la compactación; rebuild del `.exe`/APK en los 18 dispositivos — sin el rebuild, los dispositivos siguen con el comportamiento de flood viejo aunque Neon ya esté limpio.
+
+### 10.18 Auto-saneo local proactivo (sin reinstalar ni borrar la base a mano)
+
+Problema identificado por el usuario tras la Fase 10.17: aunque el pull ya auto-sana duplicados **cuando llega un evento nuevo que "choca" con un registro local sucio**, un dispositivo cuyo registro sucio nunca vuelve a recibir ese evento (p. ej. la categoría ganadora no cambia más) se queda con la copia duplicada/placeholder para siempre — la única salida hoy era reinstalar o borrar la base local a mano. No es óptimo para una flota de 18 dispositivos.
+
+Fix: `autoSanarCatalogoLocal()`, nuevo método en el contrato `AplicadorEventosRemotos` (`packages/posia_sync/lib/src/aplicador_eventos_remotos.dart`), implementado en `AplicadorEventosSqlite` (`packages/posia_database/lib/src/sync/aplicador_eventos_sqlite.dart`) y ejecutado por `SyncOrchestrator._sincronizarInterno()` **después de cada pull completo**, no solo quema-evento por evento:
+
+- `_autoSanarTiendasStub()` — desactiva localmente cualquier tienda `esStubFk` que haya quedado activa, sin importar cuándo se creó.
+- `_autoSanarCategoriasDuplicadas()` — agrupa las categorías activas locales por nombre normalizado; si hay más de una con el mismo nombre, la canónica es la que tiene más productos asignados localmente (empate → id menor, para que todos los dispositivos converjan a la misma elección), reasigna los productos de las demás y las desactiva.
+
+Puramente local: no emite eventos ni escribe en el hub, así que no hay riesgo de que dos dispositivos "peleen" por decidir cuál registro es el canónico (principio establecido esta sesión: todo auto-saneo en el dispositivo debe ser reactivo al pull o local-sin-emisión). Cualquier dispositivo converge solo en su siguiente sync completo, sin intervención manual.
+
+Prueba nueva: `packages/posia_database/test/aplicador_eventos_sqlite_autosanado_test.dart` (4 casos: fusiona duplicadas y reasigna productos, no toca nombres distintos, desactiva tiendas placeholder sin tocar tiendas reales, es idempotente en corridas repetidas).
+
+Verificado: `dart analyze` limpio en `posia_database`; `flutter test` — 82/82 en `posia_database` (78 previos + 4 nuevos), 25/25 en `posia_sync`; `flutter analyze` limpio en `apps/posia_pos`.
+
+Mismo pendiente que la fase anterior: este fix solo toma efecto en un dispositivo después de que se actualice con el código nuevo (rebuild del `.exe`/APK) — sigue sin existir forma de forzar la actualización remota sin infraestructura MDM adicional (no configurada hoy).

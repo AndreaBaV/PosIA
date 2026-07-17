@@ -144,6 +144,103 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		await _aplicarConGarantias(evento);
 	}
 
+	@override
+	Future<void> autoSanarCatalogoLocal() async {
+		await _autoSanarTiendasStub();
+		await _autoSanarCategoriasDuplicadas();
+	}
+
+	/// Desactiva localmente tiendas placeholder (creadas por integridad FK)
+	/// que hayan quedado activas — sin importar cuándo ni cómo llegaron.
+	Future<void> _autoSanarTiendasStub() async {
+		final repo = _tiendaRepository;
+		if (repo == null) {
+			return;
+		}
+		final todas = await repo.listarTodas();
+		for (final tienda in todas) {
+			if (tienda.esStubFk && tienda.activa) {
+				await repo.guardar(
+					Tienda(
+						id: tienda.id,
+						nombre: tienda.nombre,
+						direccion: tienda.direccion,
+						activa: false,
+						latitud: tienda.latitud,
+						longitud: tienda.longitud,
+						radioMetrosAsistencia: tienda.radioMetrosAsistencia,
+					),
+				);
+			}
+		}
+	}
+
+	/// Fusiona localmente categorías activas con el mismo nombre normalizado
+	/// (p. ej. quedaron dos IDs para "Abarrotes" de antes del fix de alta
+	/// idempotente). Puramente local: reasigna productos y desactiva la
+	/// perdedora en la base de este dispositivo, sin emitir eventos — no hay
+	/// riesgo de que dos dispositivos "peleen" por cuál es la canónica.
+	Future<void> _autoSanarCategoriasDuplicadas() async {
+		final repo = _categoriaRepository;
+		if (repo == null) {
+			return;
+		}
+		final activas = await repo.listarActivas();
+		final grupos = <String, List<Categoria>>{};
+		for (final categoria in activas) {
+			final clave = normalizarTextoBusqueda(categoria.nombre);
+			grupos.putIfAbsent(clave, () => []).add(categoria);
+		}
+		for (final grupo in grupos.values) {
+			if (grupo.length <= 1) {
+				continue;
+			}
+			// Canónica: la que ya tiene más productos locales asignados
+			// (mejor señal de "cuál es la real"); empate → id menor, para que
+			// todos los dispositivos converjan a la misma elección.
+			final conteos = <String, int>{};
+			for (final categoria in grupo) {
+				final filas = await _baseDatos.query(
+					'products',
+					columns: ['id'],
+					where: 'categoria_id = ?',
+					whereArgs: [categoria.id],
+				);
+				conteos[categoria.id] = filas.length;
+			}
+			grupo.sort((a, b) {
+				final porConteo = (conteos[b.id] ?? 0).compareTo(conteos[a.id] ?? 0);
+				if (porConteo != 0) {
+					return porConteo;
+				}
+				return a.id.compareTo(b.id);
+			});
+			final canonica = grupo.first;
+			for (final perdedora in grupo.skip(1)) {
+				await _baseDatos.transaction((tx) async {
+					await tx.update(
+						'products',
+						{'categoria_id': canonica.id},
+						where: 'categoria_id = ?',
+						whereArgs: [perdedora.id],
+					);
+					await tx.insert(
+						'categories',
+						{
+							'id': perdedora.id,
+							'nombre': perdedora.nombre,
+							'icono': perdedora.icono,
+							'color_hex': perdedora.colorHex,
+							'orden': perdedora.orden,
+							'activa': 0,
+						},
+						conflictAlgorithm: ConflictAlgorithm.replace,
+					);
+				});
+			}
+		}
+	}
+
 	/// Aplica un evento garantizando atomicidad e idempotencia cuando importa.
 	///
 	/// - Eventos con deltas/multiescritura: transaccion unica que aplica los
