@@ -657,13 +657,36 @@ class AseguradorPadresFk {
 	/// Origen/destino de un traspaso puede ser una tienda o, codificado con
 	/// [prefijoAlmacenTraspaso], un almacén — no crear una "tienda" falsa
 	/// cuando en realidad es un almacén (ver [codificarAlmacenEnTraspaso]).
+	///
+	/// `transfers.tienda_origen_id`/`tienda_destino_id` tienen FK dura a
+	/// `stores(id)` sin importar la codificación, así que aunque el almacén
+	/// ya está garantizado por [asegurarAlmacen], también hace falta un stub
+	/// (inactivo, nunca visible como tienda real) con el id literal
+	/// codificado para que el INSERT en `transfers` no falle.
 	Future<void> _asegurarUbicacionTraspaso(String ubicacionId) async {
 		final almacenId = decodificarAlmacenEnTraspaso(ubicacionId);
 		if (almacenId != null) {
 			await asegurarAlmacen(almacenId);
+			await _asegurarStubFkTransferencia(ubicacionId);
 			return;
 		}
 		await asegurarTienda(ubicacionId);
+	}
+
+	Future<void> _asegurarStubFkTransferencia(String ubicacionId) async {
+		if (await _existe('stores', ubicacionId)) {
+			return;
+		}
+		await _baseDatos.insert(
+			'stores',
+			{
+				'id': ubicacionId,
+				'nombre': 'Tienda',
+				'direccion': '',
+				'activa': 0,
+			},
+			conflictAlgorithm: ConflictAlgorithm.ignore,
+		);
 	}
 
 	Future<void> asegurarPadresDeCompra(Compra compra) async {
