@@ -242,6 +242,13 @@ class UsuarioRepository {
 	/// Persiste usuario recibido por sync (hash de PIN ya calculado).
 	///
 	/// Retorna false si la copia local es mas reciente que el evento remoto.
+	/// [pinCredencial] nulo = el evento remoto no traía credencial (perfil
+	/// propagado por otro dispositivo que tampoco la tenía cacheada). Se
+	/// preserva la credencial local existente si la hay; si el usuario es
+	/// nuevo en este dispositivo, se guarda con credencial vacía (no
+	/// autentica localmente hasta que un login en línea o "Reparar equipo y
+	/// roles" traiga la real desde el hub) — así el equipo se ve íntegro en
+	/// todos los dispositivos aunque el pin aún no haya llegado a este.
 	Future<bool> guardarRemoto({
 		required String id,
 		required String nombre,
@@ -250,7 +257,7 @@ class UsuarioRepository {
 		String? tiendaId,
 		String? rolPersonalizadoId,
 		required bool activo,
-		required String pinCredencial,
+		required String? pinCredencial,
 		required String creadoEn,
 		required String actualizadoEn,
 	}) async {
@@ -265,6 +272,14 @@ class UsuarioRepository {
 			whereArgs: [id],
 			limit: 1,
 		);
+		String credencialFinal;
+		if (pinCredencial != null) {
+			credencialFinal = pinCredencial;
+		} else if (filaExistente.isNotEmpty) {
+			credencialFinal = filaExistente.first['pin_credencial'] as String? ?? '';
+		} else {
+			credencialFinal = '';
+		}
 		if (filaExistente.isNotEmpty) {
 			final localActualizado =
 				filaExistente.first['actualizado_en'] as String? ?? '';
@@ -294,7 +309,7 @@ class UsuarioRepository {
 				'id': id,
 				'nombre': nombre.trim(),
 				'codigo': codigoLimpio,
-				'pin_credencial': pinCredencial,
+				'pin_credencial': credencialFinal,
 				'rol': rol.name,
 				'tienda_id': tiendaId,
 				'rol_personalizado_id': rolPersonalizadoId,

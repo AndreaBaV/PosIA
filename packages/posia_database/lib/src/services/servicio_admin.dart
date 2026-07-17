@@ -702,6 +702,22 @@ class ServicioAdmin {
     return resultado;
   }
 
+  /// Acción EXPLÍCITA de recuperación: re-sube el catálogo local completo a
+  /// Neon. NO debe llamarse en el sync periódico (satura la cola). Úsese solo
+  /// para sembrar un Neon vacío o forzar una re-subida manual desde un
+  /// dispositivo que es fuente de verdad del catálogo.
+  Future<ResultadoSync> resubirCatalogoCompleto({
+    ReporteProgresoSync? alProgreso,
+  }) async {
+    await _reencolarCatalogoLocalPendiente(alProgreso: alProgreso);
+    final resultado = await _syncOrchestrator.sincronizarCompleto(
+      alProgreso: alProgreso,
+    );
+    await PosiaLocalDatabase.obtenerInstancia()
+        .completarMigracionIntegridadTrasSync();
+    return resultado;
+  }
+
   /// Encola de nuevo todo el catalogo local que Neon proyecta como espejo.
   ///
   /// Cubre altas hechas offline, datos previos al sync de cada entidad, y

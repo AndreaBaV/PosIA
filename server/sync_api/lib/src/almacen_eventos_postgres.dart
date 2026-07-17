@@ -36,7 +36,70 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 				'(retencion ${DIAS_RETENCION_SYNC_EVENTS}d)',
 			);
 		}
+		final compactados = await _compactarCatalogoDuplicado(pool);
+		if (compactados > 0) {
+			stdout.writeln(
+				'Sync: compactados $compactados eventos de catálogo duplicados',
+			);
+		}
 		await _reproyectarEventosEspejoPendientes(pool);
+	}
+
+	/// Tipos de catálogo "last-write-wins": solo importa el estado más
+	/// reciente por entidad. Deja intacto el historial append-only (ventas,
+	/// compras, movimientos, asistencia, nómina).
+	static const _tiposCatalogoCompactables = [
+		'productUpserted',
+		'categoryUpserted',
+		'productPresentationsReplaced',
+		'wholesaleTiersReplaced',
+		'variantUpserted',
+		'customerUpserted',
+		'supplierUpserted',
+		'warehouseUpserted',
+		'storeUpserted',
+		'customRoleUpserted',
+	];
+
+	/// Colapsa versiones viejas del mismo evento de catálogo, dejando solo la
+	/// más reciente por (tipo, id de entidad). Corre en cada arranque (no es
+	/// un backfill único): el catálogo se sigue editando y re-generando
+	/// duplicados con el uso normal, igual que [EsquemaPosPostgres.purgarEventosAntiguos].
+	/// Seguro con el cursor de pull (`seq`): un dispositivo con cursor viejo
+	/// solo deja de ver estados de catálogo ya superados, nunca el más
+	/// reciente. `productPresentationsReplaced`/`wholesaleTiersReplaced` usan
+	/// `productoId` como clave de entidad (no tienen `id` propio); el resto
+	/// usa `id`.
+	Future<int> _compactarCatalogoDuplicado(Pool<Object> pool) async {
+		final listaTipos = _tiposCatalogoCompactables.map((t) => "'$t'").join(', ');
+		final resultado = await pool.execute('''
+			WITH claves AS (
+				SELECT
+					seq,
+					CASE
+						WHEN type IN ('productPresentationsReplaced', 'wholesaleTiersReplaced')
+							THEN payload->>'productoId'
+						ELSE payload->>'id'
+					END AS entity_key
+				FROM sync_events
+				WHERE type IN ($listaTipos)
+			),
+			duplicados AS (
+				SELECT seq FROM (
+					SELECT
+						c.seq,
+						ROW_NUMBER() OVER (
+							PARTITION BY se.type, c.entity_key ORDER BY c.seq DESC
+						) AS rn
+					FROM claves c
+					JOIN sync_events se ON se.seq = c.seq
+					WHERE c.entity_key IS NOT NULL AND c.entity_key <> ''
+				) t
+				WHERE rn > 1
+			)
+			DELETE FROM sync_events WHERE seq IN (SELECT seq FROM duplicados)
+		''');
+		return resultado.affectedRows;
 	}
 
 	@override

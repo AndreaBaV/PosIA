@@ -167,6 +167,52 @@ class SyncProgresoNotifier extends Notifier<EstadoSyncUi> {
 		}
 	}
 
+	/// Acción explícita: re-sube el catálogo local completo a Neon.
+	/// Solo para sembrar Neon o forzar re-subida desde una fuente de verdad.
+	/// El sync periódico NO hace esto (evita saturar la cola).
+	Future<ResultadoSync> resubirCatalogo() async {
+		if (state.activo) {
+			return state.ultimoResultado ??
+				const ResultadoSync(
+					eventosEnviados: 0,
+					eventosRecibidos: 0,
+					hubDisponible: false,
+				);
+		}
+		_reportar(
+			const ProgresoSync(
+				fase: FaseProgresoSync.preparar,
+				indice: 0,
+				total: 0,
+				mensaje: 'Preparando catálogo completo para la nube…',
+			),
+		);
+		try {
+			final servicio = await ref.read(servicioAdminProvider.future);
+			final resultado = await servicio.resubirCatalogoCompleto(
+				alProgreso: _reportar,
+			);
+			final mensaje = resultado.hubDisponible
+				? 'Catálogo re-subido: enviados ${resultado.eventosEnviados} · '
+					'recibidos ${resultado.eventosRecibidos}'
+				: 'Sin conexión al hub';
+			state = EstadoSyncUi(
+				activo: false,
+				mensajeResultado: mensaje,
+				ultimoResultado: resultado,
+			);
+			ref.invalidate(_estadoSyncColaProvider);
+			return resultado;
+		} on Object catch (error) {
+			state = EstadoSyncUi(
+				activo: false,
+				mensajeResultado: 'Error al re-subir catálogo: $error',
+				ultimoResultado: state.ultimoResultado,
+			);
+			rethrow;
+		}
+	}
+
 	void limpiarMensaje() {
 		if (state.mensajeResultado == null) {
 			return;

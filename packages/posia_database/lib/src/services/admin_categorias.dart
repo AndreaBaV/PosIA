@@ -28,6 +28,13 @@ class AdminCategorias {
 		return _categoriaRepository?.listarTodas() ?? [];
 	}
 
+	/// Crea la categoría o, si ya existe una activa con el mismo nombre
+	/// (comparación normalizada), devuelve esa en vez de duplicarla.
+	///
+	/// Idempotencia por nombre necesaria porque múltiples dispositivos (3
+	/// admins, 2 supervisores) pueden crear catálogo en paralelo — sin esto,
+	/// dos altas del mismo nombre en dispositivos distintos generan dos IDs
+	/// que Neon nunca fusiona solo.
 	Future<Categoria> registrarCategoria({
 		required String nombre,
 		String icono = 'shopping_basket',
@@ -38,6 +45,13 @@ class AdminCategorias {
 			throw StateError('Repositorio de categorias no configurado');
 		}
 		final existentes = await repo.listarTodas();
+		final clave = normalizarTextoBusqueda(nombre);
+		final coincidente = existentes
+			.where((c) => c.activa && normalizarTextoBusqueda(c.nombre) == clave)
+			.firstOrNull;
+		if (coincidente != null) {
+			return coincidente;
+		}
 		final categoria = Categoria(
 			id: _generadorId.v4(),
 			nombre: nombre,

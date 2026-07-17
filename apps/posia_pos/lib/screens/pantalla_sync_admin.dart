@@ -33,6 +33,8 @@ class PantallaSyncAdmin extends ConsumerWidget {
 						ref.read(syncProgresoProvider.notifier).reconciliarConHub(),
 					alRepararEquipo: () =>
 						ref.read(syncProgresoProvider.notifier).repararEquipo(),
+					alResubirCatalogo: () =>
+						ref.read(syncProgresoProvider.notifier).resubirCatalogo(),
 					alReconfigurar: () => abrirInstalacionTecnica(context, ref),
 				),
 				loading: () => const Center(child: CircularProgressIndicator()),
@@ -50,6 +52,7 @@ class _ConstruirContenidoSync extends StatelessWidget {
 		required this.alSincronizar,
 		required this.alReconciliar,
 		required this.alRepararEquipo,
+		required this.alResubirCatalogo,
 		required this.alReconfigurar,
 	});
 
@@ -59,6 +62,7 @@ class _ConstruirContenidoSync extends StatelessWidget {
 	final VoidCallback alSincronizar;
 	final VoidCallback alReconciliar;
 	final VoidCallback alRepararEquipo;
+	final VoidCallback alResubirCatalogo;
 	final VoidCallback alReconfigurar;
 
 	@override
@@ -166,6 +170,15 @@ class _ConstruirContenidoSync extends StatelessWidget {
 								onPressed: sincronizando ? null : alRepararEquipo,
 								icon: const Icon(Icons.people_outline),
 								label: const Text('Reparar equipo y roles'),
+							),
+						),
+						const SizedBox(height: 8.0),
+						SizedBox(
+							height: 48.0,
+							child: OutlinedButton.icon(
+								onPressed: sincronizando ? null : alResubirCatalogo,
+								icon: const Icon(Icons.cloud_upload),
+								label: const Text('Resubir catálogo completo'),
 							),
 						),
 					],
