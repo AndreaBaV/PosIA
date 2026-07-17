@@ -718,6 +718,16 @@ class ServicioAdmin {
     return resultado;
   }
 
+  /// Acción EXPLÍCITA de recuperación: descarta de la cola local (pendiente o
+  /// error) los eventos de catálogo espejo — obsoletos ahora que el catálogo
+  /// ya no se re-sube automáticamente (ver [resubirCatalogoCompleto]). NO
+  /// toca ventas, compras, movimientos, asistencia ni nómina: esos siguen en
+  /// cola hasta subir. Pensado para vaciar colas que quedaron atoradas con
+  /// cientos de reencolados de catálogo antes de este fix.
+  Future<int> descartarCatalogoEnCola() {
+    return _syncEventRepository.descartarPendientesCatalogoEspejo();
+  }
+
   /// Encola de nuevo todo el catalogo local que Neon proyecta como espejo.
   ///
   /// Cubre altas hechas offline, datos previos al sync de cada entidad, y

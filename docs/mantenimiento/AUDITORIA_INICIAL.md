@@ -376,4 +376,22 @@ Duodécimo paso: movimientos manuales de stock a nivel tienda (ajuste/salida —
 - `ServicioAdmin` pasó de 3,584 a 3,474 líneas (−110).
 - Verificado: `dart analyze` limpio, 78 tests en verde, `flutter analyze` limpio en `apps/posia_pos`.
 
-Progreso ServicioAdmin: 5,810 → 5,067 → 4,602 → 4,468 → 4,452 → 4,313 → 4,117 → 4,027 → 3,754 → 3,703 → 3,665 → 3,584 → **3,474** líneas (−2,336 desde el inicio, −40%).
+Progreso ServicioAdmin: 5,810 → 5,067 → 4,602 → 4,468 → 4,452 → 4,313 → 4,117 → 4,027 → 3,754 → 3,703 → 3,665 → 3,584 → 3,474 líneas (−2,336 desde el inicio, −40%).
+
+### 10.17 Fix integral de sync para flota multi-dispositivo (18 dispositivos: 3 compus + 15 móviles)
+
+Incidente real reportado por el usuario tras validar en dispositivos: dos laptops con 792/687 eventos pendientes+error, un usuario nuevo creado en una laptop que nunca llegó a Neon, y categorías duplicadas visibles en consulta directa a la base. Diagnóstico en código (no solo síntoma) encontró 3 fallas de diseño del sync pre-existentes (no introducidas por la Fase 3):
+
+1. **Flood de catálogo**: tanto el sync automático periódico (`app_providers.dart`) como el sync en segundo plano tras login (`servicio_inicio_sesion.dart`) llamaban `sincronizarManual(incluirCatalogo: true)`, re-encolando el catálogo local completo (~639 productos) en cada ciclo/login. En un dispositivo recién instalado esto generaba un bucle: pull baja el catálogo, el siguiente ciclo lo re-sube completo, Northflank hace timeout en frío, cientos quedan en error — tapando los cambios reales (el usuario nuevo). Fix: ambos puntos ahora usan `incluirCatalogo: false`; el re-push completo del catálogo pasó a ser una acción explícita (`ServicioAdmin.resubirCatalogoCompleto()`, botón "Resubir catálogo completo" en Estado de la nube).
+2. **Categorías se auto-duplicaban**: alta no idempotente por nombre + pull sin dedupe. `AdminCategorias.registrarCategoria` ahora es idempotente por nombre normalizado; `_aplicarCategoriaRemota` en el pull auto-sana duplicados históricos (categoría entrante con mismo nombre que una activa existente se guarda inactiva, sin romper productos que ya la referencian).
+3. **Equipo no se propagaba íntegro**: login solo guardaba al usuario logueado, y el pull descartaba `userUpserted` sin `pinCredencial`. Fix: login llama `importarUsuariosDesdeHub()` en segundo plano; `UsuarioRepository.guardarRemoto` acepta `pinCredencial` nulo (aplica el perfil igual, preserva credencial local existente o la deja vacía si el usuario es nuevo en ese dispositivo — `HasherPin.verificar` ya rechaza credenciales vacías, sin hueco de seguridad).
+
+**Server** (`almacen_eventos_postgres.dart`): compactación en cada arranque de los tipos de catálogo "last-write-wins" (deja solo el evento más reciente por tipo+entidad), mismo patrón que la purga de retención ya existente — no un backfill de una sola vez, corre en cada boot porque el catálogo se sigue re-generando duplicados con el uso normal.
+
+**Recuperación ejecutada en Neon de producción (autorizada explícitamente, dry-run primero)**: `server/sync_api/bin/merge_categorias_duplicadas.dart --apply` — 6 grupos de categorías duplicadas por nombre (slugs `cat-*` de una importación vieja vs. UUIDs de altas posteriores), **441 productos reasignados** al id canónico (356 solo en "Abarrotes"), **8 categorías desactivadas**. Cada cambio se aplicó vía `ProyectorEventosPostgres` (misma ruta que un evento normal) con id de evento determinístico (`tipo:entidadId`), insertado en `sync_events` para propagarse por pull a los 18 dispositivos. Verificado post-migración: 0 duplicados activos restantes, 0 productos con `categoria_id` huérfano/inactivo, 20 categorías activas (28−8).
+
+Además se expuso `descartarCatalogoEnCola()` (+ botón "Descartar catálogo en cola") para vaciar colas locales que quedaron atoradas con el bug anterior, sin tocar ventas/compras/movimientos/asistencia/nómina pendientes.
+
+Verificado: `dart analyze` limpio en los 3 paquetes + server, 78 tests `posia_database`, 7 tests `server/sync_api`, `flutter analyze` limpio en `apps/posia_pos`.
+
+**Pendiente de que el usuario ejecute** (no lo puedo hacer yo): `git push` a `main` para que Northflank redespliegue el server con la compactación; rebuild del `.exe`/APK en los 18 dispositivos — sin el rebuild, los dispositivos siguen con el comportamiento de flood viejo aunque Neon ya esté limpio.

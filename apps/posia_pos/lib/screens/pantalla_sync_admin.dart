@@ -35,12 +35,49 @@ class PantallaSyncAdmin extends ConsumerWidget {
 						ref.read(syncProgresoProvider.notifier).repararEquipo(),
 					alResubirCatalogo: () =>
 						ref.read(syncProgresoProvider.notifier).resubirCatalogo(),
+					alDescartarColaCatalogo: () =>
+						_confirmarDescartarColaCatalogo(context, ref),
 					alReconfigurar: () => abrirInstalacionTecnica(context, ref),
 				),
 				loading: () => const Center(child: CircularProgressIndicator()),
 				error: (error, _) => Center(child: Text(error.toString())),
 			),
 		);
+	}
+
+	Future<void> _confirmarDescartarColaCatalogo(
+		BuildContext context,
+		WidgetRef ref,
+	) async {
+		final confirmar = await showDialog<bool>(
+			context: context,
+			builder: (ctx) => AlertDialog(
+				icon: const Icon(Icons.warning_amber, color: PosiaColors.cancelar),
+				title: const Text('Descartar catálogo en cola'),
+				content: const Text(
+					'Elimina de la cola de este dispositivo los eventos de catálogo '
+					'(productos, categorías, precios, etc.) pendientes o con error. '
+					'Úsalo solo si la cola quedó atorada con reencolados masivos.\n\n'
+					'No borra ventas, compras, movimientos, asistencia ni nómina sin '
+					'subir. Si hiciste una edición de catálogo muy reciente que aún no '
+					'se sincronizó, vuelve a hacerla después de esto.',
+				),
+				actions: [
+					TextButton(
+						onPressed: () => Navigator.pop(ctx, false),
+						child: const Text('Cancelar'),
+					),
+					FilledButton(
+						style: FilledButton.styleFrom(backgroundColor: PosiaColors.cancelar),
+						onPressed: () => Navigator.pop(ctx, true),
+						child: const Text('Descartar'),
+					),
+				],
+			),
+		);
+		if (confirmar == true) {
+			await ref.read(syncProgresoProvider.notifier).descartarCatalogoEnCola();
+		}
 	}
 }
 
@@ -53,6 +90,7 @@ class _ConstruirContenidoSync extends StatelessWidget {
 		required this.alReconciliar,
 		required this.alRepararEquipo,
 		required this.alResubirCatalogo,
+		required this.alDescartarColaCatalogo,
 		required this.alReconfigurar,
 	});
 
@@ -63,6 +101,7 @@ class _ConstruirContenidoSync extends StatelessWidget {
 	final VoidCallback alReconciliar;
 	final VoidCallback alRepararEquipo;
 	final VoidCallback alResubirCatalogo;
+	final VoidCallback alDescartarColaCatalogo;
 	final VoidCallback alReconfigurar;
 
 	@override
@@ -179,6 +218,15 @@ class _ConstruirContenidoSync extends StatelessWidget {
 								onPressed: sincronizando ? null : alResubirCatalogo,
 								icon: const Icon(Icons.cloud_upload),
 								label: const Text('Resubir catálogo completo'),
+							),
+						),
+						const SizedBox(height: 8.0),
+						SizedBox(
+							height: 48.0,
+							child: OutlinedButton.icon(
+								onPressed: sincronizando ? null : alDescartarColaCatalogo,
+								icon: const Icon(Icons.delete_sweep_outlined),
+								label: const Text('Descartar catálogo en cola'),
 							),
 						),
 					],

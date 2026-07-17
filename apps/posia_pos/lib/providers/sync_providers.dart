@@ -213,6 +213,23 @@ class SyncProgresoNotifier extends Notifier<EstadoSyncUi> {
 		}
 	}
 
+	/// Acción explícita: descarta de la cola local los eventos de catálogo
+	/// espejo (pendientes o con error) — útil si este dispositivo quedó con
+	/// una cola atorada de reencolados masivos previos a este fix. NO borra
+	/// ventas/compras/movimientos/asistencia/nómina sin subir.
+	Future<int> descartarCatalogoEnCola() async {
+		final servicio = await ref.read(servicioAdminProvider.future);
+		final descartados = await servicio.descartarCatalogoEnCola();
+		state = EstadoSyncUi(
+			activo: state.activo,
+			progreso: state.progreso,
+			mensajeResultado: 'Descartados $descartados eventos de catálogo en cola',
+			ultimoResultado: state.ultimoResultado,
+		);
+		ref.invalidate(_estadoSyncColaProvider);
+		return descartados;
+	}
+
 	void limpiarMensaje() {
 		if (state.mensajeResultado == null) {
 			return;
