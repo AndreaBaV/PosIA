@@ -96,14 +96,29 @@ class ServicioInicioSesion {
 				}
 				if (!LimpiadorCacheLocal.seLimpioEnEsteArranque) {
 					try {
+						await contenedorActivo.servicioNomina?.reencolarPerfilesParaSync();
+						await contenedorActivo.servicioNomina?.reencolarPeriodosParaSync();
+						// incluirCatalogo: false — el login no re-sube el catalogo
+						// completo (eso satura la cola en cada inicio de sesion);
+						// solo empuja cambios reales pendientes y hace pull.
 						await contenedorActivo.servicioAdmin.sincronizarManual(
-							incluirCatalogo: true,
+							incluirCatalogo: false,
 						);
 						await PosiaLocalDatabase.obtenerInstancia()
 							.completarMigracionIntegridadTrasSync();
 					} on Object {
 						// Catalogo se reintentara en sync automatico / manual.
 					}
+				}
+				// Lectura integra del equipo en cada dispositivo: no solo el usuario
+				// logueado. Requiere hub en linea; si falla, el equipo local queda
+				// como estaba (no bloquea el login, ya se corrio en segundo plano).
+				try {
+					await contenedorActivo.servicioAdmin
+						.importarUsuariosDesdeHub()
+						.timeout(const Duration(seconds: TIMEOUT_HUB_SYNC_SEGUNDOS));
+				} on Object {
+					// Se reintenta en el proximo login o con "Reparar equipo y roles".
 				}
 			}());
 			container.invalidate(carritoNotifierProvider);

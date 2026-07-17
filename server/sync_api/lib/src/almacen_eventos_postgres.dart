@@ -36,7 +36,70 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 				'(retencion ${DIAS_RETENCION_SYNC_EVENTS}d)',
 			);
 		}
+		final compactados = await _compactarCatalogoDuplicado(pool);
+		if (compactados > 0) {
+			stdout.writeln(
+				'Sync: compactados $compactados eventos de catálogo duplicados',
+			);
+		}
 		await _reproyectarEventosEspejoPendientes(pool);
+	}
+
+	/// Tipos de catálogo "last-write-wins": solo importa el estado más
+	/// reciente por entidad. Deja intacto el historial append-only (ventas,
+	/// compras, movimientos, asistencia, nómina).
+	static const _tiposCatalogoCompactables = [
+		'productUpserted',
+		'categoryUpserted',
+		'productPresentationsReplaced',
+		'wholesaleTiersReplaced',
+		'variantUpserted',
+		'customerUpserted',
+		'supplierUpserted',
+		'warehouseUpserted',
+		'storeUpserted',
+		'customRoleUpserted',
+	];
+
+	/// Colapsa versiones viejas del mismo evento de catálogo, dejando solo la
+	/// más reciente por (tipo, id de entidad). Corre en cada arranque (no es
+	/// un backfill único): el catálogo se sigue editando y re-generando
+	/// duplicados con el uso normal, igual que [EsquemaPosPostgres.purgarEventosAntiguos].
+	/// Seguro con el cursor de pull (`seq`): un dispositivo con cursor viejo
+	/// solo deja de ver estados de catálogo ya superados, nunca el más
+	/// reciente. `productPresentationsReplaced`/`wholesaleTiersReplaced` usan
+	/// `productoId` como clave de entidad (no tienen `id` propio); el resto
+	/// usa `id`.
+	Future<int> _compactarCatalogoDuplicado(Pool<Object> pool) async {
+		final listaTipos = _tiposCatalogoCompactables.map((t) => "'$t'").join(', ');
+		final resultado = await pool.execute('''
+			WITH claves AS (
+				SELECT
+					seq,
+					CASE
+						WHEN type IN ('productPresentationsReplaced', 'wholesaleTiersReplaced')
+							THEN payload->>'productoId'
+						ELSE payload->>'id'
+					END AS entity_key
+				FROM sync_events
+				WHERE type IN ($listaTipos)
+			),
+			duplicados AS (
+				SELECT seq FROM (
+					SELECT
+						c.seq,
+						ROW_NUMBER() OVER (
+							PARTITION BY se.type, c.entity_key ORDER BY c.seq DESC
+						) AS rn
+					FROM claves c
+					JOIN sync_events se ON se.seq = c.seq
+					WHERE c.entity_key IS NOT NULL AND c.entity_key <> ''
+				) t
+				WHERE rn > 1
+			)
+			DELETE FROM sync_events WHERE seq IN (SELECT seq FROM duplicados)
+		''');
+		return resultado.affectedRows;
 	}
 
 	@override
@@ -203,17 +266,51 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 		);
 	}
 
-	/// Reproyecta eventos de roles/usuarios que quedaron solo en sync_events.
+	/// Reproyecta eventos que quedaron solo en sync_events (nunca aplicados a
+	/// su tabla espejo). Cada backfill corre una sola vez, marcado en
+	/// schema_meta; agregar un backfill nuevo no repite los anteriores.
 	Future<void> _reproyectarEventosEspejoPendientes(Pool<Object> pool) async {
-		// v2: users.creado_en/actualizado_en pasaron a TIMESTAMPTZ; el proyector
-		// casteaba DateTime as String? y tumaba userUpserted (y lotes con proveedores).
-		const claveMeta = 'mirror_backfill_roles_v2';
 		await pool.execute('''
 			CREATE TABLE IF NOT EXISTS schema_meta (
 				clave TEXT PRIMARY KEY,
 				valor TEXT NOT NULL
 			)
 		''');
+		// v2: users.creado_en/actualizado_en pasaron a TIMESTAMPTZ; el proyector
+		// casteaba DateTime as String? y tumaba userUpserted (y lotes con proveedores).
+		await _reproyectarPorTipos(
+			pool: pool,
+			claveMeta: 'mirror_backfill_roles_v2',
+			tipos: [
+				'customRoleUpserted',
+				'userUpserted',
+				'supplierUpserted',
+				'supplierDeleted',
+			],
+		);
+		// v1: _registrarEventoCompra y ServicioAsistencia usaban IDs de evento
+		// aleatorios; cada reintento de sync creaba un evento "nuevo" que nunca
+		// convergia, dejando compras/nomina/asistencia varadas en sync_events
+		// sin proyectarse (ver docs/mantenimiento/AUDITORIA_INICIAL.md).
+		await _reproyectarPorTipos(
+			pool: pool,
+			claveMeta: 'mirror_backfill_ops_v1',
+			tipos: [
+				'purchaseCompleted',
+				'payrollPeriodClosed',
+				'employeeProfileUpserted',
+				'attendanceChallengeCreated',
+				'attendanceCheckedIn',
+				'attendanceCheckedOut',
+			],
+		);
+	}
+
+	Future<void> _reproyectarPorTipos({
+		required Pool<Object> pool,
+		required String claveMeta,
+		required List<String> tipos,
+	}) async {
 		final existente = await pool.execute(
 			Sql.named('SELECT valor FROM schema_meta WHERE clave = @clave'),
 			parameters: {'clave': claveMeta},
@@ -221,15 +318,14 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 		if (existente.isNotEmpty) {
 			return;
 		}
+		// `tipos` son literales internos fijos (nunca entrada de usuario); se
+		// listan inline porque el driver no soporta bien parámetros de array
+		// con Sql.named en este proyecto.
+		final listaTipos = tipos.map((t) => "'$t'").join(', ');
 		final filas = await pool.execute('''
 			SELECT seq, id, store_id, device_id, type, payload, created_at
 			FROM sync_events
-			WHERE type IN (
-				'customRoleUpserted',
-				'userUpserted',
-				'supplierUpserted',
-				'supplierDeleted'
-			)
+			WHERE type IN ($listaTipos)
 			ORDER BY seq ASC
 		''');
 		for (final fila in filas) {
@@ -240,7 +336,7 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 				});
 			} on Object catch (error) {
 				stdout.writeln(
-					'Sync backfill: error en ${fila.toColumnMap()['type']}: $error',
+					'Sync backfill ($claveMeta): error en ${fila.toColumnMap()['type']}: $error',
 				);
 			}
 		}

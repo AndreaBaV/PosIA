@@ -44,4 +44,12 @@ class Tienda {
 
 	/// Radio en metros para validar entrada de empleados.
 	final double radioMetrosAsistencia;
+
+	/// Placeholder creado por integridad FK (sync fuera de orden), p.ej. un
+	/// traspaso o venta que llegó antes que la tienda a la que pertenece.
+	///
+	/// No es una sucursal real; no debe proyectarse a Neon.
+	bool get esStubFk {
+		return nombre.trim() == 'Tienda' && direccion.trim().isEmpty;
+	}
 }

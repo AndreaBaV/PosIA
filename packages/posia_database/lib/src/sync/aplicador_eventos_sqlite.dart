@@ -472,10 +472,13 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		}
 		final payload = evento.payload;
 		final id = payload['id'] as String? ?? '';
-		final pinCredencial = extraerPinCredencialSync(payload);
-		if (id.isEmpty || pinCredencial == null) {
+		if (id.isEmpty) {
 			return;
 		}
+		// Nulo (no ausente-y-descartado): el perfil se aplica igual para que el
+		// equipo se vea íntegro en todos los dispositivos; guardarRemoto
+		// preserva la credencial local existente o deja vacía si es nuevo aquí.
+		final pinCredencial = extraerPinCredencialSync(payload);
 		final rolNombre = payload['rol'] as String? ?? RolUsuario.empleado.name;
 		final rol = RolUsuario.values.firstWhere(
 			(valor) => valor.name == rolNombre,
@@ -609,17 +612,35 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			return;
 		}
 		final payload = evento.payload;
+		final id = payload['id'] as String? ?? '';
+		if (id.isEmpty) {
+			return;
+		}
+		var activa = payload['activa'] as bool? ?? true;
+		final nombre = payload['nombre'] as String? ?? '';
+		if (activa) {
+			// Auto-sanado de duplicados históricos (mismo nombre, distinto id,
+			// generados antes de que el alta fuera idempotente por nombre): la
+			// categoría ya existente y activa gana localmente; esta se guarda
+			// inactiva para no ofrecerla dos veces en la UI, sin romper
+			// productos que ya referencian este id.
+			final existentes = await repo.listarTodas();
+			final clave = normalizarTextoBusqueda(nombre);
+			final yaHayOtraActiva = existentes.any(
+				(c) => c.id != id && c.activa && normalizarTextoBusqueda(c.nombre) == clave,
+			);
+			if (yaHayOtraActiva) {
+				activa = false;
+			}
+		}
 		final categoria = Categoria(
-			id: payload['id'] as String? ?? '',
-			nombre: payload['nombre'] as String? ?? '',
+			id: id,
+			nombre: nombre,
 			icono: payload['icono'] as String? ?? 'shopping_basket',
 			colorHex: payload['colorHex'] as String? ?? '#4CAF50',
 			orden: (payload['orden'] as num?)?.toInt() ?? 0,
-			activa: payload['activa'] as bool? ?? true,
+			activa: activa,
 		);
-		if (categoria.id.isEmpty) {
-			return;
-		}
 		await repo.guardar(categoria);
 	}
 

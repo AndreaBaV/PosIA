@@ -6,6 +6,7 @@ import 'package:posia_database/posia_database.dart';
 import 'package:posia_sync/posia_sync.dart';
 
 import 'admin_providers.dart';
+import 'app_providers.dart';
 
 /// Estado visible de una sincronizacion en curso o recien terminada.
 class EstadoSyncUi {
@@ -60,8 +61,12 @@ class SyncProgresoNotifier extends Notifier<EstadoSyncUi> {
 			),
 		);
 		try {
-			final servicio = await ref.read(servicioAdminProvider.future);
-			final resultado = await servicio.sincronizarManual(alProgreso: _reportar);
+			final contenedor = await ref.read(contenedorServiciosProvider.future);
+			await contenedor.servicioNomina?.reencolarPerfilesParaSync();
+			await contenedor.servicioNomina?.reencolarPeriodosParaSync();
+			final resultado = await contenedor.servicioAdmin.sincronizarManual(
+				alProgreso: _reportar,
+			);
 			final mensaje = resultado.hubDisponible
 				? 'Enviados: ${resultado.eventosEnviados} · '
 					'Recibidos: ${resultado.eventosRecibidos}'
@@ -160,6 +165,69 @@ class SyncProgresoNotifier extends Notifier<EstadoSyncUi> {
 			);
 			rethrow;
 		}
+	}
+
+	/// Acción explícita: re-sube el catálogo local completo a Neon.
+	/// Solo para sembrar Neon o forzar re-subida desde una fuente de verdad.
+	/// El sync periódico NO hace esto (evita saturar la cola).
+	Future<ResultadoSync> resubirCatalogo() async {
+		if (state.activo) {
+			return state.ultimoResultado ??
+				const ResultadoSync(
+					eventosEnviados: 0,
+					eventosRecibidos: 0,
+					hubDisponible: false,
+				);
+		}
+		_reportar(
+			const ProgresoSync(
+				fase: FaseProgresoSync.preparar,
+				indice: 0,
+				total: 0,
+				mensaje: 'Preparando catálogo completo para la nube…',
+			),
+		);
+		try {
+			final servicio = await ref.read(servicioAdminProvider.future);
+			final resultado = await servicio.resubirCatalogoCompleto(
+				alProgreso: _reportar,
+			);
+			final mensaje = resultado.hubDisponible
+				? 'Catálogo re-subido: enviados ${resultado.eventosEnviados} · '
+					'recibidos ${resultado.eventosRecibidos}'
+				: 'Sin conexión al hub';
+			state = EstadoSyncUi(
+				activo: false,
+				mensajeResultado: mensaje,
+				ultimoResultado: resultado,
+			);
+			ref.invalidate(_estadoSyncColaProvider);
+			return resultado;
+		} on Object catch (error) {
+			state = EstadoSyncUi(
+				activo: false,
+				mensajeResultado: 'Error al re-subir catálogo: $error',
+				ultimoResultado: state.ultimoResultado,
+			);
+			rethrow;
+		}
+	}
+
+	/// Acción explícita: descarta de la cola local los eventos de catálogo
+	/// espejo (pendientes o con error) — útil si este dispositivo quedó con
+	/// una cola atorada de reencolados masivos previos a este fix. NO borra
+	/// ventas/compras/movimientos/asistencia/nómina sin subir.
+	Future<int> descartarCatalogoEnCola() async {
+		final servicio = await ref.read(servicioAdminProvider.future);
+		final descartados = await servicio.descartarCatalogoEnCola();
+		state = EstadoSyncUi(
+			activo: state.activo,
+			progreso: state.progreso,
+			mensajeResultado: 'Descartados $descartados eventos de catálogo en cola',
+			ultimoResultado: state.ultimoResultado,
+		);
+		ref.invalidate(_estadoSyncColaProvider);
+		return descartados;
 	}
 
 	void limpiarMensaje() {

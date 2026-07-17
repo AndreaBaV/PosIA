@@ -113,7 +113,14 @@ final sincronizadorAutomaticoProvider = FutureProvider<SincronizadorAutomatico>(
 					.completarMigracionIntegridadTrasSync();
 				return;
 			}
-			await contenedor.servicioAdmin.sincronizarManual(incluirCatalogo: true);
+			await contenedor.servicioNomina?.reencolarPerfilesParaSync();
+			await contenedor.servicioNomina?.reencolarPeriodosParaSync();
+			// El sync periódico NO re-sube el catálogo completo: solo empuja los
+			// cambios reales en cola (altas/ediciones que ya emitieron su evento)
+			// y hace pull. Re-subir todo en cada ciclo saturaba la cola (cientos
+			// de pendientes/errores) y tapaba los cambios legítimos. El re-push
+			// completo es ahora acción explícita: ServicioAdmin.resubirCatalogoCompleto().
+			await contenedor.servicioAdmin.sincronizarManual(incluirCatalogo: false);
 		},
 	);
 	sincronizador.iniciar();
