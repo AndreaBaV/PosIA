@@ -572,6 +572,20 @@ abstract final class ClasificacionArquitecturaSync {
 			motivo: 'Borrado descuento',
 			tablasAfectadas: ['customer_discounts'],
 		),
+		ContratoEventoSync(
+			tipo: TipoSyncEvento.productDeleted,
+			politica: PoliticaEventoSync.activo,
+			motivo: 'Borrado manual de producto: lapida, gana sobre cualquier '
+				'productUpserted posterior',
+			tablasAfectadas: ['entidades_eliminadas', 'products'],
+		),
+		ContratoEventoSync(
+			tipo: TipoSyncEvento.categoryDeleted,
+			politica: PoliticaEventoSync.activo,
+			motivo: 'Borrado manual de categoria: lapida, gana sobre cualquier '
+				'categoryUpserted posterior',
+			tablasAfectadas: ['entidades_eliminadas', 'categories'],
+		),
 	];
 
 	static ContratoEventoSync contratoDe(TipoSyncEvento tipo) {

@@ -53,19 +53,53 @@ def tablas_con_columna(cur, columna):
     return [r[0] for r in cur.fetchall()]
 
 
+def ids_de_sqlite_local(ruta):
+    """Ids de producto que sobrevivieron a la deduplicacion local.
+
+    Son la autoridad: Neon debe conservar exactamente los mismos, o el sync
+    volveria a poblar los duplicados que se acaban de limpiar.
+    """
+    import sqlite3
+
+    if not ruta or not os.path.exists(ruta):
+        return set()
+    con = sqlite3.connect(ruta)
+    try:
+        return {r[0] for r in con.execute('SELECT id FROM products')}
+    finally:
+        con.close()
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument('--aplicar', action='store_true')
+    p.add_argument(
+        '--sqlite-local',
+        default=os.path.expandvars(
+            r'%APPDATA%\com.posia\La Fortuna\posia_operativa.db'
+        ),
+        help='SQLite ya deduplicado que define que id sobrevive.',
+    )
     args = p.parse_args()
 
     dsn = os.environ.get('NEON_DATABASE_URL', '').strip()
     if not dsn:
         sys.exit('Define NEON_DATABASE_URL con la cadena de conexion de Neon.')
 
+    ids_locales = ids_de_sqlite_local(args.sqlite_local)
+    if not ids_locales:
+        sys.exit(
+            'No pude leer el SQLite local en:\n  '
+            f'{args.sqlite_local}\n'
+            'Se necesita para elegir el mismo superviviente que quedo en la caja.'
+        )
+    print(f'ids de producto en el SQLite local: {len(ids_locales)}\n')
+
     with psycopg.connect(dsn) as conn, conn.cursor() as cur:
         for cid, nombre in RENOMBRAR.items():
+            # `activa` es integer en Postgres, no boolean.
             cur.execute(
-                'UPDATE categories SET nombre=%s, activa=true WHERE id=%s',
+                'UPDATE categories SET nombre=%s, activa=1 WHERE id=%s',
                 (nombre, cid),
             )
             print(f'renombrada {cid} -> {nombre} ({cur.rowcount})')
@@ -99,7 +133,13 @@ def main():
                 (nombre,),
             )
             ids = [r[0] for r in cur.fetchall()]
-            vive = next((i for i in ids if i.startswith('prod-')), ids[0])
+            # El superviviente DEBE coincidir con el que quedo en el SQLite
+            # local ya deduplicado. Si cada lado conserva un id distinto, al
+            # sincronizar reaparecen ambos y el duplicado vuelve.
+            vive = next((i for i in ids if i in ids_locales), None)
+            if vive is None:
+                vive = next((i for i in ids if i.startswith('prod-')), ids[0])
+                print(f'    AVISO: ninguno existe en local, se elige {vive}')
             for muere in [i for i in ids if i != vive]:
                 for t in hijas:
                     try:

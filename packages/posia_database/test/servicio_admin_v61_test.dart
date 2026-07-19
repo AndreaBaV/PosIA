@@ -81,8 +81,20 @@ void main() {
 			);
 			final eliminado = await servicio.eliminarProductoPermanente(producto.id);
 			expect(eliminado, isTrue);
-			final restante = await servicio.obtenerProducto(producto.id);
-			expect(restante, isNull);
+
+			// Contrato v36: el borrado del administrador deja lapida y da de baja
+			// logica, no borra la fila. `sale_lines` tiene FK sin cascada, asi que
+			// un borrado duro fallaria en cuanto el producto tuviera una venta; y
+			// conservar la fila evita que un evento hijo atrasado la resucite como
+			// stub FK. Para el usuario el producto desaparece igual.
+			expect(
+				await servicio.listarProductosCatalogo(),
+				isNot(contains(predicate<Producto>((p) => p.id == producto.id))),
+				reason: 'la lapida lo oculta del catalogo',
+			);
+			final fila = await servicio.obtenerProducto(producto.id);
+			expect(fila, isNotNull);
+			expect(fila!.activo, isFalse);
 			await fixture.cerrar();
 		});
 
