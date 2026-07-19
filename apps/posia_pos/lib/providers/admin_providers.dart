@@ -213,6 +213,11 @@ Future<void> refrescarDatosMaestros(WidgetRef ref) async {
 	ref.invalidate(listasPreciosAdminProvider);
 	ref.invalidate(detalleListaPreciosProvider);
 	ref.invalidate(productosCatalogoAdminProvider);
+	// Sin autoDispose, estos dos sirven la lista cacheada de toda la sesion: al
+	// activar o desactivar una categoria, el formulario de producto seguia
+	// viendo el estado anterior y rechazaba el guardado por "categoria inactiva".
+	ref.invalidate(categoriasFormularioAdminProvider);
+	ref.invalidate(proveedoresFormularioAdminProvider);
 	await ref.read(contenedorServiciosProvider.future);
 	final carrito = ref.read(carritoNotifierProvider.notifier);
 	if (ref.read(carritoNotifierProvider).hasValue) {

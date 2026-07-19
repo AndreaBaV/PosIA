@@ -41,6 +41,15 @@ class RolPersonalizado {
 		return categoriasPermitidas.contains(categoriaId);
 	}
 
+	/// Placeholder creado por integridad FK (sync fuera de orden).
+	///
+	/// No es un rol de negocio; no debe proyectarse a Neon.
+	bool get esStubFk =>
+		nombre.trim() == 'Rol' &&
+		descripcion.trim().isEmpty &&
+		permisosAdmin.isEmpty &&
+		categoriasPermitidas.isEmpty;
+
 	RolPersonalizado copiarCon({
 		String? id,
 		String? nombre,

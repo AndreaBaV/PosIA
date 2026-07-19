@@ -30,6 +30,7 @@ import '../repositories/traspaso_repository.dart';
 import '../repositories/inventario_repository.dart';
 import '../repositories/combo_repository.dart';
 import '../repositories/lote_promocion_repository.dart';
+import '../repositories/lapida_repository.dart';
 import '../repositories/producto_repository.dart';
 import '../repositories/usuario_repository.dart';
 import '../repositories/turno_caja_repository.dart';
@@ -94,6 +95,9 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 	     _descuentoClienteRepository = descuentoClienteRepository;
 
 	final Database _baseDatos;
+
+	/// Lapidas de borrado manual; se construye sobre la misma conexion.
+	LapidaRepository get _lapidas => LapidaRepository(baseDatos: _baseDatos);
 	final ProductoRepository _productoRepository;
 	final ClienteRepository _clienteRepository;
 	final VentaRepository _ventaRepository;
@@ -355,6 +359,10 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 				await _aplicarProveedorEliminadoRemoto(evento);
 			case TipoSyncEvento.purchaseCompleted:
 				await _aplicarCompraRemota(evento, ejecutor: ejecutor);
+			case TipoSyncEvento.productDeleted:
+				await _aplicarProductoEliminadoRemoto(evento);
+			case TipoSyncEvento.categoryDeleted:
+				await _aplicarCategoriaEliminadaRemota(evento);
 			case TipoSyncEvento.productPresentationsReplaced:
 				await _aplicarPresentacionesRemotas(evento);
 			case TipoSyncEvento.attendanceChallengeCreated:
@@ -716,6 +724,10 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		if (id.isEmpty) {
 			return;
 		}
+		// El borrado manual del administrador manda sobre el hub.
+		if (await _lapidas.estaEliminada(TipoLapida.categoria, id)) {
+			return;
+		}
 		var activa = payload['activa'] as bool? ?? true;
 		final nombre = payload['nombre'] as String? ?? '';
 		if (activa) {
@@ -741,6 +753,15 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			orden: (payload['orden'] as num?)?.toInt() ?? 0,
 			activa: activa,
 		);
+		// Un stub FK entrante ("Categoría") no debe degradar una categoría real:
+		// `guardar` usa ConflictAlgorithm.replace y le borraria el nombre, con lo
+		// que los productos que la referencian quedan colgando de un placeholder.
+		if (categoria.esStubFk) {
+			final existente = await repo.obtenerPorId(id);
+			if (existente != null && !existente.esStubFk) {
+				return;
+			}
+		}
 		await repo.guardar(categoria);
 	}
 
@@ -928,6 +949,48 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		}
 	}
 
+	/// Aplica la lapida de un producto borrado por un administrador.
+	///
+	/// La lapida es absoluta: gana sobre cualquier upsert, llegue antes o
+	/// despues. Se conserva la fila con baja logica para no romper el historial
+	/// de ventas ni provocar que un evento hijo la resucite como stub.
+	Future<void> _aplicarProductoEliminadoRemoto(SyncEvent evento) async {
+		final productoId = evento.payload['id'] as String? ?? '';
+		if (productoId.isEmpty) {
+			return;
+		}
+		await _lapidas.registrar(
+			tipo: TipoLapida.producto,
+			entidadId: productoId,
+			eliminadoEn: evento.creadoEn,
+		);
+		final existente = await _productoRepository.obtenerPorId(productoId);
+		if (existente != null && existente.activo) {
+			await _productoRepository.guardar(existente.copiarCon(activo: false));
+		}
+	}
+
+	/// Aplica la lapida de una categoria borrada por un administrador.
+	Future<void> _aplicarCategoriaEliminadaRemota(SyncEvent evento) async {
+		final categoriaId = evento.payload['id'] as String? ?? '';
+		if (categoriaId.isEmpty) {
+			return;
+		}
+		await _lapidas.registrar(
+			tipo: TipoLapida.categoria,
+			entidadId: categoriaId,
+			eliminadoEn: evento.creadoEn,
+		);
+		final repo = _categoriaRepository;
+		if (repo == null) {
+			return;
+		}
+		final existente = await repo.obtenerPorId(categoriaId);
+		if (existente != null && existente.activa) {
+			await repo.guardar(existente.copiarCon(activa: false));
+		}
+	}
+
 	/// Inserta o actualiza producto remoto en catalogo local.
 	///
 	/// [evento] Evento productUpserted.
@@ -935,6 +998,11 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		final payload = evento.payload;
 		final productoId = payload['id'] as String? ?? '';
 		if (productoId.isEmpty) {
+			return;
+		}
+		// El borrado manual del administrador manda: un upsert de algo enterrado
+		// se descarta, sin importar que llegue despues de la lapida.
+		if (await _lapidas.estaEliminada(TipoLapida.producto, productoId)) {
 			return;
 		}
 		final tiendaId = payload['tiendaId'] as String? ?? evento.tiendaId;
@@ -966,6 +1034,15 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			favoritoCaja: payload['favoritoCaja'] as bool? ?? false,
 			permiteStockNegativo: payload['permiteStockNegativo'] as bool? ?? true,
 		);
+		// Un stub FK que ya viaje en la cola (emitido por una version anterior o
+		// por otro equipo) no debe degradar al producto real: `guardar` usa
+		// ConflictAlgorithm.replace y borraria nombre, precio y categoria.
+		if (producto.esStubFk) {
+			final existente = await _productoRepository.obtenerPorId(productoId);
+			if (existente != null && !existente.esStubFk) {
+				return;
+			}
+		}
 		await _productoRepository.guardar(producto);
 	}
 
@@ -1610,6 +1687,27 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			})
 			.where((p) => p.id.isNotEmpty)
 			.toList();
+		// `reemplazarPresentacionesProducto` borra TODAS las presentaciones del
+		// producto y reinserta las del evento. Como el snapshot no lleva marca de
+		// recencia, un equipo con el catálogo desactualizado (o sin ninguna
+		// presentación para este producto) borraba los empaques recién creados en
+		// los demás equipos: se perdía el empaque nuevo y también los anteriores.
+		//
+		// Si el snapshot entrante haría desaparecer presentaciones que existen
+		// localmente, se trata como incompleto y se fusiona en vez de reemplazar.
+		// Compensación consciente: un borrado hecho en otro equipo deja de
+		// propagarse solo y hay que repetirlo aquí. Preferible a perder datos.
+		final locales = await repo.listarPorProducto(productoId);
+		final idsRemotos = presentaciones.map((p) => p.id).toSet();
+		final sePerderian = locales
+			.where((p) => !p.esPresentacionBase && !idsRemotos.contains(p.id))
+			.toList();
+		if (presentaciones.isEmpty || sePerderian.isNotEmpty) {
+			for (final presentacion in presentaciones) {
+				await repo.guardarPresentacion(presentacion);
+			}
+			return;
+		}
 		await repo.reemplazarPresentacionesProducto(productoId, presentaciones);
 	}
 

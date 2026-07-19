@@ -80,6 +80,14 @@ class PosiaLocalDatabase {
 			_baseOperativaLectura = null;
 		}
 		if (_baseOperativa != null) {
+			// Consolida el WAL en el .db antes de soltar la conexion: sin esto el
+			// -wal crece sin limite y el contenido reciente solo es visible para
+			// quien logre indexarlo via -shm.
+			try {
+				await _baseOperativa!.rawQuery('PRAGMA wal_checkpoint(TRUNCATE)');
+			} on Object {
+				// Un checkpoint fallido no debe impedir el cierre.
+			}
 			await _baseOperativa!.close();
 			_baseOperativa = null;
 		}
@@ -246,6 +254,9 @@ class PosiaLocalDatabase {
 					}
 					if (anterior < 35 && nueva >= 35) {
 						await MigracionesEsquema.migrarVersion34A35(base);
+					}
+					if (anterior < 36 && nueva >= 36) {
+						await MigracionesEsquema.migrarVersion35A36(base);
 					}
 				},
 			);

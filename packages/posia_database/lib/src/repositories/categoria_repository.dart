@@ -25,6 +25,20 @@ class CategoriaRepository {
 		return filas.map(_mapear).toList();
 	}
 
+	/// Obtiene categoria por identificador, o null si no existe.
+	Future<Categoria?> obtenerPorId(String categoriaId) async {
+		final filas = await _baseDatos.query(
+			'categories',
+			where: 'id = ?',
+			whereArgs: [categoriaId],
+			limit: 1,
+		);
+		if (filas.isEmpty) {
+			return null;
+		}
+		return _mapear(filas.first);
+	}
+
 	/// Lista todas las categorias para administracion.
 	Future<List<Categoria>> listarTodas() async {
 		final filas = await _baseDatos.query(

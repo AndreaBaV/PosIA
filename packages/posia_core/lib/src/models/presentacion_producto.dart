@@ -15,6 +15,12 @@ class TipoPresentacion {
 	final String unidad;
 	final bool activo;
 
+	/// Placeholder creado por integridad FK (sync fuera de orden).
+	///
+	/// No es un tipo de empaque de negocio; no debe proyectarse a Neon.
+	bool get esStubFk =>
+		nombre.trim() == 'Presentación' && unidad.trim() == 'pieza';
+
 	TipoPresentacion copiarWith({
 		String? id,
 		String? nombre,

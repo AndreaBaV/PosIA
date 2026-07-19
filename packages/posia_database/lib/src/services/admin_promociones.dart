@@ -186,6 +186,9 @@ class AdminPromociones {
 
 	Future<void> _registrarEventoLotePromocion(LotePromocion lote) async {
 		final eventoId = await _emisorEventos.lotePromocion(lote);
+		if (eventoId.isEmpty) {
+			return;
+		}
 		await _syncOrchestrator.sincronizarEventosPorIds([eventoId]);
 	}
 
@@ -230,6 +233,9 @@ class AdminPromociones {
 
 	Future<void> _registrarEventoCombo(Combo combo) async {
 		final eventoId = await _emisorEventos.combo(combo);
+		if (eventoId.isEmpty) {
+			return;
+		}
 		await _syncOrchestrator.sincronizarEventosPorIds([eventoId]);
 	}
 }

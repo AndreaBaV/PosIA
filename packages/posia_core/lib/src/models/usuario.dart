@@ -31,6 +31,14 @@ class Usuario {
 	/// Rol personalizado opcional con permisos granulares de admin.
 	final String? rolPersonalizadoId;
 
+	/// Placeholder creado por integridad FK (sync fuera de orden).
+	///
+	/// No es un usuario real; no debe proyectarse a Neon. El `codigo` con
+	/// prefijo `sync-` lo genera [AseguradorPadresFk] y ningun alta manual lo
+	/// produce, asi que identifica al stub sin ambiguedad.
+	bool get esStubFk =>
+		nombre.trim() == 'Usuario' && codigo.startsWith('sync-');
+
 	Usuario copiarCon({
 		String? id,
 		String? nombre,

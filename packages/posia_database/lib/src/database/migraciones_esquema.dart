@@ -610,6 +610,7 @@ class MigracionesEsquema {
 		await migrarVersion32A33(base);
 		await migrarVersion33A34(base);
 		await migrarVersion34A35(base);
+		await migrarVersion35A36(base);
 	}
 
 	/// Tabla guia `ejemplo` en bases ya existentes (v10 → v11).
@@ -1352,6 +1353,28 @@ class MigracionesEsquema {
 		await base.execute('''
 			CREATE INDEX IF NOT EXISTS idx_combo_miembros_producto
 			ON combo_miembros(producto_id)
+		''');
+	}
+
+	/// v36: lapidas de borrado. El borrado manual del administrador es absoluto
+	/// y tiene prioridad sobre el hub.
+	///
+	/// Sin esto, borrar un producto o una categoria no se propagaba (el protocolo
+	/// no tenia evento de borrado) y el siguiente pull lo recreaba; ademas
+	/// cualquier evento hijo atrasado lo resucitaba como stub FK.
+	static Future<void> migrarVersion35A36(Database base) async {
+		await base.execute('''
+			CREATE TABLE IF NOT EXISTS entidades_eliminadas (
+				tipo TEXT NOT NULL,
+				entidad_id TEXT NOT NULL,
+				eliminado_en TEXT NOT NULL,
+				eliminado_por TEXT NOT NULL DEFAULT '',
+				PRIMARY KEY (tipo, entidad_id)
+			)
+		''');
+		await base.execute('''
+			CREATE INDEX IF NOT EXISTS idx_entidades_eliminadas_tipo
+			ON entidades_eliminadas(tipo)
 		''');
 	}
 

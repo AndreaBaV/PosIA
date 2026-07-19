@@ -17,6 +17,7 @@ import '../models/stock_por_tienda.dart';
 import '../repositories/almacen_repository.dart';
 import '../repositories/inventario_repository.dart';
 import '../repositories/lote_promocion_repository.dart';
+import '../repositories/lapida_repository.dart';
 import '../repositories/precio_repository.dart';
 import '../repositories/presentacion_repository.dart';
 import '../repositories/producto_repository.dart';
@@ -70,17 +71,34 @@ class AdminCatalogoProductos {
 	// --- Consultas ---
 
 	/// Lista productos activos de la tienda local.
-	Future<List<Producto>> listarProductos() {
-		return _productoRepository.listarActivosPorTienda(_tiendaActivaId);
+	Future<List<Producto>> listarProductos() async {
+		return _sinEliminados(
+			await _productoRepository.listarActivosPorTienda(_tiendaActivaId),
+		);
 	}
 
-	Future<List<Producto>> listarProductosActivosPorTienda(String tiendaId) {
-		return _productoRepository.listarActivosPorTienda(tiendaId);
+	Future<List<Producto>> listarProductosActivosPorTienda(
+		String tiendaId,
+	) async {
+		return _sinEliminados(
+			await _productoRepository.listarActivosPorTienda(tiendaId),
+		);
 	}
 
 	/// Lista catalogo completo incluyendo inactivos (admin).
-	Future<List<Producto>> listarProductosCatalogo() {
-		return _productoRepository.listarTodosPorTienda(_tiendaActivaId);
+	Future<List<Producto>> listarProductosCatalogo() async {
+		return _sinEliminados(
+			await _productoRepository.listarTodosPorTienda(_tiendaActivaId),
+		);
+	}
+
+	/// Oculta los productos con lapida: para el usuario ya no existen.
+	Future<List<Producto>> _sinEliminados(List<Producto> productos) async {
+		final enterrados = await _productosEliminados();
+		if (enterrados.isEmpty) {
+			return productos;
+		}
+		return productos.where((p) => !enterrados.contains(p.id)).toList();
 	}
 
 	Future<Producto?> obtenerProducto(String productoId) {
@@ -471,7 +489,18 @@ class AdminCatalogoProductos {
 		return true;
 	}
 
-	Future<bool> eliminarProductoPermanente(String productoId) async {
+	/// Borrado manual del administrador: absoluto y con prioridad sobre el hub.
+	///
+	/// Registra una lapida y da de baja logica en lugar de borrar la fila. El
+	/// historial de ventas (`sale_lines`) tiene FK sin cascada, asi que un
+	/// borrado duro fallaria en cuanto el producto tuviera una sola venta; y
+	/// dejar la fila evita que un evento hijo atrasado lo resucite como stub FK.
+	/// La lapida hace que los listados lo oculten y que cualquier
+	/// `productUpserted` remoto posterior se descarte.
+	Future<bool> eliminarProductoPermanente(
+		String productoId, {
+		String eliminadoPor = '',
+	}) async {
 		if (await _productoTieneStock(productoId)) {
 			return false;
 		}
@@ -488,9 +517,25 @@ class AdminCatalogoProductos {
 			await _precioRepository?.eliminarPreciosPorProducto(productoId, db: tx);
 			await _varianteRepository?.eliminarPorProductoPadre(productoId, db: tx);
 			await _inventarioRepository.eliminarStockPorProducto(productoId, db: tx);
-			await _productoRepository.eliminar(productoId, db: tx);
+			await _productoRepository.guardar(
+				producto.copiarCon(activo: false),
+				db: tx,
+			);
+			await LapidaRepository(baseDatos: _baseDatos).registrar(
+				tipo: TipoLapida.producto,
+				entidadId: productoId,
+				eliminadoPor: eliminadoPor,
+				db: tx,
+			);
 		});
+		await _emisorEventos.productoEliminado(productoId);
 		return true;
+	}
+
+	/// Identificadores de producto enterrados por un administrador.
+	Future<Set<String>> _productosEliminados() {
+		return LapidaRepository(baseDatos: _baseDatos)
+			.idsEliminados(TipoLapida.producto);
 	}
 
 	Future<bool> _productoTieneStock(String productoId) async {

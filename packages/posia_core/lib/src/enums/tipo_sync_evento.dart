@@ -117,6 +117,16 @@ enum TipoSyncEvento {
 	/// Proveedor eliminado.
 	supplierDeleted,
 
+	/// Producto eliminado por un administrador (lapida).
+	///
+	/// El borrado manual es absoluto: gana sobre cualquier `productUpserted`
+	/// posterior, sin importar el orden de llegada, y evita que un evento hijo
+	/// atrasado resucite el producto como stub FK.
+	productDeleted,
+
+	/// Categoria eliminada por un administrador (lapida).
+	categoryDeleted,
+
 	/// Compra a proveedor registrada (incluye lineas y efecto en stock).
 	purchaseCompleted,
 

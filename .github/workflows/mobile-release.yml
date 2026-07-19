@@ -29,7 +29,7 @@ env:
   APP_DIR: apps/posia_pos
   # "true" borra SQLite al primer arranque de cada build (fuerza pull desde Neon).
   # Tras una release de recuperación, volver a "false" para no borrar datos en cada update.
-  POSIA_LIMPIAR_CACHE_LOCAL: "true"
+  POSIA_LIMPIAR_CACHE_LOCAL: "false"
 
 jobs:
   android:

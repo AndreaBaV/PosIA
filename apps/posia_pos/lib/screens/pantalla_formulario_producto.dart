@@ -922,14 +922,38 @@ class _PantallaFormularioProductoState
 
   Future<void> _guardar(List<Categoria> categorias) async {
     final nombre = _nombreController.text.trim();
-    final categoriaValida =
-        _categoriaId != null &&
-        categorias.any((c) => c.activa && c.id == _categoriaId);
-    if (nombre.isEmpty || !categoriaValida) {
+    if (nombre.isEmpty) {
       PosiaNotificaciones.mostrarSnackBar(
         context,
         const SnackBar(
-          content: Text('Nombre y categoría son obligatorios'),
+          content: Text('El nombre es obligatorio'),
+          backgroundColor: PosiaColors.cancelar,
+        ),
+      );
+      return;
+    }
+    // El desplegable ofrece las categorias activas y, al editar, tambien la del
+    // producto aunque este desactivada (ver _pestanaGeneral). Exigir aqui que
+    // sea activa rechazaba justo lo que la pantalla dejaba elegir: un producto
+    // cuya categoria se desactivo despues quedaba imposible de guardar, con un
+    // mensaje que ademas culpaba al nombre. En alta si se exige activa.
+    final categoriaSeleccionada = _categoriaId == null
+        ? null
+        : categorias.where((c) => c.id == _categoriaId).firstOrNull;
+    final categoriaValida = categoriaSeleccionada != null &&
+        (categoriaSeleccionada.activa ||
+            (_esEdicion &&
+                widget.productoExistente!.categoriaId == categoriaSeleccionada.id));
+    if (!categoriaValida) {
+      PosiaNotificaciones.mostrarSnackBar(
+        context,
+        SnackBar(
+          content: Text(
+            categoriaSeleccionada == null
+                ? 'Seleccione una categoría'
+                : 'La categoría "${categoriaSeleccionada.nombre}" está '
+                    'desactivada; reactívela o elija otra',
+          ),
           backgroundColor: PosiaColors.cancelar,
         ),
       );

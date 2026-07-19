@@ -32,6 +32,7 @@ import '../models/resumen_ventas_dia.dart';
 import '../models/stock_por_tienda.dart';
 import '../models/stock_por_almacen.dart';
 import '../repositories/categoria_repository.dart';
+import '../repositories/lapida_repository.dart';
 import '../repositories/cliente_repository.dart';
 import '../repositories/combo_repository.dart';
 import '../repositories/compra_repository.dart';
@@ -216,6 +217,7 @@ class ServicioAdmin {
     _categorias = AdminCategorias(
       emisorEventos: _emisorEventos,
       categoriaRepository: categoriaRepository,
+      lapidaRepository: LapidaRepository(baseDatos: baseDatos),
     );
     _vendedores = AdminVendedores(vendedorRepository: vendedorRepository);
     _reportes = AdminReportes(
@@ -3051,7 +3053,7 @@ class ServicioAdmin {
     bool empujarInmediato = true,
   }) async {
     final eventoId = await _emisorEventos.lotePromocion(lote);
-    if (empujarInmediato) {
+    if (empujarInmediato && eventoId.isNotEmpty) {
       await _syncOrchestrator.sincronizarEventosPorIds([eventoId]);
     }
   }
@@ -3061,6 +3063,19 @@ class ServicioAdmin {
     if (repo == null) {
       return;
     }
+    // El hub tiene FK dura product_presentations -> products. Si el producto
+    // padre todavia no existe en Neon, el evento se rechaza con 23503
+    // ("is not present in table products") y se reintenta indefinidamente: el
+    // empaque nunca llega. Hay que emitir el padre y empujarlo en el mismo
+    // lote, delante del evento de presentaciones.
+    final producto = await _productoRepository.obtenerPorId(productoId);
+    if (producto == null || producto.esStubFk) {
+      // Sin padre replicable no tiene sentido encolar sus presentaciones:
+      // solo generaria otro evento envenenado.
+      return;
+    }
+    await _emisorEventos.producto(producto);
+
     final presentaciones = await repo.listarPorProducto(productoId);
     await _emisorEventos.presentacionesReemplazadas(
       productoId,
@@ -3068,18 +3083,26 @@ class ServicioAdmin {
     );
     // Colapsar: deja el snapshot mas reciente por producto.
     await _syncEventRepository.colapsarDuplicadosCatalogo();
-    // Empujar solo el evento de este producto (no la cola antigua completa).
+    // Empujar solo lo de este producto (no la cola antigua completa), con el
+    // productUpserted primero para que el hub lo aplique antes.
     final pendientes = await _syncEventRepository.obtenerPendientes();
+    final idsProducto = pendientes
+        .where(
+          (e) =>
+              e.tipo == TipoSyncEvento.productUpserted &&
+              (e.payload['id']?.toString() == productoId),
+        )
+        .map((e) => e.id);
     final idsEmpaque = pendientes
         .where(
           (e) =>
               e.tipo == TipoSyncEvento.productPresentationsReplaced &&
               (e.payload['productoId']?.toString() == productoId),
         )
-        .map((e) => e.id)
-        .toList();
+        .map((e) => e.id);
+    final ids = [...idsProducto, ...idsEmpaque];
     // ignore: unawaited_futures
-    _syncOrchestrator.sincronizarEventosPorIds(idsEmpaque).catchError(
+    _syncOrchestrator.sincronizarEventosPorIds(ids).catchError(
       (Object _) => const ResultadoEnvioHub(exitoso: false),
     );
   }

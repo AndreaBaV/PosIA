@@ -33,6 +33,22 @@ class Cliente {
 	final String notas;
 	final int diasCredito;
 
+	/// Placeholder creado por integridad FK (sync fuera de orden).
+	///
+	/// No es un cliente de negocio; no debe proyectarse a Neon.
+	bool get esStubFk {
+		if (notas.trim() == '__stub_fk__') {
+			return true;
+		}
+		return nombre.trim() == 'Cliente' &&
+				telefono.trim().isEmpty &&
+				email.trim().isEmpty &&
+				rfc.trim().isEmpty &&
+				direccion.trim().isEmpty &&
+				listaPreciosId == null &&
+				!creditoHabilitado;
+	}
+
 	Cliente copiarCon({
 		String? id,
 		String? nombre,

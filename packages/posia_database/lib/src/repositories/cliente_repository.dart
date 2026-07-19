@@ -79,11 +79,24 @@ class ClienteRepository {
 
 	Future<void> guardar(Cliente cliente) async {
 		await _padresFk.asegurarListaPrecios(cliente.listaPreciosId);
-		await _baseDatos.insert(
+		// Sin ConflictAlgorithm.replace: borraria la fila y el ON DELETE CASCADE
+		// se llevaria customer_product_prices y customer_discounts, es decir los
+		// precios especiales y descuentos del cliente. Ver la misma correccion en
+		// ProductoRepository.guardar.
+		final datos = _mapearMapa(cliente);
+		final filasActualizadas = await _baseDatos.update(
 			'customers',
-			_mapearMapa(cliente),
-			conflictAlgorithm: ConflictAlgorithm.replace,
+			datos,
+			where: 'id = ?',
+			whereArgs: [cliente.id],
 		);
+		if (filasActualizadas == 0) {
+			await _baseDatos.insert(
+				'customers',
+				datos,
+				conflictAlgorithm: ConflictAlgorithm.ignore,
+			);
+		}
 	}
 
 	/// Elimina cliente y datos comerciales vinculados (descuentos, precios especiales).

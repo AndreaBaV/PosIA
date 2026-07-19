@@ -52,6 +52,21 @@ class Producto {
 		return moduloVertical == ModuloVertical.farmacia;
 	}
 
+	/// Placeholder creado por integridad FK (sync fuera de orden).
+	///
+	/// No es un producto de negocio; no debe proyectarse a Neon. Sin esta marca
+	/// el stub viaja a Neon como producto real y, al bajar a los demas equipos,
+	/// reemplaza el producto legitimo que comparte su id.
+	bool get esStubFk {
+		if (notas.trim() == '__stub_fk__') {
+			return true;
+		}
+		return nombre.trim() == 'Producto' &&
+				codigoBarras.trim().isEmpty &&
+				precioBase == 0.0 &&
+				costoUnitario == 0.0;
+	}
+
 	Producto copiarCon({
 		String? id,
 		String? nombre,

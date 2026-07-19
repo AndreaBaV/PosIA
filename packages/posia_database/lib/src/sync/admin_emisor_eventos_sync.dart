@@ -2,8 +2,8 @@
 ///
 /// Unico lugar que arma el payload de cada `SyncEvent` hacia Neon para las
 /// entidades administradas por `ServicioAdmin`. Los stubs FK (ver
-/// `esStubFk` en `Categoria`/`Tienda`/`Proveedor`) nunca se emiten para no
-/// contaminar el catalogo espejo.
+/// `esStubFk` en `Categoria`/`Tienda`/`Proveedor`/`Producto`) nunca se emiten
+/// para no contaminar el catalogo espejo.
 library;
 
 import 'package:posia_core/posia_core.dart';
@@ -67,6 +67,10 @@ class AdminEmisorEventosSync {
 	}
 
 	Future<void> rolPersonalizado(RolPersonalizado rol) {
+		// Stubs FK ("Rol") no son catálogo real; no contaminar Neon.
+		if (rol.esStubFk) {
+			return Future.value();
+		}
 		return _emitir(
 			SyncEvent(
 				id: _idEventoEspejo(TipoSyncEvento.customRoleUpserted, rol.id),
@@ -89,6 +93,10 @@ class AdminEmisorEventosSync {
 	}
 
 	Future<void> cliente(Cliente cliente) {
+		// Stubs FK ("Cliente") no son catálogo real; no contaminar Neon.
+		if (cliente.esStubFk) {
+			return Future.value();
+		}
 		return _emitir(
 			SyncEvent(
 				id: _idEventoEspejo(TipoSyncEvento.customerUpserted, cliente.id),
@@ -330,7 +338,12 @@ class AdminEmisorEventosSync {
 	}
 
 	/// Retorna el id del evento encolado (para empujarlo de inmediato si aplica).
+	/// Retorna el id del evento encolado, o cadena vacia si no se emitio.
 	Future<String> lotePromocion(LotePromocion lote) async {
+		// Stubs FK ("Lote promoción") no son promociones reales.
+		if (lote.esStubFk) {
+			return '';
+		}
 		final evento = SyncEvent(
 			id: _idEventoEspejo(TipoSyncEvento.lotePromocionReplaced, lote.id),
 			tiendaId: _tiendaActivaId,
@@ -353,7 +366,12 @@ class AdminEmisorEventosSync {
 	}
 
 	/// Retorna el id del evento encolado (para empujarlo de inmediato si aplica).
+	/// Retorna el id del evento encolado, o cadena vacia si no se emitio.
 	Future<String> combo(Combo combo) async {
+		// Stubs FK ("Combo") no son promociones reales.
+		if (combo.esStubFk) {
+			return '';
+		}
 		final evento = SyncEvent(
 			id: _idEventoEspejo(TipoSyncEvento.comboReplaced, combo.id),
 			tiendaId: _tiendaActivaId,
@@ -381,6 +399,10 @@ class AdminEmisorEventosSync {
 	}
 
 	Future<void> listaPrecios(ListaPrecios lista) {
+		// Stubs FK ("Lista de precios") no son catálogo real; no contaminar Neon.
+		if (lista.esStubFk) {
+			return Future.value();
+		}
 		return _emitir(
 			SyncEvent(
 				id: _idEventoEspejo(TipoSyncEvento.priceListUpserted, lista.id),
@@ -751,6 +773,10 @@ class AdminEmisorEventosSync {
 	/// [snapshot] viene de `UsuarioRepository.obtenerSnapshotSync`: contiene
 	/// campos (pin, timestamps) que no vive en el modelo `Usuario` de dominio.
 	Future<void> usuario(Usuario usuario, {required UsuarioSnapshotSync snapshot}) {
+		// Stubs FK ("Usuario" con codigo sync-) no son personal real.
+		if (usuario.esStubFk) {
+			return Future.value();
+		}
 		return _emitir(
 			SyncEvent(
 				id: _idEventoEspejo(TipoSyncEvento.userUpserted, usuario.id),
@@ -775,8 +801,47 @@ class AdminEmisorEventosSync {
 		);
 	}
 
+	/// Encola la lapida de un producto borrado por el administrador.
+	///
+	/// El id del evento no se deriva del producto (a diferencia de los espejos):
+	/// una lapida nunca debe colapsarse contra un `productUpserted` del mismo
+	/// producto, porque son afirmaciones opuestas.
+	Future<void> productoEliminado(String productoId) {
+		return _emitir(
+			SyncEvent(
+				id: _generadorId.v4(),
+				tiendaId: _tiendaActivaId,
+				dispositivoId: _cajaId,
+				tipo: TipoSyncEvento.productDeleted,
+				payload: {'id': productoId},
+				creadoEn: DateTime.now().toUtc(),
+				estado: EstadoSyncEvento.pendiente,
+			),
+		);
+	}
+
+	/// Encola la lapida de una categoria borrada por el administrador.
+	Future<void> categoriaEliminada(String categoriaId) {
+		return _emitir(
+			SyncEvent(
+				id: _generadorId.v4(),
+				tiendaId: _tiendaActivaId,
+				dispositivoId: _cajaId,
+				tipo: TipoSyncEvento.categoryDeleted,
+				payload: {'id': categoriaId},
+				creadoEn: DateTime.now().toUtc(),
+				estado: EstadoSyncEvento.pendiente,
+			),
+		);
+	}
+
 	/// Encola evento productUpserted para replicar catalogo.
 	Future<void> producto(Producto producto) {
+		// Stubs FK ("Producto") no son catálogo real; no contaminar Neon/products.
+		// Emitirlos hace que pisen al producto legítimo en los demás equipos.
+		if (producto.esStubFk) {
+			return Future.value();
+		}
 		return _emitir(
 			SyncEvent(
 				id: _idEventoEspejo(TipoSyncEvento.productUpserted, producto.id),
@@ -809,6 +874,10 @@ class AdminEmisorEventosSync {
 	}
 
 	Future<void> almacen(Almacen almacen) {
+		// Stubs FK ("Almacén") no son ubicaciones reales; no contaminar Neon.
+		if (almacen.esStubFk) {
+			return Future.value();
+		}
 		return _emitir(
 			SyncEvent(
 				id: _idEventoEspejo(TipoSyncEvento.warehouseUpserted, almacen.id),
@@ -831,6 +900,10 @@ class AdminEmisorEventosSync {
 	}
 
 	Future<void> tipoPresentacion(TipoPresentacion tipo) {
+		// Stubs FK ("Presentación") no son tipos de empaque reales.
+		if (tipo.esStubFk) {
+			return Future.value();
+		}
 		return _emitir(
 			SyncEvent(
 				id: _idEventoEspejo(TipoSyncEvento.presentationTypeUpserted, tipo.id),

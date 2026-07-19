@@ -188,11 +188,30 @@ class ProductoRepository {
 			proveedorId: producto.proveedorId,
 		);
 		final exec = db ?? _baseDatos;
-		await exec.insert(
+		final datos = _mapearProductoMapa(producto);
+		// NUNCA ConflictAlgorithm.replace aqui. `INSERT OR REPLACE` resuelve el
+		// conflicto de clave primaria BORRANDO la fila existente antes de
+		// insertar la nueva, y desde la migracion v33 ese borrado dispara
+		// ON DELETE CASCADE sobre nueve tablas hijas: presentaciones (empaques),
+		// stock_levels y stock_almacen (inventario), wholesale_tiers (escalas),
+		// product_variants, price_list_items, customer_product_prices,
+		// lote_promocion_miembros y combo_miembros.
+		//
+		// Es decir: guardar un producto le vaciaba empaques, existencias, precios
+		// de mayoreo y variantes. UPDATE + INSERT preserva las filas hijas.
+		final filasActualizadas = await exec.update(
 			'products',
-			_mapearProductoMapa(producto),
-			conflictAlgorithm: ConflictAlgorithm.replace,
+			datos,
+			where: 'id = ?',
+			whereArgs: [producto.id],
 		);
+		if (filasActualizadas == 0) {
+			await exec.insert(
+				'products',
+				datos,
+				conflictAlgorithm: ConflictAlgorithm.ignore,
+			);
+		}
 	}
 
 	/// Convierte fila SQLite a entidad [Producto].

@@ -14,6 +14,18 @@ class AseguradorPadresFk {
 
 	static const _tiendaSync = 'tienda-sync';
 
+	/// Verifica existencia del padre antes de insertar un stub.
+	///
+	/// **No redirigir a la conexion de escritura.** `aplicarEvento` envuelve los
+	/// eventos transaccionales en `_baseDatos.transaction(...)` sobre esa misma
+	/// conexion, y sqflite serializa las operaciones por conexion: una consulta
+	/// lanzada aparte quedaria encolada detras de la transaccion mientras la
+	/// transaccion espera la consulta — deadlock, la app entera se cuelga.
+	///
+	/// El riesgo que motivo el intento (un snapshot de lectura retrasado hace
+	/// creer que el padre no existe y genera un stub) se atacó en su origen:
+	/// la base ya no vive en una carpeta sincronizada, asi que el `-shm` se
+	/// mantiene al dia y la conexion de lectura ve el WAL.
 	Future<bool> _existe(String tabla, String id) async {
 		final filas = await _baseDatos.query(
 			tabla,
@@ -127,7 +139,8 @@ class AseguradorPadresFk {
 				'email': '',
 				'rfc': '',
 				'direccion': '',
-				'notas': '',
+				// Stub FK local: no debe subirse a Neon como cliente real.
+				'notas': '__stub_fk__',
 				'dias_credito': DIAS_CREDITO_PREDETERMINADO,
 			},
 			conflictAlgorithm: ConflictAlgorithm.ignore,
@@ -577,6 +590,9 @@ class AseguradorPadresFk {
 			);
 			return;
 		}
+		// Stub FK local: no debe subirse al catálogo Neon como producto real.
+		// Sin la marca, este placeholder se replica y reemplaza al producto
+		// legítimo que comparte su id en el resto de los equipos.
 		await _baseDatos.insert(
 			'products',
 			{
@@ -589,7 +605,7 @@ class AseguradorPadresFk {
 				'activo': 1,
 				'tienda_id': tienda,
 				'modulo_vertical': ModuloVertical.general.name,
-				'notas': '',
+				'notas': '__stub_fk__',
 				'costo_unitario': 0.0,
 				'favorito_caja': 0,
 				'permite_stock_negativo': 1,

@@ -49,6 +49,13 @@ class Combo {
 	/// Productos miembro con su cantidad requerida.
 	final List<ComboMiembro> miembros;
 
+	/// Placeholder creado por integridad FK (sync fuera de orden).
+	///
+	/// No es un combo de negocio; no debe proyectarse a Neon. Un combo real sin
+	/// miembros y con precio cero no tendria sentido comercial.
+	bool get esStubFk =>
+		nombre.trim() == 'Combo' && precioCombo == 0.0 && miembros.isEmpty;
+
 	Combo copiarCon({
 		String? id,
 		String? nombre,

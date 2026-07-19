@@ -21,6 +21,15 @@ class Almacen {
 	final double? longitud;
 	final double radioMetros;
 
+	/// Placeholder creado por integridad FK (sync fuera de orden).
+	///
+	/// No es un almacen de negocio; no debe proyectarse a Neon.
+	bool get esStubFk =>
+		nombre.trim() == 'Almacén' &&
+		latitud == null &&
+		longitud == null &&
+		radioMetros == 150;
+
 	Almacen copiarCon({
 		String? id,
 		String? nombre,

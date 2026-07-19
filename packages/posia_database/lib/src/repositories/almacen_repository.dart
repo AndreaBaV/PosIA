@@ -47,19 +47,31 @@ class AlmacenRepository {
 
 	Future<void> guardar(Almacen almacen) async {
 		await _padresFk.asegurarTienda(almacen.tiendaId);
-		await _baseDatos.insert(
+		// Sin ConflictAlgorithm.replace: borraria la fila y el ON DELETE CASCADE
+		// vaciaria stock_almacen, o sea las existencias del almacen. Ver la misma
+		// correccion en ProductoRepository.guardar.
+		final datos = {
+			'id': almacen.id,
+			'nombre': almacen.nombre,
+			'tienda_id': almacen.tiendaId,
+			'activo': almacen.activo ? 1 : 0,
+			'latitud': almacen.latitud,
+			'longitud': almacen.longitud,
+			'radio_metros': almacen.radioMetros,
+		};
+		final filasActualizadas = await _baseDatos.update(
 			'almacenes',
-			{
-				'id': almacen.id,
-				'nombre': almacen.nombre,
-				'tienda_id': almacen.tiendaId,
-				'activo': almacen.activo ? 1 : 0,
-				'latitud': almacen.latitud,
-				'longitud': almacen.longitud,
-				'radio_metros': almacen.radioMetros,
-			},
-			conflictAlgorithm: ConflictAlgorithm.replace,
+			datos,
+			where: 'id = ?',
+			whereArgs: [almacen.id],
 		);
+		if (filasActualizadas == 0) {
+			await _baseDatos.insert(
+				'almacenes',
+				datos,
+				conflictAlgorithm: ConflictAlgorithm.ignore,
+			);
+		}
 	}
 
 	Future<StockAlmacen?> obtenerStock(

@@ -10,6 +10,7 @@ import 'package:posia_core/posia_core.dart';
 import 'package:uuid/uuid.dart';
 
 import '../repositories/categoria_repository.dart';
+import '../repositories/lapida_repository.dart';
 import '../sync/admin_emisor_eventos_sync.dart';
 
 /// Catálogo de categorías de producto.
@@ -17,15 +18,26 @@ class AdminCategorias {
 	AdminCategorias({
 		required AdminEmisorEventosSync emisorEventos,
 		CategoriaRepository? categoriaRepository,
+		LapidaRepository? lapidaRepository,
 	}) : _emisorEventos = emisorEventos,
-	     _categoriaRepository = categoriaRepository;
+	     _categoriaRepository = categoriaRepository,
+	     _lapidaRepository = lapidaRepository;
 
 	final AdminEmisorEventosSync _emisorEventos;
 	final CategoriaRepository? _categoriaRepository;
+	final LapidaRepository? _lapidaRepository;
 	final Uuid _generadorId = const Uuid();
 
 	Future<List<Categoria>> listarCategorias() async {
-		return _categoriaRepository?.listarTodas() ?? [];
+		final todas = await _categoriaRepository?.listarTodas() ?? [];
+		final enterradas =
+			await _lapidaRepository?.idsEliminados(TipoLapida.categoria) ??
+			const <String>{};
+		if (enterradas.isEmpty) {
+			return todas;
+		}
+		// Las eliminadas por un administrador ya no existen para el usuario.
+		return todas.where((c) => !enterradas.contains(c.id)).toList();
 	}
 
 	/// Crea la categoría o, si ya existe una activa con el mismo nombre
@@ -86,7 +98,16 @@ class AdminCategorias {
 		}
 	}
 
-	Future<void> eliminarCategoria(String categoriaId) async {
+	/// Borrado manual del administrador: absoluto y con prioridad sobre el hub.
+	///
+	/// Antes solo hacia baja logica y emitia un upsert con `activa: false`, asi
+	/// que cualquier equipo podia reactivarla y volvia a aparecer. Ahora ademas
+	/// deja lapida: los listados la ocultan y todo `categoryUpserted` posterior
+	/// se descarta en cualquier caja.
+	Future<void> eliminarCategoria(
+		String categoriaId, {
+		String eliminadoPor = '',
+	}) async {
 		final repo = _categoriaRepository;
 		if (repo == null) {
 			throw StateError('Repositorio de categorias no configurado');
@@ -97,6 +118,11 @@ class AdminCategorias {
 			return;
 		}
 		await repo.guardar(categoria.copiarCon(activa: false));
-		await _emisorEventos.categoria(categoria.copiarCon(activa: false));
+		await _lapidaRepository?.registrar(
+			tipo: TipoLapida.categoria,
+			entidadId: categoriaId,
+			eliminadoPor: eliminadoPor,
+		);
+		await _emisorEventos.categoriaEliminada(categoriaId);
 	}
 }

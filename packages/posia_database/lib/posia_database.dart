@@ -46,6 +46,7 @@ export 'src/repositories/lote_farmacia_repository.dart';
 export 'src/repositories/combo_repository.dart';
 export 'src/repositories/lote_promocion_repository.dart';
 export 'src/repositories/precio_repository.dart';
+export 'src/repositories/lapida_repository.dart';
 export 'src/repositories/producto_repository.dart';
 export 'src/repositories/sync_event_repository.dart';
 export 'src/repositories/sync_state_repository.dart';

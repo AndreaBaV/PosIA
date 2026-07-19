@@ -151,6 +151,14 @@ class _PanelEmpaquesProductoState extends ConsumerState<PanelEmpaquesProducto> {
 	bool _cargando = true;
 	bool _procesando = false;
 
+	/// Ultimo fallo al persistir un empaque, mostrado fijo en el panel.
+	///
+	/// Los SnackBar de esta pantalla se perdian: los del diálogo quedaban detrás
+	/// de la barrera modal y los del panel se descartaban si el widget ya no
+	/// estaba montado. El resultado era un guardado que no ocurría y no decía
+	/// nada. Este banner permanece hasta que el usuario lo cierra.
+	String? _errorPersistente;
+
 	bool get _esProductoNuevo => widget.productoId == null;
 
 	@override
@@ -366,6 +374,11 @@ class _PanelEmpaquesProductoState extends ConsumerState<PanelEmpaquesProducto> {
 			}
 		}
 
+		// Los errores de validación se muestran DENTRO del diálogo. Con
+		// ScaffoldMessenger el SnackBar queda detrás de la barrera modal: el
+		// usuario pulsa Guardar, la validación falla y no aparece nada.
+		String? errorDialogo;
+
 		final guardado = await showDialog<bool>(
 			context: context,
 			builder: (ctx) => StatefulBuilder(
@@ -405,7 +418,7 @@ class _PanelEmpaquesProductoState extends ConsumerState<PanelEmpaquesProducto> {
 										),
 										onChanged: (_) {
 											sincronizarPrecioSugerido();
-											setLocal(() {});
+											setLocal(() => errorDialogo = null);
 										},
 									),
 									const SizedBox(height: 12.0),
@@ -444,6 +457,36 @@ class _PanelEmpaquesProductoState extends ConsumerState<PanelEmpaquesProducto> {
 										labelText: 'Precio de venta (opcional)',
 										obligatorio: false,
 									),
+									if (errorDialogo != null) ...[
+										const SizedBox(height: 12.0),
+										Container(
+											width: double.infinity,
+											padding: const EdgeInsets.all(12.0),
+											decoration: BoxDecoration(
+												color: PosiaColors.cancelar.withValues(alpha: 0.10),
+												borderRadius: BorderRadius.circular(8.0),
+											),
+											child: Row(
+												crossAxisAlignment: CrossAxisAlignment.start,
+												children: [
+													const Icon(
+														Icons.error_outline,
+														color: PosiaColors.cancelar,
+														size: 20.0,
+													),
+													const SizedBox(width: 8.0),
+													Expanded(
+														child: Text(
+															errorDialogo!,
+															style: const TextStyle(
+																color: PosiaColors.cancelar,
+															),
+														),
+													),
+												],
+											),
+										),
+									],
 								],
 							),
 						),
@@ -458,14 +501,10 @@ class _PanelEmpaquesProductoState extends ConsumerState<PanelEmpaquesProducto> {
 									final factor =
 										parsearPrecioTexto(factorController.text) ?? 0.0;
 									if (nombre.isEmpty || factor <= 0) {
-										PosiaNotificaciones.mostrarSnackBar(
-											ctx,
-											const SnackBar(
-												content: Text(
-													'Nombre y cantidad válida son obligatorios',
-												),
-												backgroundColor: PosiaColors.cancelar,
-											),
+										setLocal(
+											() => errorDialogo = nombre.isEmpty
+												? 'Escriba un nombre para el empaque'
+												: 'La cantidad por empaque debe ser mayor a 0',
 										);
 										return;
 									}
@@ -477,13 +516,7 @@ class _PanelEmpaquesProductoState extends ConsumerState<PanelEmpaquesProducto> {
 										obligatorio: false,
 									);
 									if (errorPrecio != null && textoPrecio.isNotEmpty) {
-										PosiaNotificaciones.mostrarSnackBar(
-											ctx,
-											SnackBar(
-												content: Text(errorPrecio),
-												backgroundColor: PosiaColors.cancelar,
-											),
-										);
+										setLocal(() => errorDialogo = errorPrecio);
 										return;
 									}
 									if (_factorYaExiste(
@@ -491,16 +524,13 @@ class _PanelEmpaquesProductoState extends ConsumerState<PanelEmpaquesProducto> {
 										excluirPresentacionId: existente?.id,
 										excluirIndicePendiente: indicePendiente,
 									)) {
-										PosiaNotificaciones.mostrarSnackBar(
-											ctx,
-											SnackBar(
-												content: Text(
-													existente != null || indicePendiente != null
-														? 'Ya existe otro empaque con ese factor'
-														: 'Ya existe un empaque con ese factor',
-												),
-												backgroundColor: PosiaColors.cancelar,
-											),
+										setLocal(
+											() => errorDialogo = existente != null ||
+													indicePendiente != null
+												? 'Ya existe otro empaque con esa cantidad '
+													'(${_formatearFactor(factor)})'
+												: 'Ya existe un empaque con esa cantidad '
+													'(${_formatearFactor(factor)})',
 										);
 										return;
 									}
@@ -570,9 +600,14 @@ class _PanelEmpaquesProductoState extends ConsumerState<PanelEmpaquesProducto> {
 			if (!mounted) {
 				return;
 			}
+			setState(() => _errorPersistente = null);
 			_mostrarExito('Empaque guardado');
-		} catch (error) {
+		} catch (error, rastro) {
+			// Nunca tragar el fallo: si el widget se desmontó no hay setState
+			// posible, pero al menos queda en el log de la plataforma.
+			debugPrint('POSIA: fallo al guardar empaque: $error\n$rastro');
 			if (mounted) {
+				setState(() => _errorPersistente = '$error');
 				_mostrarError('$error');
 			}
 		} finally {
@@ -689,6 +724,55 @@ class _PanelEmpaquesProductoState extends ConsumerState<PanelEmpaquesProducto> {
 										),
 									),
 								],
+							),
+						],
+						if (_errorPersistente != null) ...[
+							const SizedBox(height: 12.0),
+							Container(
+								padding: const EdgeInsets.all(12.0),
+								decoration: BoxDecoration(
+									color: PosiaColors.cancelar.withValues(alpha: 0.10),
+									border: Border.all(
+										color: PosiaColors.cancelar.withValues(alpha: 0.40),
+									),
+									borderRadius: BorderRadius.circular(8.0),
+								),
+								child: Row(
+									crossAxisAlignment: CrossAxisAlignment.start,
+									children: [
+										const Icon(
+											Icons.error_outline,
+											color: PosiaColors.cancelar,
+											size: 20.0,
+										),
+										const SizedBox(width: 8.0),
+										Expanded(
+											child: Column(
+												crossAxisAlignment: CrossAxisAlignment.start,
+												children: [
+													const Text(
+														'No se pudo guardar el empaque',
+														style: TextStyle(
+															fontWeight: FontWeight.bold,
+															color: PosiaColors.cancelar,
+														),
+													),
+													const SizedBox(height: 4.0),
+													Text(
+														_errorPersistente!,
+														style: const TextStyle(fontSize: 12.0),
+													),
+												],
+											),
+										),
+										IconButton(
+											icon: const Icon(Icons.close, size: 18.0),
+											tooltip: 'Cerrar',
+											onPressed: () =>
+												setState(() => _errorPersistente = null),
+										),
+									],
+								),
 							),
 						],
 						const SizedBox(height: 16.0),

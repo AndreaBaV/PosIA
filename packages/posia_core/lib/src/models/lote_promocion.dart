@@ -37,6 +37,16 @@ class LotePromocion {
   /// Productos miembros del lote (puede ir vacio si solo se consulta la escala).
   final List<String> productoIds;
 
+  /// Placeholder creado por integridad FK (sync fuera de orden).
+  ///
+  /// No es un lote de negocio; no debe proyectarse a Neon. El stub copia el id
+  /// en `codigoExterno`, cosa que un alta real nunca hace.
+  bool get esStubFk =>
+      nombre.trim() == 'Lote promoción' &&
+      codigoExterno == id &&
+      precioUnitario == 0.0 &&
+      productoIds.isEmpty;
+
   LotePromocion copiarCon({
     String? id,
     String? codigoExterno,

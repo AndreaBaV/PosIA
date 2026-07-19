@@ -63,6 +63,9 @@ class FixtureAdmin {
 			movimientoRepository: MovimientoInventarioRepository(baseDatos: base),
 			traspasoRepository: TraspasoRepository(baseDatos: base),
 			varianteRepository: VarianteRepository(baseDatos: base),
+			// La app real siempre lo cablea (ver FabricaServicios); sin esto el
+			// fixture no ejercita la ruta de empaques.
+			presentacionRepository: PresentacionRepository(baseDatos: base),
 			baseDatos: base,
 			tiendaActivaId: tiendaId,
 			cajaId: cajaPruebaId,

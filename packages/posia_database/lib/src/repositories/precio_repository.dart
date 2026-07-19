@@ -370,15 +370,27 @@ class PrecioRepository implements RepositorioPrecio {
 
 	/// Guarda lista de precios.
 	Future<void> guardarLista(ListaPrecios lista) async {
-		await _baseDatos.insert(
+		// Sin ConflictAlgorithm.replace: borraria la fila y el ON DELETE CASCADE
+		// vaciaria price_list_items, es decir todos los precios de la lista. Ver
+		// la misma correccion en ProductoRepository.guardar.
+		final datos = {
+			'id': lista.id,
+			'nombre': lista.nombre,
+			'activa': lista.activa ? 1 : 0,
+		};
+		final filasActualizadas = await _baseDatos.update(
 			'price_lists',
-			{
-				'id': lista.id,
-				'nombre': lista.nombre,
-				'activa': lista.activa ? 1 : 0,
-			},
-			conflictAlgorithm: ConflictAlgorithm.replace,
+			datos,
+			where: 'id = ?',
+			whereArgs: [lista.id],
 		);
+		if (filasActualizadas == 0) {
+			await _baseDatos.insert(
+				'price_lists',
+				datos,
+				conflictAlgorithm: ConflictAlgorithm.ignore,
+			);
+		}
 	}
 
 	/// Precios de productos en una lista.
