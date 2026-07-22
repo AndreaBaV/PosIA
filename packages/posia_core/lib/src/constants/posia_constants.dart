@@ -56,6 +56,16 @@ const int INTERVALO_MANTENER_HUB_VIVO_SEGUNDOS = 600;
 /// Timeout HTTP normal de sync (falla rapido y reintenta en el siguiente ciclo).
 const int TIMEOUT_HUB_SYNC_SEGUNDOS = 15;
 
+/// Timeout al empujar un lote de eventos al hub.
+///
+/// Mucho mas alto que [TIMEOUT_HUB_SYNC_SEGUNDOS]: un POST /v1/events escribe y
+/// proyecta el lote completo en Postgres, y el hub serializa las escrituras, asi
+/// que con varias cajas activas la respuesta puede tardar. Rendirse antes de
+/// tiempo era peor que esperar: el hub terminaba guardando el lote (200, todos
+/// aceptados) pero el cliente ya lo habia dado por fallido y lo reenviaba al
+/// siguiente ciclo, alimentando la fila del servidor hasta colapsarla.
+const int TIMEOUT_HUB_ENVIO_EVENTOS_SEGUNDOS = 180;
+
 /// Timeout del health check del hub.
 ///
 /// Algunos planes gratuitos (Northflank spot, etc.) suspenden el contenedor por
@@ -67,6 +77,13 @@ const int TIMEOUT_HUB_DESPERTAR_SEGUNDOS = 60;
 
 /// Eventos por lote al empujar la cola local al hub.
 const int TAMANO_LOTE_SYNC_HUB = 40;
+
+/// Tiempo maximo que la fase de envio puede consumir en un ciclo de sync.
+///
+/// Con colas de miles de eventos el envio completo no cabe en un ciclo; se
+/// avanza lo que se pueda y el resto sigue en cola para el siguiente. Acota
+/// tambien el peor caso de varios lotes agotando [TIMEOUT_HUB_ENVIO_EVENTOS_SEGUNDOS].
+const int PRESUPUESTO_ENVIO_SYNC_SEGUNDOS = 300;
 
 /// Si la cola local supera este umbral, no se reencola el catalogo completo
 /// (evita multiplicar pendientes al pulsar "Sincronizar" varias veces).

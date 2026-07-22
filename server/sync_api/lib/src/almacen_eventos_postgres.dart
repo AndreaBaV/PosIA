@@ -126,36 +126,32 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 		final pool = await _obtenerPool();
 		final cronometro = Stopwatch()..start();
 		var aceptados = 0;
+		var modo = 'lote';
 		// Una sola conexion por lote: evita N adquisiciones del semaforo
 		// (cada pool.runTx pelea por un slot con connectTimeout ~15s).
 		await pool.withConnection((conexion) async {
+			// Camino rapido: TODO el lote en una transaccion. Antes se abria una
+			// transaccion por evento (40 BEGIN/COMMIT extra contra Neon), lo que
+			// costaba ~18 s por lote de 40; como las escrituras estan serializadas
+			// en `_colaEscritura`, esa demora se acumulaba en una fila global de
+			// minutos y los clientes cortaban por timeout antes de recibir el 200.
+			try {
+				aceptados = await conexion.runTx(
+					(tx) => _aplicarEventos(tx, eventos, cacheTiendas: <String>{}),
+				);
+				return;
+			} on Object catch (error) {
+				// Un solo evento invalido aborta la transaccion completa: se
+				// reintenta evento por evento para aislarlo y salvar el resto.
+				stdout.writeln('Sync: lote en bloque fallo ($error); aislando eventos');
+			}
+			modo = 'aislado';
+			aceptados = 0;
 			for (final evento in eventos) {
 				try {
-					await conexion.runTx((tx) async {
-						await tx.execute(
-							Sql.named('''
-								INSERT INTO sync_events
-									(id, store_id, device_id, type, payload, created_at)
-								VALUES
-									(@id, @storeId, @deviceId, @type, @payload, @createdAt)
-								ON CONFLICT (id) DO UPDATE SET
-									store_id = EXCLUDED.store_id,
-									device_id = EXCLUDED.device_id,
-									type = EXCLUDED.type,
-									payload = EXCLUDED.payload,
-									created_at = EXCLUDED.created_at
-							'''),
-							parameters: {
-								'id': evento.id,
-								'storeId': evento.tiendaId,
-								'deviceId': evento.dispositivoId,
-								'type': evento.tipo,
-								'payload': jsonEncode(evento.payload),
-								'createdAt': evento.creadoEn,
-							},
-						);
-						await ProyectorEventosPostgres(tx).aplicar(evento);
-					});
+					// Sin cache de tiendas: si esta transaccion revierte, un id
+					// cacheado quedaria marcado como insertado sin estarlo.
+					await conexion.runTx((tx) => _aplicarEventos(tx, [evento]));
 					aceptados = aceptados + 1;
 				} on Object catch (error) {
 					stdout.writeln(
@@ -166,10 +162,48 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 		});
 		cronometro.stop();
 		stdout.writeln(
-			'Sync: lote ${eventos.length} eventos, '
+			'Sync: lote ${eventos.length} eventos ($modo), '
 			'$aceptados aceptados en ${cronometro.elapsed}',
 		);
 		return aceptados;
+	}
+
+	/// Persiste y proyecta [eventos] dentro de la sesion/transaccion [tx].
+	///
+	/// Retorna cuantos se aplicaron. Si alguno lanza, propaga: quien llama
+	/// decide si revierte el bloque o reintenta evento por evento.
+	Future<int> _aplicarEventos(
+		Session tx,
+		List<EventoHub> eventos, {
+		Set<String>? cacheTiendas,
+	}) async {
+		final proyector = ProyectorEventosPostgres(tx, cacheTiendas: cacheTiendas);
+		for (final evento in eventos) {
+			await tx.execute(
+				Sql.named('''
+					INSERT INTO sync_events
+						(id, store_id, device_id, type, payload, created_at)
+					VALUES
+						(@id, @storeId, @deviceId, @type, @payload, @createdAt)
+					ON CONFLICT (id) DO UPDATE SET
+						store_id = EXCLUDED.store_id,
+						device_id = EXCLUDED.device_id,
+						type = EXCLUDED.type,
+						payload = EXCLUDED.payload,
+						created_at = EXCLUDED.created_at
+				'''),
+				parameters: {
+					'id': evento.id,
+					'storeId': evento.tiendaId,
+					'deviceId': evento.dispositivoId,
+					'type': evento.tipo,
+					'payload': jsonEncode(evento.payload),
+					'createdAt': evento.creadoEn,
+				},
+			);
+			await proyector.aplicar(evento);
+		}
+		return eventos.length;
 	}
 
 	@override

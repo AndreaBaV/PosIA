@@ -120,7 +120,14 @@ class SyncOrchestrator {
     final total = pendientes.length;
     var enviados = 0;
     var fallosConsecutivos = 0;
+    var detener = false;
     const maxFallosConsecutivos = 3;
+    // Acota el ciclo completo: un lote puede tardar hasta
+    // TIMEOUT_HUB_ENVIO_EVENTOS_SEGUNDOS, y sin presupuesto varios lotes lentos
+    // dejarian la UI en "Sincronizando…" durante mucho tiempo. Lo que no quepa
+    // sigue en cola para el siguiente ciclo.
+    final cronometro = Stopwatch()..start();
+    const presupuesto = Duration(seconds: PRESUPUESTO_ENVIO_SYNC_SEGUNDOS);
 
     // Agrupar por identidad hub: un POST admite un solo storeId/deviceId.
     final porIdentidad = <String, List<SyncEvent>>{};
@@ -145,6 +152,7 @@ class SyncOrchestrator {
         }
         fallosConsecutivos = fallosConsecutivos + 1;
         if (fallosConsecutivos >= maxFallosConsecutivos) {
+          detener = true;
           break;
         }
         continue;
@@ -155,6 +163,10 @@ class SyncOrchestrator {
             ? eventosGrupo.length
             : i + TAMANO_LOTE_SYNC_HUB;
         final lote = eventosGrupo.sublist(i, fin);
+        if (cronometro.elapsed >= presupuesto) {
+          detener = true;
+          break;
+        }
         alProgreso?.call(
           ProgresoSync(
             fase: FaseProgresoSync.enviar,
@@ -181,11 +193,12 @@ class SyncOrchestrator {
           }
           fallosConsecutivos = fallosConsecutivos + 1;
           if (fallosConsecutivos >= maxFallosConsecutivos) {
+            detener = true;
             break;
           }
         }
       }
-      if (fallosConsecutivos >= maxFallosConsecutivos) {
+      if (detener) {
         break;
       }
     }
@@ -208,7 +221,33 @@ class SyncOrchestrator {
     return _sincronizarInterno(reiniciarCursor: true, alProgreso: alProgreso);
   }
 
+  /// Ciclo en vuelo, si lo hay. Ver [_sincronizarInterno].
+  Future<ResultadoSync>? _cicloEnCurso;
+
+  /// Serializa los ciclos de sync de este dispositivo.
+  ///
+  /// Hay varios disparadores (temporizador de 60 s, boton "Sincronizar ahora",
+  /// login, corte de caja, reconciliacion) y cada uno tenia su propio candado o
+  /// ninguno, asi que podian solaparse y multiplicar los POST contra un hub que
+  /// ya venia lento. Quien llega mientras hay un ciclo en curso se engancha a
+  /// ese mismo resultado en vez de abrir otro.
   Future<ResultadoSync> _sincronizarInterno({
+    required bool reiniciarCursor,
+    ReporteProgresoSync? alProgreso,
+  }) {
+    final enCurso = _cicloEnCurso;
+    if (enCurso != null) {
+      return enCurso;
+    }
+    final ciclo = _ejecutarCiclo(
+      reiniciarCursor: reiniciarCursor,
+      alProgreso: alProgreso,
+    );
+    _cicloEnCurso = ciclo;
+    return ciclo.whenComplete(() => _cicloEnCurso = null);
+  }
+
+  Future<ResultadoSync> _ejecutarCiclo({
     required bool reiniciarCursor,
     ReporteProgresoSync? alProgreso,
   }) async {

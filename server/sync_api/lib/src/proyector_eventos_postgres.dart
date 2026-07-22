@@ -10,9 +10,15 @@ import 'evento_hub.dart';
 
 /// Aplica eventos de dominio sobre el esquema operativo Postgres.
 class ProyectorEventosPostgres {
-  ProyectorEventosPostgres(this._sesion);
+  /// [cacheTiendas] Ids de tienda ya asegurados en esta transaccion. Compartirlo
+  /// entre los eventos de un mismo lote evita repetir el upsert de `stores` una
+  /// vez por evento. Solo es valido mientras la transaccion no revierta: pasar
+  /// `null` (default) cuando cada evento va en su propia transaccion.
+  ProyectorEventosPostgres(this._sesion, {Set<String>? cacheTiendas})
+    : _cacheTiendas = cacheTiendas;
 
   final Session _sesion;
+  final Set<String>? _cacheTiendas;
 
   /// Proyecta un evento recien persistido en sync_events.
   Future<void> aplicar(EventoHub evento) async {
@@ -605,6 +611,10 @@ class ProyectorEventosPostgres {
 
   Future<void> _asegurarTienda(String tiendaId) async {
     if (tiendaId.isEmpty) {
+      return;
+    }
+    final cache = _cacheTiendas;
+    if (cache != null && !cache.add(tiendaId)) {
       return;
     }
     await _sesion.execute(

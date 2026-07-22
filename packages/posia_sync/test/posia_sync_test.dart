@@ -224,4 +224,56 @@ void main() {
 		expect(resultado.eventosEnviados, 1);
 		expect(storeIdEnviado, 'tienda-1');
 	});
+
+	test('ciclos simultaneos se enganchan al mismo sync sin duplicar POST', () async {
+		final cola = ColaEventosMemoria();
+		await cola.encolar(crearEvento('ev-concurrente'));
+		var posts = 0;
+		final cliente = HubSyncClient(
+			urlBase: 'https://hub.test',
+			clienteHttp: MockClient((request) async {
+				if (request.url.path.endsWith('/v1/health')) {
+					return http.Response('{"ok":true}', 200);
+				}
+				if (request.method == 'POST') {
+					posts = posts + 1;
+					// Simula un hub lento: da tiempo a que el segundo disparador
+					// entre mientras el primero sigue en vuelo.
+					await Future<void>.delayed(const Duration(milliseconds: 20));
+					return http.Response(
+						'{"accepted":1,"received":1}',
+						200,
+						headers: {'Content-Type': 'application/json'},
+					);
+				}
+				return http.Response(
+					'{"events":[],"lastSeq":0}',
+					200,
+					headers: {'Content-Type': 'application/json'},
+				);
+			}),
+		);
+		final orquestador = SyncOrchestrator(
+			colaLocal: cola,
+			clienteHub: cliente,
+			clienteLan: null,
+			aplicadorRemoto: AplicadorMemoria(),
+			almacenCursor: CursorMemoria(),
+			tiendaId: 'tienda-1',
+			dispositivoId: 'caja-1',
+		);
+		// El temporizador de 60 s y el boton "Sincronizar ahora" disparando a la vez.
+		final resultados = await Future.wait([
+			orquestador.sincronizarCompleto(),
+			orquestador.sincronizarCompleto(),
+		]);
+		expect(posts, 1);
+		expect(resultados[0].eventosEnviados, 1);
+		expect(resultados[1].eventosEnviados, 1);
+
+		// Terminado el ciclo, un sync posterior vuelve a ejecutarse normalmente.
+		await cola.encolar(crearEvento('ev-posterior'));
+		await orquestador.sincronizarCompleto();
+		expect(posts, 2);
+	});
 }

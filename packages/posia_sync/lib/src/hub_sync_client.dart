@@ -42,9 +42,29 @@ class HubSyncClient {
     required String urlBase,
     String? claveApi,
     http.Client? clienteHttp,
-  }) : _urlBase = urlBase,
+  }) : _urlBase = normalizarUrlBase(urlBase),
        _claveApi = claveApi,
        _clienteHttp = clienteHttp ?? http.Client();
+
+  /// Quita barras finales y un `/v1` sobrante de la URL configurada.
+  ///
+  /// Todas las rutas de esta clase concatenan `/v1/...`. Si el usuario captura
+  /// la direccion del hub incluyendo el prefijo (algo natural al copiarla del
+  /// navegador), quedaba `/v1/v1/auth/preview` y el hub respondia 404 en TODAS
+  /// las llamadas: la app lo mostraba como "usuario no encontrado".
+  static String normalizarUrlBase(String urlBase) {
+    var base = urlBase.trim();
+    while (base.endsWith('/')) {
+      base = base.substring(0, base.length - 1);
+    }
+    if (base.toLowerCase().endsWith('/v1')) {
+      base = base.substring(0, base.length - 3);
+    }
+    while (base.endsWith('/')) {
+      base = base.substring(0, base.length - 1);
+    }
+    return base;
+  }
 
   final String _urlBase;
   final String? _claveApi;
@@ -81,7 +101,7 @@ class HubSyncClient {
     try {
       final respuesta = await _clienteHttp
           .post(uri, headers: _construirCabeceras(), body: cuerpo)
-          .timeout(const Duration(seconds: TIMEOUT_HUB_SYNC_SEGUNDOS));
+          .timeout(const Duration(seconds: TIMEOUT_HUB_ENVIO_EVENTOS_SEGUNDOS));
       if (respuesta.statusCode < 200 || respuesta.statusCode >= 300) {
         return ResultadoEnvioHub(
           exitoso: false,
