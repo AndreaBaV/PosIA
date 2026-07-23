@@ -50,6 +50,83 @@ void main() {
 			await fixture.cerrar();
 		});
 
+		test('registrarProductoCompleto sin codigo reutiliza el activo con el mismo nombre',
+			() async {
+			final fixture = await FixtureAdmin.abrir();
+			final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
+			// Regresion: importar granel dos veces (sin codigo de barras) creaba un
+			// producto nuevo cada vez -> duplicados que se propagaban por sync a
+			// todos los dispositivos.
+			final primero = await servicio.registrarProductoCompleto(
+				AltaProductoRequest(
+					nombre: 'Almendra Fileteada',
+					codigoBarras: '',
+					precioBase: 300.0,
+					categoriaId: fixture.categoriaId,
+					stockInicial: 5.0,
+					notas: 'importacion:kg',
+				),
+			);
+			final segundo = await servicio.registrarProductoCompleto(
+				AltaProductoRequest(
+					nombre: '  almendra fileteada  ',
+					codigoBarras: '',
+					precioBase: 320.0,
+					categoriaId: fixture.categoriaId,
+					stockInicial: 999.0,
+					notas: 'importacion:kg',
+				),
+			);
+			expect(segundo.id, primero.id, reason: 'mismo producto, no un duplicado');
+			expect(segundo.precioBase, 320.0, reason: 'el reimport actualiza el precio');
+
+			final activos = await servicio.listarProductosCatalogo();
+			expect(
+				activos.where((p) => p.id == primero.id),
+				hasLength(1),
+				reason: 'solo debe quedar una fila para el producto',
+			);
+
+			final stock = await fixture.inventarioRepository.obtenerStock(
+				primero.id,
+				fixture.tiendaOrigenId,
+			);
+			expect(
+				stock?.cantidad,
+				5.0,
+				reason: 'reutilizar el producto no debe pisar el stock existente',
+			);
+			await fixture.cerrar();
+		});
+
+		test('registrarProductoCompleto con codigo de barras SI puede crear otro producto '
+			'aunque comparta nombre', () async {
+			final fixture = await FixtureAdmin.abrir();
+			final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
+			final primero = await servicio.registrarProductoCompleto(
+				AltaProductoRequest(
+					nombre: 'Refresco 600ml',
+					codigoBarras: '7501000000001',
+					precioBase: 18.0,
+					categoriaId: fixture.categoriaId,
+				),
+			);
+			final segundo = await servicio.registrarProductoCompleto(
+				AltaProductoRequest(
+					nombre: 'Refresco 600ml',
+					codigoBarras: '7501000000002',
+					precioBase: 18.0,
+					categoriaId: fixture.categoriaId,
+				),
+			);
+			expect(
+				segundo.id,
+				isNot(primero.id),
+				reason: 'con codigo de barras propio, cada uno es un producto real',
+			);
+			await fixture.cerrar();
+		});
+
 		test('eliminarProducto rechaza si stock mayor a cero', () async {
 			final fixture = await FixtureAdmin.abrir();
 			final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);

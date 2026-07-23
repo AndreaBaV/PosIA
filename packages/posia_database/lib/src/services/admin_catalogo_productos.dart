@@ -197,8 +197,16 @@ class AdminCatalogoProductos {
 			validarPrecioVenta(escala.precioUnitario, req.costoUnitario);
 		}
 		final unidad = _unidadPorCategoria(req.categoriaId, req.unidadMedida);
+		// Sin código de barras (p. ej. importación a granel) no hay forma de
+		// detectar un duplicado por código; reutilizar el producto activo con el
+		// mismo nombre evita crear una copia cada vez que se reimporta la misma
+		// lista de precios. Con código de barras, ese ya es el mecanismo de
+		// deduplicación (validarCodigoBarrasUnico arriba) y no hace falta esto.
+		final existente = req.codigoBarras.trim().isEmpty
+			? await _productoRepository.buscarActivoPorNombre(req.nombre)
+			: null;
 		final producto = Producto(
-			id: _generadorId.v4(),
+			id: existente?.id ?? _generadorId.v4(),
 			nombre: req.nombre.trim(),
 			codigoBarras: req.codigoBarras.trim(),
 			precioBase: redondearMonto(req.precioBase),
@@ -218,16 +226,21 @@ class AdminCatalogoProductos {
 		await _enTransaccion((tx) async {
 			await _productoRepository.guardar(producto, db: tx);
 			final ahora = DateTime.now().toUtc();
-			await _inventarioRepository.guardarStock(
-				StockNivel(
-					productoId: producto.id,
-					tiendaId: _tiendaActivaId,
-					cantidad: req.stockInicial,
-					actualizadoEn: ahora,
-					stockMinimo: req.stockMinimo,
-				),
-				db: tx,
-			);
+			// Al reutilizar un producto existente no se toca su stock: pisarlo con
+			// el stock inicial del formulario/importación borraría inventario real
+			// ya vendido o repuesto.
+			if (existente == null) {
+				await _inventarioRepository.guardarStock(
+					StockNivel(
+						productoId: producto.id,
+						tiendaId: _tiendaActivaId,
+						cantidad: req.stockInicial,
+						actualizadoEn: ahora,
+						stockMinimo: req.stockMinimo,
+					),
+					db: tx,
+				);
+			}
 			if (req.escalasMayoreo.isNotEmpty && _precioRepository != null) {
 				final escalas = req.escalasMayoreo
 					.map(

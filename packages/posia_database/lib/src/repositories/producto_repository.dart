@@ -147,6 +147,28 @@ class ProductoRepository {
 		return _mapearProducto(filas.first);
 	}
 
+	/// Busca un producto activo por nombre normalizado, en el catalogo
+	/// unificado (cualquier tienda). Usado para evitar altas duplicadas cuando
+	/// no hay codigo de barras que las prevenga (p. ej. importacion a granel).
+	Future<Producto?> buscarActivoPorNombre(String nombre) async {
+		final clave = normalizarTextoBusqueda(nombre.trim());
+		if (clave.isEmpty) {
+			return null;
+		}
+		final filas = await _baseDatos.rawQuery(
+			'''
+			$_sqlCatalogoActivo
+			ORDER BY p.id ASC
+			''',
+		);
+		for (final fila in filas) {
+			if (normalizarTextoBusqueda((fila['nombre'] as String).trim()) == clave) {
+				return _mapearProducto(fila);
+			}
+		}
+		return null;
+	}
+
 	/// Indica si ya existe un producto activo con el mismo codigo de barras.
 	///
 	/// [tiendaId] Tienda del catalogo.
