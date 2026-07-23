@@ -2498,6 +2498,44 @@ class ServicioAdmin {
     return _ventaRepository.listarConFiltro(filtro);
   }
 
+  /// Líneas vendidas con precio manual (sobreprecio o descuento) en el periodo,
+  /// para auditoría del admin. Incluye el vendedor y el precio base actual del
+  /// producto como referencia. Lee la BD local, ya sincronizada desde Neon, así
+  /// que el admin ve lo mismo desde cualquier dispositivo.
+  Future<List<RegistroPrecioManual>> auditarPreciosManuales(
+    FiltroVentas filtro,
+  ) async {
+    final ventas = await _ventaRepository.listarConFiltro(filtro);
+    final tiendaId = filtro.tiendaId ?? _tiendaActivaId;
+    final productos = await _productoRepository.listarTodosPorTienda(tiendaId);
+    final baseporId = {for (final p in productos) p.id: p.precioBase};
+    final usuarios =
+        await _usuarioRepository?.listarTodos() ?? const <Usuario>[];
+    final nombrePorId = {for (final u in usuarios) u.id: u.nombre};
+    final registros = <RegistroPrecioManual>[];
+    for (final venta in ventas) {
+      for (final linea in venta.lineas) {
+        if (linea.reglaPrecio != ReglaPrecio.precioManual) {
+          continue;
+        }
+        registros.add(
+          RegistroPrecioManual(
+            ventaId: venta.id,
+            fecha: venta.creadaEn,
+            vendedorId: venta.vendedorId,
+            vendedorNombre: nombrePorId[venta.vendedorId] ?? 'Desconocido',
+            nombreProducto: linea.nombreProducto,
+            cantidad: linea.cantidad,
+            precioCobrado: linea.precioUnitario,
+            precioReferencia: baseporId[linea.productoId],
+          ),
+        );
+      }
+    }
+    registros.sort((a, b) => b.fecha.compareTo(a.fecha));
+    return registros;
+  }
+
   Future<Venta?> obtenerVenta(String ventaId) async {
     return _ventaRepository.obtenerPorId(ventaId);
   }

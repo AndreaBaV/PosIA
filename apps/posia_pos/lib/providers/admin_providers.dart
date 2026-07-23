@@ -323,6 +323,21 @@ final cotizacionesAdminProvider = FutureProvider.family<List<Cotizacion>, int>((
 	return servicio.listarCotizaciones(dias: dias);
 });
 
+/// Auditoría de líneas con precio manual (sobreprecio o descuento) por periodo.
+final preciosManualesProvider =
+	FutureProvider.family<List<RegistroPrecioManual>, int>((ref, dias) async {
+		final servicio = await ref.watch(servicioAdminProvider.future);
+		final desde = DateTime.now().toUtc().subtract(Duration(days: dias));
+		final hasta = DateTime.now().toUtc();
+		return servicio.auditarPreciosManuales(
+			FiltroVentas(
+				tiendaId: servicio.tiendaActivaId,
+				desde: desde,
+				hasta: hasta,
+			),
+		);
+	});
+
 /// Categorias para formulario de producto.
 final categoriasFormularioAdminProvider = FutureProvider<List<Categoria>>((ref) async {
 	final servicio = await ref.watch(servicioAdminProvider.future);

@@ -42,6 +42,7 @@ export 'src/models/descuento_cliente.dart';
 export 'src/models/filtro_ventas.dart';
 export 'src/models/linea_carrito.dart';
 export 'src/models/linea_ticket_espera.dart';
+export 'src/models/registro_precio_manual.dart';
 export 'src/models/movimiento_inventario.dart';
 export 'src/models/almacen.dart';
 export 'src/models/asistencia.dart';

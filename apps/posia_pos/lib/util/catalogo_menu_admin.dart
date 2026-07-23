@@ -27,6 +27,7 @@ import '../screens/pantalla_pedidos_admin.dart';
 import '../screens/pantalla_productos_admin.dart';
 import '../screens/pantalla_promociones_admin.dart';
 import '../screens/pantalla_proveedores_admin.dart';
+import '../screens/pantalla_auditoria_precios.dart';
 import '../screens/pantalla_reportes_admin.dart';
 import '../screens/pantalla_roles_personalizados_admin.dart';
 import '../screens/pantalla_sync_admin.dart';
@@ -433,6 +434,19 @@ List<EntradaMenuAdmin> construirCatalogoMenuAdmin(
 			destino: PantallaReportesAdmin(),
 			palabrasClave: [
 				'reporte', 'estadistica', 'alerta', 'exportar', 'excel', 'resumen',
+			],
+		),
+		EntradaMenuAdmin(
+			clave: 'auditoria_precios',
+			seccion: 'Reportes y sistema',
+			titulo: 'Precios manuales',
+			subtitulo: 'Auditoría de sobreprecio',
+			icono: Icons.price_change_outlined,
+			color: Colors.deepOrange,
+			destino: PantallaAuditoriaPrecios(),
+			palabrasClave: [
+				'precio manual', 'sobreprecio', 'descuento', 'auditoria', 'auditar',
+				'empleado', 'vendedor', 'manual',
 			],
 		),
 		EntradaMenuAdmin(
