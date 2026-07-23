@@ -1,5 +1,5 @@
-/// Tests para la supresión de teclado nativo y banner inline en diálogos
-/// de captura numérica (cantidad, peso).
+/// Tests para la captura numérica por teclado físico y banner inline en
+/// diálogos de cantidad y peso (se quitó el teclado numérico en pantalla).
 library;
 
 import 'package:flutter/material.dart';
@@ -100,7 +100,7 @@ void main() {
 	});
 
 	group('DialogoCantidadProducto', () {
-		testWidgets('suprime el teclado nativo (TextInputType.none) y mantiene cursor visible',
+		testWidgets('usa teclado físico numérico y mantiene cursor visible',
 			(tester) async {
 			await _abrirDialogoCantidad(tester);
 
@@ -109,7 +109,10 @@ void main() {
 			);
 			expect(campoCantidad, findsOneWidget);
 			final textField = tester.widget<TextField>(campoCantidad);
-			expect(textField.keyboardType, TextInputType.none);
+			expect(
+				textField.keyboardType,
+				const TextInputType.numberWithOptions(decimal: true),
+			);
 			expect(textField.showCursor, isTrue);
 
 			await tester.tap(find.text('Cancelar'));
@@ -120,7 +123,10 @@ void main() {
 			(tester) async {
 			await _abrirDialogoCantidad(tester);
 
-			await tester.tap(find.widgetWithIcon(InkWell, Icons.backspace));
+			final campoCantidad = find.byWidgetPredicate(
+				(w) => w is TextField && w.decoration?.labelText == 'Cantidad',
+			);
+			await tester.enterText(campoCantidad, '0');
 			await tester.pump();
 
 			await tester.tap(find.text('Agregar'));
@@ -130,7 +136,7 @@ void main() {
 			expect(find.text('Indique una cantidad mayor a cero'), findsOneWidget);
 			expect(find.byType(SnackBar), findsNothing);
 
-			await tester.tap(find.widgetWithText(InkWell, '2'));
+			await tester.enterText(campoCantidad, '2');
 			await tester.pump();
 			expect(find.byType(BannerMensajeDialogo), findsNothing);
 
@@ -140,7 +146,7 @@ void main() {
 	});
 
 	group('DialogoPesoCarniceria', () {
-		testWidgets('suprime el teclado nativo (TextInputType.none) y mantiene cursor visible',
+		testWidgets('usa teclado físico numérico y mantiene cursor visible',
 			(tester) async {
 			await _abrirDialogoPeso(tester);
 
@@ -149,7 +155,10 @@ void main() {
 			);
 			expect(campoPeso, findsOneWidget);
 			final textField = tester.widget<TextField>(campoPeso);
-			expect(textField.keyboardType, TextInputType.none);
+			expect(
+				textField.keyboardType,
+				const TextInputType.numberWithOptions(decimal: true),
+			);
 			expect(textField.showCursor, isTrue);
 
 			await tester.tap(find.text('Cancelar'));
@@ -167,7 +176,10 @@ void main() {
 			expect(find.text('Indique un peso mayor a cero'), findsOneWidget);
 			expect(find.byType(SnackBar), findsNothing);
 
-			await tester.tap(find.widgetWithText(InkWell, '1'));
+			final campoPeso = find.byWidgetPredicate(
+				(w) => w is TextField && w.decoration?.labelText == 'Peso',
+			);
+			await tester.enterText(campoPeso, '1');
 			await tester.pump();
 			expect(find.byType(BannerMensajeDialogo), findsNothing);
 
