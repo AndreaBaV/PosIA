@@ -17,13 +17,10 @@ class PoliticaAccesoAdmin {
 		Usuario usuario,
 		RolPersonalizado? rolPersonalizado,
 	) {
-		if (esAdministradorGlobal(usuario)) {
-			return true;
-		}
-		if (rolPersonalizado != null && rolPersonalizado.activo) {
-			return rolPersonalizado.permisosAdmin.isNotEmpty;
-		}
-		return usuario.rol != RolUsuario.empleado;
+		// Todos pueden abrir el panel: aunque un vendedor no administre nada, debe
+		// alcanzar Sincronización con el hub y Configuración (impresora, sync). El
+		// menú se filtra por sección, así que solo verá lo que su rol permite.
+		return true;
 	}
 
 	static bool puedeVerSeccionAdmin(
@@ -31,7 +28,12 @@ class PoliticaAccesoAdmin {
 		RolPersonalizado? rolPersonalizado,
 		String clave,
 	) {
-		if (clave == PermisosAdmin.miCuenta) {
+		// Mi cuenta, Sincronización con el hub y Configuración son visibles para
+		// TODOS los usuarios: cualquiera debe poder ver el estado de la nube,
+		// forzar un sync o ajustar la impresora/dispositivo sin depender del admin.
+		if (clave == PermisosAdmin.miCuenta ||
+			clave == PermisosAdmin.sync ||
+			clave == PermisosAdmin.config) {
 			return true;
 		}
 		if (esAdministradorGlobal(usuario)) {

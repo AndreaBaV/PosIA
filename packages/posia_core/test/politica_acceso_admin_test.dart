@@ -55,18 +55,31 @@ void main() {
 		);
 	});
 
-	test('empleado sin rol personalizado no accede al admin', () {
+	test('empleado accede al panel pero solo ve mi cuenta, sync y config', () {
+		// Todos pueden abrir el panel para alcanzar sync/config del hub.
 		expect(
 			PoliticaAccesoAdmin.puedeAccederPanelAdmin(empleado, null),
-			isFalse,
+			isTrue,
 		);
+		for (final clave in [
+			PermisosAdmin.miCuenta,
+			PermisosAdmin.sync,
+			PermisosAdmin.config,
+		]) {
+			expect(
+				PoliticaAccesoAdmin.puedeVerSeccionAdmin(empleado, null, clave),
+				isTrue,
+				reason: '$clave debe ser visible para todos los usuarios',
+			);
+		}
+		// Pero no las secciones de administración propiamente dichas.
 		expect(
 			PoliticaAccesoAdmin.puedeVerSeccionAdmin(
 				empleado,
 				null,
-				PermisosAdmin.miCuenta,
+				PermisosAdmin.productos,
 			),
-			isTrue,
+			isFalse,
 		);
 	});
 
@@ -83,13 +96,23 @@ void main() {
 			),
 			isTrue,
 		);
+		// Una sección que el rol no lista sigue oculta…
+		expect(
+			PoliticaAccesoAdmin.puedeVerSeccionAdmin(
+				empleado,
+				preSupervisor,
+				PermisosAdmin.tiendas,
+			),
+			isFalse,
+		);
+		// …pero sync/config son visibles para todos, aunque el rol no los liste.
 		expect(
 			PoliticaAccesoAdmin.puedeVerSeccionAdmin(
 				empleado,
 				preSupervisor,
 				PermisosAdmin.sync,
 			),
-			isFalse,
+			isTrue,
 		);
 	});
 

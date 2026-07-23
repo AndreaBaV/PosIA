@@ -171,23 +171,18 @@ class PanelCarrito extends StatelessWidget {
 																	children: [
 																		Tooltip(
 																			message: 'Doble clic para editar',
-																			child: CircleAvatar(
-																			backgroundColor: PosiaColors.cobrar,
-																			radius: 18.0,
-																			child: Text(
-																				linea.cantidad.toStringAsFixed(
-																					linea.cantidad ==
-																							linea.cantidad.roundToDouble()
-																						? 0
-																						: 1,
-																				),
-																				style: const TextStyle(
-																					color: Colors.white,
-																					fontSize: 12.0,
-																					fontWeight: FontWeight.bold,
+																			child: SizedBox(
+																				width: 52.0,
+																				child: Text(
+																					_formatearCantidad(linea.cantidad),
+																					textAlign: TextAlign.center,
+																					style: const TextStyle(
+																						color: PosiaColors.cobrar,
+																						fontSize: 15.0,
+																						fontWeight: FontWeight.bold,
+																					),
 																				),
 																			),
-																		),
 																		),
 																		const SizedBox(width: 10.0),
 																		Expanded(
@@ -255,6 +250,18 @@ class PanelCarrito extends StatelessWidget {
 	}
 
 	/// Construye subtitulo de linea con peso, lote o precio unitario.
+	String _formatearCantidad(double cantidad) {
+		if (cantidad == cantidad.roundToDouble()) {
+			return cantidad.toStringAsFixed(0);
+		}
+		// Hasta 3 decimales, sin ceros de mas: 0.275 se muestra "0.275", no
+		// redondeado a "0.3" como hacia el circulo verde anterior (1 decimal).
+		return cantidad
+			.toStringAsFixed(3)
+			.replaceAll(RegExp(r'0+$'), '')
+			.replaceAll(RegExp(r'\.$'), '');
+	}
+
 	String _construirSubtituloLinea(LineaCarrito linea) {
 		if (linea.etiquetaLote != null && linea.producto.moduloVertical == ModuloVertical.farmacia) {
 			return '${linea.etiquetaLote} · ${formatearMoneda(linea.precioUnitario)}';

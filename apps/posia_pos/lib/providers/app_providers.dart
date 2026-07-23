@@ -150,6 +150,20 @@ final licenciaProvider = FutureProvider<Licencia>((ref) async {
 	);
 });
 
+/// Último ticket digital impreso en esta sesión, para reimpresión rápida desde
+/// la caja sin tener que buscar la venta en el historial.
+class UltimoTicketImpresoNotifier extends Notifier<TicketDigitalContenido?> {
+	@override
+	TicketDigitalContenido? build() => null;
+
+	void establecer(TicketDigitalContenido? ticket) => state = ticket;
+}
+
+final ultimoTicketImpresoProvider =
+	NotifierProvider<UltimoTicketImpresoNotifier, TicketDigitalContenido?>(
+		UltimoTicketImpresoNotifier.new,
+	);
+
 /// Registro de hardware segun configuracion de impresora del dispositivo.
 final hardwareRegistryProvider = FutureProvider<HardwareRegistry>((ref) async {
 	final contenedor = await ref.watch(contenedorServiciosProvider.future);

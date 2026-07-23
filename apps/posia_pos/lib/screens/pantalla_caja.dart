@@ -840,6 +840,45 @@ Future<void> ejecutarPonerEnEspera(BuildContext context, WidgetRef ref) async {
 	}
 }
 
+/// Reimprime el último ticket impreso en esta sesión, sin buscar la venta en
+/// el historial. Útil cuando el papel se atora o el cliente pide otra copia.
+Future<void> reimprimirUltimoTicketCaja(
+	BuildContext context,
+	WidgetRef ref,
+) async {
+	final ticket = ref.read(ultimoTicketImpresoProvider);
+	if (ticket == null) {
+		PosiaNotificaciones.mostrarSnackBar(
+			context,
+			const SnackBar(content: Text('Aún no hay un ticket para reimprimir')),
+		);
+		return;
+	}
+	try {
+		final hardware = await ref.read(hardwareRegistryProvider.future);
+		await imprimirTicketDigital(
+			impresora: hardware.obtenerImpresora(),
+			contenido: ticket,
+		);
+		if (context.mounted) {
+			PosiaNotificaciones.mostrarSnackBar(
+				context,
+				const SnackBar(content: Text('Reimprimiendo último ticket…')),
+			);
+		}
+	} on Object catch (error) {
+		if (context.mounted) {
+			PosiaNotificaciones.mostrarSnackBar(
+				context,
+				SnackBar(
+					content: Text('No se pudo reimprimir: $error'),
+					backgroundColor: PosiaColors.cancelar,
+				),
+			);
+		}
+	}
+}
+
 /// Muestra tickets apartados para recuperar o eliminar.
 Future<void> mostrarTicketsEnEspera(BuildContext context, WidgetRef ref) async {
 	final servicio = await ref.read(servicioCajaProvider.future);
@@ -1061,54 +1100,6 @@ bool _cobroIncluyeEfectivo(MetodoPago metodo, CobroRequest request) {
 	return false;
 }
 
-Future<void> _mostrarOpcionesPostVenta(
-	BuildContext context, {
-	required TicketDigitalContenido ticketDigital,
-	String? telefonoCliente,
-}) async {
-	await showDialog<void>(
-		context: context,
-		builder: (dialogContext) => CallbackShortcuts(
-			bindings: {
-				const SingleActivator(LogicalKeyboardKey.enter): () {
-					Navigator.of(dialogContext).pop();
-				},
-				const SingleActivator(LogicalKeyboardKey.numpadEnter): () {
-					Navigator.of(dialogContext).pop();
-				},
-			},
-			child: AlertDialog(
-				title: const Text('Venta completada'),
-				content: const Text(
-					'¿Desea enviar el ticket digital por WhatsApp?\n'
-					'Se adjuntará una imagen con el logo de la tienda.',
-				),
-				actions: [
-					TextButton.icon(
-						onPressed: () async {
-							await compartirTicketDigitalWhatsApp(
-								context,
-								contenido: ticketDigital,
-								telefono: telefonoCliente,
-							);
-							if (dialogContext.mounted) {
-								Navigator.of(dialogContext).pop();
-							}
-						},
-						icon: const Icon(Icons.chat),
-						label: const Text('WhatsApp'),
-					),
-					FilledButton(
-						autofocus: true,
-						onPressed: () => Navigator.of(dialogContext).pop(),
-						child: const Text('Cerrar'),
-					),
-				],
-			),
-		),
-	);
-}
-
 Future<void> _mostrarOpcionesPostCredito(
 	BuildContext context, {
 	required TicketDigitalContenido pagareDigital,
@@ -1268,25 +1259,15 @@ Future<void> ejecutarCobroCaja(BuildContext context, WidgetRef ref) async {
 				impresora: impresora,
 				contenido: ticketDigital,
 			);
+			// Guarda el último ticket para reimpresión rápida desde la caja.
+			ref.read(ultimoTicketImpresoProvider.notifier).establecer(ticketDigital);
 			if (_cobroIncluyeEfectivo(venta.metodoPago, request)) {
 				try {
 					await hardware.obtenerCajon()?.abrir();
 				} catch (_) {}
 			}
-			if (!context.mounted) {
-				return;
-			}
-			final cliente = venta.clienteId != null
-				? await contenedor.servicioAdmin.obtenerCliente(venta.clienteId!)
-				: null;
-			if (!context.mounted) {
-				return;
-			}
-			await _mostrarOpcionesPostVenta(
-				context,
-				ticketDigital: ticketDigital,
-				telefonoCliente: cliente?.telefono,
-			);
+			// El ticket ya se imprimió arriba. Se omite el diálogo de compartir
+			// por WhatsApp para agilizar el flujo de cobro en caja.
 		}
 		if (!context.mounted) {
 			return;
@@ -1493,6 +1474,15 @@ class _BarraAccionesCaja extends ConsumerWidget {
 										etiqueta: 'Recuperar (${estado.ticketsEnEspera})',
 										colorFondo: Colors.orange.shade800,
 										alPresionar: () => mostrarTicketsEnEspera(context, ref),
+									),
+								),
+							if (ref.watch(ultimoTicketImpresoProvider) != null)
+								Expanded(
+									child: BotonAccionCaja(
+										icono: Icons.print_outlined,
+										etiqueta: 'Reimprimir',
+										colorFondo: PosiaColors.neutro,
+										alPresionar: () => reimprimirUltimoTicketCaja(context, ref),
 									),
 								),
 							Expanded(

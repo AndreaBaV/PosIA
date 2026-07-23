@@ -142,14 +142,15 @@ class ProyectorEventosPostgres {
     final tiendaId = p['tiendaId'] as String? ?? evento.tiendaId;
     await _asegurarTienda(tiendaId);
     final codigo = (p['codigoBarras'] as String? ?? '').trim();
+    final idOriginal = id;
     if (codigo.isNotEmpty) {
       final existente = await _sesion.execute(
         Sql.named('''
           SELECT id FROM products
-          WHERE tienda_id = @tienda AND codigo_barras = @codigo
+          WHERE tienda_id = @tienda AND codigo_barras = @codigo AND id <> @id
           LIMIT 1
         '''),
-        parameters: {'tienda': tiendaId, 'codigo': codigo},
+        parameters: {'tienda': tiendaId, 'codigo': codigo, 'id': id},
       );
       if (existente.isNotEmpty) {
         id = existente.first[0] as String;
@@ -205,6 +206,46 @@ class ProyectorEventosPostgres {
         'favorito': _boolInt(p['favoritoCaja']),
       },
     );
+    // Integridad referencial: si el id entrante se remapeó a un producto
+    // canónico existente (mismo código), preservar el id original como alias
+    // INACTIVO en vez de descartarlo. Antes se descartaba, y las ventas/stock
+    // que ya lo referenciaban rompían la llave foránea (23503) para siempre.
+    // Con código vacío no entra al índice único (tienda, código) y activo=0 lo
+    // oculta del catálogo, así que no aparece como duplicado.
+    if (id != idOriginal) {
+      await _sesion.execute(
+        Sql.named('''
+					INSERT INTO products (
+						id, nombre, codigo_barras, precio_base, unidad_medida, ruta_imagen,
+						activo, tienda_id, modulo_vertical, categoria_id, piezas_por_caja,
+						proveedor_id, unidades_por_bulto, notas,
+						costo_unitario, permite_stock_negativo, favorito_caja
+					) VALUES (
+						@id, @nombre, '', @precio, @unidad, @ruta, 0, @tienda, @vertical,
+						@categoria, @piezas, @proveedor, @bulto, @notas, @costo,
+						@permiteNegativo, @favorito
+					)
+					ON CONFLICT (id) DO UPDATE SET activo = 0, codigo_barras = ''
+				'''),
+        parameters: {
+          'id': idOriginal,
+          'nombre': p['nombre'] ?? '',
+          'precio': _dbl(p['precioBase']),
+          'unidad': p['unidadMedida'] ?? 'pieza',
+          'ruta': p['rutaImagen'] ?? '',
+          'tienda': tiendaId,
+          'vertical': p['moduloVertical'] ?? 'general',
+          'categoria': p['categoriaId'],
+          'piezas': _intNullable(p['piezasPorCaja']),
+          'proveedor': p['proveedorId'],
+          'bulto': _intNullable(p['unidadesPorBulto']),
+          'notas': p['notas'] ?? '',
+          'costo': _dbl(p['costoUnitario']),
+          'permiteNegativo': _boolInt(p['permiteStockNegativo'], defaultValue: true),
+          'favorito': _boolInt(p['favoritoCaja']),
+        },
+      );
+    }
   }
 
   Future<void> _cliente(EventoHub evento) async {
@@ -1664,12 +1705,12 @@ class ProyectorEventosPostgres {
     if (productoId.isEmpty) {
       return;
     }
-    await _sesion.execute(
-      Sql.named(
-        'DELETE FROM product_presentations WHERE producto_id = @producto',
-      ),
-      parameters: {'producto': productoId},
-    );
+    // Merge aditivo (no destructivo): upsert por id, sin borrar las que no
+    // vengan en el evento. Antes se hacía DELETE de todas las presentaciones del
+    // producto + reinsert, así que un evento viejo de un equipo con el catálogo
+    // desactualizado borraba los bultos que otros equipos habían creado. Un
+    // borrado real se hace inactivando (activo=0), que se propaga como campo. Así
+    // la unión de presentaciones de todos los dispositivos converge sin pérdida.
     for (final presentacion in _listaMapas(p['presentaciones'])) {
       final id = presentacion['id'] as String? ?? '';
       if (id.isEmpty) {
@@ -1683,6 +1724,15 @@ class ProyectorEventosPostgres {
 					) VALUES (
 						@id, @producto, @tipo, @nombre, @factor, @base, @codigo, @precio, @activo
 					)
+					ON CONFLICT (id) DO UPDATE SET
+						producto_id = EXCLUDED.producto_id,
+						tipo_presentacion_id = EXCLUDED.tipo_presentacion_id,
+						nombre = EXCLUDED.nombre,
+						factor_a_base = EXCLUDED.factor_a_base,
+						es_presentacion_base = EXCLUDED.es_presentacion_base,
+						codigo_barras = EXCLUDED.codigo_barras,
+						precio = EXCLUDED.precio,
+						activo = EXCLUDED.activo
 				'''),
         parameters: {
           'id': id,

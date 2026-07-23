@@ -21,7 +21,7 @@ class ResultadoDialogoPeso {
 	final double pesoKg;
 }
 
-enum _UnidadCapturaPeso { kilogramos, gramos }
+enum _UnidadCapturaPeso { kilogramos, gramos, importe }
 
 /// Muestra dialogo para capturar peso en kg o gramos.
 class DialogoPesoCarniceria extends StatefulWidget {
@@ -105,9 +105,17 @@ class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
 		if (cantidad <= 0.0) {
 			return null;
 		}
-		return _unidad == _UnidadCapturaPeso.gramos
-			? cantidad / 1000.0
-			: cantidad;
+		switch (_unidad) {
+			case _UnidadCapturaPeso.gramos:
+				return cantidad / 1000.0;
+			case _UnidadCapturaPeso.importe:
+				// Granel por monto: peso = importe ÷ precio por kg. Usa el precio
+				// base como estimación; la caja resuelve el precio final normal.
+				final precioKg = widget.producto.precioBase;
+				return precioKg > 0.0 ? cantidad / precioKg : null;
+			case _UnidadCapturaPeso.kilogramos:
+				return cantidad;
+		}
 	}
 
 	Future<void> _actualizarPrecioResuelto() async {
@@ -194,7 +202,12 @@ class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
 
 	@override
 	Widget build(BuildContext context) {
-		final etiquetaUnidad = _unidad == _UnidadCapturaPeso.kilogramos ? 'kg' : 'g';
+		final etiquetaUnidad = switch (_unidad) {
+			_UnidadCapturaPeso.kilogramos => 'kg',
+			_UnidadCapturaPeso.gramos => 'g',
+			_UnidadCapturaPeso.importe => '\$',
+		};
+		final esImporte = _unidad == _UnidadCapturaPeso.importe;
 		return AlertDialog(
 			title: Row(
 				children: [
@@ -212,11 +225,15 @@ class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
 							segments: const [
 								ButtonSegment(
 									value: _UnidadCapturaPeso.kilogramos,
-									label: Text('Kilogramos'),
+									label: Text('Kg'),
 								),
 								ButtonSegment(
 									value: _UnidadCapturaPeso.gramos,
 									label: Text('Gramos'),
+								),
+								ButtonSegment(
+									value: _UnidadCapturaPeso.importe,
+									label: Text('Importe \$'),
 								),
 							],
 							selected: {_unidad},
@@ -236,11 +253,17 @@ class _DialogoPesoCarniceriaState extends State<DialogoPesoCarniceria> {
 							showCursor: true,
 							textInputAction: TextInputAction.done,
 							decoration: InputDecoration(
-								labelText: 'Peso',
+								labelText: esImporte ? 'Importe' : 'Peso',
 								suffixText: etiquetaUnidad,
-								hintText: _unidad == _UnidadCapturaPeso.gramos ? '250' : '0.250',
+								hintText: switch (_unidad) {
+									_UnidadCapturaPeso.gramos => '250',
+									_UnidadCapturaPeso.importe => '50',
+									_UnidadCapturaPeso.kilogramos => '0.250',
+								},
 								border: const OutlineInputBorder(),
-								helperText: 'Enter agrega · Esc cancela',
+								helperText: esImporte
+									? 'Peso = importe ÷ precio/kg · Enter agrega'
+									: 'Enter agrega · Esc cancela',
 							),
 							onChanged: (texto) {
 								_limpiarError();

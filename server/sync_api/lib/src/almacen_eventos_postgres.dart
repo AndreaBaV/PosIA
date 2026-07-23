@@ -21,9 +21,31 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 	final String _urlConexion;
 	Pool<Object>? _pool;
 
-	/// Cola de escrituras: un solo lote a la vez evita saturar el pool
-	/// cuando varias cajas reintentan POST /v1/events en paralelo.
-	Future<void> _colaEscritura = Future<void>.value();
+	/// Pool de escrituras por PRIORIDAD (dos carriles concurrentes). El carril
+	/// ALTO atiende lo interactivo y el alta de catálogo (productos, categorías);
+	/// el BAJO, las avalanchas grandes sin fundamentos. Así un flujo masivo de un
+	/// dispositivo no atora las ventas ni el alta de productos de los demás.
+	/// Cada carril está serializado (un lote a la vez) para no saturar el pool.
+	Future<void> _colaAlta = Future<void>.value();
+	Future<void> _colaBaja = Future<void>.value();
+
+	/// Tipos "fundamento": el catálogo del que dependen ventas y stock. Tienen
+	/// prioridad ALTA y, dentro de un lote, se aplican ANTES que el resto para
+	/// que existan cuando una venta los referencie (evita el 23503 de FK).
+	static const Set<String> _tiposFundacion = {
+		'productUpserted',
+		'categoryUpserted',
+		'presentationTypeUpserted',
+		'productPresentationsReplaced',
+		'wholesaleTiersReplaced',
+		'storeUpserted',
+		'supplierUpserted',
+		'warehouseUpserted',
+	};
+
+	/// Un lote más grande que esto se considera "avalancha": si además no trae
+	/// fundamentos, va al carril BAJO para no bloquear lo interactivo.
+	static const int _umbralLoteGrande = 25;
 
 	@override
 	Future<void> inicializar() async {
@@ -104,25 +126,43 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 
 	@override
 	Future<int> guardarLote(List<EventoHub> eventos) {
-		return _encolarEscritura(() => _guardarLoteInterno(eventos));
+		// Carril ALTO: lotes chicos (una venta, el alta de un producto, una
+		// edición) y cualquier lote con fundamentos de catálogo — el alta de
+		// productos es prioridad. Carril BAJO: avalanchas grandes sin fundamentos
+		// (p. ej. resincronización masiva de ventas), para no atorar lo demás.
+		final tieneFundamentos = eventos.any((e) => _tiposFundacion.contains(e.tipo));
+		final alta = eventos.length <= _umbralLoteGrande || tieneFundamentos;
+		return _encolarEscritura(alta, () => _guardarLoteInterno(eventos));
 	}
 
-	Future<T> _encolarEscritura<T>(Future<T> Function() trabajo) {
+	Future<T> _encolarEscritura<T>(bool alta, Future<T> Function() trabajo) {
 		final resultado = Completer<T>();
-		_colaEscritura = _colaEscritura.then((_) async {
+		final siguiente = (alta ? _colaAlta : _colaBaja).then((_) async {
 			try {
 				resultado.complete(await trabajo());
 			} on Object catch (error, stack) {
 				resultado.completeError(error, stack);
 			}
 		});
+		if (alta) {
+			_colaAlta = siguiente;
+		} else {
+			_colaBaja = siguiente;
+		}
 		return resultado.future;
 	}
 
-	Future<int> _guardarLoteInterno(List<EventoHub> eventos) async {
-		if (eventos.isEmpty) {
+	Future<int> _guardarLoteInterno(List<EventoHub> eventosEntrada) async {
+		if (eventosEntrada.isEmpty) {
 			return 0;
 		}
+		// Fundamentos de catálogo primero (orden relativo estable), luego el
+		// resto. Así, dentro del lote, un producto se proyecta ANTES que la venta
+		// que lo referencia y no se rompe la llave foránea (23503).
+		final eventos = <EventoHub>[
+			...eventosEntrada.where((e) => _tiposFundacion.contains(e.tipo)),
+			...eventosEntrada.where((e) => !_tiposFundacion.contains(e.tipo)),
+		];
 		final pool = await _obtenerPool();
 		final cronometro = Stopwatch()..start();
 		var aceptados = 0;

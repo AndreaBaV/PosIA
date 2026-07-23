@@ -111,7 +111,7 @@ class _ConstruirContenidoSync extends StatelessWidget {
 		final progreso = syncUi.progreso;
 		final mensajeResultado = syncUi.mensajeResultado;
 
-		return Padding(
+		return SingleChildScrollView(
 			padding: const EdgeInsets.all(24.0),
 			child: Column(
 				crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -161,7 +161,7 @@ class _ConstruirContenidoSync extends StatelessWidget {
 							),
 						),
 					],
-					const Spacer(),
+					const SizedBox(height: 28.0),
 					if (mensajeResultado != null) ...[
 						Text(mensajeResultado, textAlign: TextAlign.center),
 						const SizedBox(height: 12.0),
@@ -193,40 +193,76 @@ class _ConstruirContenidoSync extends StatelessWidget {
 							),
 						),
 					if (hubActivo) ...[
-						const SizedBox(height: 8.0),
-						SizedBox(
-							height: 48.0,
-							child: OutlinedButton.icon(
-								onPressed: sincronizando ? null : alReconciliar,
-								icon: const Icon(Icons.cloud_download),
-								label: const Text('Reconciliar con la nube'),
+						const SizedBox(height: 24.0),
+						Align(
+							alignment: Alignment.centerLeft,
+							child: Text(
+								'Herramientas de recuperación',
+								style: Theme.of(context).textTheme.titleSmall?.copyWith(
+									fontWeight: FontWeight.bold,
+								),
+							),
+						),
+						const SizedBox(height: 4.0),
+						Text(
+							'Úsalas solo si algo se ve incompleto o atorado. Para el día a día '
+							'basta con "Sincronizar ahora".',
+							style: Theme.of(context).textTheme.bodySmall?.copyWith(
+								color: Colors.grey.shade700,
 							),
 						),
 						const SizedBox(height: 8.0),
-						SizedBox(
-							height: 48.0,
-							child: OutlinedButton.icon(
-								onPressed: sincronizando ? null : alRepararEquipo,
-								icon: const Icon(Icons.people_outline),
-								label: const Text('Reparar equipo y roles'),
+						Card(
+							child: ListTile(
+								leading: const Icon(Icons.cloud_download),
+								title: const Text('Descargar todo de la nube'),
+								subtitle: const Text(
+									'Rehace el catálogo de este equipo desde la nube. Úsalo si aquí '
+									'faltan productos o categorías.',
+								),
+								trailing: const Icon(Icons.chevron_right),
+								isThreeLine: true,
+								onTap: sincronizando ? null : alReconciliar,
 							),
 						),
-						const SizedBox(height: 8.0),
-						SizedBox(
-							height: 48.0,
-							child: OutlinedButton.icon(
-								onPressed: sincronizando ? null : alResubirCatalogo,
-								icon: const Icon(Icons.cloud_upload),
-								label: const Text('Resubir catálogo completo'),
+						Card(
+							child: ListTile(
+								leading: const Icon(Icons.people_outline),
+								title: const Text('Reparar usuarios, roles y permisos'),
+								subtitle: const Text(
+									'Vuelve a bajar el equipo y sus permisos desde la nube.',
+								),
+								trailing: const Icon(Icons.chevron_right),
+								onTap: sincronizando ? null : alRepararEquipo,
 							),
 						),
-						const SizedBox(height: 8.0),
-						SizedBox(
-							height: 48.0,
-							child: OutlinedButton.icon(
-								onPressed: sincronizando ? null : alDescartarColaCatalogo,
-								icon: const Icon(Icons.delete_sweep_outlined),
-								label: const Text('Descartar catálogo en cola'),
+						Card(
+							child: ListTile(
+								leading: const Icon(Icons.cloud_upload),
+								title: const Text('Resubir MI catálogo a la nube'),
+								subtitle: const Text(
+									'Envía el catálogo de este equipo a la nube. Úsalo solo desde el '
+									'equipo que tiene el catálogo correcto.',
+								),
+								trailing: const Icon(Icons.chevron_right),
+								isThreeLine: true,
+								onTap: sincronizando ? null : alResubirCatalogo,
+							),
+						),
+						Card(
+							child: ListTile(
+								leading: Icon(
+									Icons.delete_sweep_outlined,
+									color: PosiaColors.cancelar,
+								),
+								title: const Text('Vaciar catálogo atorado en la cola'),
+								subtitle: const Text(
+									'Descarta catálogo pendiente o con error en la cola. No borra '
+									'ventas, compras ni movimientos.',
+								),
+								trailing: const Icon(Icons.chevron_right),
+								isThreeLine: true,
+								onTap: sincronizando ? null : alDescartarColaCatalogo,
 							),
 						),
 					],

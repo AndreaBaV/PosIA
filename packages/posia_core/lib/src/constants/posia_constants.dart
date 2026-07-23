@@ -25,7 +25,7 @@ const int DIAS_ALERTA_CADUCIDAD_AMARILLA = 30;
 const int DIAS_ALERTA_CADUCIDAD_ROJA = 7;
 
 /// Gramos minimos validos para venta por peso en carniceria.
-const double PESO_MINIMO_GRAMOS_CARNICERIA = 100.0;
+const double PESO_MINIMO_GRAMOS_CARNICERIA = 1.0;
 
 /// Decimales permitidos para montos en MXN.
 const int DECIMALES_MONEDA = 2;

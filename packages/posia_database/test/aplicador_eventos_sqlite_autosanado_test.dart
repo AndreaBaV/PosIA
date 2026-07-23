@@ -165,6 +165,62 @@ void main() {
 		expect(real!.activa, isTrue, reason: 'tienda real no se toca');
 	});
 
+	test('no colapsa categorias stub aunque compartan el nombre "Categoría"', () async {
+		// Regresion: los stubs FK se llaman todos "Categoría" y normalizan a la
+		// misma clave. Antes la auto-sanacion los trataba como duplicados, dejaba
+		// uno y reasignaba TODOS los productos a esa unica categoria — el resto
+		// de las categorias reales (que habian quedado como stub tras una
+		// reconstruccion) se perdian.
+		for (final entry in {
+			'cat-abarrotes': 'prod-a',
+			'cat-lacteos': 'prod-l',
+			'cat-semillas': 'prod-s',
+		}.entries) {
+			await categoriaRepo.guardar(
+				Categoria(
+					id: entry.key,
+					nombre: 'Categoría', // forma de stub FK
+					icono: 'shopping_basket',
+					colorHex: '#4CAF50',
+					orden: 0,
+					activa: true,
+				),
+			);
+			await productoRepo.guardar(
+				Producto(
+					id: entry.value,
+					nombre: entry.value,
+					codigoBarras: entry.value,
+					precioBase: 5,
+					unidadMedida: UnidadMedida.pieza,
+					rutaImagen: '',
+					activo: true,
+					tiendaId: 'tienda-1',
+					categoriaId: entry.key,
+				),
+			);
+		}
+
+		await aplicador.autoSanarCatalogoLocal();
+
+		final todas = await categoriaRepo.listarTodas();
+		final stubs = todas.where((c) => c.esStubFk).toList();
+		expect(
+			stubs.where((c) => c.activa).length,
+			3,
+			reason: 'ninguna categoria stub se desactiva ni se colapsa',
+		);
+		// Cada producto conserva su propia categoria (no se reasignan a una sola).
+		for (final entry in {
+			'prod-a': 'cat-abarrotes',
+			'prod-l': 'cat-lacteos',
+			'prod-s': 'cat-semillas',
+		}.entries) {
+			final prod = await productoRepo.obtenerPorId(entry.key);
+			expect(prod!.categoriaId, entry.value);
+		}
+	});
+
 	test('es re-ejecutable sin efectos adicionales (idempotente)', () async {
 		await categoriaRepo.guardar(
 			const Categoria(

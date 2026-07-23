@@ -190,7 +190,12 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		if (repo == null) {
 			return;
 		}
-		final activas = await repo.listarActivas();
+		// Excluir stubs FK: todos se llaman "Categoría" y normalizan a la misma
+		// clave, así que agruparlos los trataría como duplicados y colapsaría
+		// categorías reales distintas en una sola (reasignando sus productos).
+		// El stub se corrige solo cuando llega/rehidrata su categoryUpserted real.
+		final activas =
+			(await repo.listarActivas()).where((c) => !c.esStubFk).toList();
 		final grupos = <String, List<Categoria>>{};
 		for (final categoria in activas) {
 			final clave = normalizarTextoBusqueda(categoria.nombre);
@@ -1687,28 +1692,14 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			})
 			.where((p) => p.id.isNotEmpty)
 			.toList();
-		// `reemplazarPresentacionesProducto` borra TODAS las presentaciones del
-		// producto y reinserta las del evento. Como el snapshot no lleva marca de
-		// recencia, un equipo con el catálogo desactualizado (o sin ninguna
-		// presentación para este producto) borraba los empaques recién creados en
-		// los demás equipos: se perdía el empaque nuevo y también los anteriores.
-		//
-		// Si el snapshot entrante haría desaparecer presentaciones que existen
-		// localmente, se trata como incompleto y se fusiona en vez de reemplazar.
-		// Compensación consciente: un borrado hecho en otro equipo deja de
-		// propagarse solo y hay que repetirlo aquí. Preferible a perder datos.
-		final locales = await repo.listarPorProducto(productoId);
-		final idsRemotos = presentaciones.map((p) => p.id).toSet();
-		final sePerderian = locales
-			.where((p) => !p.esPresentacionBase && !idsRemotos.contains(p.id))
-			.toList();
-		if (presentaciones.isEmpty || sePerderian.isNotEmpty) {
-			for (final presentacion in presentaciones) {
-				await repo.guardarPresentacion(presentacion);
-			}
-			return;
+		// Merge aditivo (nunca destructivo): upsert de cada presentación por id,
+		// sin borrar las que no vengan en el evento. Un borrado real se hace
+		// inactivando (activo=false), que llega como actualización de campo y se
+		// propaga igual. Así la unión de empaques de todos los equipos sobrevive y
+		// nunca se pierde un bulto creado en otro dispositivo.
+		for (final presentacion in presentaciones) {
+			await repo.guardarPresentacion(presentacion);
 		}
-		await repo.reemplazarPresentacionesProducto(productoId, presentaciones);
 	}
 
 	Future<void> _aplicarDesafioAsistenciaRemoto(SyncEvent evento) async {

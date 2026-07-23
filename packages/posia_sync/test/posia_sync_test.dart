@@ -225,6 +225,57 @@ void main() {
 		expect(storeIdEnviado, 'tienda-1');
 	});
 
+	test('sincronizarDesdeOrigen NO excluye el dispositivo propio en el pull', () async {
+		final cola = ColaEventosMemoria();
+		final capturados = <String?>[];
+		final cliente = HubSyncClient(
+			urlBase: 'https://hub.test',
+			clienteHttp: MockClient((request) async {
+				if (request.url.path.endsWith('/v1/health')) {
+					return http.Response('{"ok":true}', 200);
+				}
+				if (request.method == 'GET' && request.url.path.endsWith('/v1/events')) {
+					capturados.add(request.url.queryParameters['excludeDevice']);
+					return http.Response(
+						'{"events":[],"lastSeq":0}',
+						200,
+						headers: {'Content-Type': 'application/json'},
+					);
+				}
+				return http.Response(
+					'{"accepted":0,"received":0}',
+					200,
+					headers: {'Content-Type': 'application/json'},
+				);
+			}),
+		);
+		final orquestador = SyncOrchestrator(
+			colaLocal: cola,
+			clienteHub: cliente,
+			clienteLan: null,
+			aplicadorRemoto: AplicadorMemoria(),
+			almacenCursor: CursorMemoria(),
+			tiendaId: 'tienda-1',
+			dispositivoId: 'caja-1',
+		);
+
+		// Desde origen: debe pedir TODO, incluidos los eventos propios, para
+		// rehidratar el catálogo local (nombres de categoría, etc.).
+		await orquestador.sincronizarDesdeOrigen();
+		expect(capturados, isNotEmpty);
+		expect(
+			capturados.first,
+			isNull,
+			reason: 'en reconstrucción desde origen no se excluye el dispositivo',
+		);
+
+		// Sync incremental normal: conserva la exclusión del dispositivo propio.
+		capturados.clear();
+		await orquestador.sincronizarCompleto();
+		expect(capturados, isNotEmpty);
+		expect(capturados.first, 'caja-1');
+	});
+
 	test('ciclos simultaneos se enganchan al mismo sync sin duplicar POST', () async {
 		final cola = ColaEventosMemoria();
 		await cola.encolar(crearEvento('ev-concurrente'));

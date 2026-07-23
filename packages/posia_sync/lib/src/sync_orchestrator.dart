@@ -298,7 +298,15 @@ class SyncOrchestrator {
         mensaje: 'Descargando cambios desde la nube…',
       ),
     );
-    final recibidos = await _ejecutarPull(clienteHub, alProgreso: alProgreso);
+    final recibidos = await _ejecutarPull(
+      clienteHub,
+      // En una reconstrucción desde origen (cursor a 0) la base local se
+      // rehidrata por completo, así que hay que traer también los eventos que
+      // este dispositivo originó: si se excluyen, su propio catálogo (p. ej.
+      // los nombres de categoría) nunca vuelve y quedan stubs "Categoría".
+      incluirEventosPropios: reiniciarCursor,
+      alProgreso: alProgreso,
+    );
     // Corrige localmente duplicados/placeholders que este dispositivo ya
     // tenía guardados (no solo los que un evento nuevo "choca" al llegar).
     // Corre en cada sync completo, haya o no eventos nuevos: así cualquier
@@ -321,6 +329,7 @@ class SyncOrchestrator {
 
   Future<int> _ejecutarPull(
     HubSyncClient clienteHub, {
+    bool incluirEventosPropios = false,
     ReporteProgresoSync? alProgreso,
   }) async {
     final aplicador = _aplicadorRemoto;
@@ -335,7 +344,7 @@ class SyncOrchestrator {
     while (continuar) {
       final resultado = await clienteHub.obtenerEventos(
         desdeSeq: cursor,
-        excluirDispositivoId: _dispositivoId,
+        excluirDispositivoId: incluirEventosPropios ? null : _dispositivoId,
       );
       if (!resultado.exitoso || resultado.eventos.isEmpty) {
         continuar = false;
