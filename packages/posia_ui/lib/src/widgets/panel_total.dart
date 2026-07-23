@@ -3,7 +3,7 @@
 /// Autor: Equipo POSIA
 /// Matricula: POSIA-2026-001
 /// Fecha creacion: 2026-06-07 18:30:00 (UTC-6)
-/// Ultima modificacion: 2026-06-07 18:30:00 (UTC-6)
+/// Ultima modificacion: 2026-07-23 (compactado para mostrar mas carrito)
 library;
 
 import 'package:flutter/material.dart';
@@ -39,8 +39,15 @@ class PanelTotal extends StatelessWidget {
 
 	@override
 	Widget build(BuildContext context) {
+		// Tienda, vendedor y turno se condensan en una sola línea de apoyo para
+		// ganar alto y que se vean más productos del carrito.
+		final subtitulo = [
+			if (nombreVendedor != null && nombreVendedor!.trim().isNotEmpty)
+				nombreVendedor!,
+			turnoAbierto ? 'Turno abierto' : 'Sin turno',
+		].join(' · ');
 		return Container(
-			padding: const EdgeInsets.fromLTRB(20.0, 14.0, 20.0, 14.0),
+			padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
 			decoration: BoxDecoration(
 				gradient: LinearGradient(
 					colors: [
@@ -50,83 +57,50 @@ class PanelTotal extends StatelessWidget {
 					begin: Alignment.centerLeft,
 					end: Alignment.centerRight,
 				),
-				boxShadow: [
-					BoxShadow(
-						color: PosiaColors.cobrar.withValues(alpha: 0.25),
-						blurRadius: 8.0,
-						offset: const Offset(0.0, 3.0),
-					),
-				],
 			),
 			child: Row(
 				children: [
+					const Icon(Icons.storefront_rounded, color: Colors.white, size: 20.0),
+					const SizedBox(width: 8.0),
 					Expanded(
 						child: Column(
 							crossAxisAlignment: CrossAxisAlignment.start,
+							mainAxisSize: MainAxisSize.min,
 							children: [
-								Row(
-									children: [
-										const Icon(Icons.storefront_rounded, color: Colors.white, size: 22.0),
-										const SizedBox(width: 8.0),
-										Flexible(
-											child: Text(
-												nombreTienda,
-												style: Theme.of(context).textTheme.titleLarge?.copyWith(
-													color: Colors.white,
-													fontWeight: FontWeight.w600,
-												),
-												overflow: TextOverflow.ellipsis,
-											),
-										),
-									],
-								),
-								if (nombreVendedor != null) ...[
-									const SizedBox(height: 4.0),
-									Text(
-										'Vendedor: $nombreVendedor',
-										style: Theme.of(context).textTheme.bodySmall?.copyWith(
-											color: Colors.white.withValues(alpha: 0.9),
-										),
+								Text(
+									nombreTienda,
+									maxLines: 1,
+									overflow: TextOverflow.ellipsis,
+									style: Theme.of(context).textTheme.titleMedium?.copyWith(
+										color: Colors.white,
+										fontWeight: FontWeight.w600,
 									),
-								],
-								const SizedBox(height: 4.0),
-								Row(
-									children: [
-										Icon(
-											turnoAbierto ? Icons.lock_open_rounded : Icons.lock_rounded,
-											size: 14.0,
-											color: Colors.white.withValues(alpha: 0.85),
-										),
-										const SizedBox(width: 4.0),
-										Text(
-											turnoAbierto ? 'Turno abierto' : 'Sin turno',
-											style: Theme.of(context).textTheme.bodySmall?.copyWith(
-												color: Colors.white.withValues(alpha: 0.85),
-											),
-										),
-									],
+								),
+								Text(
+									subtitulo,
+									maxLines: 1,
+									overflow: TextOverflow.ellipsis,
+									style: Theme.of(context).textTheme.bodySmall?.copyWith(
+										color: Colors.white.withValues(alpha: 0.85),
+									),
 								),
 							],
 						),
 					),
-					Column(
-						crossAxisAlignment: CrossAxisAlignment.end,
-						children: [
-							Text(
-								'Total',
-								style: Theme.of(context).textTheme.bodySmall?.copyWith(
-									color: Colors.white.withValues(alpha: 0.85),
-									letterSpacing: 0.5,
-								),
-							),
-							Text(
-								formatearMoneda(total),
-								style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-									color: Colors.white,
-									fontWeight: FontWeight.bold,
-								),
-							),
-						],
+					const SizedBox(width: 12.0),
+					Text(
+						'Total',
+						style: Theme.of(context).textTheme.bodySmall?.copyWith(
+							color: Colors.white.withValues(alpha: 0.85),
+						),
+					),
+					const SizedBox(width: 6.0),
+					Text(
+						formatearMoneda(total),
+						style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+							color: Colors.white,
+							fontWeight: FontWeight.bold,
+						),
 					),
 				],
 			),

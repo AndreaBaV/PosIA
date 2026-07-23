@@ -120,12 +120,6 @@ class _DialogoEditarLineaCarritoState extends State<DialogoEditarLineaCarrito> {
 		};
 	}
 
-	TextEditingController _ctrlActivo() => switch (_campoActivo) {
-		_CampoActivoEditarLinea.cantidad => _cantidadCtrl,
-		_CampoActivoEditarLinea.precio => _precioCtrl,
-		_CampoActivoEditarLinea.descuento => _descuentoCtrl,
-	};
-
 	FocusNode _focoActivo() => switch (_campoActivo) {
 		_CampoActivoEditarLinea.cantidad => _cantidadFocus,
 		_CampoActivoEditarLinea.precio => _precioFocus,
@@ -156,43 +150,6 @@ class _DialogoEditarLineaCarritoState extends State<DialogoEditarLineaCarrito> {
 				foco.requestFocus();
 			}
 		});
-	}
-
-	void _alPresionarTecla(String tecla) {
-		_limpiarError();
-		final ctrl = _ctrlActivo();
-		var texto = ctrl.text;
-		if (tecla == '.') {
-			if (texto.contains('.')) {
-				return;
-			}
-			texto = texto.isEmpty ? '0.' : '$texto.';
-		} else {
-			texto = texto == '0' ? tecla : '$texto$tecla';
-		}
-		ctrl.text = texto;
-		ctrl.selection = TextSelection.collapsed(offset: texto.length);
-		setState(() {});
-	}
-
-	void _alBorrar() {
-		_limpiarError();
-		final ctrl = _ctrlActivo();
-		final texto = ctrl.text;
-		if (texto.isEmpty) {
-			return;
-		}
-		final nuevo = texto.substring(0, texto.length - 1);
-		ctrl.text = nuevo;
-		ctrl.selection = TextSelection.collapsed(offset: nuevo.length);
-		setState(() {});
-	}
-
-	void _limpiarError() {
-		if (_mensajeError == null) {
-			return;
-		}
-		setState(() => _mensajeError = null);
 	}
 
 	void _mostrarError(String mensaje) {
@@ -314,7 +271,8 @@ class _DialogoEditarLineaCarritoState extends State<DialogoEditarLineaCarrito> {
 						TextField(
 							controller: _cantidadCtrl,
 							focusNode: _cantidadFocus,
-							keyboardType: TextInputType.none,
+							autofocus: true,
+							keyboardType: const TextInputType.numberWithOptions(decimal: true),
 							decoration: InputDecoration(
 								labelText: 'Cantidad',
 								suffixText: _etiquetaUnidad(),
@@ -327,7 +285,7 @@ class _DialogoEditarLineaCarritoState extends State<DialogoEditarLineaCarrito> {
 							controller: _precioCtrl,
 							focusNode: _precioFocus,
 							readOnly: !widget.puedeEditarPrecio,
-							keyboardType: TextInputType.none,
+							keyboardType: const TextInputType.numberWithOptions(decimal: true),
 							decoration: InputDecoration(
 								labelText: 'Precio unitario',
 								suffixText: widget.puedeEditarPrecio ? null : 'Solo admin',
@@ -345,7 +303,7 @@ class _DialogoEditarLineaCarritoState extends State<DialogoEditarLineaCarrito> {
 							TextField(
 								controller: _descuentoCtrl,
 								focusNode: _descuentoFocus,
-								keyboardType: TextInputType.none,
+								keyboardType: const TextInputType.numberWithOptions(decimal: true),
 								decoration: InputDecoration(
 									labelText: 'Descuento en producto',
 									helperText: 'Máximo: ${formatearMoneda(maxDescuento)}',
@@ -355,13 +313,6 @@ class _DialogoEditarLineaCarritoState extends State<DialogoEditarLineaCarrito> {
 									_seleccionarCampo(_CampoActivoEditarLinea.descuento),
 							),
 						],
-						const SizedBox(height: 12.0),
-						TecladoNumericoSimple(
-							valorActual: _ctrlActivo().text,
-							mostrarValor: false,
-							alPresionarTecla: _alPresionarTecla,
-							alBorrar: _alBorrar,
-						),
 						if (_mensajeError != null) ...[
 							const SizedBox(height: 8.0),
 							BannerMensajeDialogo(mensaje: _mensajeError!),

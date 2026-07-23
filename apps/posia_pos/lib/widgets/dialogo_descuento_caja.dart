@@ -219,38 +219,6 @@ class _DialogoDescuentoCajaState extends State<DialogoDescuentoCaja> {
 		);
 	}
 
-	void _alPresionarTecla(String tecla) {
-		_limpiarError();
-		var texto = _valorController.text;
-		if (tecla == '.') {
-			if (texto.contains('.')) {
-				return;
-			}
-			if (texto.isEmpty) {
-				texto = '0.';
-			} else {
-				texto = '$texto.';
-			}
-		} else {
-			texto = texto == '0' ? tecla : '$texto$tecla';
-		}
-		_valorController.text = texto;
-		_valorController.selection = TextSelection.collapsed(offset: texto.length);
-		setState(() {});
-	}
-
-	void _alBorrar() {
-		_limpiarError();
-		final texto = _valorController.text;
-		if (texto.isEmpty) {
-			return;
-		}
-		final nuevo = texto.substring(0, texto.length - 1);
-		_valorController.text = nuevo;
-		_valorController.selection = TextSelection.collapsed(offset: nuevo.length);
-		setState(() {});
-	}
-
 	@override
 	Widget build(BuildContext context) {
 		final puedeDescontar = widget.descuentoMaximo > 0.0;
@@ -329,13 +297,6 @@ class _DialogoDescuentoCajaState extends State<DialogoDescuentoCaja> {
 								mensaje: _mensajeError!,
 							),
 						],
-						const SizedBox(height: 12.0),
-						TecladoNumericoSimple(
-							valorActual: _valorController.text,
-							mostrarValor: false,
-							alPresionarTecla: puedeDescontar ? _alPresionarTecla : (_) {},
-							alBorrar: puedeDescontar ? _alBorrar : () {},
-						),
 					],
 				),
 			),

@@ -91,7 +91,8 @@ class PoliticaAccesoAdmin {
 		usuario.rol == RolUsuario.administrador ||
 		usuario.rol == RolUsuario.supervisor;
 
-	/// Indica si el usuario puede editar precios manualmente en caja.
-	static bool puedeEditarPrecioEnCaja(Usuario usuario) =>
-		usuario.rol == RolUsuario.administrador;
+	/// Cualquier usuario puede ajustar el precio de una línea en caja. El diálogo
+	/// de edición impide bajarlo por debajo del costo, así que ese piso —y no el
+	/// rol— es la protección del negocio.
+	static bool puedeEditarPrecioEnCaja(Usuario usuario) => true;
 }

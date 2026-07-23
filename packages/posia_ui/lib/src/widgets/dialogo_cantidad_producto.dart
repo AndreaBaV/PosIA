@@ -8,7 +8,6 @@ import 'package:posia_core/posia_core.dart';
 import '../theme/posia_theme.dart';
 import 'banner_mensaje_dialogo.dart';
 import 'contenido_dialogo_teclado.dart';
-import 'teclado_numerico_simple.dart';
 
 /// Resultado del dialogo de cantidad.
 class ResultadoDialogoCantidad {
@@ -126,7 +125,7 @@ class _DialogoCantidadProductoState extends State<DialogoCantidadProducto> {
 							controller: _cantidadController,
 							focusNode: _cantidadFocus,
 							autofocus: true,
-							keyboardType: TextInputType.none,
+							keyboardType: const TextInputType.numberWithOptions(decimal: true),
 							showCursor: true,
 							textInputAction: TextInputAction.done,
 							decoration: InputDecoration(
@@ -139,28 +138,6 @@ class _DialogoCantidadProductoState extends State<DialogoCantidadProducto> {
 							onChanged: (texto) {
 								_limpiarError();
 								_establecerValor(_normalizarEntradaCantidad(texto));
-							},
-						),
-						const SizedBox(height: 8.0),
-						TecladoNumericoSimple(
-							valorActual: _valorCantidad,
-							mostrarValor: false,
-							alPresionarTecla: (tecla) {
-								_limpiarError();
-								_establecerValor(
-									_normalizarEntradaCantidad('$_valorCantidad$tecla'),
-								);
-							},
-							alBorrar: () {
-								_limpiarError();
-								if (_valorCantidad.isEmpty) {
-									return;
-								}
-								_establecerValor(
-									_normalizarEntradaCantidad(
-										_valorCantidad.substring(0, _valorCantidad.length - 1),
-									),
-								);
 							},
 						),
 						if (subtotal > 0.0) ...[
