@@ -97,12 +97,18 @@ Future<void> main(List<String> args) async {
     totalGrupos++;
     // Catálogo unificado: los duplicados pueden venir de distintas tiendas
     // (p. ej. la misma lista de granel importada por separado para cada una).
-    // El tiendaId del canónico es solo metadato del evento de fusión.
-    final tiendaCanonico = await conn.execute(
-      Sql.named('SELECT tienda_id FROM products WHERE id = @id'),
+    final filaCanonico = await conn.execute(
+      Sql.named('''
+        SELECT nombre, codigo_barras, precio_base, unidad_medida, ruta_imagen,
+               tienda_id, modulo_vertical, categoria_id, piezas_por_caja,
+               proveedor_id, unidades_por_bulto, notas, costo_unitario,
+               permite_stock_negativo, favorito_caja
+        FROM products WHERE id = @id
+      '''),
       parameters: {'id': canonico},
     );
-    final tiendaId = tiendaCanonico.first[0] as String;
+    final datosCanonico = filaCanonico.first.toColumnMap();
+    final tiendaId = datosCanonico['tienda_id'] as String;
     print('\n"$clave"');
     print('  canónico=$canonico (tienda $tiendaId)  pres=${metricas[canonico]!.$1}');
 
@@ -140,6 +146,42 @@ Future<void> main(List<String> args) async {
     }).length;
 
     if (!aplicar) continue;
+
+    // 0) Reafirmar el alta del canónico. Sin esto, un dispositivo que nunca
+    // haya recibido el productUpserted original de este id (p. ej. porque el
+    // pull normal excluye los eventos propios de su creador, o porque su
+    // copia local se perdió) lo crea como stub genérico "Producto" al aplicar
+    // el evento de presentaciones de abajo — tapando el nombre real.
+    await _guardarYAplicar(
+      conn,
+      EventoHub(
+        seq: 0,
+        id: 'productUpserted:merge-reafirma:$canonico',
+        tiendaId: tiendaId,
+        dispositivoId: 'merge-neon',
+        tipo: 'productUpserted',
+        payload: {
+          'id': canonico,
+          'nombre': datosCanonico['nombre'],
+          'codigoBarras': datosCanonico['codigo_barras'] ?? '',
+          'precioBase': datosCanonico['precio_base'],
+          'unidadMedida': datosCanonico['unidad_medida'],
+          'rutaImagen': datosCanonico['ruta_imagen'] ?? '',
+          'activo': true,
+          'tiendaId': tiendaId,
+          'moduloVertical': datosCanonico['modulo_vertical'],
+          'categoriaId': datosCanonico['categoria_id'],
+          'piezasPorCaja': datosCanonico['piezas_por_caja'],
+          'proveedorId': datosCanonico['proveedor_id'],
+          'unidadesPorBulto': datosCanonico['unidades_por_bulto'],
+          'notas': datosCanonico['notas'] ?? '',
+          'costoUnitario': datosCanonico['costo_unitario'],
+          'permiteStockNegativo': (datosCanonico['permite_stock_negativo'] as int) != 0,
+          'favoritoCaja': (datosCanonico['favorito_caja'] as int) != 0,
+        },
+        creadoEn: DateTime.now().toUtc(),
+      ),
+    );
 
     // 1) Mover/unir presentaciones al canónico (aditivo).
     if (presentaciones.isNotEmpty) {

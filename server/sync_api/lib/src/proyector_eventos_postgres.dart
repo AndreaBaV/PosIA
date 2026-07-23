@@ -144,10 +144,16 @@ class ProyectorEventosPostgres {
     final codigo = (p['codigoBarras'] as String? ?? '').trim();
     final idOriginal = id;
     if (codigo.isNotEmpty) {
+      // Solo un producto ACTIVO puede "ser dueño" de un código de barras para
+      // efectos de remapeo. Un alias inactivo (activo=0) que conservó su
+      // código original (p. ej. de una reparación de emergencia anterior) no
+      // debe volver a capturar altas nuevas — eso redirige el evento hacia una
+      // fila inactiva y choca con el índice único de código activo.
       final existente = await _sesion.execute(
         Sql.named('''
           SELECT id FROM products
-          WHERE tienda_id = @tienda AND codigo_barras = @codigo AND id <> @id
+          WHERE tienda_id = @tienda AND codigo_barras = @codigo
+            AND id <> @id AND activo = 1
           LIMIT 1
         '''),
         parameters: {'tienda': tiendaId, 'codigo': codigo, 'id': id},
