@@ -48,10 +48,10 @@ Future<void> main(List<String> args) async {
 
   // Grupos de productos activos con el mismo nombre normalizado, por tienda.
   final grupos = await conn.execute('''
-    SELECT tienda_id, lower(trim(nombre)) AS clave, array_agg(id) AS ids
+    SELECT lower(trim(nombre)) AS clave, array_agg(id) AS ids
     FROM products
     WHERE activo = 1
-    GROUP BY tienda_id, lower(trim(nombre))
+    GROUP BY lower(trim(nombre))
     HAVING COUNT(*) > 1
     ORDER BY clave
   ''');
@@ -67,9 +67,8 @@ Future<void> main(List<String> args) async {
   var totalPresMovidas = 0;
 
   for (final fila in grupos) {
-    final tiendaId = fila[0] as String;
-    final clave = fila[1] as String;
-    final ids = (fila[2] as List).cast<String>();
+    final clave = fila[0] as String;
+    final ids = (fila[1] as List).cast<String>();
 
     // Métricas por producto para elegir canónico determinista.
     final metricas = <String, (int pres, double stock)>{};
@@ -96,8 +95,16 @@ Future<void> main(List<String> args) async {
     final canonico = ordenados.first;
     final perdedores = ordenados.skip(1).toList();
     totalGrupos++;
-    print('\n"$clave" (tienda $tiendaId)');
-    print('  canónico=$canonico  pres=${metricas[canonico]!.$1}');
+    // Catálogo unificado: los duplicados pueden venir de distintas tiendas
+    // (p. ej. la misma lista de granel importada por separado para cada una).
+    // El tiendaId del canónico es solo metadato del evento de fusión.
+    final tiendaCanonico = await conn.execute(
+      Sql.named('SELECT tienda_id FROM products WHERE id = @id'),
+      parameters: {'id': canonico},
+    );
+    final tiendaId = tiendaCanonico.first[0] as String;
+    print('\n"$clave"');
+    print('  canónico=$canonico (tienda $tiendaId)  pres=${metricas[canonico]!.$1}');
 
     // Unión de presentaciones (canónico + perdedores) para reasignar al canónico.
     final presRows = await conn.execute(
