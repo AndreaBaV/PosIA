@@ -23,6 +23,7 @@ class PanelCarrito extends StatelessWidget {
 		this.total = 0.0,
 		this.descuentoTicket = 0.0,
 		this.alDobleClicLinea,
+		this.alDobleClicPrecio,
 		super.key,
 	});
 
@@ -40,6 +41,10 @@ class PanelCarrito extends StatelessWidget {
 
 	/// Accion al hacer doble clic en linea (editar cantidad/precio).
 	final ValueChanged<int>? alDobleClicLinea;
+
+	/// Accion al hacer doble clic en el PRECIO de la linea: fija el precio final
+	/// manual (sobreprecio o descuento) sin recalcular el peso/cantidad.
+	final ValueChanged<int>? alDobleClicPrecio;
 
 	@override
 	Widget build(BuildContext context) {
@@ -212,13 +217,20 @@ class PanelCarrito extends StatelessWidget {
 																			),
 																		),
 																		const SizedBox(width: 6.0),
-																		Text(
-																			formatearMoneda(subtotal),
-																			style: const TextStyle(
-																				fontWeight: FontWeight.bold,
-																				color: PosiaColors.cobrar,
+																		GestureDetector(
+																			onDoubleTap: alDobleClicPrecio != null
+																				? () => alDobleClicPrecio!(indice)
+																				: null,
+																			child: Text(
+																				formatearMoneda(subtotal),
+																				style: TextStyle(
+																					fontWeight: FontWeight.bold,
+																					color: linea.reglaPrecio == ReglaPrecio.precioManual
+																						? Colors.orange.shade900
+																						: PosiaColors.cobrar,
+																					),
+																				),
 																			),
-																		),
 																	],
 																),
 															),

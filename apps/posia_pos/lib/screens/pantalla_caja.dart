@@ -21,6 +21,7 @@ import '../providers/app_providers.dart';
 import '../utils/compartir_ticket_digital_util.dart';
 import '../utils/descuento_caja_util.dart';
 import '../utils/editar_linea_caja_util.dart';
+import '../utils/precio_final_linea_caja_util.dart';
 import '../utils/existencias_caja_util.dart';
 import '../utils/imprimir_ticket_digital_util.dart';
 import '../utils/ticket_credito_util.dart';
@@ -456,6 +457,8 @@ class _ConstruirLayoutCaja extends ConsumerWidget {
 													ref,
 													indice,
 												),
+												alDobleClicPrecio: (indice) =>
+													mostrarEditarPrecioFinalCaja(context, ref, indice),
 											),
 										),
 									),

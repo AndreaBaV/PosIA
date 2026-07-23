@@ -16,6 +16,7 @@ import '../providers/app_providers.dart';
 import '../util/teclado_util.dart';
 import '../utils/descuento_caja_util.dart';
 import '../utils/editar_linea_caja_util.dart';
+import '../utils/precio_final_linea_caja_util.dart';
 import '../utils/existencias_caja_util.dart';
 import '../voz/servicio_voz_dispositivo.dart';
 import '../widgets/resolucion_lineas_voz.dart';
@@ -345,6 +346,8 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 										ref,
 										indice,
 									),
+									alDobleClicPrecio: (indice) =>
+										mostrarEditarPrecioFinalCaja(context, ref, indice),
 								),
 							),
 							_BarraInferiorCajaMovil(
@@ -434,6 +437,8 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 											ref,
 											indice,
 										),
+										alDobleClicPrecio: (indice) =>
+											mostrarEditarPrecioFinalCaja(context, ref, indice),
 									),
 								),
 								Padding(
