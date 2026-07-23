@@ -1156,6 +1156,10 @@ Future<void> ejecutarCobroCaja(BuildContext context, WidgetRef ref) async {
 		return;
 	}
 	_cobroCajaEnEjecucion = true;
+	// Declarada fuera del try para que el catch general sepa si la venta ya se
+	// guardó (falló solo la impresión/ticket) o si falló antes de guardarse —
+	// el cajero nunca debe quedarse sin saber si se cobró o no.
+	Venta? ventaGuardada;
 	try {
 		final servicio = await ref.read(servicioCajaProvider.future);
 		final error = await servicio.validarCobro();
@@ -1202,6 +1206,7 @@ Future<void> ejecutarCobroCaja(BuildContext context, WidgetRef ref) async {
 		Venta? venta;
 		try {
 			venta = await servicio.cobrar(request);
+			ventaGuardada = venta;
 		} on Object catch (error) {
 			if (context.mounted) {
 				PosiaNotificaciones.mostrarSnackBar(context, 
@@ -1214,7 +1219,27 @@ Future<void> ejecutarCobroCaja(BuildContext context, WidgetRef ref) async {
 			return;
 		}
 		await ref.read(carritoNotifierProvider.notifier).recargar();
-		if (!context.mounted || venta == null) {
+		if (!context.mounted) {
+			return;
+		}
+		if (venta == null) {
+			// cobrar() no lanzó excepción pero tampoco completó la venta (p. ej.
+			// algo cambió entre la validación del diálogo y el guardado: stock,
+			// turno, monto). El cajero SIEMPRE debe enterarse — nunca silencio.
+			final motivo = await servicio.validarCobroRequest(request);
+			if (context.mounted) {
+				PosiaNotificaciones.mostrarSnackBar(
+					context,
+					SnackBar(
+						content: Text(
+							'No se completó la venta'
+							'${motivo != null ? ': $motivo' : ''}. Intente de nuevo.',
+						),
+						backgroundColor: PosiaColors.cancelar,
+						duration: const Duration(seconds: 4),
+					),
+				);
+			}
 			return;
 		}
 		final contenedor = await ref.read(contenedorServiciosProvider.future);
@@ -1287,6 +1312,28 @@ Future<void> ejecutarCobroCaja(BuildContext context, WidgetRef ref) async {
 				duration: const Duration(seconds: 2),
 			),
 		);
+	} on Object catch (error) {
+		// Red de seguridad: cualquier excepción no prevista en este flujo (p. ej.
+		// al validar, al abrir el turno, al imprimir el ticket) no debe dejar al
+		// cajero sin saber qué pasó. Si la venta ya se había guardado, se le
+		// avisa que SÍ se cobró (para no arriesgar un doble cobro).
+		if (context.mounted) {
+			PosiaNotificaciones.mostrarSnackBar(
+				context,
+				SnackBar(
+					content: Text(
+						ventaGuardada != null
+							? 'Venta guardada, pero algo falló después '
+								'(ticket/impresión): $error'
+							: 'No se pudo completar la venta: $error',
+					),
+					backgroundColor: ventaGuardada != null
+						? Colors.orange.shade800
+						: PosiaColors.cancelar,
+					duration: const Duration(seconds: 5),
+				),
+			);
+		}
 	} finally {
 		_cobroCajaEnEjecucion = false;
 	}
