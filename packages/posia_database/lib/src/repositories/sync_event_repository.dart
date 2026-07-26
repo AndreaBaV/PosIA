@@ -12,6 +12,32 @@ class SyncEventRepository implements LocalEventQueue {
 
 	final Database _baseDatos;
 
+	/// Eventos de producto/catalogo: van primero en la cola de envio para que
+	/// un alta o cambio de producto, precio, costo o presentacion llegue a las
+	/// demas cajas sin esperar detras de backlog de ventas, nomina u otro
+	/// historial. Incluye tambien las bajas (producto/categoria/precio
+	/// eliminado): una baja tardia es igual de grave que un alta tardia, por
+	/// ejemplo un producto descontinuado que se sigue vendiendo en otra caja.
+	static const List<String> _tiposPrioridadProducto = [
+		'productUpserted',
+		'productDeleted',
+		'variantUpserted',
+		'categoryUpserted',
+		'categoryDeleted',
+		'productPresentationsReplaced',
+		'presentationTypeUpserted',
+		'priceListUpserted',
+		'priceListDeleted',
+		'priceListItemUpserted',
+		'priceListItemDeleted',
+		'customerProductPriceUpserted',
+		'customerProductPriceDeleted',
+		'wholesaleTiersReplaced',
+		'lotePromocionReplaced',
+		'comboReplaced',
+		'stockAdjusted',
+	];
+
 	/// Tipos espejo de catalogo: reencolar N veces genera basura, no historial.
 	static const Set<String> _tiposEspejoCatalogo = {
 		'productUpserted',
@@ -54,6 +80,13 @@ class SyncEventRepository implements LocalEventQueue {
 		);
 	}
 
+	/// `tipo IN ('a','b',...)` para la clausula de prioridad en [obtenerPendientes].
+	///
+	/// `orderBy` de sqflite no admite bind params; los tipos vienen de la
+	/// constante interna [_tiposPrioridadProducto], no de entrada de usuario.
+	static final String _listaTipoPrioridadSql =
+		_tiposPrioridadProducto.map((tipo) => "'$tipo'").join(',');
+
 	@override
 	Future<List<SyncEvent>> obtenerPendientes() async {
 		final filas = await _baseDatos.query(
@@ -63,7 +96,11 @@ class SyncEventRepository implements LocalEventQueue {
 				EstadoSyncEvento.pendiente.name,
 				EstadoSyncEvento.error.name,
 			],
-			orderBy: 'creado_en ASC',
+			// Producto/catalogo primero (prioridad 0), el resto despues por
+			// antiguedad: un alta de producto no debe esperar detras de un
+			// backlog grande de ventas o nomina para llegar a las demas cajas.
+			orderBy: 'CASE WHEN tipo IN ($_listaTipoPrioridadSql) THEN 0 ELSE 1 '
+				'END ASC, creado_en ASC',
 		);
 		return filas.map(_mapearEvento).toList();
 	}

@@ -53,7 +53,7 @@ class EscPosWindowsPrinter implements ReceiptPrinter {
 		enviarBytesCrudos(
 			nombreImpresora: nombreImpresora,
 			nombreDocumento: 'POSIA ticket',
-			datos: Uint8List.fromList(bytes),
+			datos: bytes,
 		);
 	}
 }
@@ -106,9 +106,9 @@ void enviarBytesCrudos({
 					);
 				}
 				bufferDatos = calloc<Uint8>(datos.length);
-				for (var i = 0; i < datos.length; i++) {
-					bufferDatos[i] = datos[i];
-				}
+				// Copia en bloque: escribir byte a byte cruza la frontera FFI en
+				// cada iteracion y es muchisimo mas lento para tickets grandes.
+				bufferDatos.asTypedList(datos.length).setAll(0, datos);
 				final ok = WritePrinter(
 					handle,
 					bufferDatos.cast(),

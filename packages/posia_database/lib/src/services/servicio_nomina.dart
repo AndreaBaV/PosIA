@@ -63,13 +63,48 @@ class ServicioNomina {
 	/// Reencola perfiles locales para proyeccion a Neon (`employee_profiles`).
 	///
 	/// Solo encola; el push ocurre en el siguiente [sincronizarPendientes] /
-	/// [sincronizarManual] del orquestador.
+	/// [sincronizarManual] del orquestador. Omite los que ya se confirmaron
+	/// enviados al hub: reencolar todo en cada sesion satura la cola y atrasa
+	/// eventos mas urgentes (p. ej. productos nuevos).
 	Future<int> reencolarPerfilesParaSync() async {
 		final perfiles = await _empleadoPerfilRepository.listarTodos();
+		final yaEnviados = await _idsYaEnviados([
+			for (final perfil in perfiles) 'employeeProfileUpserted:${perfil.usuarioId}',
+		]);
+		var reencolados = 0;
 		for (final perfil in perfiles) {
+			final eventoId = 'employeeProfileUpserted:${perfil.usuarioId}';
+			if (yaEnviados.contains(eventoId)) {
+				continue;
+			}
 			await _publicarPerfil(perfil, empujarAhora: false);
+			reencolados++;
 		}
-		return perfiles.length;
+		return reencolados;
+	}
+
+	/// IDs de `sync_event_queue` cuyo ultimo estado confirmado es `enviado`.
+	Future<Set<String>> _idsYaEnviados(List<String> ids) async {
+		if (ids.isEmpty) {
+			return {};
+		}
+		final encontrados = <String>{};
+		const chunk = 400;
+		for (var i = 0; i < ids.length; i += chunk) {
+			final lote = ids.sublist(
+				i,
+				i + chunk > ids.length ? ids.length : i + chunk,
+			);
+			final placeholders = List.filled(lote.length, '?').join(',');
+			final filas = await _baseDatos.query(
+				'sync_event_queue',
+				columns: ['id'],
+				where: 'estado = ? AND id IN ($placeholders)',
+				whereArgs: [EstadoSyncEvento.enviado.name, ...lote],
+			);
+			encontrados.addAll(filas.map((fila) => fila['id'] as String));
+		}
+		return encontrados;
 	}
 
 	Future<void> _publicarPerfil(
@@ -210,15 +245,26 @@ class ServicioNomina {
 	}
 
 	/// Reencola periodos de nomina locales hacia Neon.
+	///
+	/// Omite los que ya se confirmaron enviados: los periodos cerrados son
+	/// historial inmutable, no hace falta reenviarlos en cada sesion.
 	Future<int> reencolarPeriodosParaSync() async {
 		final periodos = await listarPeriodos();
 		final sync = _syncOrchestrator;
 		if (sync == null || !sync.tieneHubConfigurado()) {
 			return 0;
 		}
+		final yaEnviados = await _idsYaEnviados([
+			for (final periodo in periodos) 'payrollPeriodClosed:${periodo.id}',
+		]);
+		var reencolados = 0;
 		for (final periodo in periodos) {
-			final lineas = await listarLineasPeriodo(periodo.id);
 			final eventoId = 'payrollPeriodClosed:${periodo.id}';
+			if (yaEnviados.contains(eventoId)) {
+				continue;
+			}
+			reencolados++;
+			final lineas = await listarLineasPeriodo(periodo.id);
 			await sync.registrarEvento(
 				SyncEvent(
 					id: eventoId,
@@ -250,7 +296,7 @@ class ServicioNomina {
 				),
 			);
 		}
-		return periodos.length;
+		return reencolados;
 	}
 
 	Future<List<LineaNomina>> listarLineasPeriodo(String periodoId) {

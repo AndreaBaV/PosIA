@@ -29,6 +29,7 @@ import 'pantalla_caja.dart'
 		ejecutarPonerEnEspera,
 		intentarSeleccionarEmpaqueEnCaja,
 		mostrarTicketsEnEspera,
+		reimprimirUltimoTicketCaja,
 		seleccionarProductoEnCaja;
 
 /// Pantalla de venta optimizada para telefonos y tablets.
@@ -161,6 +162,12 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 						? () => ejecutarCobroCaja(context, ref)
 						: null,
 					alAlternarVoz: _alternarEscucha,
+					alRecuperarEnEspera: estado.ticketsEnEspera > 0
+						? () => mostrarTicketsEnEspera(context, ref)
+						: null,
+					alReimprimir: ref.watch(ultimoTicketImpresoProvider) != null
+						? () => reimprimirUltimoTicketCaja(context, ref)
+						: null,
 				),
 		);
 	}
@@ -358,6 +365,12 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 									? () => ejecutarCobroCaja(context, ref)
 									: null,
 								alAlternarVoz: _alternarEscucha,
+								alRecuperarEnEspera: estado.ticketsEnEspera > 0
+									? () => mostrarTicketsEnEspera(context, ref)
+									: null,
+								alReimprimir: ref.watch(ultimoTicketImpresoProvider) != null
+									? () => reimprimirUltimoTicketCaja(context, ref)
+									: null,
 								compacta: true,
 							),
 						],
@@ -929,6 +942,8 @@ class _BarraInferiorCajaMovil extends StatelessWidget {
 		required this.alAbrirCarrito,
 		required this.alCobrar,
 		required this.alAlternarVoz,
+		this.alRecuperarEnEspera,
+		this.alReimprimir,
 		this.compacta = false,
 	});
 
@@ -937,6 +952,8 @@ class _BarraInferiorCajaMovil extends StatelessWidget {
 	final VoidCallback alAbrirCarrito;
 	final VoidCallback? alCobrar;
 	final VoidCallback alAlternarVoz;
+	final VoidCallback? alRecuperarEnEspera;
+	final VoidCallback? alReimprimir;
 	final bool compacta;
 
 	@override
@@ -962,6 +979,30 @@ class _BarraInferiorCajaMovil extends StatelessWidget {
 									icon: Icon(escuchando ? Icons.stop : Icons.mic_none),
 								),
 							if (!compacta) const SizedBox(width: 8.0),
+							if (alRecuperarEnEspera != null)
+								Padding(
+									padding: const EdgeInsets.only(right: 8.0),
+									child: Badge(
+										label: Text('${estado.ticketsEnEspera}'),
+										child: IconButton.filledTonal(
+											tooltip: 'Recuperar ticket en espera',
+											style: IconButton.styleFrom(
+												backgroundColor: Colors.orange.shade800.withValues(alpha: 0.15),
+											),
+											onPressed: alRecuperarEnEspera,
+											icon: const Icon(Icons.playlist_play),
+										),
+									),
+								),
+							if (alReimprimir != null)
+								Padding(
+									padding: const EdgeInsets.only(right: 8.0),
+									child: IconButton.filledTonal(
+										tooltip: 'Reimprimir último ticket',
+										onPressed: alReimprimir,
+										icon: const Icon(Icons.print_outlined),
+									),
+								),
 							Expanded(
 								child: InkWell(
 									onTap: compacta ? null : alAbrirCarrito,

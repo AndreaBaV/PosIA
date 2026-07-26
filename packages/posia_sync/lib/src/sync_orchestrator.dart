@@ -305,6 +305,12 @@ class SyncOrchestrator {
       // este dispositivo originó: si se excluyen, su propio catálogo (p. ej.
       // los nombres de categoría) nunca vuelve y quedan stubs "Categoría".
       incluirEventosPropios: reiniciarCursor,
+      // Reconstrucción desde origen = replay de TODO el historial de la
+      // tienda (cursor a 0), no solo lo pendiente reciente. Si se dispara el
+      // callback de impresión aquí, la caja reimprime cada venta que la
+      // tienda haya hecho jamás. Ese callback es solo para ventas nuevas
+      // llegando de otras cajas en el sync normal.
+      esReconstruccionDesdeOrigen: reiniciarCursor,
       alProgreso: alProgreso,
     );
     // Corrige localmente duplicados/placeholders que este dispositivo ya
@@ -330,6 +336,7 @@ class SyncOrchestrator {
   Future<int> _ejecutarPull(
     HubSyncClient clienteHub, {
     bool incluirEventosPropios = false,
+    bool esReconstruccionDesdeOrigen = false,
     ReporteProgresoSync? alProgreso,
   }) async {
     final aplicador = _aplicadorRemoto;
@@ -352,7 +359,9 @@ class SyncOrchestrator {
       }
       for (final evento in resultado.eventos) {
         await aplicador.aplicarEvento(evento);
-        await alAplicarEventoRemoto?.call(evento);
+        if (!esReconstruccionDesdeOrigen) {
+          await alAplicarEventoRemoto?.call(evento);
+        }
         aplicados = aplicados + 1;
         alProgreso?.call(
           ProgresoSync(
