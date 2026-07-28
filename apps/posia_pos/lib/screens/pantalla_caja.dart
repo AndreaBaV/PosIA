@@ -830,16 +830,29 @@ Future<void> ejecutarPonerEnEspera(BuildContext context, WidgetRef ref) async {
 		if (!context.mounted) {
 			return;
 		}
-		PosiaNotificaciones.mostrarSnackBar(context, 
+		PosiaNotificaciones.mostrarSnackBar(context,
 			const SnackBar(content: Text('Ticket guardado en espera')),
 		);
 	} on StateError catch (e) {
 		if (!context.mounted) {
 			return;
 		}
-		PosiaNotificaciones.mostrarSnackBar(context, 
+		PosiaNotificaciones.mostrarSnackBar(context,
 			SnackBar(content: Text(e.message), backgroundColor: PosiaColors.cancelar),
 		);
+	} on Object catch (error) {
+		// Red de seguridad: cualquier excepción no prevista (guardar el ticket,
+		// refrescar stock/turno) no debe dejar al cajero sin saber qué pasó.
+		if (context.mounted) {
+			PosiaNotificaciones.mostrarSnackBar(
+				context,
+				SnackBar(
+					content: Text('No se pudo poner el ticket en espera: $error'),
+					backgroundColor: PosiaColors.cancelar,
+					duration: const Duration(seconds: 4),
+				),
+			);
+		}
 	}
 }
 
@@ -1027,8 +1040,24 @@ Future<void> confirmarVaciarCarritoCaja(BuildContext context, WidgetRef ref) asy
 			],
 		),
 	);
-	if (confirmar == true) {
+	if (confirmar != true) {
+		return;
+	}
+	try {
 		await ref.read(carritoNotifierProvider.notifier).vaciarCarrito();
+	} on Object catch (error) {
+		// Red de seguridad: si algo falla al refrescar el carrito (stock, turno,
+		// catálogo) el cajero nunca debe quedarse sin saber qué pasó.
+		if (context.mounted) {
+			PosiaNotificaciones.mostrarSnackBar(
+				context,
+				SnackBar(
+					content: Text('No se pudo vaciar el carrito: $error'),
+					backgroundColor: PosiaColors.cancelar,
+					duration: const Duration(seconds: 4),
+				),
+			);
+		}
 	}
 }
 
