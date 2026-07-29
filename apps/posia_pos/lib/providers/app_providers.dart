@@ -122,16 +122,6 @@ final sincronizadorAutomaticoProvider = FutureProvider<SincronizadorAutomatico>(
 			// completo es ahora acción explícita: ServicioAdmin.resubirCatalogoCompleto().
 			await contenedor.servicioAdmin.sincronizarManual(incluirCatalogo: false);
 		},
-		alCompletarSync: () async {
-			try {
-				final carrito = ref.read(carritoNotifierProvider.notifier);
-				if (ref.read(carritoNotifierProvider).hasValue) {
-					await carrito.recargar(invalidarCatalogo: true);
-				}
-			} on Object {
-				// Ignora errores en invalidación del carrito tras sync automático
-			}
-		},
 	);
 	sincronizador.iniciar();
 	ref.onDispose(sincronizador.detener);
@@ -725,6 +715,27 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 		_catalogoCompleto = await servicio.listarProductos();
 	}
 
+	/// Vuelve a "Todos" si la categoria filtrada ya no esta activa.
+	///
+	/// El sync fusiona categorias duplicadas por nombre: reasigna los productos
+	/// de la perdedora a la canonica y desactiva la perdedora
+	/// (AplicadorEventosSqlite._autoSanarCategoriasDuplicadas). La caja guarda
+	/// la categoria elegida en memoria, asi que si la desactivada era la
+	/// seleccionada el filtro se queda en cero y la caja se ve vacia aunque el
+	/// catalogo este completo. Antes solo se recuperaba cerrando sesion, que es
+	/// lo unico que reiniciaba este notifier.
+	void _descartarCategoriaQueYaNoExiste() {
+		if (_categoriaSeleccionadaId == CATEGORIA_TODOS_ID) {
+			return;
+		}
+		final vigente = _categoriasCache
+			?.any((categoria) => categoria.id == _categoriaSeleccionadaId);
+		if (vigente ?? false) {
+			return;
+		}
+		_categoriaSeleccionadaId = CATEGORIA_TODOS_ID;
+	}
+
 	List<Producto> _filtrarProductos(
 		List<Producto> todos,
 		String categoriaId,
@@ -750,6 +761,7 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 		final contenedor = await ref.read(contenedorServiciosProvider.future);
 		await _asegurarCatalogo();
 		_categoriasCache ??= await servicio.listarCategorias();
+		_descartarCategoriaQueYaNoExiste();
 		final productos = _filtrarProductos(
 			_catalogoCompleto!,
 			_categoriaSeleccionadaId,

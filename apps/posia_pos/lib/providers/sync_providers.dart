@@ -8,18 +8,21 @@ import 'package:posia_sync/posia_sync.dart';
 import 'admin_providers.dart';
 import 'app_providers.dart' show carritoNotifierProvider, contenedorServiciosProvider;
 
-/// Invalida caches de productos tras sincronización.
+/// Relee el catalogo en las pantallas abiertas tras sincronizar.
+///
+/// NO invalida [contenedorServiciosProvider]: eso destruye y reconstruye
+/// ServicioCaja con la caja en pantalla, y ese servicio es el que guarda el
+/// catalogo y el carrito en memoria. Al reconstruirlo, la caja se quedaba sin
+/// productos hasta la siguiente recarga. Basta con releer desde SQLite usando
+/// el mismo servicio que ya esta vivo.
 Future<void> _refrescarCachesProductosTrasSync(Ref ref) async {
-	ref.invalidate(contenedorServiciosProvider);
 	ref.invalidate(productosCatalogoAdminProvider);
 	ref.invalidate(categoriasFormularioAdminProvider);
 	ref.invalidate(proveedoresFormularioAdminProvider);
-	await ref.read(contenedorServiciosProvider.future);
-	final carrito = ref.read(carritoNotifierProvider.notifier);
 	if (ref.read(carritoNotifierProvider).hasValue) {
-		await carrito.recargar(invalidarCatalogo: true);
-	} else {
-		ref.invalidate(carritoNotifierProvider);
+		await ref
+			.read(carritoNotifierProvider.notifier)
+			.recargar(invalidarCatalogo: true);
 	}
 }
 

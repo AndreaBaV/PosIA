@@ -20,19 +20,14 @@ class SincronizadorAutomatico {
 	/// [orquestador] Orquestador de sincronizacion activo.
 	/// [sincronizarConCatalogo] Si se provee, el primer ciclo (y al recuperar
 	/// red la primera vez) reencola el catalogo completo hacia Neon.
-	/// [alCompletarSync] Callback ejecutado al completar cada ciclo de sync
-	/// (independiente de éxito o error).
 	SincronizadorAutomatico({
 		required SyncOrchestrator orquestador,
 		Future<void> Function()? sincronizarConCatalogo,
-		Future<void> Function()? alCompletarSync,
 	}) : _orquestador = orquestador,
-	     _sincronizarConCatalogo = sincronizarConCatalogo,
-	     _alCompletarSync = alCompletarSync;
+	     _sincronizarConCatalogo = sincronizarConCatalogo;
 
 	final SyncOrchestrator _orquestador;
 	final Future<void> Function()? _sincronizarConCatalogo;
-	final Future<void> Function()? _alCompletarSync;
 	StreamSubscription<List<ConnectivityResult>>? _suscripcionConectividad;
 	Timer? _temporizador;
 	Timer? _temporizadorMantenerHub;
@@ -103,10 +98,6 @@ class SincronizadorAutomatico {
 			// Reintenta en el siguiente ciclo; la caja sigue operando con datos locales.
 		} finally {
 			_sincronizando = false;
-			final callback = _alCompletarSync;
-			if (callback != null) {
-				unawaited(callback());
-			}
 		}
 	}
 }
