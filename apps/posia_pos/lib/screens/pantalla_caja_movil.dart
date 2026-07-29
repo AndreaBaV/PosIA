@@ -433,8 +433,15 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 				minChildSize: 0.3,
 				maxChildSize: 0.9,
 				builder: (_, scrollController) => Consumer(
-					builder: (contextHoja, ref, _) {
-						final estadoActual = ref.watch(carritoNotifierProvider).value ?? estado;
+					// `refHoja` es el ref del Consumer y vive solo mientras la
+					// hoja está montada. NO se debe usar en callbacks que primero
+					// hacen Navigator.pop(sheetContext) y luego abren diálogos
+					// asíncronos: para cuando el usuario responda, la hoja ya se
+					// habrá desactivado y Riverpod lanzará
+					// "Bad state: Using 'ref' outside a widget…" al leerlo. Esos
+					// callbacks deben usar el `ref` del ConsumerState (estable).
+					builder: (contextHoja, refHoja, _) {
+						final estadoActual = refHoja.watch(carritoNotifierProvider).value ?? estado;
 						return Column(
 							children: [
 								Expanded(
@@ -443,15 +450,15 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 										total: estadoActual.total,
 										descuentoTicket: estadoActual.descuentoTicket,
 										alEliminarLinea: (indice) {
-											ref.read(carritoNotifierProvider.notifier).eliminarLinea(indice);
+											refHoja.read(carritoNotifierProvider.notifier).eliminarLinea(indice);
 										},
 										alDobleClicLinea: (indice) => mostrarEditarLineaCaja(
 											contextHoja,
-											ref,
+											refHoja,
 											indice,
 										),
 										alDobleClicPrecio: (indice) =>
-											mostrarEditarPrecioFinalCaja(contextHoja, ref, indice),
+											mostrarEditarPrecioFinalCaja(contextHoja, refHoja, indice),
 									),
 								),
 								Padding(
