@@ -433,7 +433,7 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 				minChildSize: 0.3,
 				maxChildSize: 0.9,
 				builder: (_, scrollController) => Consumer(
-					builder: (context, ref, _) {
+					builder: (contextHoja, ref, _) {
 						final estadoActual = ref.watch(carritoNotifierProvider).value ?? estado;
 						return Column(
 							children: [
@@ -446,12 +446,12 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 											ref.read(carritoNotifierProvider.notifier).eliminarLinea(indice);
 										},
 										alDobleClicLinea: (indice) => mostrarEditarLineaCaja(
-											context,
+											contextHoja,
 											ref,
 											indice,
 										),
 										alDobleClicPrecio: (indice) =>
-											mostrarEditarPrecioFinalCaja(context, ref, indice),
+											mostrarEditarPrecioFinalCaja(contextHoja, ref, indice),
 									),
 								),
 								Padding(
