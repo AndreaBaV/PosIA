@@ -6,7 +6,22 @@ import 'package:posia_database/posia_database.dart';
 import 'package:posia_sync/posia_sync.dart';
 
 import 'admin_providers.dart';
-import 'app_providers.dart';
+import 'app_providers.dart' show carritoNotifierProvider, contenedorServiciosProvider;
+
+/// Invalida caches de productos tras sincronización.
+Future<void> _refrescarCachesProductosTrasSync(Ref ref) async {
+	ref.invalidate(contenedorServiciosProvider);
+	ref.invalidate(productosCatalogoAdminProvider);
+	ref.invalidate(categoriasFormularioAdminProvider);
+	ref.invalidate(proveedoresFormularioAdminProvider);
+	await ref.read(contenedorServiciosProvider.future);
+	final carrito = ref.read(carritoNotifierProvider.notifier);
+	if (ref.read(carritoNotifierProvider).hasValue) {
+		await carrito.recargar(invalidarCatalogo: true);
+	} else {
+		ref.invalidate(carritoNotifierProvider);
+	}
+}
 
 /// Estado visible de una sincronizacion en curso o recien terminada.
 class EstadoSyncUi {
@@ -80,6 +95,7 @@ class SyncProgresoNotifier extends Notifier<EstadoSyncUi> {
 			ref.invalidate(_estadoSyncColaProvider);
 			ref.invalidate(rolesPersonalizadosAdminProvider);
 			ref.invalidate(rolesPersonalizadosActivosProvider);
+			await _refrescarCachesProductosTrasSync(ref);
 			return resultado;
 		} on Object catch (error) {
 			state = EstadoSyncUi(
@@ -112,6 +128,7 @@ class SyncProgresoNotifier extends Notifier<EstadoSyncUi> {
 				ultimoResultado: resultado.sync,
 			);
 			ref.invalidate(_estadoSyncColaProvider);
+			await _refrescarCachesProductosTrasSync(ref);
 			return resultado;
 		} on Object catch (error) {
 			state = EstadoSyncUi(
@@ -157,6 +174,7 @@ class SyncProgresoNotifier extends Notifier<EstadoSyncUi> {
 			ref.invalidate(_estadoSyncColaProvider);
 			ref.invalidate(rolesPersonalizadosAdminProvider);
 			ref.invalidate(rolesPersonalizadosActivosProvider);
+			await _refrescarCachesProductosTrasSync(ref);
 			return resultado;
 		} on Object catch (error) {
 			state = EstadoSyncUi(
@@ -202,6 +220,7 @@ class SyncProgresoNotifier extends Notifier<EstadoSyncUi> {
 				ultimoResultado: resultado,
 			);
 			ref.invalidate(_estadoSyncColaProvider);
+			await _refrescarCachesProductosTrasSync(ref);
 			return resultado;
 		} on Object catch (error) {
 			state = EstadoSyncUi(

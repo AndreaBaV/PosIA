@@ -122,6 +122,16 @@ final sincronizadorAutomaticoProvider = FutureProvider<SincronizadorAutomatico>(
 			// completo es ahora acción explícita: ServicioAdmin.resubirCatalogoCompleto().
 			await contenedor.servicioAdmin.sincronizarManual(incluirCatalogo: false);
 		},
+		alCompletarSync: () async {
+			try {
+				final carrito = ref.read(carritoNotifierProvider.notifier);
+				if (ref.read(carritoNotifierProvider).hasValue) {
+					await carrito.recargar(invalidarCatalogo: true);
+				}
+			} on Object {
+				// Ignora errores en invalidación del carrito tras sync automático
+			}
+		},
 	);
 	sincronizador.iniciar();
 	ref.onDispose(sincronizador.detener);
