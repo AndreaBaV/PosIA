@@ -19,8 +19,9 @@ import {
 	LIMITE_LINEAS_PEDIDO,
 	METODOS_PAGO,
 } from './constantes.js';
-import { cargarPresentaciones } from './catalogo.js';
+import { cargarPresentaciones, cargarEscalas } from './catalogo.js';
 import { formatearMoneda, numeroCorto, redondearMonto } from './dinero.js';
+import { resolverPrecioConEscalas } from './escalas.js';
 import { ErrorPeticion } from './respuesta.js';
 
 const ESTADO_INICIAL = 'recibido';
@@ -185,7 +186,9 @@ export async function crearPedido(sql, { tiendaId, nombreTienda, whatsapp, cuerp
 /**
  * Relee nombre y precio de cada partida desde Neon.
  *
- * El navegador solo dice QUE y CUANTO; el importe se calcula aqui.
+ * El navegador solo dice QUE y CUANTO; el importe se calcula aqui. Sin
+ * presentacion se aplica el tramo de `wholesale_tiers` (medio/cuarto kilo,
+ * mayoreo) igual que en caja.
  */
 async function resolverLineas(sql, solicitadas) {
 	const ids = [...new Set(solicitadas.map((s) => s.productoId))];
@@ -198,7 +201,10 @@ async function resolverLineas(sql, solicitadas) {
 		[ids],
 	);
 	const productos = new Map(filas.map((fila) => [fila.id, fila]));
-	const presentaciones = await cargarPresentaciones(sql, ids);
+	const [presentaciones, escalas] = await Promise.all([
+		cargarPresentaciones(sql, ids),
+		cargarEscalas(sql, ids),
+	]);
 
 	return solicitadas.map((solicitada) => {
 		const producto = productos.get(solicitada.productoId);
@@ -206,7 +212,12 @@ async function resolverLineas(sql, solicitadas) {
 			throw new ErrorPeticion('Un producto del carrito ya no esta disponible');
 		}
 		let nombreProducto = producto.nombre;
-		let precioUnitario = redondearMonto(Number(producto.precio_base ?? 0));
+		const precioBase = Number(producto.precio_base ?? 0);
+		let precioUnitario = resolverPrecioConEscalas(
+			precioBase,
+			solicitada.cantidad,
+			escalas.get(solicitada.productoId) ?? [],
+		);
 
 		if (solicitada.presentacionId) {
 			const disponibles = presentaciones.get(solicitada.productoId) ?? [];
@@ -214,6 +225,7 @@ async function resolverLineas(sql, solicitadas) {
 			if (!elegida) {
 				throw new ErrorPeticion('La presentacion elegida ya no esta disponible');
 			}
+			// Empaque con precio fijo: no aplica escala por kilo/pieza.
 			precioUnitario = elegida.precio;
 			nombreProducto = `${nombreProducto} (${elegida.nombre})`;
 		}

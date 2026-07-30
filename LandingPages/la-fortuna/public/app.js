@@ -85,6 +85,40 @@
 		return /kilo|gramo|litro|metro/i.test(unidad || '');
 	}
 
+	// Espejo de lib/escalas.js: el carrito debe mostrar el mismo $/kg que
+	// cobrara el servidor al confirmar (medio/cuarto, mayoreo, etc.).
+	function seleccionarEscalaPorCantidad(escalas, cantidad) {
+		var mejor = null;
+		(escalas || []).forEach(function (escala) {
+			var umbral = Number(escala.cantidadMinima);
+			var precio = Number(escala.precioUnitario);
+			if (!(cantidad >= umbral) || !(precio > 0)) { return; }
+			if (!mejor || umbral > Number(mejor.cantidadMinima)) { mejor = escala; }
+		});
+		return mejor;
+	}
+
+	function resolverPrecioConEscalas(precioBase, cantidad, escalas) {
+		var escala = seleccionarEscalaPorCantidad(escalas, cantidad);
+		if (escala) { return Number(escala.precioUnitario); }
+		return Number(precioBase) || 0;
+	}
+
+	function precioUnitarioDe(producto, presentacionId, cantidad) {
+		var presentacion = presentacionDe(producto, presentacionId);
+		if (presentacion) { return presentacion.precio; }
+		return resolverPrecioConEscalas(producto.precio, cantidad, producto.escalas);
+	}
+
+	function recalcularPrecioLinea(linea) {
+		if (linea.presentacionId) { return; }
+		linea.precio = resolverPrecioConEscalas(
+			linea.precioBase != null ? linea.precioBase : linea.precio,
+			linea.cantidad,
+			linea.escalas,
+		);
+	}
+
 	// --- Tienda -------------------------------------------------------------
 
 	function cargarTienda() {
@@ -236,17 +270,21 @@
 		menos.addEventListener('click', function () {
 			var paso = pasoActual();
 			campo.value = cantidadTexto(Math.max(paso, (parseFloat(campo.value) || paso) - paso));
+			sincronizarUnidad();
 		});
 		mas.addEventListener('click', function () {
 			var paso = pasoActual();
 			campo.value = cantidadTexto((parseFloat(campo.value) || 0) + paso);
+			sincronizarUnidad();
 		});
+		campo.addEventListener('change', sincronizarUnidad);
 		contenedorCantidad.appendChild(menos);
 		contenedorCantidad.appendChild(campo);
 		contenedorCantidad.appendChild(mas);
 		cuerpo.appendChild(contenedorCantidad);
 
-		// Precio, unidad y paso de la cantidad siguen a la presentacion elegida.
+		// Precio, unidad y paso de la cantidad siguen a la presentacion elegida
+		// y, en granel, al tramo de escala que aplica a la cantidad.
 		function sincronizarUnidad() {
 			var elegida = selector ? presentacionDe(producto, selector.value) : null;
 			var paso = pasoActual();
@@ -254,7 +292,11 @@
 			campo.step = String(paso);
 			var actual = parseFloat(campo.value) || paso;
 			campo.value = cantidadTexto(Math.max(paso, Math.round(actual / paso) * paso));
-			precioNodo.textContent = dinero.format(elegida ? elegida.precio : producto.precio);
+			var cantidad = parseFloat(campo.value) || paso;
+			var precio = elegida
+				? elegida.precio
+				: precioUnitarioDe(producto, '', cantidad);
+			precioNodo.textContent = dinero.format(precio);
 			metaNodo.textContent = 'por ' + (elegida ? elegida.nombre : (producto.unidad || 'pieza'));
 		}
 		if (selector) { selector.addEventListener('change', sincronizarUnidad); }
@@ -294,6 +336,13 @@
 		});
 		if (existente) {
 			existente.cantidad = Math.round((existente.cantidad + cantidad) * 1000) / 1000;
+			if (!existente.escalas || !existente.escalas.length) {
+				existente.escalas = presentacion ? [] : (producto.escalas || []);
+			}
+			if (existente.precioBase == null) {
+				existente.precioBase = producto.precio;
+			}
+			recalcularPrecioLinea(existente);
 		} else {
 			estado.carrito.push({
 				clave: clave,
@@ -301,7 +350,9 @@
 				presentacionId: presentacionId || '',
 				nombre: producto.nombre + (presentacion ? ' (' + presentacion.nombre + ')' : ''),
 				unidad: presentacion ? presentacion.nombre : (producto.unidad || 'pieza'),
-				precio: presentacion ? presentacion.precio : producto.precio,
+				precioBase: producto.precio,
+				escalas: presentacion ? [] : (producto.escalas || []),
+				precio: precioUnitarioDe(producto, presentacionId, cantidad),
 				granel: !presentacion && esGranel(producto.unidad),
 				cantidad: cantidad
 			});
@@ -363,6 +414,7 @@
 					return;
 				}
 				linea.cantidad = nueva;
+				recalcularPrecioLinea(linea);
 				persistirCarrito();
 			});
 			controles.appendChild(campo);

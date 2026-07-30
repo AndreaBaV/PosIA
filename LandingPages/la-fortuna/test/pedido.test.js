@@ -122,6 +122,60 @@ test('la presentación elegida fija precio y nombre de la partida', async () => 
 	assert.equal(pedido.total, 1780);
 });
 
+test('las escalas menores a un kilo fijan el precio unitario del granel', async () => {
+	const sql = sqlFalso({
+		productos: [
+			{ id: 'carne', nombre: 'Bistec de res', precio_base: 30 },
+		],
+		escalas: [
+			{ producto_id: 'carne', cantidad_minima: 0, precio_unitario: 88 },
+			{ producto_id: 'carne', cantidad_minima: 0.25, precio_unitario: 88 },
+			{ producto_id: 'carne', cantidad_minima: 0.5, precio_unitario: 40 },
+			{ producto_id: 'carne', cantidad_minima: 1, precio_unitario: 30 },
+		],
+	});
+	const medio = await crearPedido(sql, {
+		tiendaId: TIENDA,
+		...OPCIONES,
+		cuerpo: cuerpoBase([{ productoId: 'carne', cantidad: 0.5 }]),
+	});
+	assert.equal(medio.lineas[0].precioUnitario, 40, 'medio kilo a $40/kg');
+	assert.equal(medio.lineas[0].subtotal, 20, '0.5 × 40 = 20');
+
+	const cuarto = await crearPedido(sql, {
+		tiendaId: TIENDA,
+		...OPCIONES,
+		cuerpo: cuerpoBase([{ productoId: 'carne', cantidad: 0.25 }]),
+	});
+	assert.equal(cuarto.lineas[0].precioUnitario, 88);
+	assert.equal(cuarto.lineas[0].subtotal, 22);
+
+	const kilo = await crearPedido(sql, {
+		tiendaId: TIENDA,
+		...OPCIONES,
+		cuerpo: cuerpoBase([{ productoId: 'carne', cantidad: 1 }]),
+	});
+	assert.equal(kilo.lineas[0].precioUnitario, 30);
+	assert.equal(kilo.lineas[0].subtotal, 30);
+});
+
+test('la presentación gana sobre las escalas de peso', async () => {
+	const sql = sqlFalso({
+		productos: PRODUCTOS,
+		presentaciones: PRESENTACIONES,
+		escalas: [
+			{ producto_id: 'p1', cantidad_minima: 0, precio_unitario: 99 },
+			{ producto_id: 'p1', cantidad_minima: 1, precio_unitario: 38.5 },
+		],
+	});
+	const pedido = await crearPedido(sql, {
+		tiendaId: TIENDA,
+		...OPCIONES,
+		cuerpo: cuerpoBase([{ productoId: 'p1', presentacionId: 'pr1', cantidad: 1 }]),
+	});
+	assert.equal(pedido.lineas[0].precioUnitario, 890);
+});
+
 test('rechaza productos y presentaciones que ya no existen', async () => {
 	const sinProductos = sqlFalso({ productos: [], presentaciones: [] });
 	await assert.rejects(

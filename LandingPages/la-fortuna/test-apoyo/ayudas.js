@@ -13,6 +13,7 @@ export function sqlFalso(datos = {}) {
 		if (texto.includes('FROM stores')) return datos.tiendas ?? [];
 		if (texto.includes('FROM categories')) return datos.categorias ?? [];
 		if (texto.includes('FROM product_presentations')) return datos.presentaciones ?? [];
+		if (texto.includes('FROM wholesale_tiers')) return datos.escalas ?? [];
 		if (texto.includes('FROM products')) return datos.productos ?? [];
 		if (texto.includes('FROM order_lines')) return datos.lineasPedido ?? [];
 		if (texto.includes('FROM orders')) return datos.pedidos ?? [];

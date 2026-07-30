@@ -1,7 +1,7 @@
 /* Consultas del catalogo publico.
 
    Regla de oro: la vitrina NUNCA expone existencias. Solo nombre, precio,
-   unidad, categoria y presentaciones con precio propio.
+   unidad, categoria, presentaciones y escalas de precio por cantidad.
 
    Autor: Equipo POSIA · Matricula: POSIA-2026-001 */
 
@@ -99,11 +99,17 @@ export async function consultarCatalogo(sql, tiendaPrincipalId, opciones = {}) {
 		categoria: fila.categoria_nombre || 'Otros',
 		descripcion: (fila.notas ?? '').trim(),
 		presentaciones: [],
+		escalas: [],
 	}));
 
-	const porProducto = await cargarPresentaciones(sql, productos.map((p) => p.id));
+	const ids = productos.map((p) => p.id);
+	const [porProducto, porEscalas] = await Promise.all([
+		cargarPresentaciones(sql, ids),
+		cargarEscalas(sql, ids),
+	]);
 	for (const producto of productos) {
 		producto.presentaciones = porProducto.get(producto.id) ?? [];
+		producto.escalas = porEscalas.get(producto.id) ?? [];
 	}
 
 	return {
@@ -141,6 +147,39 @@ export async function cargarPresentaciones(sql, productoIds) {
 			nombre: fila.nombre,
 			precio: redondearMonto(Number(fila.precio ?? 0)),
 			factor: Number(fila.factor_a_base ?? 1),
+		});
+		porProducto.set(fila.producto_id, lista);
+	}
+	return porProducto;
+}
+
+/**
+ * Tramos de mayoreo / precio por peso desde Neon.
+ *
+ * Misma tabla que proyecta el hub (`wholesale_tiers`). Sin esto la vitrina
+ * cobra el precio de kilo tambien en medio y cuarto.
+ */
+export async function cargarEscalas(sql, productoIds) {
+	if (!productoIds.length) {
+		return new Map();
+	}
+	const filas = await sql.query(
+		`SELECT producto_id, cantidad_minima, precio_unitario
+		 FROM wholesale_tiers
+		 WHERE producto_id = ANY($1)
+		 ORDER BY cantidad_minima ASC`,
+		[productoIds],
+	);
+	const porProducto = new Map();
+	for (const fila of filas) {
+		const lista = porProducto.get(fila.producto_id) ?? [];
+		const precio = Number(fila.precio_unitario ?? 0);
+		if (!(precio > 0)) {
+			continue;
+		}
+		lista.push({
+			cantidadMinima: Number(fila.cantidad_minima ?? 0),
+			precioUnitario: redondearMonto(precio),
 		});
 		porProducto.set(fila.producto_id, lista);
 	}

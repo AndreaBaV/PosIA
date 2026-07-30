@@ -32,9 +32,27 @@ test('el catálogo nunca consulta ni publica existencias', async () => {
 			'no debe tocarse ninguna tabla de inventario');
 	}
 	assert.deepEqual(Object.keys(datos.productos[0]).sort(), [
-		'categoria', 'categoriaId', 'descripcion', 'id', 'nombre',
+		'categoria', 'categoriaId', 'descripcion', 'escalas', 'id', 'nombre',
 		'precio', 'presentaciones', 'unidad',
 	]);
+});
+
+test('el catálogo trae las escalas de precio por cantidad', async () => {
+	const sql = sqlFalso({
+		productos: [producto('carne', 'Bistec')],
+		escalas: [
+			{ producto_id: 'carne', cantidad_minima: 0.5, precio_unitario: 40 },
+			{ producto_id: 'carne', cantidad_minima: 1, precio_unitario: 30 },
+		],
+	});
+	const datos = await consultarCatalogo(sql, TIENDA);
+	assert.equal(datos.productos[0].escalas.length, 2);
+	assert.equal(datos.productos[0].escalas[0].cantidadMinima, 0.5);
+	assert.equal(datos.productos[0].escalas[0].precioUnitario, 40);
+	assert.ok(
+		consultasCon(sql, 'FROM wholesale_tiers').length >= 1,
+		'debe leer wholesale_tiers para respetar medio/cuarto kilo',
+	);
 });
 
 test('solo salen productos activos y con precio, de cualquier sucursal', async () => {
