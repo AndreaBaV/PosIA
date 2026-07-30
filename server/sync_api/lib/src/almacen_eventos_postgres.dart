@@ -292,6 +292,76 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 		return AlmacenUsuariosPostgres(_obtenerPool);
 	}
 
+	/// Eventos que definen el catalogo (ver [_tiposCatalogoCompactables]),
+	/// deduplicados al mas reciente por entidad.
+	///
+	/// A diferencia de un pull normal desde seq=0, esto NO trae ventas,
+	/// compras, traspasos, asistencia ni nomina: un dispositivo cuyo catalogo
+	/// diverge de Neon pero cuyo historial transaccional esta sano puede
+	/// repararse sin repetir años de eventos que no le hacen falta. Reusa la
+	/// misma extraccion de clave por entidad que [_compactarCatalogoDuplicado]
+	/// (`productPresentationsReplaced`/`wholesaleTiersReplaced` usan
+	/// `productoId`, el resto usa `id`) para no discrepar sobre cual es la
+	/// version mas reciente de cada fila.
+	Future<List<EventoHub>> obtenerCatalogoCompacto() async {
+		final pool = await _obtenerPool();
+		final listaTipos = _tiposCatalogoCompactables.map((t) => "'$t'").join(', ');
+		final resultado = await pool.execute('''
+			SELECT DISTINCT ON (type, entity_key)
+				seq, id, store_id, device_id, type, payload, created_at
+			FROM (
+				SELECT
+					seq, id, store_id, device_id, type, payload, created_at,
+					CASE
+						WHEN type IN ('productPresentationsReplaced', 'wholesaleTiersReplaced')
+							THEN payload->>'productoId'
+						ELSE payload->>'id'
+					END AS entity_key
+				FROM sync_events
+				WHERE type IN ($listaTipos)
+			) con_clave
+			WHERE entity_key IS NOT NULL AND entity_key <> ''
+			ORDER BY type, entity_key, seq DESC
+		''');
+		final eventos = resultado.map(_mapearFila).toList()
+			..sort((a, b) => a.seq.compareTo(b.seq));
+		return eventos;
+	}
+
+	/// Cuenta y huella del catalogo activo en Neon, para que el dispositivo
+	/// compare contra su copia local aunque su cursor de sync ya este al dia.
+	///
+	/// Un pull incremental solo repara lo que un evento nuevo "toca"; si un
+	/// producto se perdio silenciosamente en el dispositivo (bug de indice
+	/// unico corregido en el cliente, o cualquier otra causa futura) el cursor
+	/// avanza igual y ese hueco nunca se vuelve a descargar. Esta auditoria le
+	/// da al dispositivo una forma de notar el hueco y disparar una
+	/// reconstruccion desde origen.
+	Future<HuellaCatalogo> auditarCatalogo() async {
+		final pool = await _obtenerPool();
+		final filasProducto = await pool.execute(
+			'SELECT id, nombre, codigo_barras FROM products WHERE activo = 1',
+		);
+		final huellaProductos = filasProducto.map((fila) {
+			final mapa = fila.toColumnMap();
+			return FilaHuellaProducto(
+				id: mapa['id']! as String,
+				nombre: mapa['nombre'] as String? ?? '',
+				codigoBarras: mapa['codigo_barras'] as String? ?? '',
+			);
+		}).toList();
+		final resultadoCategorias = await pool.execute(
+			'SELECT COUNT(*) AS total FROM categories WHERE activa = 1',
+		);
+		final categoriasActivas =
+			(resultadoCategorias.first[0] as num?)?.toInt() ?? 0;
+		return HuellaCatalogo(
+			productosActivos: huellaProductos.length,
+			categoriasActivas: categoriasActivas,
+			huellaProductos: calcularHuellaCatalogo(huellaProductos),
+		);
+	}
+
 	Future<Pool<Object>> _obtenerPool() async {
 		final existente = _pool;
 		if (existente != null) {

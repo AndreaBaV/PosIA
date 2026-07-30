@@ -12,6 +12,7 @@ import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 
 import 'almacen_eventos.dart';
+import 'almacen_eventos_postgres.dart';
 import 'almacen_usuarios_postgres.dart';
 import 'evento_hub.dart';
 
@@ -46,7 +47,9 @@ class EnrutadorApi {
 			..get('/v1/custom-roles', _manejarListarRolesPersonalizados)
 			..post('/v1/events', _manejarEnvioEventos)
 			..get('/v1/events/head', _manejarCabezaEventos)
-			..get('/v1/events', _manejarConsultaEventos);
+			..get('/v1/events', _manejarConsultaEventos)
+			..get('/v1/catalog/audit', _manejarAuditoriaCatalogo)
+			..get('/v1/catalog/events', _manejarCatalogoCompacto);
 		return const Pipeline()
 			.addMiddleware(logRequests())
 			.addMiddleware(_validarClaveApi())
@@ -182,6 +185,49 @@ class EnrutadorApi {
 			excluirDispositivoId: excluirDispositivo,
 		);
 		final ultimoSeq = eventos.isEmpty ? desdeSeq : eventos.last.seq;
+		return _respuestaJson({
+			'events': eventos.map((evento) => evento.aJson()).toList(),
+			'lastSeq': ultimoSeq,
+		});
+	}
+
+	/// Entrega conteo y huella del catalogo activo en Neon.
+	///
+	/// [solicitud] Solicitud HTTP entrante (sin parametros).
+	/// Retorna 503 si el almacen no es Postgres (no hay tabla `products` que
+	/// auditar; el modo archivo es solo para desarrollo sin Neon).
+	Future<Response> _manejarAuditoriaCatalogo(Request solicitud) async {
+		final almacen = _almacen;
+		if (almacen is! AlmacenEventosPostgres) {
+			return _respuestaJson(
+				{'error': 'Auditoria no disponible sin Postgres'},
+				codigo: 503,
+			);
+		}
+		final huella = await almacen.auditarCatalogo();
+		return _respuestaJson(huella.aJson());
+	}
+
+	/// Entrega solo los eventos que definen el catalogo (productos,
+	/// categorias, presentaciones, tiendas, proveedores, almacenes, variantes,
+	/// clientes, roles), deduplicados al mas reciente por entidad.
+	///
+	/// [solicitud] Solicitud HTTP entrante (sin parametros).
+	/// Retorna el mismo formato que `/v1/events` (`events`/`lastSeq`) para que
+	/// el cliente reutilice su decodificador habitual. 503 si el almacen no es
+	/// Postgres.
+	Future<Response> _manejarCatalogoCompacto(Request solicitud) async {
+		final almacen = _almacen;
+		if (almacen is! AlmacenEventosPostgres) {
+			return _respuestaJson(
+				{'error': 'Catalogo compacto no disponible sin Postgres'},
+				codigo: 503,
+			);
+		}
+		final eventos = await almacen.obtenerCatalogoCompacto();
+		final ultimoSeq = eventos.isEmpty
+			? 0
+			: eventos.map((e) => e.seq).reduce((a, b) => a > b ? a : b);
 		return _respuestaJson({
 			'events': eventos.map((evento) => evento.aJson()).toList(),
 			'lastSeq': ultimoSeq,

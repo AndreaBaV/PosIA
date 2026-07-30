@@ -189,6 +189,48 @@ class HubSyncClient {
     );
   }
 
+  /// Catalogo deduplicado: un evento por producto/categoría/etc, el más
+  /// reciente, sin el historial transaccional (ventas, compras, traspasos).
+  ///
+  /// Reparación rápida cuando el catálogo local diverge del hub pero no hace
+  /// falta repetir años de eventos que no le tocan al catálogo. No trae
+  /// `lastSeq` útil (no avanza el cursor incremental normal: es un parche
+  /// puntual, no un reemplazo del pull de siempre).
+  Future<ResultadoPullHub> obtenerCatalogoCompacto() async {
+    final uri = Uri.parse('$_urlBase/v1/catalog/events');
+    final http.Response respuesta;
+    try {
+      respuesta = await _clienteHttp
+          .get(uri, headers: _construirCabeceras())
+          .timeout(const Duration(seconds: TIMEOUT_HUB_SYNC_SEGUNDOS));
+    } on Object {
+      return const ResultadoPullHub(eventos: [], ultimoSeq: 0, exitoso: false);
+    }
+    if (respuesta.statusCode < 200 || respuesta.statusCode >= 300) {
+      return const ResultadoPullHub(eventos: [], ultimoSeq: 0, exitoso: false);
+    }
+    final Map<String, dynamic> json;
+    try {
+      json = jsonDecode(respuesta.body) as Map<String, dynamic>;
+    } on Object {
+      return const ResultadoPullHub(eventos: [], ultimoSeq: 0, exitoso: false);
+    }
+    final lista = json['events'];
+    final eventos = <SyncEvent>[];
+    if (lista is List) {
+      for (final item in lista) {
+        if (item is! Map) {
+          continue;
+        }
+        final evento = _deserializarEvento(Map<String, dynamic>.from(item));
+        if (evento != null) {
+          eventos.add(evento);
+        }
+      }
+    }
+    return ResultadoPullHub(eventos: eventos, ultimoSeq: 0, exitoso: true);
+  }
+
   /// Consulta el ultimo seq publicado por el hub sin descargar eventos.
   ///
   /// Sirve para medir el atraso real de este dispositivo (cursor local contra
@@ -489,6 +531,28 @@ class HubSyncClient {
       return respuesta.statusCode >= 200 && respuesta.statusCode < 300;
     } on Object {
       return false;
+    }
+  }
+
+  /// Conteo y huella del catalogo activo en el hub, para comparar contra la
+  /// copia local aunque el cursor de sync ya este al dia.
+  ///
+  /// Retorna null si el hub no respondio o no soporta la ruta (modo archivo
+  /// sin Postgres); el orquestador trata null como "no se pudo auditar" y
+  /// reintenta en el siguiente ciclo, sin tratarlo como una divergencia real.
+  Future<HuellaCatalogo?> auditarCatalogo() async {
+    final uri = Uri.parse('$_urlBase/v1/catalog/audit');
+    try {
+      final respuesta = await _clienteHttp
+          .get(uri, headers: _construirCabeceras())
+          .timeout(const Duration(seconds: TIMEOUT_HUB_SYNC_SEGUNDOS));
+      if (respuesta.statusCode != 200) {
+        return null;
+      }
+      final json = jsonDecode(respuesta.body) as Map<String, dynamic>;
+      return HuellaCatalogo.desdeJson(Map<String, Object?>.from(json));
+    } on Object {
+      return null;
     }
   }
 

@@ -53,6 +53,15 @@ const int INTERVALO_SYNC_PERIODICO_SEGUNDOS = 60;
 /// Útil en despliegues gratuitos o con auto-suspend por inactividad.
 const int INTERVALO_MANTENER_HUB_VIVO_SEGUNDOS = 600;
 
+/// Intervalo minimo entre auditorias de catalogo contra el hub (cada 1 h).
+///
+/// La auditoria compara conteo y huella de contenido del catalogo activo
+/// (Neon vs SQLite local) para detectar divergencias que un pull incremental
+/// no repara por si solo. Correrla en cada ciclo de 60 s golpearia al hub sin
+/// necesidad; este intervalo la deja correr en el login y despues, como
+/// mucho, una vez por hora mientras el catalogo siga coincidiendo.
+const int INTERVALO_AUDITORIA_CATALOGO_SEGUNDOS = 3600;
+
 /// Timeout HTTP normal de sync (falla rapido y reintenta en el siguiente ciclo).
 const int TIMEOUT_HUB_SYNC_SEGUNDOS = 15;
 

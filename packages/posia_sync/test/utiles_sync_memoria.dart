@@ -48,6 +48,14 @@ class ColaEventosMemoria implements LocalEventQueue {
 class AplicadorMemoria implements AplicadorEventosRemotos {
 	final List<SyncEvent> aplicados = [];
 
+	/// Huella que reporta `calcularHuellaCatalogoLocal`; sobreescribible en
+	/// pruebas que necesitan simular una divergencia contra el hub.
+	HuellaCatalogo huellaLocal = const HuellaCatalogo(
+		productosActivos: 0,
+		categoriasActivas: 0,
+		huellaProductos: '',
+	);
+
 	@override
 	Future<void> aplicarEvento(SyncEvent evento) async {
 		aplicados.add(evento);
@@ -62,6 +70,64 @@ class AplicadorMemoria implements AplicadorEventosRemotos {
 
 	@override
 	Future<void> autoSanarCatalogoLocal() async {}
+
+	@override
+	Future<HuellaCatalogo> calcularHuellaCatalogoLocal() async => huellaLocal;
+}
+
+/// Diagnostico en memoria con la misma semantica que el repositorio SQLite.
+class DiagnosticoMemoria implements DiagnosticoSync {
+	final Map<String, EventoEnCuarentena> cuarentena = {};
+	ErrorCicloSync? ultimoError;
+	AuditoriaCatalogo? ultimaAuditoriaCatalogo;
+
+	@override
+	Future<void> registrarEventoFallido({
+		required SyncEvent evento,
+		required Object error,
+	}) async {
+		final previo = cuarentena[evento.id];
+		cuarentena[evento.id] = EventoEnCuarentena(
+			evento: evento,
+			error: '$error',
+			intentos: (previo?.intentos ?? 0) + 1,
+			ultimoIntentoEn: DateTime.now().toUtc(),
+		);
+	}
+
+	@override
+	Future<void> resolverEventoFallido(String eventoId) async {
+		cuarentena.remove(eventoId);
+	}
+
+	@override
+	Future<List<EventoEnCuarentena>> listarCuarentena({int limite = 100}) async {
+		final lista = cuarentena.values.toList()
+			..sort((a, b) => a.evento.seq.compareTo(b.evento.seq));
+		return lista.take(limite).toList();
+	}
+
+	@override
+	Future<int> contarCuarentena() async => cuarentena.length;
+
+	@override
+	Future<void> registrarErrorCiclo(Object? error) async {
+		ultimoError = error == null
+			? null
+			: ErrorCicloSync(mensaje: '$error', ocurridoEn: DateTime.now().toUtc());
+	}
+
+	@override
+	Future<ErrorCicloSync?> leerUltimoErrorCiclo() async => ultimoError;
+
+	@override
+	Future<void> registrarAuditoriaCatalogo(AuditoriaCatalogo resultado) async {
+		ultimaAuditoriaCatalogo = resultado;
+	}
+
+	@override
+	Future<AuditoriaCatalogo?> leerUltimaAuditoriaCatalogo() async =>
+		ultimaAuditoriaCatalogo;
 }
 
 /// Cursor en memoria para pruebas.

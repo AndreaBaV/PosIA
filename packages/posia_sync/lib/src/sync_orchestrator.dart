@@ -342,6 +342,45 @@ class SyncOrchestrator {
         ),
       );
     }
+    // Auditoria de catalogo: a diferencia del chequeo anterior (catalogo en
+    // CERO), aqui el catalogo local tiene filas pero puede faltarle un
+    // subconjunto -exactamente lo que dejaba pasar el bug de indice unico
+    // que se resolvia en silencio con ConflictAlgorithm.ignore. Un pull
+    // incremental normal nunca lo repara porque el cursor ya esta al dia; se
+    // necesita comparar conteo + huella de contenido contra el hub y, si
+    // difieren, repararlo.
+    final huellaHub = await _obtenerHuellaHubSiToca(clienteHub);
+    if (!desdeOrigen && huellaHub != null) {
+      final huellaLocal = await _aplicadorRemoto?.calcularHuellaCatalogoLocal();
+      if (huellaLocal != null && !huellaLocal.coincideCon(huellaHub)) {
+        alProgreso?.call(
+          const ProgresoSync(
+            fase: FaseProgresoSync.preparar,
+            indice: 0,
+            total: 0,
+            mensaje: 'Catálogo desalineado con la nube: reparando…',
+          ),
+        );
+        // Reparacion rapida primero: aplica solo los eventos que definen el
+        // catalogo (deduplicados al mas reciente por entidad), sin repetir
+        // años de ventas/compras/traspasos que el catalogo no necesita. Si el
+        // hub desplegado aun no expone la ruta (503/red), cae a la
+        // reconstruccion completa desde origen como red de seguridad: mas
+        // lenta, pero siempre disponible.
+        final reparado = await _repararCatalogoRapido(clienteHub);
+        if (!reparado) {
+          desdeOrigen = true;
+          alProgreso?.call(
+            const ProgresoSync(
+              fase: FaseProgresoSync.preparar,
+              indice: 0,
+              total: 0,
+              mensaje: 'Reparación rápida no disponible: reconstruyendo desde la nube…',
+            ),
+          );
+        }
+      }
+    }
     if (desdeOrigen) {
       final almacenCursor = _almacenCursor;
       if (almacenCursor != null) {
@@ -405,6 +444,12 @@ class SyncOrchestrator {
     // Corre en cada sync completo, haya o no eventos nuevos: así cualquier
     // dispositivo converge solo, sin reinstalar ni borrar datos a mano.
     await _aplicadorRemoto?.autoSanarCatalogoLocal();
+    // Deja constancia del resultado final (coincide o no) DESPUES del pull y
+    // el autosanador: si arriba se forzo una reconstruccion, esto confirma
+    // en el mismo ciclo si convergio, sin esperar a la siguiente auditoria.
+    if (huellaHub != null) {
+      await _registrarAuditoriaCatalogo(huellaHub);
+    }
     final recibidos = resultadoPull.aplicados;
     final fallidos = resultadoPull.fallidos;
     alProgreso?.call(
@@ -497,6 +542,87 @@ class SyncOrchestrator {
     } on Object {
       // Ante duda, seguir con el ciclo incremental normal.
       return false;
+    }
+  }
+
+  /// Pide al hub la huella del catalogo activo, como mucho una vez cada
+  /// [INTERVALO_AUDITORIA_CATALOGO_SEGUNDOS].
+  ///
+  /// Es una consulta de conteo + hash sobre todo `products` en Neon; correrla
+  /// en cada ciclo de 60 s golpearia al hub sin necesidad. Si la ultima
+  /// auditoria registrada (coincida o no) es reciente, no pide nada y este
+  /// ciclo sigue como un pull incremental normal. Un fallo de red devuelve
+  /// null y no actualiza el "ultimo intento", asi que el siguiente ciclo (60 s
+  /// despues) reintenta en vez de esperar la hora completa.
+  Future<HuellaCatalogo?> _obtenerHuellaHubSiToca(HubSyncClient clienteHub) async {
+    try {
+      final ultima = await _diagnostico?.leerUltimaAuditoriaCatalogo();
+      if (ultima != null) {
+        final transcurrido = DateTime.now().toUtc().difference(ultima.verificadoEn);
+        if (transcurrido <
+            const Duration(seconds: INTERVALO_AUDITORIA_CATALOGO_SEGUNDOS)) {
+          return null;
+        }
+      }
+    } on Object {
+      // Ante duda, intentar la auditoria de todas formas.
+    }
+    return clienteHub.auditarCatalogo();
+  }
+
+  /// Reparacion rapida ante una divergencia de catalogo: aplica solo los
+  /// eventos que lo definen (productos, categorías, presentaciones, tiendas,
+  /// proveedores, almacenes), deduplicados al más reciente por entidad, SIN
+  /// tocar el cursor de sync — el historial transaccional sigue su curso
+  /// incremental normal en el resto del ciclo.
+  ///
+  /// Retorna false si el hub no respondió (desplegado sin esta ruta, o caído
+  /// de red): el llamador recurre a la reconstrucción completa desde origen
+  /// como red de seguridad. Un evento individual que falle se aparta en
+  /// cuarentena igual que en un pull normal, sin abortar el resto del lote.
+  Future<bool> _repararCatalogoRapido(HubSyncClient clienteHub) async {
+    final aplicador = _aplicadorRemoto;
+    if (aplicador == null) {
+      return false;
+    }
+    final resultado = await clienteHub.obtenerCatalogoCompacto();
+    if (!resultado.exitoso) {
+      return false;
+    }
+    for (final evento in resultado.eventos) {
+      try {
+        await aplicador.aplicarEvento(evento);
+      } on Object catch (error) {
+        await _registrarFalloEvento(evento, error);
+      }
+    }
+    return true;
+  }
+
+  /// Registra si el catalogo local, tras este ciclo, coincide con [huellaHub].
+  ///
+  /// Best-effort: un fallo aqui no debe tumbar el ciclo de sync, solo deja de
+  /// actualizarse el diagnostico visible en el panel de sync.
+  Future<void> _registrarAuditoriaCatalogo(HuellaCatalogo huellaHub) async {
+    final diagnostico = _diagnostico;
+    final aplicador = _aplicadorRemoto;
+    if (diagnostico == null || aplicador == null) {
+      return;
+    }
+    try {
+      final huellaLocal = await aplicador.calcularHuellaCatalogoLocal();
+      await diagnostico.registrarAuditoriaCatalogo(
+        AuditoriaCatalogo(
+          coincide: huellaLocal.coincideCon(huellaHub),
+          productosHub: huellaHub.productosActivos,
+          productosLocal: huellaLocal.productosActivos,
+          categoriasHub: huellaHub.categoriasActivas,
+          categoriasLocal: huellaLocal.categoriasActivas,
+          verificadoEn: DateTime.now().toUtc(),
+        ),
+      );
+    } on Object {
+      // El diagnostico es best-effort: nunca debe tumbar el ciclo de sync.
     }
   }
 

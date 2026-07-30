@@ -36,6 +36,8 @@ import '../repositories/usuario_repository.dart';
 import '../repositories/turno_caja_repository.dart';
 import '../repositories/variante_repository.dart';
 import '../repositories/venta_repository.dart';
+import '../seed/placeholders_ejemplo.dart';
+import '../utils/duplicados_producto.dart';
 
 /// Implementa [AplicadorEventosRemotos] con escritura idempotente.
 class AplicadorEventosSqlite implements AplicadorEventosRemotos {
@@ -156,6 +158,38 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		await _autoSanarProductosSinCodigoInterno();
 		await _autoSanarProductosDuplicados();
 		await _autoSanarCategoriasStubHuerfanas();
+	}
+
+	@override
+	Future<HuellaCatalogo> calcularHuellaCatalogoLocal() async {
+		final filas = await _baseDatos.rawQuery(
+			'''
+			SELECT id, nombre, codigo_barras
+			FROM products
+			WHERE activo = 1 AND id <> ?
+			''',
+			[IdsEjemplo.producto],
+		);
+		final filasHuella = filas
+			.map(
+				(fila) => FilaHuellaProducto(
+					id: fila['id']! as String,
+					nombre: fila['nombre'] as String? ?? '',
+					codigoBarras: fila['codigo_barras'] as String? ?? '',
+				),
+			)
+			.toList();
+		final repoCategorias = _categoriaRepository;
+		final categoriasActivas = repoCategorias == null
+			? 0
+			: (await repoCategorias.listarActivas())
+				.where((c) => !c.esStubFk)
+				.length;
+		return HuellaCatalogo(
+			productosActivos: filasHuella.length,
+			categoriasActivas: categoriasActivas,
+			huellaProductos: calcularHuellaCatalogo(filasHuella),
+		);
 	}
 
 	/// Desactiva localmente tiendas placeholder (creadas por integridad FK)
@@ -349,15 +383,19 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			final conteos = <String, int>{};
 			for (final fila in grupo) {
 				final id = fila['id']! as String;
-				conteos[id] = await _referenciasTransaccionalesDeProducto(id);
+				conteos[id] =
+					await contarReferenciasTransaccionalesProducto(_baseDatos, id);
 			}
 			grupo.sort((a, b) {
-				final porConteo = (conteos[b['id']] ?? 0)
-					.compareTo(conteos[a['id']] ?? 0);
-				if (porConteo != 0) {
-					return porConteo;
-				}
-				return (a['id']! as String).compareTo(b['id']! as String);
+				final idA = a['id']! as String;
+				final idB = b['id']! as String;
+				final aGana = productoGanaColision(
+					idA: idA,
+					refsA: conteos[idA] ?? 0,
+					idB: idB,
+					refsB: conteos[idB] ?? 0,
+				);
+				return aGana ? -1 : 1;
 			});
 			final canonicoId = grupo.first['id']! as String;
 			for (final perdedora in grupo.skip(1)) {
@@ -386,28 +424,6 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		}
 	}
 
-	/// Suma referencias transaccionales que apuntan a este producto. Es la
-	/// mejor señal de "cuál es el real": la fila con más ventas registradas
-	/// gana el canónico y así conserva su historial.
-	Future<int> _referenciasTransaccionalesDeProducto(String productoId) async {
-		const tablas = [
-			'sale_lines',
-			'held_ticket_lines',
-			'transfer_lines',
-			'purchase_lines',
-			'order_lines',
-			'quote_lines',
-		];
-		var total = 0;
-		for (final tabla in tablas) {
-			final filas = await _baseDatos.rawQuery(
-				'SELECT COUNT(*) AS c FROM $tabla WHERE producto_id = ?',
-				[productoId],
-			);
-			total += (filas.first['c'] as int?) ?? 0;
-		}
-		return total;
-	}
 
 	/// Redirige todas las FK transaccionales del producto perdedor al canónico.
 	/// Los catálogos hijos con CASCADE (variantes, presentaciones, escalas,

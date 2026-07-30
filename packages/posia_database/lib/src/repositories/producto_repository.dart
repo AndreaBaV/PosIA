@@ -11,6 +11,7 @@ import 'package:sqflite/sqflite.dart';
 
 import '../seed/placeholders_ejemplo.dart';
 import '../utils/asegurador_padres_fk.dart';
+import '../utils/duplicados_producto.dart';
 
 /// Persiste y consulta catalogo de productos local.
 class ProductoRepository {
@@ -240,10 +241,90 @@ class ProductoRepository {
 			where: 'id = ?',
 			whereArgs: [producto.id],
 		);
-		if (filasActualizadas == 0) {
+		if (filasActualizadas > 0) {
+			return;
+		}
+		if (producto.codigoBarras.trim().isEmpty) {
+			// Sin codigo no hay indice unico que pueda chocar: alta directa.
 			await exec.insert(
 				'products',
 				datos,
+				conflictAlgorithm: ConflictAlgorithm.ignore,
+			);
+			return;
+		}
+		try {
+			await exec.insert('products', datos);
+		} on DatabaseException catch (error) {
+			if (!error.isUniqueConstraintError()) {
+				rethrow;
+			}
+			await _resolverColisionAlInsertar(exec, producto, datos);
+		}
+	}
+
+	/// Resuelve una colision del indice unico `(tienda_id, codigo_barras)` al
+	/// insertar un producto que no existia localmente.
+	///
+	/// Antes esta colision se resolvia con `ConflictAlgorithm.ignore`: el
+	/// producto entrante desaparecia sin dejar rastro (ni error, ni fila, ni
+	/// evento en cuarentena) y el dispositivo quedaba con un catalogo
+	/// incompleto aunque su cursor de sync ya estuviera al dia. Aqui el
+	/// entrante SIEMPRE queda persistido: se decide el canonico con la misma
+	/// regla deterministica que usa el autosanador periodico (mas referencias
+	/// transaccionales locales gana; empate -> id mas chico), asi que ningun
+	/// dispositivo pierde datos y todos convergen a la misma eleccion.
+	Future<void> _resolverColisionAlInsertar(
+		DatabaseExecutor exec,
+		Producto entrante,
+		Map<String, Object?> datosEntrante,
+	) async {
+		final filasExistente = await exec.query(
+			'products',
+			columns: ['id'],
+			where: 'tienda_id = ? AND codigo_barras = ? AND activo = 1 AND id <> ?',
+			whereArgs: [entrante.tiendaId, entrante.codigoBarras, entrante.id],
+			limit: 1,
+		);
+		if (filasExistente.isEmpty) {
+			// La fila que bloqueaba ya no esta activa (se desactivo en paralelo
+			// justo entre el UPDATE y este INSERT): el slot esta libre.
+			await exec.insert(
+				'products',
+				datosEntrante,
+				conflictAlgorithm: ConflictAlgorithm.ignore,
+			);
+			return;
+		}
+		final existenteId = filasExistente.first['id']! as String;
+		final refsExistente =
+			await contarReferenciasTransaccionalesProducto(exec, existenteId);
+		final refsEntrante =
+			await contarReferenciasTransaccionalesProducto(exec, entrante.id);
+		final entranteGana = productoGanaColision(
+			idA: entrante.id,
+			refsA: refsEntrante,
+			idB: existenteId,
+			refsB: refsExistente,
+		);
+		if (entranteGana) {
+			await exec.update(
+				'products',
+				{'activo': 0, 'codigo_barras': ''},
+				where: 'id = ?',
+				whereArgs: [existenteId],
+			);
+			await exec.insert(
+				'products',
+				datosEntrante,
+				conflictAlgorithm: ConflictAlgorithm.replace,
+			);
+		} else {
+			// El existente gana: el entrante queda preservado como historial
+			// inactivo (nunca se pierde), sin codigo para no volver a chocar.
+			await exec.insert(
+				'products',
+				{...datosEntrante, 'activo': 0, 'codigo_barras': ''},
 				conflictAlgorithm: ConflictAlgorithm.ignore,
 			);
 		}

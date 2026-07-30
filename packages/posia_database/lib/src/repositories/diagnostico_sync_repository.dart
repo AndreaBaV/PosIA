@@ -15,6 +15,12 @@ class DiagnosticoSyncRepository implements DiagnosticoSync {
 	static const String _tabla = 'sync_eventos_cuarentena';
 	static const String _claveUltimoError = 'ultimo_error_sync';
 	static const String _claveUltimoErrorEn = 'ultimo_error_sync_en';
+	static const String _claveAuditoriaCoincide = 'auditoria_catalogo_coincide';
+	static const String _claveAuditoriaProductosHub = 'auditoria_catalogo_productos_hub';
+	static const String _claveAuditoriaProductosLocal = 'auditoria_catalogo_productos_local';
+	static const String _claveAuditoriaCategoriasHub = 'auditoria_catalogo_categorias_hub';
+	static const String _claveAuditoriaCategoriasLocal = 'auditoria_catalogo_categorias_local';
+	static const String _claveAuditoriaEn = 'auditoria_catalogo_en';
 
 	/// Recorte del mensaje de error guardado; basta para identificar la causa
 	/// y evita que un stack trace enorme infle la base de cada dispositivo.
@@ -142,6 +148,49 @@ class DiagnosticoSyncRepository implements DiagnosticoSync {
 			mensaje: mensaje,
 			ocurridoEn: DateTime.tryParse(await _leerEstado(_claveUltimoErrorEn) ?? '') ??
 				DateTime.now().toUtc(),
+		);
+	}
+
+	@override
+	Future<void> registrarAuditoriaCatalogo(AuditoriaCatalogo resultado) async {
+		final valores = {
+			_claveAuditoriaCoincide: resultado.coincide ? '1' : '0',
+			_claveAuditoriaProductosHub: '${resultado.productosHub}',
+			_claveAuditoriaProductosLocal: '${resultado.productosLocal}',
+			_claveAuditoriaCategoriasHub: '${resultado.categoriasHub}',
+			_claveAuditoriaCategoriasLocal: '${resultado.categoriasLocal}',
+			_claveAuditoriaEn: resultado.verificadoEn.toUtc().toIso8601String(),
+		};
+		for (final entrada in valores.entries) {
+			await _baseDatos.insert(
+				'sync_state',
+				{'clave': entrada.key, 'valor': entrada.value},
+				conflictAlgorithm: ConflictAlgorithm.replace,
+			);
+		}
+	}
+
+	@override
+	Future<AuditoriaCatalogo?> leerUltimaAuditoriaCatalogo() async {
+		final verificadoEnTexto = await _leerEstado(_claveAuditoriaEn);
+		if (verificadoEnTexto == null) {
+			return null;
+		}
+		final verificadoEn = DateTime.tryParse(verificadoEnTexto);
+		if (verificadoEn == null) {
+			return null;
+		}
+		return AuditoriaCatalogo(
+			coincide: await _leerEstado(_claveAuditoriaCoincide) == '1',
+			productosHub:
+				int.tryParse(await _leerEstado(_claveAuditoriaProductosHub) ?? '') ?? 0,
+			productosLocal:
+				int.tryParse(await _leerEstado(_claveAuditoriaProductosLocal) ?? '') ?? 0,
+			categoriasHub:
+				int.tryParse(await _leerEstado(_claveAuditoriaCategoriasHub) ?? '') ?? 0,
+			categoriasLocal:
+				int.tryParse(await _leerEstado(_claveAuditoriaCategoriasLocal) ?? '') ?? 0,
+			verificadoEn: verificadoEn,
 		);
 	}
 

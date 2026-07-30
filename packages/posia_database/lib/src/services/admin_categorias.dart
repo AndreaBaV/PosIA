@@ -28,16 +28,24 @@ class AdminCategorias {
 	final LapidaRepository? _lapidaRepository;
 	final Uuid _generadorId = const Uuid();
 
+	/// Lista categorías del catálogo, sin stubs FK ni las que un admin borró.
+	///
+	/// Un stub ("Categoría", ver `Categoria.esStubFk`) es un placeholder de
+	/// integridad creado cuando un producto llegó antes que su categoría real
+	/// — no es un grupo de negocio. Mostrarlo aquí con su switch de
+	/// "reactivar" invita a reactivarlo por error, lo que ensucia el hub
+	/// (misma corrección que ya aplica `ServicioCaja.listarCategorias`).
 	Future<List<Categoria>> listarCategorias() async {
 		final todas = await _categoriaRepository?.listarTodas() ?? [];
+		final sinStubs = todas.where((c) => !c.esStubFk).toList();
 		final enterradas =
 			await _lapidaRepository?.idsEliminados(TipoLapida.categoria) ??
 			const <String>{};
 		if (enterradas.isEmpty) {
-			return todas;
+			return sinStubs;
 		}
 		// Las eliminadas por un administrador ya no existen para el usuario.
-		return todas.where((c) => !enterradas.contains(c.id)).toList();
+		return sinStubs.where((c) => !enterradas.contains(c.id)).toList();
 	}
 
 	/// Crea la categoría o, si ya existe una activa con el mismo nombre

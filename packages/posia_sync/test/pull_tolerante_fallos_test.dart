@@ -41,51 +41,15 @@ class AplicadorConVeneno implements AplicadorEventosRemotos {
 
 	@override
 	Future<void> autoSanarCatalogoLocal() async {}
-}
-
-/// Diagnostico en memoria con la misma semantica que el repositorio SQLite.
-class DiagnosticoMemoria implements DiagnosticoSync {
-	final Map<String, EventoEnCuarentena> cuarentena = {};
-	ErrorCicloSync? ultimoError;
 
 	@override
-	Future<void> registrarEventoFallido({
-		required SyncEvent evento,
-		required Object error,
-	}) async {
-		final previo = cuarentena[evento.id];
-		cuarentena[evento.id] = EventoEnCuarentena(
-			evento: evento,
-			error: '$error',
-			intentos: (previo?.intentos ?? 0) + 1,
-			ultimoIntentoEn: DateTime.now().toUtc(),
+	Future<HuellaCatalogo> calcularHuellaCatalogoLocal() async {
+		return const HuellaCatalogo(
+			productosActivos: 0,
+			categoriasActivas: 0,
+			huellaProductos: '',
 		);
 	}
-
-	@override
-	Future<void> resolverEventoFallido(String eventoId) async {
-		cuarentena.remove(eventoId);
-	}
-
-	@override
-	Future<List<EventoEnCuarentena>> listarCuarentena({int limite = 100}) async {
-		final lista = cuarentena.values.toList()
-			..sort((a, b) => a.evento.seq.compareTo(b.evento.seq));
-		return lista.take(limite).toList();
-	}
-
-	@override
-	Future<int> contarCuarentena() async => cuarentena.length;
-
-	@override
-	Future<void> registrarErrorCiclo(Object? error) async {
-		ultimoError = error == null
-			? null
-			: ErrorCicloSync(mensaje: '$error', ocurridoEn: DateTime.now().toUtc());
-	}
-
-	@override
-	Future<ErrorCicloSync?> leerUltimoErrorCiclo() async => ultimoError;
 }
 
 /// Serializa un evento tal como lo entrega el hub.

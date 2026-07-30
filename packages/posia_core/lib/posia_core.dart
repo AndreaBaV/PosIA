@@ -81,6 +81,7 @@ export 'src/utils/geolocalizacion_util.dart';
 export 'src/utils/formateador_ticket_digital.dart';
 export 'src/utils/generador_ticket.dart';
 export 'src/utils/hasher_pin.dart';
+export 'src/utils/huella_catalogo.dart';
 export 'src/utils/id_posia.dart';
 export 'src/utils/periodo_util.dart';
 export 'src/utils/permisos_usuario.dart';

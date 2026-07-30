@@ -151,4 +151,14 @@ void main() {
     final eventos = cuerpo['events'] as List<Object?>;
     expect(eventos.length, greaterThanOrEqualTo(1));
   });
+
+  test('auditoria de catalogo responde 503 sin Postgres (modo archivo)', () async {
+    final respuesta = await http.get(Uri.parse('$urlBase/v1/catalog/audit'));
+    expect(respuesta.statusCode, 503);
+  });
+
+  test('catalogo compacto responde 503 sin Postgres (modo archivo)', () async {
+    final respuesta = await http.get(Uri.parse('$urlBase/v1/catalog/events'));
+    expect(respuesta.statusCode, 503);
+  });
 }

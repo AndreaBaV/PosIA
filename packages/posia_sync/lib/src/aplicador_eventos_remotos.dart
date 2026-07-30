@@ -25,4 +25,9 @@ abstract class AplicadorEventosRemotos {
 	/// copia local, converge a un estado limpio en su siguiente sync — no
 	/// requiere reinstalar la app ni borrar la base local a mano.
 	Future<void> autoSanarCatalogoLocal();
+
+	/// Calcula la huella del catálogo local activo, en el mismo formato que
+	/// usa el hub, para que el orquestador la compare y detecte divergencias
+	/// que un pull incremental no repararía por sí solo.
+	Future<HuellaCatalogo> calcularHuellaCatalogoLocal();
 }

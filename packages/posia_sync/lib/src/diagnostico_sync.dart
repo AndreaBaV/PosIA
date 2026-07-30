@@ -40,6 +40,26 @@ class ErrorCicloSync {
 	final DateTime ocurridoEn;
 }
 
+/// Resultado de comparar el catalogo local contra la huella publicada por el
+/// hub (ver `HuellaCatalogo`).
+class AuditoriaCatalogo {
+	const AuditoriaCatalogo({
+		required this.coincide,
+		required this.productosHub,
+		required this.productosLocal,
+		required this.categoriasHub,
+		required this.categoriasLocal,
+		required this.verificadoEn,
+	});
+
+	final bool coincide;
+	final int productosHub;
+	final int productosLocal;
+	final int categoriasHub;
+	final int categoriasLocal;
+	final DateTime verificadoEn;
+}
+
 /// Persiste el estado de salud del sync de este dispositivo.
 abstract class DiagnosticoSync {
 	/// Aparta un evento que no se pudo aplicar y suma un intento.
@@ -62,4 +82,10 @@ abstract class DiagnosticoSync {
 
 	/// Ultimo error de ciclo registrado, si lo hay.
 	Future<ErrorCicloSync?> leerUltimoErrorCiclo();
+
+	/// Guarda el resultado de la ultima comparacion contra la huella del hub.
+	Future<void> registrarAuditoriaCatalogo(AuditoriaCatalogo resultado);
+
+	/// Ultima auditoria de catalogo registrada, si la hay.
+	Future<AuditoriaCatalogo?> leerUltimaAuditoriaCatalogo();
 }
