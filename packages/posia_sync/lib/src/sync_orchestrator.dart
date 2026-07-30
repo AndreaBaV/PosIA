@@ -5,6 +5,7 @@ import 'package:posia_core/posia_core.dart';
 
 import 'almacen_cursor_sync.dart';
 import 'aplicador_eventos_remotos.dart';
+import 'diagnostico_sync.dart';
 import 'hub_sync_client.dart';
 import 'lan_sync_client.dart';
 import 'local_event_queue.dart';
@@ -15,11 +16,19 @@ class ResultadoSync {
     required this.eventosEnviados,
     required this.eventosRecibidos,
     required this.hubDisponible,
+    this.eventosFallidos = 0,
+    this.eventosRecuperados = 0,
   });
 
   final int eventosEnviados;
   final int eventosRecibidos;
   final bool hubDisponible;
+
+  /// Eventos que no se pudieron aplicar y quedaron en cuarentena.
+  final int eventosFallidos;
+
+  /// Eventos que estaban en cuarentena y se aplicaron en este ciclo.
+  final int eventosRecuperados;
 }
 
 class SyncOrchestrator {
@@ -29,6 +38,7 @@ class SyncOrchestrator {
     required LanSyncClient? clienteLan,
     AplicadorEventosRemotos? aplicadorRemoto,
     AlmacenCursorSync? almacenCursor,
+    DiagnosticoSync? diagnostico,
     Future<int> Function()? contarCatalogoActivo,
     required String tiendaId,
     required String dispositivoId,
@@ -38,15 +48,25 @@ class SyncOrchestrator {
        _clienteLan = clienteLan,
        _aplicadorRemoto = aplicadorRemoto,
        _almacenCursor = almacenCursor,
+       _diagnostico = diagnostico,
        _contarCatalogoActivo = contarCatalogoActivo,
        _tiendaId = tiendaId,
        _dispositivoId = dispositivoId;
+
+  /// Eventos aplicados entre dos escrituras del cursor.
+  ///
+  /// Persistir en cada evento multiplicaria las escrituras de una reconstruccion
+  /// completa (decenas de miles de eventos). Reaplicar como mucho este puñado
+  /// tras un cierre abrupto es inocuo: los upserts son idempotentes y los
+  /// eventos transaccionales llevan su propia tabla de deduplicacion.
+  static const int _eventosPorConfirmacionCursor = 25;
 
   final LocalEventQueue _colaLocal;
   final HubSyncClient? _clienteHub;
   final LanSyncClient? _clienteLan;
   final AplicadorEventosRemotos? _aplicadorRemoto;
   final AlmacenCursorSync? _almacenCursor;
+  final DiagnosticoSync? _diagnostico;
   final Future<int> Function()? _contarCatalogoActivo;
   final String _tiendaId;
   final String _dispositivoId;
@@ -268,7 +288,37 @@ class SyncOrchestrator {
     });
   }
 
+  /// Ejecuta el ciclo dejando rastro de su resultado en el diagnostico.
+  ///
+  /// Los disparadores automaticos se tragan la excepcion para no molestar al
+  /// cajero, asi que sin este registro un ciclo que fallaba siempre era
+  /// invisible: la app se veia normal mientras dejaba de recibir datos.
   Future<ResultadoSync> _ejecutarCiclo({
+    required bool reiniciarCursor,
+    ReporteProgresoSync? alProgreso,
+  }) async {
+    try {
+      final resultado = await _ejecutarCicloInterno(
+        reiniciarCursor: reiniciarCursor,
+        alProgreso: alProgreso,
+      );
+      await _registrarErrorCiclo(null);
+      return resultado;
+    } on Object catch (error) {
+      await _registrarErrorCiclo(error);
+      rethrow;
+    }
+  }
+
+  Future<void> _registrarErrorCiclo(Object? error) async {
+    try {
+      await _diagnostico?.registrarErrorCiclo(error);
+    } on Object {
+      // El diagnostico es best-effort: nunca debe tumbar el ciclo de sync.
+    }
+  }
+
+  Future<ResultadoSync> _ejecutarCicloInterno({
     required bool reiniciarCursor,
     ReporteProgresoSync? alProgreso,
   }) async {
@@ -301,6 +351,10 @@ class SyncOrchestrator {
     // No abortar el ciclo si /health falla: tras offline el hub puede despertar
     // lento, pero POST/GET /v1/events aún pueden funcionar.
     final hubOk = await clienteHub.verificarSalud();
+    // Reintentar lo apartado antes del pull: si la causa era transitoria (una
+    // fila padre que ya llego, un bloqueo de la BD) el evento entra ahora y el
+    // dispositivo converge solo, sin que nadie pulse nada.
+    final recuperados = await _reintentarCuarentena(alProgreso: alProgreso);
     // Empujar primero los cambios locales (incl. empaques/presentaciones).
     // Antes se descartaba todo el catálogo pendiente y luego el pull desde Neon
     // sobrescribía SQLite: los bultos nuevos nunca llegaban a la nube y se
@@ -331,7 +385,7 @@ class SyncOrchestrator {
         mensaje: 'Descargando cambios desde la nube…',
       ),
     );
-    final recibidos = await _ejecutarPull(
+    final resultadoPull = await _ejecutarPull(
       clienteHub,
       // En una reconstrucción desde origen (cursor a 0) la base local se
       // rehidrata por completo, así que hay que traer también los eventos que
@@ -351,19 +405,73 @@ class SyncOrchestrator {
     // Corre en cada sync completo, haya o no eventos nuevos: así cualquier
     // dispositivo converge solo, sin reinstalar ni borrar datos a mano.
     await _aplicadorRemoto?.autoSanarCatalogoLocal();
+    final recibidos = resultadoPull.aplicados;
+    final fallidos = resultadoPull.fallidos;
     alProgreso?.call(
       ProgresoSync(
         fase: FaseProgresoSync.listo,
         indice: enviados + recibidos,
         total: enviados + recibidos,
-        mensaje: 'Sincronización completada',
+        mensaje: fallidos > 0
+            ? 'Sincronización completada; $fallidos evento(s) apartados para reintento'
+            : 'Sincronización completada',
       ),
     );
     return ResultadoSync(
       eventosEnviados: enviados,
       eventosRecibidos: recibidos,
       hubDisponible: hubOk || enviados > 0 || recibidos > 0,
+      eventosFallidos: fallidos,
+      eventosRecuperados: recuperados,
     );
+  }
+
+  /// Vuelve a aplicar los eventos apartados en ciclos anteriores.
+  ///
+  /// Retorna cuantos se pudieron aplicar por fin; los que siguen fallando se
+  /// quedan en cuarentena con un intento mas y su error actualizado.
+  Future<int> _reintentarCuarentena({ReporteProgresoSync? alProgreso}) async {
+    final diagnostico = _diagnostico;
+    final aplicador = _aplicadorRemoto;
+    if (diagnostico == null || aplicador == null) {
+      return 0;
+    }
+    final List<EventoEnCuarentena> apartados;
+    try {
+      apartados = await diagnostico.listarCuarentena();
+    } on Object {
+      return 0;
+    }
+    if (apartados.isEmpty) {
+      return 0;
+    }
+    alProgreso?.call(
+      ProgresoSync(
+        fase: FaseProgresoSync.preparar,
+        indice: 0,
+        total: apartados.length,
+        mensaje: 'Reintentando ${apartados.length} evento(s) pendientes…',
+      ),
+    );
+    var recuperados = 0;
+    for (final apartado in apartados) {
+      try {
+        await aplicador.aplicarEvento(apartado.evento);
+        await diagnostico.resolverEventoFallido(apartado.evento.id);
+        recuperados = recuperados + 1;
+      } on Object catch (error) {
+        await _registrarFalloEvento(apartado.evento, error);
+      }
+    }
+    return recuperados;
+  }
+
+  Future<void> _registrarFalloEvento(SyncEvent evento, Object error) async {
+    try {
+      await _diagnostico?.registrarEventoFallido(evento: evento, error: error);
+    } on Object {
+      // El diagnostico es best-effort: nunca debe tumbar el ciclo de sync.
+    }
   }
 
   /// Catalogo local en cero pero con cursor avanzado: el delta no lo recupera.
@@ -392,7 +500,14 @@ class SyncOrchestrator {
     }
   }
 
-  Future<int> _ejecutarPull(
+  /// Descarga y aplica el historial pendiente del hub.
+  ///
+  /// Cada evento se aplica aislado: si uno falla se aparta en cuarentena y el
+  /// recorrido continua. El cursor avanza con los eventos ya procesados, no al
+  /// terminar la pagina, para que un fallo a mitad de camino no obligue a
+  /// repetirla ni —peor— deje al dispositivo anclado en ese punto del historial
+  /// ciclo tras ciclo, mostrando un catalogo de semanas atras.
+  Future<_ResultadoPullLocal> _ejecutarPull(
     HubSyncClient clienteHub, {
     bool incluirEventosPropios = false,
     bool esReconstruccionDesdeOrigen = false,
@@ -401,13 +516,27 @@ class SyncOrchestrator {
     final aplicador = _aplicadorRemoto;
     final almacenCursor = _almacenCursor;
     if (aplicador == null || almacenCursor == null) {
-      return 0;
+      return const _ResultadoPullLocal(aplicados: 0, fallidos: 0);
     }
 
     var aplicados = 0;
+    var fallidos = 0;
     var cursor = await almacenCursor.leerCursorHub();
+    var cursorConfirmado = cursor;
+    var desdeUltimaConfirmacion = 0;
     var continuar = true;
+
+    Future<void> confirmarCursor() async {
+      if (cursor <= cursorConfirmado) {
+        return;
+      }
+      await almacenCursor.guardarCursorHub(cursor);
+      cursorConfirmado = cursor;
+      desdeUltimaConfirmacion = 0;
+    }
+
     while (continuar) {
+      final cursorAlPedirPagina = cursor;
       final resultado = await clienteHub.obtenerEventos(
         desdeSeq: cursor,
         excluirDispositivoId: incluirEventosPropios ? null : _dispositivoId,
@@ -417,11 +546,25 @@ class SyncOrchestrator {
         continue;
       }
       for (final evento in resultado.eventos) {
-        await aplicador.aplicarEvento(evento);
-        if (!esReconstruccionDesdeOrigen) {
-          await alAplicarEventoRemoto?.call(evento);
+        try {
+          await aplicador.aplicarEvento(evento);
+          if (!esReconstruccionDesdeOrigen) {
+            await alAplicarEventoRemoto?.call(evento);
+          }
+          aplicados = aplicados + 1;
+        } on Object catch (error) {
+          fallidos = fallidos + 1;
+          await _registrarFalloEvento(evento, error);
         }
-        aplicados = aplicados + 1;
+        // El evento queda atras pase lo que pase: aplicado o apartado para
+        // reintento. Lo que no puede es bloquear a los que vienen detras.
+        if (evento.seq > cursor) {
+          cursor = evento.seq;
+        }
+        desdeUltimaConfirmacion = desdeUltimaConfirmacion + 1;
+        if (desdeUltimaConfirmacion >= _eventosPorConfirmacionCursor) {
+          await confirmarCursor();
+        }
         alProgreso?.call(
           ProgresoSync(
             fase: FaseProgresoSync.recibir,
@@ -431,19 +574,24 @@ class SyncOrchestrator {
           ),
         );
       }
+      // El hub puede haber saltado eventos filtrados por dispositivo: su
+      // `lastSeq` va por delante del ultimo que llego y tambien cuenta.
+      if (resultado.ultimoSeq > cursor) {
+        cursor = resultado.ultimoSeq;
+      }
+      await confirmarCursor();
       // Guarda de seguridad: si el cursor no avanza, detener el pull para no
       // repetir la misma pagina indefinidamente (evita bloquear la BD y la UI).
-      if (resultado.ultimoSeq <= cursor) {
+      if (cursor <= cursorAlPedirPagina) {
         continuar = false;
         continue;
       }
-      cursor = resultado.ultimoSeq;
-      await almacenCursor.guardarCursorHub(cursor);
       // Cede el hilo entre paginas para que las lecturas de la UI (Admin,
       // caja) se intercalen y no perciban un spinner interminable.
       await Future<void>.delayed(Duration.zero);
     }
-    return aplicados;
+    await confirmarCursor();
+    return _ResultadoPullLocal(aplicados: aplicados, fallidos: fallidos);
   }
 
   Future<bool> _transmitirLote(
@@ -495,4 +643,39 @@ class SyncOrchestrator {
     }
     return hub;
   }
+
+  /// Mide el atraso de este dispositivo contra la cabeza del log del hub.
+  Future<AtrasoSync> medirAtraso() async {
+    final cursorLocal = await _almacenCursor?.leerCursorHub() ?? 0;
+    final cursorHub = await _clienteHub?.obtenerUltimoSeqHub();
+    return AtrasoSync(cursorLocal: cursorLocal, cursorHub: cursorHub);
+  }
+}
+
+/// Distancia entre el cursor local y el ultimo evento publicado por el hub.
+class AtrasoSync {
+  const AtrasoSync({required this.cursorLocal, required this.cursorHub});
+
+  /// Ultimo seq confirmado por este dispositivo.
+  final int cursorLocal;
+
+  /// Ultimo seq del hub; null si el hub no expone la ruta o no responde.
+  final int? cursorHub;
+
+  /// Eventos sin aplicar, o null si no se pudo consultar al hub.
+  int? get eventosAtrasados {
+    final hub = cursorHub;
+    if (hub == null) {
+      return null;
+    }
+    return hub > cursorLocal ? hub - cursorLocal : 0;
+  }
+}
+
+/// Conteo de eventos aplicados y apartados en un pull.
+class _ResultadoPullLocal {
+  const _ResultadoPullLocal({required this.aplicados, required this.fallidos});
+
+  final int aplicados;
+  final int fallidos;
 }

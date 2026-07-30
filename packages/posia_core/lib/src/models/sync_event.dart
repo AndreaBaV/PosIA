@@ -20,6 +20,7 @@ class SyncEvent {
 		required this.payload,
 		required this.creadoEn,
 		required this.estado,
+		this.seq = 0,
 	});
 
 	final String id;
@@ -30,6 +31,14 @@ class SyncEvent {
 	final DateTime creadoEn;
 	final EstadoSyncEvento estado;
 
+	/// Posicion del evento en el log del hub; 0 si es local (aun sin enviar).
+	///
+	/// El pull avanza el cursor con este valor evento por evento. Sin el, un
+	/// solo evento defectuoso a mitad de pagina impedia confirmar los que ya
+	/// se habian aplicado y el dispositivo se quedaba anclado en ese punto del
+	/// historial indefinidamente.
+	final int seq;
+
 	SyncEvent copiarConEstado(EstadoSyncEvento nuevoEstado) {
 		return SyncEvent(
 			id: id,
@@ -39,6 +48,7 @@ class SyncEvent {
 			payload: payload,
 			creadoEn: creadoEn,
 			estado: nuevoEstado,
+			seq: seq,
 		);
 	}
 }

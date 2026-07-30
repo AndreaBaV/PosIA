@@ -39,6 +39,7 @@ import '../repositories/compra_repository.dart';
 import '../repositories/config_repository.dart';
 import '../repositories/cotizacion_repository.dart';
 import '../repositories/descuento_cliente_repository.dart';
+import '../repositories/diagnostico_sync_repository.dart';
 import '../repositories/movimiento_inventario_repository.dart';
 import '../repositories/pedido_repository.dart';
 import '../repositories/proveedor_repository.dart';
@@ -673,7 +674,9 @@ class ServicioAdmin {
 
   /// Obtiene estado actual de la cola de sincronizacion.
   ///
-  /// Retorna metricas para panel admin.
+  /// Incluye la salud de la bajada (cursor, cuarentena, ultimo error), no solo
+  /// la de la subida: un equipo puede tener la cola en cero y aun asi llevar
+  /// semanas sin recibir nada del hub.
   Future<EstadoSyncAdmin> obtenerEstadoSync() async {
     final pendientes = await _syncEventRepository.obtenerPendientes();
     var conError = 0;
@@ -682,12 +685,26 @@ class ServicioAdmin {
         conError = conError + 1;
       }
     }
+    final estadoSync = SyncStateRepository(baseDatos: _baseDatos);
+    final diagnostico = DiagnosticoSyncRepository(baseDatos: _baseDatos);
+    final ultimoError = await diagnostico.leerUltimoErrorCiclo();
     return EstadoSyncAdmin(
       eventosPendientes: pendientes.length,
       eventosConError: conError,
       hubConfigurado: _syncOrchestrator.tieneHubConfigurado(),
+      cursorLocal: await estadoSync.leerCursorHub(),
+      eventosEnCuarentena: await diagnostico.contarCuarentena(),
+      ultimoError: ultimoError?.mensaje,
+      ultimoErrorEn: ultimoError?.ocurridoEn,
     );
   }
+
+  /// Compara el cursor local contra la cabeza del log del hub.
+  ///
+  /// Es la verificacion directa de "este equipo esta atrasado": si devuelve un
+  /// numero grande, el dispositivo no esta recibiendo lo que ya publicaron los
+  /// demas, aunque la pantalla se vea normal.
+  Future<AtrasoSync> medirAtrasoSync() => _syncOrchestrator.medirAtraso();
 
   /// Ejecuta ciclo completo de sincronizacion con el hub.
   ///

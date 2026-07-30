@@ -9,6 +9,7 @@ library;
 export 'src/auth_hub.dart';
 export 'src/almacen_cursor_sync.dart';
 export 'src/aplicador_eventos_remotos.dart';
+export 'src/diagnostico_sync.dart';
 export 'src/hub_sync_client.dart';
 export 'src/lan_sync_client.dart';
 export 'src/local_event_queue.dart';

@@ -7,6 +7,7 @@ import 'package:posia_database/posia_database.dart';
 import 'package:posia_sync/posia_sync.dart';
 import 'package:posia_ui/posia_ui.dart';
 
+import '../providers/admin_providers.dart';
 import '../providers/sync_providers.dart';
 import 'pantalla_instalacion_tecnico.dart';
 
@@ -147,6 +148,29 @@ class _ConstruirContenidoSync extends StatelessWidget {
 						etiqueta: 'Hub',
 						valor: hubActivo ? 'Conectado' : 'No configurado',
 					),
+					if (hubActivo) ...[
+						const SizedBox(height: 12.0),
+						_FilaEstadoSync(
+							icono: Icons.timeline,
+							etiqueta: 'Posición en la nube',
+							valor: '${estado.cursorLocal}',
+						),
+					],
+					if (estado.eventosEnCuarentena > 0) ...[
+						const SizedBox(height: 12.0),
+						_FilaEstadoSync(
+							icono: Icons.report_problem_outlined,
+							etiqueta: 'Cambios apartados para reintento',
+							valor: '${estado.eventosEnCuarentena}',
+						),
+					],
+					if (estado.ultimoError != null) ...[
+						const SizedBox(height: 12.0),
+						_TarjetaUltimoError(
+							mensaje: estado.ultimoError!,
+							ocurridoEn: estado.ultimoErrorEn,
+						),
+					],
 					if (hubUrl.isNotEmpty) ...[
 						const SizedBox(height: 12.0),
 						Card(
@@ -212,6 +236,7 @@ class _ConstruirContenidoSync extends StatelessWidget {
 							),
 						),
 						const SizedBox(height: 8.0),
+						const _ComprobadorAtraso(),
 						Card(
 							child: ListTile(
 								leading: const Icon(Icons.cloud_download),
@@ -273,6 +298,116 @@ class _ConstruirContenidoSync extends StatelessWidget {
 						label: const Text('Reconfigurar conexión (técnico)'),
 					),
 				],
+			),
+		);
+	}
+}
+
+/// Muestra el ultimo ciclo de sync que fallo.
+///
+/// Los disparadores automaticos silencian sus errores para no interrumpir al
+/// cajero; sin esta tarjeta un equipo podia pasar semanas sin recibir nada y
+/// verse perfectamente normal.
+class _TarjetaUltimoError extends StatelessWidget {
+	const _TarjetaUltimoError({required this.mensaje, this.ocurridoEn});
+
+	final String mensaje;
+	final DateTime? ocurridoEn;
+
+	@override
+	Widget build(BuildContext context) {
+		final momento = ocurridoEn?.toLocal();
+		return Card(
+			color: PosiaColors.cancelar.withValues(alpha: 0.08),
+			child: ListTile(
+				leading: Icon(Icons.warning_amber, color: PosiaColors.cancelar),
+				title: const Text('La última sincronización falló'),
+				subtitle: Text(
+					momento == null
+						? mensaje
+						: '${_formatearMomento(momento)} · $mensaje',
+				),
+				isThreeLine: true,
+			),
+		);
+	}
+
+	String _formatearMomento(DateTime momento) {
+		final dia = momento.day.toString().padLeft(2, '0');
+		final mes = momento.month.toString().padLeft(2, '0');
+		final hora = momento.hour.toString().padLeft(2, '0');
+		final minuto = momento.minute.toString().padLeft(2, '0');
+		return '$dia/$mes $hora:$minuto';
+	}
+}
+
+/// Compara la posición local con la cabeza del log del hub, bajo demanda.
+class _ComprobadorAtraso extends ConsumerStatefulWidget {
+	const _ComprobadorAtraso();
+
+	@override
+	ConsumerState<_ComprobadorAtraso> createState() => _EstadoComprobadorAtraso();
+}
+
+class _EstadoComprobadorAtraso extends ConsumerState<_ComprobadorAtraso> {
+	bool _consultando = false;
+	String? _resultado;
+
+	Future<void> _comprobar() async {
+		setState(() {
+			_consultando = true;
+			_resultado = null;
+		});
+		String mensaje;
+		try {
+			final servicio = await ref.read(servicioAdminProvider.future);
+			mensaje = _describir(await servicio.medirAtrasoSync());
+		} on Object catch (error) {
+			mensaje = 'No se pudo consultar a la nube: $error';
+		}
+		if (!mounted) {
+			return;
+		}
+		setState(() {
+			_consultando = false;
+			_resultado = mensaje;
+		});
+	}
+
+	String _describir(AtrasoSync atraso) {
+		final atrasados = atraso.eventosAtrasados;
+		if (atrasados == null) {
+			return 'El servidor no reporta su posición (hub en versión anterior). '
+				'Posición de este equipo: ${atraso.cursorLocal}.';
+		}
+		if (atrasados == 0) {
+			return 'Al día: este equipo ya tiene todo lo publicado '
+				'(posición ${atraso.cursorLocal}).';
+		}
+		return 'Faltan $atrasados cambios por bajar. Este equipo va en '
+			'${atraso.cursorLocal} y la nube en ${atraso.cursorHub}.';
+	}
+
+	@override
+	Widget build(BuildContext context) {
+		final resultado = _resultado;
+		return Card(
+			child: ListTile(
+				leading: _consultando
+					? const SizedBox(
+						width: 24.0,
+						height: 24.0,
+						child: CircularProgressIndicator(strokeWidth: 2.0),
+					)
+					: const Icon(Icons.speed),
+				title: const Text('Comprobar atraso con la nube'),
+				subtitle: Text(
+					resultado ??
+						'Dice cuántos cambios publicados aún no bajó este equipo.',
+				),
+				trailing: const Icon(Icons.chevron_right),
+				isThreeLine: resultado != null,
+				onTap: _consultando ? null : _comprobar,
 			),
 		);
 	}

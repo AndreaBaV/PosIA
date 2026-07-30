@@ -612,6 +612,7 @@ class MigracionesEsquema {
 		await migrarVersion34A35(base);
 		await migrarVersion35A36(base);
 		await migrarVersion36A37(base);
+		await migrarVersion37A38(base);
 	}
 
 	/// Tabla guia `ejemplo` en bases ya existentes (v10 → v11).
@@ -1399,6 +1400,34 @@ class MigracionesEsquema {
 			'producto_stock_id',
 			'TEXT',
 		);
+	}
+
+	/// v38: cuarentena de eventos remotos que no se pudieron aplicar.
+	///
+	/// El pull aplicaba la pagina entera o nada: un solo evento defectuoso
+	/// lanzaba, el cursor no se confirmaba y el dispositivo se quedaba anclado
+	/// en ese punto del historial para siempre, mostrando el catalogo de
+	/// semanas atras aunque SQLite estuviera sano. Ahora el evento se aparta
+	/// aqui con su payload intacto, el cursor sigue y cada ciclo lo reintenta.
+	static Future<void> migrarVersion37A38(Database base) async {
+		await base.execute('''
+			CREATE TABLE IF NOT EXISTS sync_eventos_cuarentena (
+				evento_id TEXT PRIMARY KEY,
+				seq INTEGER NOT NULL DEFAULT 0,
+				tipo TEXT NOT NULL,
+				tienda_id TEXT NOT NULL DEFAULT '',
+				dispositivo_id TEXT NOT NULL DEFAULT '',
+				payload_json TEXT NOT NULL DEFAULT '{}',
+				creado_en TEXT NOT NULL,
+				error TEXT NOT NULL DEFAULT '',
+				intentos INTEGER NOT NULL DEFAULT 1,
+				ultimo_intento_en TEXT NOT NULL
+			)
+		''');
+		await base.execute('''
+			CREATE INDEX IF NOT EXISTS idx_sync_cuarentena_seq
+			ON sync_eventos_cuarentena(seq)
+		''');
 	}
 
 	/// v6.23: codigo de barras unico por tienda entre productos activos.

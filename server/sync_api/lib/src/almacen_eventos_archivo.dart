@@ -84,6 +84,9 @@ class AlmacenEventosArchivo implements AlmacenEventos {
 	}
 
 	@override
+	Future<int> obtenerUltimoSeq() async => _ultimoSeq;
+
+	@override
 	Future<void> cerrar() async {}
 
 	/// Reconstruye evento desde linea JSONL persistida.

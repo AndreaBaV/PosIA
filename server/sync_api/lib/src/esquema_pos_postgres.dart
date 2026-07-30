@@ -992,12 +992,47 @@ class EsquemaPosPostgres {
 		);
 	}
 
-	/// Purga eventos del hub mas antiguos que la ventana de retencion.
+	/// Tipos de evento PURGABLES: historial transaccional append-only.
+	///
+	/// Son eventos de un instante (una venta, un movimiento, una entrada de
+	/// asistencia); no representan el estado vigente de ninguna entidad, asi que
+	/// perder los mas viejos no borra catalogo.
+	///
+	/// TODO lo que NO esta aqui se conserva para siempre. Es deliberado y es una
+	/// lista BLANCA, no negra: los eventos de estado (productUpserted,
+	/// categoryUpserted, priceList*, customer*, supplier*, userUpserted, roles,
+	/// presentaciones, escalas, combos y sus lapidas *Deleted) SON el catalogo.
+	/// Si un dispositivo se reconstruye desde origen ("Descargar todo de la
+	/// nube") solo puede rearmar lo que siga en el log; purgar un `productUpserted`
+	/// de mas de 90 dias hacia desaparecer para siempre productos viejos nunca
+	/// re-editados. La compactacion ya deja ~1 evento por entidad, asi que
+	/// conservarlos es barato. Ante un tipo nuevo, el default seguro es NO borrar.
+	static const List<String> tiposHistorialPurgable = [
+		'saleCompleted',
+		'saleVoided',
+		'salePartialReturn',
+		'stockAdjusted',
+		'transferRequested',
+		'transferCompleted',
+		'purchaseCompleted',
+		'attendanceChallengeCreated',
+		'attendanceCheckedIn',
+		'attendanceCheckedOut',
+		'payrollPeriodClosed',
+		'cashShiftUpserted',
+	];
+
+	/// Purga historial transaccional mas antiguo que la ventana de retencion.
+	///
+	/// Nunca toca eventos de estado de catalogo: ver [tiposHistorialPurgable].
 	static Future<int> purgarEventosAntiguos(Session conexion) async {
+		final listaTipos =
+			tiposHistorialPurgable.map((t) => "'$t'").join(', ');
 		final resultado = await conexion.execute(
 			Sql.named('''
 				DELETE FROM sync_events
 				WHERE created_at < now() - make_interval(days => @dias)
+					AND type IN ($listaTipos)
 			'''),
 			parameters: {'dias': DIAS_RETENCION_SYNC_EVENTS},
 		);

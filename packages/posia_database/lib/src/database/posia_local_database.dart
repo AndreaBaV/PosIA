@@ -261,6 +261,9 @@ class PosiaLocalDatabase {
 					if (anterior < 37 && nueva >= 37) {
 						await MigracionesEsquema.migrarVersion36A37(base);
 					}
+					if (anterior < 38 && nueva >= 38) {
+						await MigracionesEsquema.migrarVersion37A38(base);
+					}
 				},
 			);
 			_migracionFkPendientePorSync = false;

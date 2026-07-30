@@ -272,6 +272,15 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 	}
 
 	@override
+	Future<int> obtenerUltimoSeq() async {
+		final pool = await _obtenerPool();
+		final resultado = await pool.execute(
+			'SELECT COALESCE(MAX(seq), 0) FROM sync_events',
+		);
+		return (resultado.first[0] as num?)?.toInt() ?? 0;
+	}
+
+	@override
 	Future<void> cerrar() async {
 		await _pool?.close();
 		_pool = null;

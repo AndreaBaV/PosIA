@@ -150,25 +150,64 @@ class HubSyncClient {
     if (respuesta.statusCode < 200 || respuesta.statusCode >= 300) {
       return const ResultadoPullHub(eventos: [], ultimoSeq: 0, exitoso: false);
     }
-    final json = jsonDecode(respuesta.body) as Map<String, dynamic>;
+    // Un cuerpo ilegible no puede tumbar el ciclo: sin este try el pull
+    // lanzaba y el cursor se quedaba clavado en la misma pagina para siempre.
+    final Map<String, dynamic> json;
+    try {
+      json = jsonDecode(respuesta.body) as Map<String, dynamic>;
+    } on Object {
+      return const ResultadoPullHub(eventos: [], ultimoSeq: 0, exitoso: false);
+    }
     final lista = json['events'];
     final eventos = <SyncEvent>[];
+    var seqMaximoLeido = 0;
     if (lista is List) {
       for (final item in lista) {
         if (item is! Map) {
           continue;
         }
-        final evento = _deserializarEvento(Map<String, dynamic>.from(item));
+        final fila = Map<String, dynamic>.from(item);
+        final seq = (fila['seq'] as num?)?.toInt() ?? 0;
+        if (seq > seqMaximoLeido) {
+          seqMaximoLeido = seq;
+        }
+        final evento = _deserializarEvento(fila);
         if (evento != null) {
           eventos.add(evento);
         }
       }
     }
+    // `lastSeq` del hub manda, pero si faltara hay que caer al mayor seq
+    // efectivamente leido y no a `desdeSeq`: devolver el cursor de entrada
+    // dejaba el pull sin avanzar y repitiendo la misma pagina.
+    final ultimoSeq = (json['lastSeq'] as num?)?.toInt() ??
+        (seqMaximoLeido > desdeSeq ? seqMaximoLeido : desdeSeq);
     return ResultadoPullHub(
       eventos: eventos,
-      ultimoSeq: json['lastSeq'] as int? ?? desdeSeq,
+      ultimoSeq: ultimoSeq,
       exitoso: true,
     );
+  }
+
+  /// Consulta el ultimo seq publicado por el hub sin descargar eventos.
+  ///
+  /// Sirve para medir el atraso real de este dispositivo (cursor local contra
+  /// cabeza del log). Retorna null si el hub desplegado aun no expone la ruta
+  /// o no responde: es un dato de diagnostico, nunca debe romper la pantalla.
+  Future<int?> obtenerUltimoSeqHub() async {
+    final uri = Uri.parse('$_urlBase/v1/events/head');
+    try {
+      final respuesta = await _clienteHttp
+          .get(uri, headers: _construirCabeceras())
+          .timeout(const Duration(seconds: TIMEOUT_HUB_SYNC_SEGUNDOS));
+      if (respuesta.statusCode < 200 || respuesta.statusCode >= 300) {
+        return null;
+      }
+      final json = jsonDecode(respuesta.body) as Map<String, Object?>;
+      return (json['lastSeq'] as num?)?.toInt();
+    } on Object {
+      return null;
+    }
   }
 
   /// Indica si el hub tiene Postgres y puede autenticar usuarios.
@@ -621,25 +660,32 @@ class HubSyncClient {
     };
   }
 
+  /// Reconstruye un evento del hub; null si esta build no puede procesarlo.
+  ///
+  /// Tolera cualquier defecto de forma (tipo desconocido de una version mas
+  /// nueva, fecha invalida, payload que no es mapa) devolviendo null en vez de
+  /// lanzar: una excepcion aqui abortaba la pagina entera y con ella todos los
+  /// eventos sanos que venian detras.
   SyncEvent? _deserializarEvento(Map<String, dynamic> json) {
-    final tipoNombre = json['type'] as String? ?? '';
-    final TipoSyncEvento tipo;
     try {
-      tipo = TipoSyncEvento.values.byName(tipoNombre);
-    } on ArgumentError {
+      final tipo = TipoSyncEvento.values.byName(json['type'] as String? ?? '');
+      final payload = json['payload'];
+      return SyncEvent(
+        id: json['id'] as String? ?? '',
+        tiendaId: json['storeId'] as String? ?? '',
+        dispositivoId: json['deviceId'] as String? ?? '',
+        tipo: tipo,
+        payload: payload is Map
+            ? Map<String, Object?>.from(payload)
+            : <String, Object?>{},
+        creadoEn: DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+            DateTime.now().toUtc(),
+        estado: EstadoSyncEvento.enviado,
+        seq: (json['seq'] as num?)?.toInt() ?? 0,
+      );
+    } on Object {
       return null;
     }
-    return SyncEvent(
-      id: json['id'] as String? ?? '',
-      tiendaId: json['storeId'] as String? ?? '',
-      dispositivoId: json['deviceId'] as String? ?? '',
-      tipo: tipo,
-      payload: Map<String, Object?>.from(
-        json['payload'] as Map<Object?, Object?>? ?? {},
-      ),
-      creadoEn: DateTime.parse(json['createdAt'] as String? ?? ''),
-      estado: EstadoSyncEvento.enviado,
-    );
   }
 
   bool _leerActiva(Object? valor) {

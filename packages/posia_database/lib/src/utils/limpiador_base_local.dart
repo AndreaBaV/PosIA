@@ -120,10 +120,25 @@ class LimpiadorBaseLocal {
 		}
 	}
 
-	/// Vacia tablas de negocio conservando cola y cursor de sync.
+	/// Tablas de control del sync que dejan de tener sentido tras vaciar.
+	///
+	/// `sync_eventos_aplicados` es el registro de "esto ya lo apliqué": si
+	/// sobrevive al vaciado, el replay desde origen se salta cada venta, ajuste
+	/// de stock y traspaso historico y el equipo se queda sin operaciones.
+	/// `sync_eventos_cuarentena` guarda eventos del mismo historial que se va a
+	/// volver a descargar entero, asi que reintentarlos solo duplica trabajo.
+	static const _tablasControlSync = [
+		'sync_eventos_aplicados',
+		'sync_eventos_cuarentena',
+	];
+
+	/// Vacia tablas de negocio conservando la cola de envio pendiente.
+	///
+	/// El cursor lo reinicia quien llama (reconciliacion): esta limpieza asume
+	/// que despues viene una reconstruccion completa desde el hub.
 	static Future<void> vaciarDatosOperativos(Database base) async {
 		await base.transaction((tx) async {
-			for (final tabla in _tablasOperativas) {
+			for (final tabla in [..._tablasOperativas, ..._tablasControlSync]) {
 				try {
 					await tx.delete(tabla);
 				} on Object {

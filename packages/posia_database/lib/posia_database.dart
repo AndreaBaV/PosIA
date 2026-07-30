@@ -35,6 +35,7 @@ export 'src/repositories/compra_repository.dart';
 export 'src/repositories/cotizacion_repository.dart';
 export 'src/repositories/categoria_repository.dart';
 export 'src/repositories/descuento_cliente_repository.dart';
+export 'src/repositories/diagnostico_sync_repository.dart';
 export 'src/repositories/cliente_repository.dart';
 export 'src/repositories/movimiento_inventario_repository.dart';
 export 'src/repositories/proveedor_repository.dart';

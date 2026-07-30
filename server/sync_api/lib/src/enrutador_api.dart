@@ -45,6 +45,7 @@ class EnrutadorApi {
 			..get('/v1/users', _manejarListarUsuarios)
 			..get('/v1/custom-roles', _manejarListarRolesPersonalizados)
 			..post('/v1/events', _manejarEnvioEventos)
+			..get('/v1/events/head', _manejarCabezaEventos)
 			..get('/v1/events', _manejarConsultaEventos);
 		return const Pipeline()
 			.addMiddleware(logRequests())
@@ -185,6 +186,15 @@ class EnrutadorApi {
 			'events': eventos.map((evento) => evento.aJson()).toList(),
 			'lastSeq': ultimoSeq,
 		});
+	}
+
+	/// Informa el ultimo seq del log sin transferir eventos.
+	///
+	/// Un dispositivo compara este valor con su cursor para saber si esta al
+	/// dia. Sin esta ruta, "faltan productos" solo se podia diagnosticar
+	/// descargando paginas completas del historial.
+	Future<Response> _manejarCabezaEventos(Request solicitud) async {
+		return _respuestaJson({'lastSeq': await _almacen.obtenerUltimoSeq()});
 	}
 
 	/// Middleware que exige cabecera x-api-key cuando hay clave.

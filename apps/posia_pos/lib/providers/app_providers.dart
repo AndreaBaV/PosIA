@@ -25,6 +25,7 @@ import '../util/plataforma_util.dart';
 import '../utils/imprimir_ticket_digital_util.dart';
 import '../utils/ticket_credito_util.dart';
 import '../utils/ticket_venta_util.dart';
+import 'refresco_catalogo.dart';
 
 /// Estado de inicializacion de la aplicacion.
 final estadoInicializacionProvider = FutureProvider<void>((ref) async {
@@ -108,10 +109,11 @@ final sincronizadorAutomaticoProvider = FutureProvider<SincronizadorAutomatico>(
 		orquestador: contenedor.syncOrchestrator,
 		sincronizarConCatalogo: () async {
 			if (LimpiadorCacheLocal.seLimpioEnEsteArranque) {
-				await contenedor.syncOrchestrator.sincronizarDesdeOrigen();
+				final resultado =
+					await contenedor.syncOrchestrator.sincronizarDesdeOrigen();
 				await PosiaLocalDatabase.obtenerInstancia()
 					.completarMigracionIntegridadTrasSync();
-				return;
+				return resultado;
 			}
 			await contenedor.servicioNomina?.reencolarPerfilesParaSync();
 			await contenedor.servicioNomina?.reencolarPeriodosParaSync();
@@ -120,8 +122,11 @@ final sincronizadorAutomaticoProvider = FutureProvider<SincronizadorAutomatico>(
 			// y hace pull. Re-subir todo en cada ciclo saturaba la cola (cientos
 			// de pendientes/errores) y tapaba los cambios legítimos. El re-push
 			// completo es ahora acción explícita: ServicioAdmin.resubirCatalogoCompleto().
-			await contenedor.servicioAdmin.sincronizarManual(incluirCatalogo: false);
+			return contenedor.servicioAdmin.sincronizarManual(
+				incluirCatalogo: false,
+			);
 		},
+		alRecibirCambios: (_) => refrescarCachesProductosTrasSync(ref),
 	);
 	sincronizador.iniciar();
 	ref.onDispose(sincronizador.detener);

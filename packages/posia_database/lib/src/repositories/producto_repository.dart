@@ -251,29 +251,63 @@ class ProductoRepository {
 
 	/// Convierte fila SQLite a entidad [Producto].
 	///
+	/// Tolera valores que esta build no conoce en vez de lanzar. La escritura ya
+	/// era tolerante (el aplicador de eventos usa `firstWhere` con `orElse`) pero
+	/// la lectura no: bastaba un producto guardado por una version mas nueva —con
+	/// una unidad de medida o un vertical que aqui no existen— para que
+	/// `byName` lanzara y se cayera el catalogo COMPLETO, no solo esa fila.
+	/// Igual con `precio_base`: SQLite devuelve int si el valor se guardo sin
+	/// decimales y el cast a double reventaba.
+	///
 	/// [fila] Registro de base de datos.
 	/// Retorna instancia de dominio.
 	Producto _mapearProducto(Map<String, Object?> fila) {
-		final verticalNombre = fila['modulo_vertical'] as String? ?? ModuloVertical.general.name;
 		return Producto(
-			id: fila['id'] as String,
-			nombre: fila['nombre'] as String,
-			codigoBarras: fila['codigo_barras'] as String,
-			precioBase: fila['precio_base'] as double,
-			unidadMedida: UnidadMedida.values.byName(fila['unidad_medida'] as String),
-			rutaImagen: fila['ruta_imagen'] as String,
-			activo: (fila['activo'] as int) == 1,
-			tiendaId: fila['tienda_id'] as String,
-			moduloVertical: ModuloVertical.values.byName(verticalNombre),
+			id: fila['id'] as String? ?? '',
+			nombre: fila['nombre'] as String? ?? '',
+			codigoBarras: fila['codigo_barras'] as String? ?? '',
+			precioBase: (fila['precio_base'] as num?)?.toDouble() ?? 0.0,
+			unidadMedida: _leerEnum(
+				UnidadMedida.values,
+				fila['unidad_medida'],
+				UnidadMedida.pieza,
+			),
+			rutaImagen: fila['ruta_imagen'] as String? ?? '',
+			activo: ((fila['activo'] as num?)?.toInt() ?? 0) == 1,
+			tiendaId: fila['tienda_id'] as String? ?? '',
+			moduloVertical: _leerEnum(
+				ModuloVertical.values,
+				fila['modulo_vertical'],
+				ModuloVertical.general,
+			),
 			categoriaId: fila['categoria_id'] as String?,
-			piezasPorCaja: fila['piezas_por_caja'] as int?,
-			unidadesPorBulto: fila['unidades_por_bulto'] as int?,
+			piezasPorCaja: (fila['piezas_por_caja'] as num?)?.toInt(),
+			unidadesPorBulto: (fila['unidades_por_bulto'] as num?)?.toInt(),
 			proveedorId: fila['proveedor_id'] as String?,
 			notas: fila['notas'] as String? ?? '',
 			costoUnitario: (fila['costo_unitario'] as num?)?.toDouble() ?? 0.0,
-			favoritoCaja: ((fila['favorito_caja'] as int?) ?? 0) == 1,
-			permiteStockNegativo: ((fila['permite_stock_negativo'] as int?) ?? 0) == 1,
+			favoritoCaja: ((fila['favorito_caja'] as num?)?.toInt() ?? 0) == 1,
+			permiteStockNegativo:
+				((fila['permite_stock_negativo'] as num?)?.toInt() ?? 0) == 1,
 		);
+	}
+
+	/// Resuelve un enum por nombre cayendo a [porDefecto] si no se reconoce.
+	static T _leerEnum<T extends Enum>(
+		List<T> valores,
+		Object? almacenado,
+		T porDefecto,
+	) {
+		final nombre = almacenado as String?;
+		if (nombre == null || nombre.isEmpty) {
+			return porDefecto;
+		}
+		for (final valor in valores) {
+			if (valor.name == nombre) {
+				return valor;
+			}
+		}
+		return porDefecto;
 	}
 
 	/// Convierte entidad a mapa para SQLite.

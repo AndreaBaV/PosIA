@@ -20,14 +20,18 @@ class SincronizadorAutomatico {
 	/// [orquestador] Orquestador de sincronizacion activo.
 	/// [sincronizarConCatalogo] Si se provee, el primer ciclo (y al recuperar
 	/// red la primera vez) reencola el catalogo completo hacia Neon.
+	/// [alRecibirCambios] Se invoca tras un ciclo que aplico eventos remotos.
 	SincronizadorAutomatico({
 		required SyncOrchestrator orquestador,
-		Future<void> Function()? sincronizarConCatalogo,
+		Future<ResultadoSync?> Function()? sincronizarConCatalogo,
+		Future<void> Function(ResultadoSync resultado)? alRecibirCambios,
 	}) : _orquestador = orquestador,
-	     _sincronizarConCatalogo = sincronizarConCatalogo;
+	     _sincronizarConCatalogo = sincronizarConCatalogo,
+	     _alRecibirCambios = alRecibirCambios;
 
 	final SyncOrchestrator _orquestador;
-	final Future<void> Function()? _sincronizarConCatalogo;
+	final Future<ResultadoSync?> Function()? _sincronizarConCatalogo;
+	final Future<void> Function(ResultadoSync resultado)? _alRecibirCambios;
 	StreamSubscription<List<ConnectivityResult>>? _suscripcionConectividad;
 	Timer? _temporizador;
 	Timer? _temporizadorMantenerHub;
@@ -86,18 +90,28 @@ class SincronizadorAutomatico {
 		_sincronizando = true;
 		try {
 			final conCatalogo = _sincronizarConCatalogo;
+			final ResultadoSync? resultado;
 			if (conCatalogo != null && (forzarCatalogo || !_catalogoEmpujado)) {
-				await conCatalogo();
+				resultado = await conCatalogo();
 				_catalogoEmpujado = true;
 			} else {
-				await _orquestador.sincronizarCompleto();
+				resultado = await _orquestador.sincronizarCompleto();
 			}
 			await PosiaLocalDatabase.obtenerInstancia()
 				.completarMigracionIntegridadTrasSync();
+			// Sin este aviso, un producto que ya aterrizo en SQLite seguia
+			// invisible en caja: el catalogo vive en memoria y solo se releia
+			// tras un sync manual o al cerrar sesion.
+			if (resultado != null && _huboCambiosRemotos(resultado)) {
+				await _alRecibirCambios?.call(resultado);
+			}
 		} on Object {
 			// Reintenta en el siguiente ciclo; la caja sigue operando con datos locales.
 		} finally {
 			_sincronizando = false;
 		}
 	}
+
+	bool _huboCambiosRemotos(ResultadoSync resultado) =>
+		resultado.eventosRecibidos > 0 || resultado.eventosRecuperados > 0;
 }

@@ -31,6 +31,12 @@ abstract class AlmacenEventos {
 		int limite = 500,
 	});
 
+	/// Ultimo seq publicado, sin descargar eventos.
+	///
+	/// Permite a un dispositivo medir su atraso real contra el log.
+	/// Retorna 0 si aun no hay eventos.
+	Future<int> obtenerUltimoSeq();
+
 	/// Libera recursos de conexion.
 	Future<void> cerrar();
 }

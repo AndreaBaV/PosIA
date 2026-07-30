@@ -10,6 +10,7 @@ import '../database/posia_local_database.dart';
 import '../repositories/categoria_repository.dart';
 import '../repositories/cliente_repository.dart';
 import '../repositories/descuento_cliente_repository.dart';
+import '../repositories/diagnostico_sync_repository.dart';
 import '../repositories/compra_repository.dart';
 import '../repositories/cotizacion_repository.dart';
 import '../repositories/config_repository.dart';
@@ -149,6 +150,7 @@ class FabricaServicios {
       clienteLan: null,
       aplicadorRemoto: aplicadorRemoto,
       almacenCursor: estadoSyncRepo,
+      diagnostico: DiagnosticoSyncRepository(baseDatos: base),
       contarCatalogoActivo: productoRepo.contarActivosReales,
       tiendaId: tiendaId,
       dispositivoId: cajaId,
@@ -289,6 +291,7 @@ class FabricaServicios {
       clienteLan: null,
       aplicadorRemoto: aplicadorRemoto,
       almacenCursor: estadoSyncRepo,
+      diagnostico: DiagnosticoSyncRepository(baseDatos: base),
       contarCatalogoActivo: productoRepo.contarActivosReales,
       tiendaId: config.tiendaId,
       dispositivoId: config.cajaId,
