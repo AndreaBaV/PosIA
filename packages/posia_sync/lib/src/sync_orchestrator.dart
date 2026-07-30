@@ -29,6 +29,7 @@ class SyncOrchestrator {
     required LanSyncClient? clienteLan,
     AplicadorEventosRemotos? aplicadorRemoto,
     AlmacenCursorSync? almacenCursor,
+    Future<int> Function()? contarCatalogoActivo,
     required String tiendaId,
     required String dispositivoId,
     this.alAplicarEventoRemoto,
@@ -37,6 +38,7 @@ class SyncOrchestrator {
        _clienteLan = clienteLan,
        _aplicadorRemoto = aplicadorRemoto,
        _almacenCursor = almacenCursor,
+       _contarCatalogoActivo = contarCatalogoActivo,
        _tiendaId = tiendaId,
        _dispositivoId = dispositivoId;
 
@@ -45,6 +47,7 @@ class SyncOrchestrator {
   final LanSyncClient? _clienteLan;
   final AplicadorEventosRemotos? _aplicadorRemoto;
   final AlmacenCursorSync? _almacenCursor;
+  final Future<int> Function()? _contarCatalogoActivo;
   final String _tiendaId;
   final String _dispositivoId;
 
@@ -229,22 +232,40 @@ class SyncOrchestrator {
   /// Hay varios disparadores (temporizador de 60 s, boton "Sincronizar ahora",
   /// login, corte de caja, reconciliacion) y cada uno tenia su propio candado o
   /// ninguno, asi que podian solaparse y multiplicar los POST contra un hub que
-  /// ya venia lento. Quien llega mientras hay un ciclo en curso se engancha a
-  /// ese mismo resultado en vez de abrir otro.
+  /// ya venia lento. Quien llega pidiendo un ciclo incremental mientras hay
+  /// otro en curso se engancha a ese mismo resultado en vez de abrir otro.
+  ///
+  /// La reconstruccion desde origen NO se engancha: encadena su propio ciclo al
+  /// final del que este corriendo. Enganchada devolvia el resultado de un pull
+  /// incremental sin haber reiniciado el cursor, asi que una base ya vaciada
+  /// (reconciliacion, limpieza de cache) se quedaba sin catalogo ni historial
+  /// hasta que el usuario reinstalaba o volvia a descargar a mano.
   Future<ResultadoSync> _sincronizarInterno({
     required bool reiniciarCursor,
     ReporteProgresoSync? alProgreso,
   }) {
     final enCurso = _cicloEnCurso;
-    if (enCurso != null) {
+    if (enCurso != null && !reiniciarCursor) {
       return enCurso;
     }
-    final ciclo = _ejecutarCiclo(
-      reiniciarCursor: reiniciarCursor,
-      alProgreso: alProgreso,
-    );
+    final ciclo = enCurso == null
+        ? _ejecutarCiclo(reiniciarCursor: reiniciarCursor, alProgreso: alProgreso)
+        : enCurso.then(
+            (_) => _ejecutarCiclo(
+              reiniciarCursor: reiniciarCursor,
+              alProgreso: alProgreso,
+            ),
+            onError: (_) => _ejecutarCiclo(
+              reiniciarCursor: reiniciarCursor,
+              alProgreso: alProgreso,
+            ),
+          );
     _cicloEnCurso = ciclo;
-    return ciclo.whenComplete(() => _cicloEnCurso = null);
+    return ciclo.whenComplete(() {
+      if (_cicloEnCurso == ciclo) {
+        _cicloEnCurso = null;
+      }
+    });
   }
 
   Future<ResultadoSync> _ejecutarCiclo({
@@ -259,7 +280,19 @@ class SyncOrchestrator {
         hubDisponible: false,
       );
     }
-    if (reiniciarCursor) {
+    var desdeOrigen = reiniciarCursor;
+    if (!desdeOrigen && await _catalogoVacioConCursorAvanzado()) {
+      desdeOrigen = true;
+      alProgreso?.call(
+        const ProgresoSync(
+          fase: FaseProgresoSync.preparar,
+          indice: 0,
+          total: 0,
+          mensaje: 'Catálogo local vacío: reconstruyendo desde la nube…',
+        ),
+      );
+    }
+    if (desdeOrigen) {
       final almacenCursor = _almacenCursor;
       if (almacenCursor != null) {
         await almacenCursor.guardarCursorHub(0);
@@ -304,13 +337,13 @@ class SyncOrchestrator {
       // rehidrata por completo, así que hay que traer también los eventos que
       // este dispositivo originó: si se excluyen, su propio catálogo (p. ej.
       // los nombres de categoría) nunca vuelve y quedan stubs "Categoría".
-      incluirEventosPropios: reiniciarCursor,
+      incluirEventosPropios: desdeOrigen,
       // Reconstrucción desde origen = replay de TODO el historial de la
       // tienda (cursor a 0), no solo lo pendiente reciente. Si se dispara el
       // callback de impresión aquí, la caja reimprime cada venta que la
       // tienda haya hecho jamás. Ese callback es solo para ventas nuevas
       // llegando de otras cajas en el sync normal.
-      esReconstruccionDesdeOrigen: reiniciarCursor,
+      esReconstruccionDesdeOrigen: desdeOrigen,
       alProgreso: alProgreso,
     );
     // Corrige localmente duplicados/placeholders que este dispositivo ya
@@ -331,6 +364,32 @@ class SyncOrchestrator {
       eventosRecibidos: recibidos,
       hubDisponible: hubOk || enviados > 0 || recibidos > 0,
     );
+  }
+
+  /// Catalogo local en cero pero con cursor avanzado: el delta no lo recupera.
+  ///
+  /// El cursor solo dice "ya vi hasta el evento N", asi que un pull incremental
+  /// nunca vuelve a traer los `productUpserted` historicos. Si la base local se
+  /// quedo sin catalogo (limpieza que conserva el cursor, reconstruccion a
+  /// medias, archivo SQLite recreado) el unico camino de vuelta es reiniciar el
+  /// cursor y reproducir desde origen. Antes esto obligaba a descargar el
+  /// catalogo a mano o a reinstalar la app.
+  Future<bool> _catalogoVacioConCursorAvanzado() async {
+    final contar = _contarCatalogoActivo;
+    final almacenCursor = _almacenCursor;
+    if (contar == null || almacenCursor == null) {
+      return false;
+    }
+    try {
+      final cursor = await almacenCursor.leerCursorHub();
+      if (cursor <= 0) {
+        return false;
+      }
+      return await contar() == 0;
+    } on Object {
+      // Ante duda, seguir con el ciclo incremental normal.
+      return false;
+    }
   }
 
   Future<int> _ejecutarPull(

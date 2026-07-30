@@ -1,6 +1,10 @@
 /* Doble de prueba del cliente SQL de Neon.
    Registra las consultas para poder afirmar sobre ellas sin base de datos.
 
+   Vive fuera de test/ porque `node --test` trata TODO archivo .js dentro de un
+   directorio llamado test como archivo de pruebas, y este solo exporta ayudas:
+   aparecia en el reporte como una suite vacia mas.
+
    Autor: Equipo POSIA · Matricula: POSIA-2026-001 */
 
 export function sqlFalso(datos = {}) {

@@ -149,6 +149,7 @@ class FabricaServicios {
       clienteLan: null,
       aplicadorRemoto: aplicadorRemoto,
       almacenCursor: estadoSyncRepo,
+      contarCatalogoActivo: productoRepo.contarActivosReales,
       tiendaId: tiendaId,
       dispositivoId: cajaId,
     );
@@ -288,6 +289,7 @@ class FabricaServicios {
       clienteLan: null,
       aplicadorRemoto: aplicadorRemoto,
       almacenCursor: estadoSyncRepo,
+      contarCatalogoActivo: productoRepo.contarActivosReales,
       tiendaId: config.tiendaId,
       dispositivoId: config.cajaId,
     );

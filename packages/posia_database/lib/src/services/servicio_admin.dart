@@ -2480,16 +2480,22 @@ class ServicioAdmin {
 
   /// Filtro de ventas para reportes; [tiendaId] null = todas las tiendas.
   FiltroVentas filtroVentasReporte({required int dias, String? tiendaId}) {
-    final hasta = DateTime.now().toUtc();
-    final desde = hasta.subtract(Duration(days: dias));
-    return FiltroVentas(tiendaId: tiendaId, desde: desde, hasta: hasta);
+    final rango = rangoPeriodoDiasLocal(dias);
+    return FiltroVentas(
+      tiendaId: tiendaId,
+      desde: rango.desde,
+      hasta: rango.hasta,
+    );
   }
 
   /// Filtro de ventas para una tienda y periodo dados.
   FiltroVentas filtroVentasPeriodoTienda(String tiendaId, {required int dias}) {
-    final hasta = DateTime.now().toUtc();
-    final desde = hasta.subtract(Duration(days: dias));
-    return FiltroVentas(tiendaId: tiendaId, desde: desde, hasta: hasta);
+    final rango = rangoPeriodoDiasLocal(dias);
+    return FiltroVentas(
+      tiendaId: tiendaId,
+      desde: rango.desde,
+      hasta: rango.hasta,
+    );
   }
 
   // --- Historial y cancelaciones ---

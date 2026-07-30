@@ -304,10 +304,8 @@ final creditosPendientesAdminProvider = FutureProvider<List<Venta>>((ref) async 
 final historialOperacionesProvider =
 	FutureProvider.family<List<ItemHistorial>, int>((ref, dias) async {
 		final servicio = await ref.watch(servicioAdminProvider.future);
-		final desde = DateTime.now().toUtc().subtract(Duration(days: dias));
-		final hasta = DateTime.now().toUtc();
 		final ventas = await servicio.listarHistorialVentas(
-			FiltroVentas(tiendaId: servicio.tiendaActivaId, desde: desde, hasta: hasta),
+			servicio.filtroVentasPeriodoTienda(servicio.tiendaActivaId, dias: dias),
 		);
 		final pedidos = await servicio.listarPedidosEntregadosHistorial(dias: dias);
 		final items = <ItemHistorial>[
@@ -327,14 +325,8 @@ final cotizacionesAdminProvider = FutureProvider.family<List<Cotizacion>, int>((
 final preciosManualesProvider =
 	FutureProvider.family<List<RegistroPrecioManual>, int>((ref, dias) async {
 		final servicio = await ref.watch(servicioAdminProvider.future);
-		final desde = DateTime.now().toUtc().subtract(Duration(days: dias));
-		final hasta = DateTime.now().toUtc();
 		return servicio.auditarPreciosManuales(
-			FiltroVentas(
-				tiendaId: servicio.tiendaActivaId,
-				desde: desde,
-				hasta: hasta,
-			),
+			servicio.filtroVentasPeriodoTienda(servicio.tiendaActivaId, dias: dias),
 		);
 	});
 

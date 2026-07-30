@@ -111,15 +111,18 @@ class AdminPedidosCotizaciones {
 	}
 
 	/// Pedidos entregados para mostrar en historial de operaciones.
+	///
+	/// Misma ventana de dias calendario locales que usa el historial de ventas,
+	/// para que ambos listados cubran exactamente el mismo periodo.
 	Future<List<Pedido>> listarPedidosEntregadosHistorial({int dias = 7}) async {
 		final repo = _pedidoRepository;
 		if (repo == null) {
 			return [];
 		}
-		final desde = DateTime.now().toUtc().subtract(Duration(days: dias));
+		final rango = rangoPeriodoDiasLocal(dias);
 		return repo.listarEntregadosPorTiendaEnPeriodo(
 			_tiendaActivaId,
-			desde: desde,
+			desde: rango.desde,
 		);
 	}
 

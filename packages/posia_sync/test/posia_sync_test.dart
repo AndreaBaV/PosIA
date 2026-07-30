@@ -276,6 +276,148 @@ void main() {
 		expect(capturados.first, 'caja-1');
 	});
 
+	test('catalogo vacio con cursor avanzado reconstruye desde origen', () async {
+		final cursor = CursorMemoria()..cursor = 90;
+		final peticiones = <Uri>[];
+		final cliente = HubSyncClient(
+			urlBase: 'https://hub.test',
+			clienteHttp: MockClient((request) async {
+				if (request.url.path.endsWith('/v1/health')) {
+					return http.Response('{"ok":true}', 200);
+				}
+				if (request.method == 'GET' && request.url.path.endsWith('/v1/events')) {
+					peticiones.add(request.url);
+					return http.Response(
+						'{"events":[],"lastSeq":90}',
+						200,
+						headers: {'Content-Type': 'application/json'},
+					);
+				}
+				return http.Response(
+					'{"accepted":0,"received":0}',
+					200,
+					headers: {'Content-Type': 'application/json'},
+				);
+			}),
+		);
+		final orquestador = SyncOrchestrator(
+			colaLocal: ColaEventosMemoria(),
+			clienteHub: cliente,
+			clienteLan: null,
+			aplicadorRemoto: AplicadorMemoria(),
+			almacenCursor: cursor,
+			contarCatalogoActivo: () async => 0,
+			tiendaId: 'tienda-1',
+			dispositivoId: 'caja-1',
+		);
+
+		// Sync incremental normal, pero la base local quedo sin catalogo: pedir
+		// el delta desde 90 no devuelve ningun productUpserted historico, asi que
+		// el orquestador debe reiniciar el cursor y reproducir desde origen.
+		await orquestador.sincronizarCompleto();
+
+		expect(peticiones, isNotEmpty);
+		expect(peticiones.first.queryParameters['since'], '0');
+		expect(
+			peticiones.first.queryParameters['excludeDevice'],
+			isNull,
+			reason: 'la reconstruccion necesita tambien los eventos propios',
+		);
+	});
+
+	test('catalogo con productos conserva el cursor incremental', () async {
+		final cursor = CursorMemoria()..cursor = 90;
+		final peticiones = <Uri>[];
+		final cliente = HubSyncClient(
+			urlBase: 'https://hub.test',
+			clienteHttp: MockClient((request) async {
+				if (request.url.path.endsWith('/v1/health')) {
+					return http.Response('{"ok":true}', 200);
+				}
+				if (request.method == 'GET' && request.url.path.endsWith('/v1/events')) {
+					peticiones.add(request.url);
+					return http.Response(
+						'{"events":[],"lastSeq":90}',
+						200,
+						headers: {'Content-Type': 'application/json'},
+					);
+				}
+				return http.Response(
+					'{"accepted":0,"received":0}',
+					200,
+					headers: {'Content-Type': 'application/json'},
+				);
+			}),
+		);
+		final orquestador = SyncOrchestrator(
+			colaLocal: ColaEventosMemoria(),
+			clienteHub: cliente,
+			clienteLan: null,
+			aplicadorRemoto: AplicadorMemoria(),
+			almacenCursor: cursor,
+			contarCatalogoActivo: () async => 12,
+			tiendaId: 'tienda-1',
+			dispositivoId: 'caja-1',
+		);
+		await orquestador.sincronizarCompleto();
+
+		expect(peticiones, isNotEmpty);
+		expect(peticiones.first.queryParameters['since'], '90');
+		expect(peticiones.first.queryParameters['excludeDevice'], 'caja-1');
+		expect(cursor.cursor, 90);
+	});
+
+	test('sincronizarDesdeOrigen no se engancha a un ciclo incremental', () async {
+		final cursor = CursorMemoria()..cursor = 90;
+		final peticiones = <Uri>[];
+		final cliente = HubSyncClient(
+			urlBase: 'https://hub.test',
+			clienteHttp: MockClient((request) async {
+				if (request.url.path.endsWith('/v1/health')) {
+					return http.Response('{"ok":true}', 200);
+				}
+				if (request.method == 'GET' && request.url.path.endsWith('/v1/events')) {
+					peticiones.add(request.url);
+					// Hub lento: el usuario alcanza a pulsar "reconstruir" mientras
+					// el ciclo incremental automatico sigue en vuelo.
+					await Future<void>.delayed(const Duration(milliseconds: 20));
+					return http.Response(
+						'{"events":[],"lastSeq":90}',
+						200,
+						headers: {'Content-Type': 'application/json'},
+					);
+				}
+				return http.Response(
+					'{"accepted":0,"received":0}',
+					200,
+					headers: {'Content-Type': 'application/json'},
+				);
+			}),
+		);
+		final orquestador = SyncOrchestrator(
+			colaLocal: ColaEventosMemoria(),
+			clienteHub: cliente,
+			clienteLan: null,
+			aplicadorRemoto: AplicadorMemoria(),
+			almacenCursor: cursor,
+			contarCatalogoActivo: () async => 12,
+			tiendaId: 'tienda-1',
+			dispositivoId: 'caja-1',
+		);
+
+		await Future.wait([
+			orquestador.sincronizarCompleto(),
+			orquestador.sincronizarDesdeOrigen(),
+		]);
+
+		// Antes la reconstruccion devolvia el futuro del incremental en vuelo y
+		// nunca reiniciaba el cursor: el usuario veia "sincronizado" con el
+		// catalogo igual de vacio.
+		expect(peticiones.length, greaterThanOrEqualTo(2));
+		expect(peticiones.last.queryParameters['since'], '0');
+		expect(peticiones.last.queryParameters['excludeDevice'], isNull);
+	});
+
 	test('ciclos simultaneos se enganchan al mismo sync sin duplicar POST', () async {
 		final cola = ColaEventosMemoria();
 		await cola.encolar(crearEvento('ev-concurrente'));

@@ -213,12 +213,19 @@ class _PantallaAccesoTiendaState extends ConsumerState<PantallaAccesoTienda> {
 			await ref.read(contenedorServiciosProvider.future);
 			ref.read(sesionTiendaProvider.notifier).confirmar(tiendaId);
 			final contenedorSync = await ref.read(contenedorServiciosProvider.future);
+			// Sync normal, NO reconciliación. Reconciliar vacía las tablas
+			// operativas locales (ventas, pedidos, catálogo) antes de rehidratar
+			// desde Neon, así que entrar a una tienda borraba el historial y el
+			// catálogo del dispositivo; si el hub tardaba o el pull quedaba a
+			// medias, la caja arrancaba sin un solo producto y el historial
+			// aparecía vacío. El orquestador ya se auto-sana solo si detecta
+			// catálogo en cero, y reconstruir a mano sigue en Admin › Sync.
 			unawaited(
 				Future(() async {
 					try {
-						await contenedorSync.servicioAdmin.reconciliarConHub();
+						await contenedorSync.syncOrchestrator.sincronizarCompleto();
 					} on Object {
-						// La reconciliacion completa no debe bloquear el acceso a caja.
+						// La caja opera con datos locales si el hub no responde.
 					}
 				}),
 			);

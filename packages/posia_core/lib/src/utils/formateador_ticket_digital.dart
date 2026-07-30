@@ -507,13 +507,15 @@ TicketDigitalContenido construirTicketDigitalCompra({
 }
 
 /// Resumen de pedido para entrega.
+///
+/// Los campos van en el orden en que los lee quien recibe el pedido: primero a
+/// donde y con quien se entrega, luego como se cobra y en que estado va.
 TicketDigitalContenido construirTicketDigitalPedido({
   required Pedido pedido,
   required String nombreTienda,
   String? direccionTienda,
 }) {
   final campos = <String, String>{
-    'Estado': _etiquetaEstadoPedido(pedido.estado),
     'Teléfono': pedido.telefonoEntrega,
     'Dirección': pedido.direccionEntrega,
     'Pago': _etiquetaMetodoPagoPedido(pedido.metodoPago),
@@ -523,15 +525,18 @@ TicketDigitalContenido construirTicketDigitalPedido({
         '${pedido.creditoDias ?? '?'} día(s)'
         '${pedido.creditoVenceEn != null ? ' · vence ${_formatearFechaTicket(pedido.creditoVenceEn!)}' : ''}';
   }
+  campos['Estado'] = _etiquetaEstadoPedido(pedido.estado);
   if (pedido.asignadoAUsuarioNombre != null &&
       pedido.asignadoAUsuarioNombre!.trim().isNotEmpty) {
-    campos['Asignado a'] = pedido.asignadoAUsuarioNombre!.trim();
+    campos['Entrega'] = pedido.asignadoAUsuarioNombre!.trim();
   }
   if (pedido.notas.trim().isNotEmpty) {
     campos['Notas'] = pedido.notas.trim();
   }
   return TicketDigitalContenido(
     tipo: TipoDocumentoTicketDigital.pedido,
+    // Mismo folio corto que la tienda en linea entrega al cliente para dar
+    // seguimiento: si cambia, el cliente ya no puede rastrear su pedido.
     folio: pedido.id.substring(0, 8).toUpperCase(),
     fecha: pedido.creadoEn,
     nombreTienda: nombreTienda,
@@ -549,11 +554,19 @@ TicketDigitalContenido construirTicketDigitalPedido({
         .toList(),
     total: pedido.total,
     campos: campos,
-    notasPie: ['$NOMBRE_COMERCIAL_APP · ${nombreTienda.trim()}'],
+    notasPie: [
+      'Gracias por su pedido.',
+      'Dudas o cambios: $WHATSAPP_TIENDA_LEGIBLE (WhatsApp).',
+      '$NOMBRE_COMERCIAL_APP · ${nombreTienda.trim()}',
+    ],
   );
 }
 
 /// Leyenda breve para acompanar imagen o PDF al compartir (sin emojis).
+///
+/// Incluye el importe porque en WhatsApp la leyenda es lo unico legible sin
+/// abrir el adjunto: con solo el folio, el cliente tenia que descargar el PDF
+/// para saber de cuanto era su pedido.
 String formatearLeyendaCompartirTicketDigital(
   TicketDigitalContenido contenido,
 ) {
@@ -561,6 +574,8 @@ String formatearLeyendaCompartirTicketDigital(
     NOMBRE_COMERCIAL_APP,
     contenido.tituloDocumento,
     'Folio ${contenido.folio}',
+    if (contenido.mostrarImportes)
+      '${contenido.etiquetaTotal} ${formatearMoneda(contenido.total)}',
   ];
   return partes.join(' · ');
 }

@@ -93,9 +93,11 @@ class VentaRepository {
 	/// Lista ventas con filtros de historial.
 	Future<List<Venta>> listarConFiltro(FiltroVentas filtro) async {
 		final condiciones = <String>['creada_en >= ?', 'creada_en <= ?'];
+		// `creada_en` se guarda como ISO-8601 en UTC y SQLite compara el texto:
+		// una frontera en hora local (sin sufijo Z) recorta el periodo al azar.
 		final argumentos = <Object?>[
-			filtro.desde.toIso8601String(),
-			filtro.hasta.toIso8601String(),
+			filtro.desde.toUtc().toIso8601String(),
+			filtro.hasta.toUtc().toIso8601String(),
 		];
 		if (filtro.tiendaId != null) {
 			condiciones.add('tienda_id = ?');

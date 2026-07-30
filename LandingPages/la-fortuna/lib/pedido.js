@@ -301,17 +301,27 @@ export function construirRespuesta(datos) {
 	};
 }
 
-/** Texto plano del ticket, tambien usado como mensaje de WhatsApp. */
+/**
+ * Texto plano del ticket, usado como cuerpo del mensaje de WhatsApp.
+ *
+ * WhatsApp usa fuente proporcional, asi que no se puede alinear en columnas ni
+ * simular un ticket de papel: la unica jerarquia disponible es el salto de
+ * seccion y la negrita (`*asi*`). Antes eran quince renglones seguidos sin
+ * separacion, con los datos de entrega y las partidas revueltos.
+ */
 export function textoTicket(datos) {
 	const lineas = [
-		`PEDIDO ${datos.nombreTienda}`,
+		`*PEDIDO ${datos.nombreTienda}*`,
 		`Folio: ${datos.folio}`,
 		`Fecha: ${fechaLocal(datos.creadoEn)}`,
+		'',
+		'*ENTREGA*',
 		`Cliente: ${datos.nombre}`,
 		`Telefono: ${datos.telefono}`,
-		`Entrega: ${datos.direccion}`,
+		`Domicilio: ${datos.direccion}`,
 		`Pago: ${etiquetaPago(datos.metodoPago)}`,
 		'',
+		'*PRODUCTOS*',
 	];
 	for (const linea of datos.lineas) {
 		lineas.push(
@@ -319,11 +329,11 @@ export function textoTicket(datos) {
 			`${formatearMoneda(linea.subtotal)}`,
 		);
 	}
-	lineas.push('', `TOTAL: ${formatearMoneda(datos.total)}`);
+	lineas.push('', `*TOTAL: ${formatearMoneda(datos.total)}*`);
 	if (datos.notas?.trim()) {
-		lineas.push(`Notas: ${datos.notas.trim()}`);
+		lineas.push('', '*NOTAS*', datos.notas.trim());
 	}
-	lineas.push('', 'Envio este pedido desde la tienda en linea.');
+	lineas.push('', `Pedido enviado desde la tienda en linea de ${datos.nombreTienda}.`);
 	return lineas.join('\n');
 }
 

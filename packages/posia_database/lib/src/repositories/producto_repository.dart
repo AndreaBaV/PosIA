@@ -9,6 +9,7 @@ library;
 import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../seed/placeholders_ejemplo.dart';
 import '../utils/asegurador_padres_fk.dart';
 
 /// Persiste y consulta catalogo de productos local.
@@ -42,6 +43,18 @@ class ProductoRepository {
 			'$_sqlCatalogoActivo ORDER BY p.nombre ASC',
 		);
 		return filas.map(_mapearProducto).toList();
+	}
+
+	/// Cuenta productos activos del catalogo, sin contar el placeholder guia.
+	///
+	/// El sync la usa para detectar un catalogo local vacio y reconstruirlo
+	/// desde origen en vez de pedir solo el delta.
+	Future<int> contarActivosReales() async {
+		final filas = await _baseDatos.rawQuery(
+			'SELECT COUNT(*) AS total FROM products WHERE activo = 1 AND id <> ?',
+			[IdsEjemplo.producto],
+		);
+		return (filas.first['total'] as int?) ?? 0;
 	}
 
 	/// Lista productos activos filtrados por categoria.

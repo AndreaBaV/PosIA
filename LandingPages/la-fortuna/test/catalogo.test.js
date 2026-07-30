@@ -7,7 +7,7 @@ import { test } from 'node:test';
 
 import { consultarCatalogo, consultarCategorias, escaparLike } from '../lib/catalogo.js';
 import { redondearMonto } from '../lib/dinero.js';
-import { consultasCon, sqlFalso } from './ayudas.js';
+import { consultasCon, sqlFalso } from '../test-apoyo/ayudas.js';
 
 const TIENDA = 'tienda-1';
 

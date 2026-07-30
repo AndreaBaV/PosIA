@@ -16,7 +16,7 @@ import {
 	textoTicket,
 	validarEntrega,
 } from '../lib/pedido.js';
-import { consultasCon, sqlFalso } from './ayudas.js';
+import { consultasCon, sqlFalso } from '../test-apoyo/ayudas.js';
 
 const TIENDA = 'tienda-1';
 const OPCIONES = { nombreTienda: 'La Fortuna', whatsapp: '527226527751' };
@@ -257,6 +257,37 @@ test('el texto del ticket lista cantidades e importes', () => {
 	assert.ok(texto.includes('1.5 x Bistec de res - $247.50'));
 	assert.ok(texto.includes('TOTAL: $247.50'));
 	assert.ok(!texto.includes('undefined'));
+});
+
+test('el mensaje de WhatsApp separa entrega, productos y total', () => {
+	const texto = textoTicket({
+		folio: 'ABCD1234',
+		creadoEn: '2026-07-29T18:30:00.000Z',
+		nombreTienda: 'La Fortuna',
+		nombre: 'Ana',
+		telefono: '7221112233',
+		direccion: 'Av. Juarez 45, Col. Centro',
+		metodoPago: 'efectivo',
+		notas: 'Tocar el timbre dos veces',
+		total: 42,
+		lineas: [{ nombreProducto: 'Huevo', cantidad: 2, precioUnitario: 21, subtotal: 42 }],
+	});
+	const renglones = texto.split('\n');
+
+	// Encabezado, cada seccion y el total van en negrita de WhatsApp.
+	assert.ok(renglones.includes('*PEDIDO La Fortuna*'));
+	assert.ok(renglones.includes('*ENTREGA*'));
+	assert.ok(renglones.includes('*PRODUCTOS*'));
+	assert.ok(renglones.includes('*TOTAL: $42.00*'));
+	assert.ok(renglones.includes('*NOTAS*'));
+
+	// Las secciones se leen en orden y con renglon en blanco entre ellas.
+	const iEntrega = renglones.indexOf('*ENTREGA*');
+	const iProductos = renglones.indexOf('*PRODUCTOS*');
+	assert.ok(iEntrega < iProductos, 'primero a donde va, luego que lleva');
+	assert.equal(renglones[iEntrega - 1], '');
+	assert.equal(renglones[iProductos - 1], '');
+	assert.ok(texto.includes('Domicilio: Av. Juarez 45, Col. Centro'));
 });
 
 test('el enlace de WhatsApp escapa el texto del pedido', () => {
