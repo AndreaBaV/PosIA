@@ -21,6 +21,12 @@
 
 * { box-sizing: border-box; }
 
+/* El atributo `hidden` debe ganarle a cualquier `display` de estas hojas.
+   Sin esto, reglas como `.carrito { display: flex }` mantienen el elemento
+   visible aunque el JS lo marque como oculto: el carrito nunca se cerraba y
+   el formulario aparecia con el pedido vacio. */
+[hidden] { display: none !important; }
+
 html { -webkit-text-size-adjust: 100%; }
 
 body {
@@ -219,27 +225,36 @@ a { color: var(--verde-oscuro); }
 	position: fixed; inset: 0; background: rgba(12, 27, 20, .45); z-index: 40;
 }
 
+/* Un solo scroll para todo el panel. Con dos areas desplazables (lista y pie)
+   el pie no podia encogerse y el boton "Enviar pedido" quedaba fuera de la
+   pantalla en telefonos: se veia el total y no habia forma de cerrar el
+   pedido. */
 .carrito {
 	position: fixed; z-index: 50; top: 0; right: 0; bottom: 0;
 	width: min(430px, 100%);
 	background: var(--fondo);
 	display: flex; flex-direction: column;
 	box-shadow: -6px 0 24px rgba(0, 0, 0, .16);
+	overflow-y: auto;
+	-webkit-overflow-scrolling: touch;
+	overscroll-behavior: contain;
 }
 
 .carrito__encabezado {
+	position: sticky; top: 0; z-index: 2;
 	display: flex; align-items: center; justify-content: space-between;
 	padding: .85rem 1rem; background: var(--blanco);
 	border-bottom: 1px solid var(--linea);
 }
 .carrito__encabezado h2 { margin: 0; font-size: 1.15rem; }
 
-.carrito__cuerpo { overflow-y: auto; padding: .85rem 1rem; flex: 0 1 auto; }
+.carrito__cuerpo { padding: .85rem 1rem; flex: 0 0 auto; }
 .carrito__pie {
+	flex: 0 0 auto;
 	border-top: 1px solid var(--linea); background: var(--blanco);
 	padding: .9rem 1rem calc(1rem + env(safe-area-inset-bottom));
-	overflow-y: auto;
 }
+
 
 .linea {
 	display: grid; grid-template-columns: 1fr auto; gap: .25rem .6rem;
@@ -255,9 +270,13 @@ a { color: var(--verde-oscuro); }
 }
 .linea__quitar { background: transparent; border: 0; color: var(--rojo); font: inherit; cursor: pointer; margin-left: auto; }
 
+/* Pegado bajo el encabezado: el importe sigue a la vista al llenar el
+   formulario, sin robarle espacio al boton de enviar. */
 .total {
+	position: sticky; top: 61px; z-index: 1;
+	background: var(--blanco);
 	display: flex; justify-content: space-between; align-items: baseline;
-	font-size: 1.05rem; padding-bottom: .6rem;
+	font-size: 1.05rem; padding: .5rem 0 .6rem;
 }
 .total strong { font-size: 1.4rem; color: var(--verde-oscuro); }
 
