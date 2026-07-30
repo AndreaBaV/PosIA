@@ -611,6 +611,7 @@ class MigracionesEsquema {
 		await migrarVersion33A34(base);
 		await migrarVersion34A35(base);
 		await migrarVersion35A36(base);
+		await migrarVersion36A37(base);
 	}
 
 	/// Tabla guia `ejemplo` en bases ya existentes (v10 → v11).
@@ -736,7 +737,9 @@ class MigracionesEsquema {
 				codigo_barras TEXT NOT NULL DEFAULT '',
 				unidad_medida TEXT NOT NULL DEFAULT 'pieza',
 				modulo_vertical TEXT NOT NULL DEFAULT 'general',
-				categoria_id TEXT
+				categoria_id TEXT,
+				factor_a_base REAL NOT NULL DEFAULT 1,
+				producto_stock_id TEXT
 			)
 		''');
 		await base.execute(
@@ -1376,6 +1379,26 @@ class MigracionesEsquema {
 			CREATE INDEX IF NOT EXISTS idx_entidades_eliminadas_tipo
 			ON entidades_eliminadas(tipo)
 		''');
+	}
+
+	/// v37: snapshot de presentaciones en tickets en espera.
+	///
+	/// Sin `factor_a_base` / `producto_stock_id`, recuperar un ticket con
+	/// presentacion comercial pierde el factor de inventario y puede mostrar
+	/// el stub FK generico "Producto" en lugar del concepto guardado.
+	static Future<void> migrarVersion36A37(Database base) async {
+		await _agregarColumnaSiNoExiste(
+			base,
+			'held_ticket_lines',
+			'factor_a_base',
+			'REAL NOT NULL DEFAULT 1',
+		);
+		await _agregarColumnaSiNoExiste(
+			base,
+			'held_ticket_lines',
+			'producto_stock_id',
+			'TEXT',
+		);
 	}
 
 	/// v6.23: codigo de barras unico por tienda entre productos activos.

@@ -22,6 +22,8 @@ class LineaTicketEspera {
 		this.unidadMedida = UnidadMedida.pieza,
 		this.moduloVertical = ModuloVertical.general,
 		this.categoriaId,
+		this.factorABase = 1.0,
+		this.productoStockId,
 	});
 
 	final String productoId;
@@ -36,6 +38,12 @@ class LineaTicketEspera {
 	final UnidadMedida unidadMedida;
 	final ModuloVertical moduloVertical;
 	final String? categoriaId;
+
+	/// Factor de conversion a unidad base (presentaciones).
+	final double factorABase;
+
+	/// Producto padre de inventario; null usa resolucion automatica.
+	final String? productoStockId;
 
 	/// Captura snapshot desde linea activa del carrito.
 	factory LineaTicketEspera.desdeLineaCarrito(LineaCarrito linea) {
@@ -53,6 +61,8 @@ class LineaTicketEspera {
 			unidadMedida: producto.unidadMedida,
 			moduloVertical: producto.moduloVertical,
 			categoriaId: producto.categoriaId,
+			factorABase: linea.factorABase,
+			productoStockId: linea.productoStockId,
 		);
 	}
 
@@ -81,6 +91,8 @@ class LineaTicketEspera {
 			loteId: loteId,
 			etiquetaLote: etiquetaLote,
 			descuentoLinea: descuentoLinea,
+			factorABase: factorABase > 0 ? factorABase : 1.0,
+			productoStockId: productoStockId,
 		);
 	}
 }

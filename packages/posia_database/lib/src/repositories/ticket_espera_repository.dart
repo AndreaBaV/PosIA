@@ -44,6 +44,8 @@ class TicketEsperaRepository {
 					'unidad_medida': linea.unidadMedida.name,
 					'modulo_vertical': linea.moduloVertical.name,
 					'categoria_id': linea.categoriaId,
+					'factor_a_base': linea.factorABase,
+					'producto_stock_id': linea.productoStockId,
 				});
 			}
 		});
@@ -144,6 +146,8 @@ class TicketEsperaRepository {
 				fila['modulo_vertical'] as String? ?? ModuloVertical.general.name,
 			),
 			categoriaId: fila['categoria_id'] as String?,
+			factorABase: (fila['factor_a_base'] as num?)?.toDouble() ?? 1.0,
+			productoStockId: fila['producto_stock_id'] as String?,
 		);
 	}
 
