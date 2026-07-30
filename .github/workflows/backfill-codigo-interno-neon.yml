@@ -1,0 +1,57 @@
+name: Backfill codigo interno (Neon)
+
+# Corre bin/backfill_codigo_interno.dart contra Neon usando el secreto
+# DATABASE_URL ya configurado en el environment `arturo-tienda-de-abarrotes`.
+#
+# Por defecto ejecuta DRY-RUN (no escribe). Elige `apply` en el dispatch
+# despues de revisar el log del DRY-RUN.
+
+on:
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: 'dry-run (solo reporta) | apply (escribe cambios en Neon)'
+        required: true
+        default: dry-run
+        type: choice
+        options:
+          - dry-run
+          - apply
+
+permissions:
+  contents: read
+
+jobs:
+  backfill:
+    name: Backfill de codigo interno en Neon
+    runs-on: ubuntu-latest
+    environment: arturo-tienda-de-abarrotes
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Dart
+        uses: dart-lang/setup-dart@v1
+
+      - name: Install dependencies
+        working-directory: server/sync_api
+        run: dart pub get
+
+      - name: Ejecutar backfill
+        working-directory: server/sync_api
+        env:
+          MERGE_DB_URL: ${{ secrets.DATABASE_URL }}
+          MODO: ${{ github.event.inputs.modo }}
+        run: |
+          set -euo pipefail
+          if [ -z "${MERGE_DB_URL:-}" ]; then
+            echo "::error::DATABASE_URL no esta configurado en el environment 'arturo-tienda-de-abarrotes'."
+            exit 1
+          fi
+          if [ "$MODO" = "apply" ]; then
+            echo "=== MODO APLICAR seleccionado ==="
+            dart run bin/backfill_codigo_interno.dart --apply
+          else
+            echo "=== DRY-RUN (no escribe) ==="
+            dart run bin/backfill_codigo_interno.dart
+          fi
