@@ -847,7 +847,10 @@ class _PantallaFormularioProductoState
           controller: _minimoController,
           keyboardType: TextInputType.number,
           decoration: const InputDecoration(
-            labelText: 'Stock mínimo (alerta)',
+            labelText: 'Stock mínimo',
+            helperText:
+                'Si la existencia llega a este valor o baja, el producto '
+                'aparece en Faltantes para pedir surtido.',
             border: OutlineInputBorder(),
           ),
         ),

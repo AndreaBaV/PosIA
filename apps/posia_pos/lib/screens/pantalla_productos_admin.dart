@@ -4,9 +4,13 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:posia_core/posia_core.dart';
+import 'package:posia_database/posia_database.dart';
 import 'package:posia_ui/posia_ui.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../providers/admin_providers.dart';
+import '../util/exportador_faltantes.dart';
+import '../utils/compartir_whatsapp_util.dart';
 import '../widgets/dialogo_actualizar_precio_venta.dart';
 import 'pantalla_formulario_producto.dart';
 import 'pantalla_importar_productos_admin.dart';
@@ -16,7 +20,8 @@ class PantallaProductosAdmin extends ConsumerStatefulWidget {
 	const PantallaProductosAdmin({super.key});
 
 	@override
-	ConsumerState<PantallaProductosAdmin> createState() => _PantallaProductosAdminState();
+	ConsumerState<PantallaProductosAdmin> createState() =>
+		_PantallaProductosAdminState();
 }
 
 class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin> {
@@ -31,10 +36,13 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 		super.dispose();
 	}
 
+	bool get _esFaltantes => _estadoFiltro == _FiltroEstadoProducto.faltantes;
+
 	@override
 	Widget build(BuildContext context) {
 		final productosAsync = ref.watch(productosCatalogoAdminProvider);
 		final categoriasAsync = ref.watch(_categoriasProductosProvider);
+		final alertasAsync = ref.watch(alertasFaltantesAdminProvider);
 		final usuario = ref.watch(sesionUsuarioProvider);
 		final rolPersonalizado = ref.watch(rolPersonalizadoSesionProvider);
 		final puedeImportar = usuario != null &&
@@ -49,21 +57,35 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 				usuario,
 				rolPersonalizado,
 			);
+		final alertas = alertasAsync.value ?? const <AlertaFaltante>[];
 		return Scaffold(
 			appBar: AppBar(
-				title: const Text('Productos'),
+				title: Text(_esFaltantes ? 'Faltantes' : 'Productos'),
 				actions: [
-					if (puedeImportar)
+					if (_esFaltantes && alertas.isNotEmpty) ...[
+						IconButton(
+							icon: const Icon(Icons.download),
+							tooltip: 'Exportar CSV',
+							onPressed: () => _exportarFaltantes(context, alertas),
+						),
+						IconButton(
+							icon: const Icon(Icons.chat),
+							tooltip: 'Enviar por WhatsApp',
+							onPressed: () => _enviarFaltantesWhatsApp(context, alertas),
+						),
+					],
+					if (!_esFaltantes && puedeImportar)
 						IconButton(
 							icon: const Icon(Icons.upload_file),
 							tooltip: 'Importar por lote',
 							onPressed: () => _abrirImportacion(context),
 						),
-					IconButton(
-						icon: const Icon(Icons.add_circle, color: PosiaColors.cobrar),
-						iconSize: 32.0,
-						onPressed: () => _abrirFormulario(context),
-					),
+					if (!_esFaltantes)
+						IconButton(
+							icon: const Icon(Icons.add_circle, color: PosiaColors.cobrar),
+							iconSize: 32.0,
+							onPressed: () => _abrirFormulario(context),
+						),
 				],
 			),
 			body: productosAsync.when(
@@ -76,14 +98,26 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 						)
 						.toList();
 					final nombresCat = {for (final c in categorias) c.id: c.nombre};
+					final alertasPorId = {
+						for (final a in alertas) a.productoId: a,
+					};
 					final filtrados = productos.where((p) {
-						if (_estadoFiltro == _FiltroEstadoProducto.activos && !p.activo) {
-							return false;
+						if (_estadoFiltro == _FiltroEstadoProducto.faltantes) {
+							if (!alertasPorId.containsKey(p.id)) {
+								return false;
+							}
+						} else {
+							if (_estadoFiltro == _FiltroEstadoProducto.activos &&
+								!p.activo) {
+								return false;
+							}
+							if (_estadoFiltro == _FiltroEstadoProducto.inactivos &&
+								p.activo) {
+								return false;
+							}
 						}
-						if (_estadoFiltro == _FiltroEstadoProducto.inactivos && p.activo) {
-							return false;
-						}
-						if (_categoriaFiltro != null && p.categoriaId != _categoriaFiltro) {
+						if (_categoriaFiltro != null &&
+							p.categoriaId != _categoriaFiltro) {
 							return false;
 						}
 						if (_filtro.isEmpty) {
@@ -97,37 +131,88 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 							p.codigoBarras.toLowerCase().contains(q) ||
 							cat.contains(q);
 					}).toList();
+					if (_esFaltantes) {
+						filtrados.sort((a, b) {
+							final aa = alertasPorId[a.id]!;
+							final bb = alertasPorId[b.id]!;
+							return aa.cantidadActual.compareTo(bb.cantidadActual);
+						});
+					}
 					return Column(
 						children: [
 							CampoBusqueda(
 								controlador: _busquedaController,
-								sugerencia: 'Buscar producto...',
+								sugerencia: _esFaltantes
+									? 'Buscar faltante...'
+									: 'Buscar producto...',
 								alCambiar: (v) => setState(() => _filtro = v.trim()),
 							),
 							Padding(
 								padding: const EdgeInsets.symmetric(horizontal: 12.0),
-								child: SegmentedButton<_FiltroEstadoProducto>(
-									segments: const [
-										ButtonSegment(
-											value: _FiltroEstadoProducto.activos,
-											label: Text('Activos'),
+								child: Wrap(
+									spacing: 8.0,
+									runSpacing: 4.0,
+									children: [
+										ChoiceChip(
+											label: const Text('Activos'),
+											selected: _estadoFiltro ==
+												_FiltroEstadoProducto.activos,
+											onSelected: (_) => setState(
+												() => _estadoFiltro =
+													_FiltroEstadoProducto.activos,
+											),
 										),
-										ButtonSegment(
-											value: _FiltroEstadoProducto.inactivos,
-											label: Text('Inactivos'),
+										ChoiceChip(
+											label: const Text('Inactivos'),
+											selected: _estadoFiltro ==
+												_FiltroEstadoProducto.inactivos,
+											onSelected: (_) => setState(
+												() => _estadoFiltro =
+													_FiltroEstadoProducto.inactivos,
+											),
 										),
-										ButtonSegment(
-											value: _FiltroEstadoProducto.todos,
-											label: Text('Todos'),
+										ChoiceChip(
+											label: const Text('Todos'),
+											selected: _estadoFiltro ==
+												_FiltroEstadoProducto.todos,
+											onSelected: (_) => setState(
+												() => _estadoFiltro =
+													_FiltroEstadoProducto.todos,
+											),
+										),
+										ChoiceChip(
+											avatar: Icon(
+												Icons.warning_amber,
+												size: 18,
+												color: _estadoFiltro ==
+														_FiltroEstadoProducto.faltantes
+													? PosiaColors.cancelar
+													: null,
+											),
+											label: Text(
+												alertas.isEmpty
+													? 'Faltantes'
+													: 'Faltantes (${alertas.length})',
+											),
+											selected: _estadoFiltro ==
+												_FiltroEstadoProducto.faltantes,
+											selectedColor: Colors.red.shade100,
+											onSelected: (_) => setState(
+												() => _estadoFiltro =
+													_FiltroEstadoProducto.faltantes,
+											),
 										),
 									],
-									selected: {_estadoFiltro},
-									onSelectionChanged: (s) =>
-										setState(() => _estadoFiltro = s.first),
 								),
 							),
 							const SizedBox(height: 8.0),
-							if (categorias.isNotEmpty)
+							if (_esFaltantes)
+								_barraFaltantes(
+									context,
+									alertas: alertas,
+									cargando: alertasAsync.isLoading,
+								)
+							else if (categorias.isNotEmpty)
 								SizedBox(
 									height: 48.0,
 									child: ListView(
@@ -160,29 +245,52 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 								),
 							Expanded(
 								child: filtrados.isEmpty
-									? const Center(child: Text('Sin productos'))
+									? Center(
+										child: Padding(
+											padding: const EdgeInsets.all(24.0),
+											child: Text(
+												_esFaltantes
+													? 'No hay productos en o bajo el stock mínimo.\n'
+														'Configura el mínimo en la pestaña Inventario '
+														'de cada producto.'
+													: 'Sin productos',
+												textAlign: TextAlign.center,
+											),
+										),
+									)
 									: ListView.builder(
 										itemCount: filtrados.length,
 										itemBuilder: (context, indice) {
 											final producto = filtrados[indice];
+											final alerta = alertasPorId[producto.id];
 											final catNombre = producto.categoriaId == null
 												? 'Sin categoría'
 												: nombresCat[producto.categoriaId] ?? 'Categoría';
+											final bajoMinimo = alerta != null;
 											return Card(
 												margin: const EdgeInsets.symmetric(
 													horizontal: 12.0,
 													vertical: 4.0,
 												),
+												color: bajoMinimo && _esFaltantes
+													? Colors.red.shade50
+													: null,
 												child: ListTile(
 													leading: CircleAvatar(
-														backgroundColor: producto.activo
-															? PosiaColors.cobrar.withValues(alpha: 0.15)
-															: Colors.grey.shade200,
+														backgroundColor: bajoMinimo && _esFaltantes
+															? PosiaColors.cancelar.withValues(alpha: 0.15)
+															: producto.activo
+																? PosiaColors.cobrar.withValues(alpha: 0.15)
+																: Colors.grey.shade200,
 														child: Icon(
-															Icons.inventory_2,
-															color: producto.activo
-																? PosiaColors.cobrar
-																: Colors.grey,
+															bajoMinimo && _esFaltantes
+																? Icons.warning_amber
+																: Icons.inventory_2,
+															color: bajoMinimo && _esFaltantes
+																? PosiaColors.cancelar
+																: producto.activo
+																	? PosiaColors.cobrar
+																	: Colors.grey,
 														),
 													),
 													title: Text(
@@ -193,44 +301,63 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 																: TextDecoration.lineThrough,
 														),
 													),
-													subtitle: Text('$catNombre · ${producto.codigoBarras}'),
-													trailing: Row(
-														mainAxisSize: MainAxisSize.min,
-														children: [
-															IconButton(
-																icon: Icon(
-																	producto.favoritoCaja
-																		? Icons.star
-																		: Icons.star_border,
-																	color: producto.favoritoCaja
-																		? Colors.amber
-																		: null,
-																),
-																tooltip: 'Favorito en caja',
-																onPressed: () async {
-																	final servicio = await ref.read(
-																		servicioAdminProvider.future,
-																	);
-																	await servicio.establecerFavoritoProducto(
-																		producto.id,
-																		!producto.favoritoCaja,
-																	);
-																	ref.invalidate(productosCatalogoAdminProvider);
-																},
-															),
-															Text(
-																formatearMoneda(producto.precioBase),
-																style: const TextStyle(
-																	fontWeight: FontWeight.bold,
-																),
-															),
-															PopupMenuButton<String>(
-																onSelected: (accion) =>
-																	_accionProducto(context, accion, producto),
-																itemBuilder: (_) => _menuProducto(producto),
-															),
-														],
+													subtitle: Text(
+														alerta != null && _esFaltantes
+															? 'Hay ${ExportadorFaltantes.formatearCantidad(alerta.cantidadActual)}'
+																' · Mínimo ${ExportadorFaltantes.formatearCantidad(alerta.stockMinimo)}'
+																' · Pedir ${ExportadorFaltantes.formatearCantidad(ExportadorFaltantes.cantidadAPedir(alerta))}'
+															: '$catNombre · ${producto.codigoBarras}',
 													),
+													trailing: _esFaltantes
+														? IconButton(
+															icon: const Icon(Icons.edit_outlined),
+															tooltip: 'Editar producto',
+															onPressed: () =>
+																_abrirFormulario(context, producto),
+														)
+														: Row(
+															mainAxisSize: MainAxisSize.min,
+															children: [
+																IconButton(
+																	icon: Icon(
+																		producto.favoritoCaja
+																			? Icons.star
+																			: Icons.star_border,
+																		color: producto.favoritoCaja
+																			? Colors.amber
+																			: null,
+																	),
+																	tooltip: 'Favorito en caja',
+																	onPressed: () async {
+																		final servicio = await ref.read(
+																			servicioAdminProvider.future,
+																		);
+																		await servicio.establecerFavoritoProducto(
+																			producto.id,
+																			!producto.favoritoCaja,
+																		);
+																		ref.invalidate(
+																			productosCatalogoAdminProvider,
+																		);
+																	},
+																),
+																Text(
+																	formatearMoneda(producto.precioBase),
+																	style: const TextStyle(
+																		fontWeight: FontWeight.bold,
+																	),
+																),
+																PopupMenuButton<String>(
+																	onSelected: (accion) => _accionProducto(
+																		context,
+																		accion,
+																		producto,
+																	),
+																	itemBuilder: (_) =>
+																		_menuProducto(producto),
+																),
+															],
+														),
 													onTap: () => _abrirFormulario(context, producto),
 												),
 											);
@@ -246,7 +373,115 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 		);
 	}
 
-	Future<void> _abrirFormulario(BuildContext context, [Producto? producto]) async {
+	Widget _barraFaltantes(
+		BuildContext context, {
+		required List<AlertaFaltante> alertas,
+		required bool cargando,
+	}) {
+		return Material(
+			color: Colors.red.shade50,
+			child: Padding(
+				padding: const EdgeInsets.fromLTRB(12.0, 4.0, 12.0, 8.0),
+				child: Row(
+					children: [
+						Icon(Icons.warning_amber, color: PosiaColors.cancelar),
+						const SizedBox(width: 8.0),
+						Expanded(
+							child: Text(
+								cargando
+									? 'Cargando faltantes…'
+									: alertas.isEmpty
+										? 'Sin productos bajo el mínimo'
+										: '${alertas.length} producto${alertas.length == 1 ? '' : 's'} '
+											'para surtir',
+								style: TextStyle(
+									color: Colors.red.shade900,
+									fontWeight: FontWeight.w600,
+								),
+							),
+						),
+						if (alertas.isNotEmpty) ...[
+							TextButton.icon(
+								onPressed: () => _exportarFaltantes(context, alertas),
+								icon: const Icon(Icons.download, size: 18),
+								label: const Text('CSV'),
+							),
+							FilledButton.icon(
+								style: FilledButton.styleFrom(
+									backgroundColor: const Color(0xFF25D366),
+								),
+								onPressed: () =>
+									_enviarFaltantesWhatsApp(context, alertas),
+								icon: const Icon(Icons.chat, size: 18),
+								label: const Text('WhatsApp'),
+							),
+						],
+					],
+				),
+			),
+		);
+	}
+
+	Future<String> _nombreTiendaActiva() async {
+		final servicio = await ref.read(servicioAdminProvider.future);
+		final tienda = await servicio.obtenerTiendaActiva();
+		final nombre = tienda?.nombre.trim() ?? '';
+		return nombre.isEmpty ? 'Tienda' : nombre;
+	}
+
+	Future<void> _exportarFaltantes(
+		BuildContext context,
+		List<AlertaFaltante> alertas,
+	) async {
+		final nombreTienda = await _nombreTiendaActiva();
+		final csv = ExportadorFaltantes.generarCsv(
+			nombreTienda: nombreTienda,
+			alertas: alertas,
+		);
+		final ruta = await ExportadorFaltantes.guardarCsv(csv);
+		if (!context.mounted) {
+			return;
+		}
+		if (ruta == null) {
+			PosiaNotificaciones.mostrarSnackBar(
+				context,
+				const SnackBar(content: Text('No se pudo guardar el CSV')),
+			);
+			return;
+		}
+		await Share.shareXFiles(
+			[XFile(ruta, mimeType: 'text/csv')],
+			subject: 'Faltantes — $nombreTienda',
+			text: 'Lista de faltantes ($nombreTienda)',
+		);
+		if (!context.mounted) {
+			return;
+		}
+		PosiaNotificaciones.mostrarSnackBar(
+			context,
+			SnackBar(content: Text('Exportado: $ruta')),
+		);
+	}
+
+	Future<void> _enviarFaltantesWhatsApp(
+		BuildContext context,
+		List<AlertaFaltante> alertas,
+	) async {
+		final nombreTienda = await _nombreTiendaActiva();
+		final texto = ExportadorFaltantes.textoWhatsApp(
+			nombreTienda: nombreTienda,
+			alertas: alertas,
+		);
+		if (!context.mounted) {
+			return;
+		}
+		await compartirTextoWhatsAppConAviso(context, texto: texto);
+	}
+
+	Future<void> _abrirFormulario(
+		BuildContext context, [
+		Producto? producto,
+	]) async {
 		final usuario = ref.read(sesionUsuarioProvider);
 		final rolPersonalizado = ref.read(rolPersonalizadoSesionProvider);
 		if (usuario != null &&
@@ -273,6 +508,7 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 		);
 		if (ok == true) {
 			ref.invalidate(productosCatalogoAdminProvider);
+			ref.invalidate(alertasFaltantesAdminProvider);
 		}
 	}
 
@@ -284,6 +520,7 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 			),
 		);
 		ref.invalidate(productosCatalogoAdminProvider);
+		ref.invalidate(alertasFaltantesAdminProvider);
 	}
 
 	Future<void> _accionProducto(
@@ -326,9 +563,14 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 						'No es posible si hay existencias en alguna tienda.',
 					),
 					actions: [
-						TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+						TextButton(
+							onPressed: () => Navigator.pop(ctx, false),
+							child: const Text('Cancelar'),
+						),
 						FilledButton(
-							style: FilledButton.styleFrom(backgroundColor: PosiaColors.cancelar),
+							style: FilledButton.styleFrom(
+								backgroundColor: PosiaColors.cancelar,
+							),
 							onPressed: () => Navigator.pop(ctx, true),
 							child: const Text('Eliminar'),
 						),
@@ -343,7 +585,8 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 			if (!context.mounted) {
 				return;
 			}
-			PosiaNotificaciones.mostrarSnackBar(context, 
+			PosiaNotificaciones.mostrarSnackBar(
+				context,
 				SnackBar(
 					content: Text(
 						ok
@@ -354,6 +597,7 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 				),
 			);
 			ref.invalidate(productosCatalogoAdminProvider);
+			ref.invalidate(alertasFaltantesAdminProvider);
 			await refrescarDatosMaestros(ref);
 		}
 	}
@@ -382,4 +626,4 @@ final _categoriasProductosProvider = FutureProvider<List<Categoria>>((ref) async
 	return servicio.listarCategorias();
 });
 
-enum _FiltroEstadoProducto { activos, inactivos, todos }
+enum _FiltroEstadoProducto { activos, inactivos, todos, faltantes }

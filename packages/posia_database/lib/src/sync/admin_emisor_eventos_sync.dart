@@ -706,14 +706,23 @@ class AdminEmisorEventosSync {
 		double delta,
 		String motivo, {
 		required String tiendaId,
+		double? stockMinimo,
 	}) {
+		final payload = <String, Object?>{
+			'productoId': productoId,
+			'delta': delta,
+			'motivo': motivo,
+		};
+		if (stockMinimo != null) {
+			payload['stockMinimo'] = stockMinimo;
+		}
 		return _emitir(
 			SyncEvent(
 				id: _generadorId.v4(),
 				tiendaId: tiendaId,
 				dispositivoId: _cajaId,
 				tipo: TipoSyncEvento.stockAdjusted,
-				payload: {'productoId': productoId, 'delta': delta, 'motivo': motivo},
+				payload: payload,
 				creadoEn: DateTime.now().toUtc(),
 				estado: EstadoSyncEvento.pendiente,
 			),

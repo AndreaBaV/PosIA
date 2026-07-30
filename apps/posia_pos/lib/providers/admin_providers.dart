@@ -213,6 +213,7 @@ Future<void> refrescarDatosMaestros(WidgetRef ref) async {
 	ref.invalidate(listasPreciosAdminProvider);
 	ref.invalidate(detalleListaPreciosProvider);
 	ref.invalidate(productosCatalogoAdminProvider);
+	ref.invalidate(alertasFaltantesAdminProvider);
 	// Sin autoDispose, estos dos sirven la lista cacheada de toda la sesion: al
 	// activar o desactivar una categoria, el formulario de producto seguia
 	// viendo el estado anterior y rechazaba el guardado por "categoria inactiva".
@@ -237,6 +238,13 @@ final productosCatalogoAdminProvider = FutureProvider<List<Producto>>((ref) asyn
 		rolPersonalizado: rolPersonalizado,
 	);
 });
+
+/// Productos de la tienda activa en o por debajo del stock minimo.
+final alertasFaltantesAdminProvider =
+	FutureProvider<List<AlertaFaltante>>((ref) async {
+		final servicio = await ref.watch(servicioAdminProvider.future);
+		return servicio.obtenerAlertasFaltantes(tiendaId: servicio.tiendaActivaId);
+	});
 
 /// Detalle de una lista de precios: clientes asignados y productos con precio.
 class DetalleListaPrecios {

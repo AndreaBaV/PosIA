@@ -182,8 +182,9 @@ class InventarioAgrupado {
 
 	bool bajoMinimoEn(String tiendaId) {
 		final minimo = stockMinimoEn(tiendaId);
-		return cantidadEn(tiendaId) < minimo && minimo > 0.0;
+		return minimo > 0.0 && cantidadEn(tiendaId) <= minimo;
 	}
 
-	bool get bajoMinimo => cantidadLocal < stockMinimoLocal && stockMinimoLocal > 0.0;
+	bool get bajoMinimo =>
+		stockMinimoLocal > 0.0 && cantidadLocal <= stockMinimoLocal;
 }

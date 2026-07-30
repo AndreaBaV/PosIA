@@ -1099,14 +1099,19 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 
 	/// Aplica ajuste manual de stock proveniente de otra caja.
 	///
-	/// [evento] Evento stockAdjusted con delta.
+	/// [evento] Evento stockAdjusted con delta y, opcionalmente, stockMinimo.
 	Future<void> _aplicarAjusteStockRemoto(
 		SyncEvent evento, {
 		DatabaseExecutor? ejecutor,
 	}) async {
 		final productoId = evento.payload['productoId'] as String? ?? '';
 		final delta = (evento.payload['delta'] as num?)?.toDouble() ?? 0.0;
-		if (productoId.isEmpty || delta == 0.0) {
+		final stockMinimoPayload =
+			(evento.payload['stockMinimo'] as num?)?.toDouble();
+		if (productoId.isEmpty) {
+			return;
+		}
+		if (delta == 0.0 && stockMinimoPayload == null) {
 			return;
 		}
 		final almacenId = evento.payload['almacenId'] as String? ?? '';
@@ -1115,6 +1120,7 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 				productoId,
 				almacenId,
 				delta,
+				stockMinimo: stockMinimoPayload,
 				ejecutor: ejecutor,
 			);
 			return;
@@ -1123,6 +1129,7 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			productoId,
 			evento.tiendaId,
 			delta,
+			stockMinimo: stockMinimoPayload,
 			ejecutor: ejecutor,
 		);
 	}
@@ -1131,6 +1138,7 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		String productoId,
 		String tiendaId,
 		double delta, {
+		double? stockMinimo,
 		DatabaseExecutor? ejecutor,
 	}) async {
 		if (tiendaId.isEmpty) {
@@ -1148,7 +1156,7 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 				tiendaId: tiendaId,
 				cantidad: cantidadBase + delta,
 				actualizadoEn: DateTime.now().toUtc(),
-				stockMinimo: actual?.stockMinimo ?? 0.0,
+				stockMinimo: stockMinimo ?? actual?.stockMinimo ?? 0.0,
 			),
 			db: ejecutor,
 		);
@@ -1158,6 +1166,7 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		String productoId,
 		String almacenId,
 		double delta, {
+		double? stockMinimo,
 		DatabaseExecutor? ejecutor,
 	}) async {
 		final repo = _almacenRepository;
@@ -1172,7 +1181,7 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 				almacenId: almacenId,
 				cantidad: cantidadBase + delta,
 				actualizadoEn: DateTime.now().toUtc(),
-				stockMinimo: actual?.stockMinimo ?? 0.0,
+				stockMinimo: stockMinimo ?? actual?.stockMinimo ?? 0.0,
 			),
 			db: ejecutor,
 		);

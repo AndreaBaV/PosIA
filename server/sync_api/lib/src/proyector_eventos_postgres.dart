@@ -441,16 +441,41 @@ class ProyectorEventosPostgres {
     final p = evento.payload;
     final productoId = p['productoId'] as String? ?? '';
     final delta = _dbl(p['delta']);
-    if (productoId.isEmpty || delta == 0.0) {
+    final stockMinimo =
+        p.containsKey('stockMinimo') ? _dbl(p['stockMinimo']) : null;
+    if (productoId.isEmpty) {
+      return;
+    }
+    if (delta == 0.0 && stockMinimo == null) {
       return;
     }
     final almacenId = p['almacenId'] as String? ?? '';
     final actualizado = evento.creadoEn.toUtc().toIso8601String();
     if (almacenId.isNotEmpty) {
-      await _deltaStockAlmacen(productoId, almacenId, delta, actualizado);
+      if (delta != 0.0) {
+        await _deltaStockAlmacen(productoId, almacenId, delta, actualizado);
+      }
+      if (stockMinimo != null) {
+        await _fijarStockMinimoAlmacen(
+          productoId,
+          almacenId,
+          stockMinimo,
+          actualizado,
+        );
+      }
       return;
     }
-    await _deltaStock(productoId, evento.tiendaId, delta, actualizado);
+    if (delta != 0.0) {
+      await _deltaStock(productoId, evento.tiendaId, delta, actualizado);
+    }
+    if (stockMinimo != null) {
+      await _fijarStockMinimoTienda(
+        productoId,
+        evento.tiendaId,
+        stockMinimo,
+        actualizado,
+      );
+    }
   }
 
   Future<void> _ventaAnulada(EventoHub evento) async {
@@ -1902,6 +1927,58 @@ class ProyectorEventosPostgres {
         'producto': productoId,
         'almacen': almacenId,
         'delta': delta,
+        'actualizado': actualizadoEn,
+      },
+    );
+  }
+
+  Future<void> _fijarStockMinimoTienda(
+    String productoId,
+    String tiendaId,
+    double stockMinimo,
+    String actualizadoEn,
+  ) async {
+    if (productoId.isEmpty || tiendaId.isEmpty) {
+      return;
+    }
+    await _sesion.execute(
+      Sql.named('''
+				INSERT INTO stock_levels (producto_id, tienda_id, cantidad, actualizado_en, stock_minimo)
+				VALUES (@producto, @tienda, 0, @actualizado, @minimo)
+				ON CONFLICT (producto_id, tienda_id) DO UPDATE SET
+					stock_minimo = @minimo,
+					actualizado_en = @actualizado
+			'''),
+      parameters: {
+        'producto': productoId,
+        'tienda': tiendaId,
+        'minimo': stockMinimo,
+        'actualizado': actualizadoEn,
+      },
+    );
+  }
+
+  Future<void> _fijarStockMinimoAlmacen(
+    String productoId,
+    String almacenId,
+    double stockMinimo,
+    String actualizadoEn,
+  ) async {
+    if (productoId.isEmpty || almacenId.isEmpty) {
+      return;
+    }
+    await _sesion.execute(
+      Sql.named('''
+				INSERT INTO warehouse_stock (producto_id, almacen_id, cantidad, actualizado_en, stock_minimo)
+				VALUES (@producto, @almacen, 0, @actualizado, @minimo)
+				ON CONFLICT (producto_id, almacen_id) DO UPDATE SET
+					stock_minimo = @minimo,
+					actualizado_en = @actualizado
+			'''),
+      parameters: {
+        'producto': productoId,
+        'almacen': almacenId,
+        'minimo': stockMinimo,
         'actualizado': actualizadoEn,
       },
     );

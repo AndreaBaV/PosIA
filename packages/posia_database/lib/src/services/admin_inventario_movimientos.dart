@@ -180,16 +180,25 @@ class AdminInventarioMovimientos {
 					stockMinimo: stockMinimo,
 				),
 			);
-			return;
+		} else {
+			await _inventarioRepository.guardarStock(
+				StockNivel(
+					productoId: productoId,
+					tiendaId: tiendaDestino,
+					cantidad: stock.cantidad,
+					actualizadoEn: stock.actualizadoEn,
+					stockMinimo: stockMinimo,
+				),
+			);
 		}
-		await _inventarioRepository.guardarStock(
-			StockNivel(
-				productoId: productoId,
-				tiendaId: tiendaDestino,
-				cantidad: stock.cantidad,
-				actualizadoEn: stock.actualizadoEn,
-				stockMinimo: stockMinimo,
-			),
+		// delta 0: solo propaga el umbral; otras cajas y Neon lo aplican
+		// sin tocar la cantidad.
+		await _emisorEventos.ajusteStock(
+			productoId,
+			0.0,
+			'stock_minimo',
+			tiendaId: tiendaDestino,
+			stockMinimo: stockMinimo,
 		);
 	}
 

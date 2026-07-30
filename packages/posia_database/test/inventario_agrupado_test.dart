@@ -31,6 +31,24 @@ void main() {
 			expect(registro.totalEmpresa, 15.0);
 		});
 
+		test('bajoMinimoEn incluye igualdad con el umbral', () {
+			expect(registro.bajoMinimoEn('t1'), isFalse);
+			const justoEnMinimo = InventarioAgrupado(
+				productoId: 'p2',
+				nombreProducto: 'Arena',
+				existenciasPorTienda: {'Origen': 3.0},
+				existenciasPorTiendaId: {'t1': 3.0},
+				stockMinimoPorTiendaId: {'t1': 3.0},
+				existenciasPorAlmacen: {},
+				existenciasPorAlmacenId: {},
+				stockMinimoPorAlmacenId: {},
+				stockMinimoLocal: 3.0,
+				cantidadLocal: 3.0,
+			);
+			expect(justoEnMinimo.bajoMinimoEn('t1'), isTrue);
+			expect(justoEnMinimo.bajoMinimo, isTrue);
+		});
+
 		test('cantidadEnAlmacen devuelve cero si no existe', () {
 			expect(registro.cantidadEnAlmacen('inexistente'), 0.0);
 			expect(registro.cantidadEnAlmacen('a2'), 3.0);
