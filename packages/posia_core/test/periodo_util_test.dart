@@ -22,11 +22,15 @@ void main() {
 		test('una venta de esta manana cae dentro de "hoy"', () {
 			final rango = rangoPeriodoDiasLocal(1);
 			final ahora = DateTime.now();
+			// Justo despues de la medianoche local: siempre cae en [desde, hasta],
+			// aunque el test corra a las 07:00 (antes las 08:00 quedaban en el
+			// futuro y fallaban en CI / madrugada).
 			final estaManana = DateTime(
 				ahora.year,
 				ahora.month,
 				ahora.day,
-				8,
+				0,
+				1,
 			).toUtc();
 
 			// Con la ventana rodante anterior esta venta desaparecia del
