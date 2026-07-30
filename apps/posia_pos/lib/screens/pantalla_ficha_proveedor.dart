@@ -187,7 +187,7 @@ class _PantallaFichaProveedorState extends ConsumerState<PantallaFichaProveedor>
 												return ListTile(
 													leading: const Icon(Icons.inventory_2),
 													title: Text(p.nombre),
-													subtitle: Text(p.codigoBarras),
+													subtitle: Text(p.codigoBarrasVisible),
 													trailing: Text(formatearMoneda(p.precioBase)),
 												);
 											},

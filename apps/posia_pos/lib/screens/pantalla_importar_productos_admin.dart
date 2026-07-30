@@ -365,9 +365,16 @@ class _PantallaImportarProductosAdminState
     final categorias = await servicio.listarCategorias();
     final proveedores = await servicio.listarProveedores();
     final productos = await servicio.listarProductosCatalogo();
+    // Los códigos internos (`#nombre-normalizado`) son un mecanismo de
+    // deduplicación por nombre; no deben chocar con un código real capturado
+    // en la hoja. Solo se comparan los códigos que el usuario capturó.
     final codigosExistentes = productos
-        .where((p) => p.activo && p.codigoBarras.trim().isNotEmpty)
-        .map((p) => p.codigoBarras.trim().toLowerCase())
+        .where(
+          (p) =>
+              p.activo &&
+              p.codigoBarrasVisible.trim().isNotEmpty,
+        )
+        .map((p) => p.codigoBarrasVisible.trim().toLowerCase())
         .toSet();
 
     final nombreHoja = await _elegirHojaSiAplica(archivo);

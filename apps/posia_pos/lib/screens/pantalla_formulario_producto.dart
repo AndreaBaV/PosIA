@@ -63,7 +63,10 @@ class _PantallaFormularioProductoState
     final p = widget.productoExistente;
     if (p != null) {
       _nombreController.text = p.nombre;
-      _codigoController.text = p.codigoBarras;
+      // Mostrar solo el código real capturado. El código interno es un
+      // mecanismo de deduplicación; si aparece en el campo, el usuario podría
+      // editarlo por accidente y romper la equivalencia con el nombre.
+      _codigoController.text = p.codigoBarrasVisible;
       _precioController.text = p.precioBase.toStringAsFixed(2);
       _costoController.text = p.costoUnitario.toStringAsFixed(2);
       _notasController.text = p.notas;

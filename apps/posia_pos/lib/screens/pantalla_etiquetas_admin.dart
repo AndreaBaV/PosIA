@@ -128,7 +128,10 @@ class _PantallaEtiquetasAdminState extends ConsumerState<PantallaEtiquetasAdmin>
 				.where((p) => _seleccionados.contains(p.id))
 				.map(
 					(p) => DatosEtiquetaProducto(
-						codigoBarras: p.codigoBarras,
+						// El código interno es un mecanismo de deduplicación,
+						// no un código imprimible: `codigoBarrasVisible` lo
+						// oculta y el generador cae al nombre del producto.
+						codigoBarras: p.codigoBarrasVisible,
 						nombre: p.nombre,
 						precio: p.precioBase,
 					),
@@ -274,7 +277,9 @@ class _PantallaEtiquetasAdminState extends ConsumerState<PantallaEtiquetasAdmin>
 										},
 										title: Text(producto.nombre),
 										subtitle: Text(
-											'${producto.codigoBarras} · ${formatearMoneda(producto.precioBase)}',
+											producto.codigoBarrasVisible.isNotEmpty
+												? '${producto.codigoBarrasVisible} · ${formatearMoneda(producto.precioBase)}'
+												: formatearMoneda(producto.precioBase),
 										),
 									);
 								},

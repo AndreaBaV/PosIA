@@ -306,7 +306,9 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 															? 'Hay ${ExportadorFaltantes.formatearCantidad(alerta.cantidadActual)}'
 																' · Mínimo ${ExportadorFaltantes.formatearCantidad(alerta.stockMinimo)}'
 																' · Pedir ${ExportadorFaltantes.formatearCantidad(ExportadorFaltantes.cantidadAPedir(alerta))}'
-															: '$catNombre · ${producto.codigoBarras}',
+															: producto.codigoBarrasVisible.isNotEmpty
+																? '$catNombre · ${producto.codigoBarrasVisible}'
+																: catNombre,
 													),
 													trailing: _esFaltantes
 														? IconButton(
