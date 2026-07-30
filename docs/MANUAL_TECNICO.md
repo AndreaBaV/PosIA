@@ -24,6 +24,7 @@ Documentación para desarrolladores, integradores y despliegue de infraestructur
 11. [Publicación móvil](#11-publicación-móvil)
 12. [Configuración del dispositivo](#12-configuración-del-dispositivo)
 13. [Política de privacidad (tiendas)](#13-política-de-privacidad-tiendas)
+14. [Tienda en línea (LandingPages)](#14-tienda-en-línea-landingpages)
 
 ---
 
@@ -231,6 +232,10 @@ Event log append-only. Cada dispositivo mantiene cola `sync_event_queue` y curso
 | `POST /v1/auth/login` | Login código + PIN → tenantId |
 | `GET /v1/health` | Health check |
 
+El hub **no** expone superficie pública para clientes finales: la tienda en
+línea corre en Cloudflare y consulta Neon directamente, para no cargar el plan
+gratuito de Northflank. Ver [sección 14](#14-tienda-en-línea-landingpages).
+
 ### Comportamiento offline
 
 | Escenario | Comportamiento |
@@ -296,6 +301,9 @@ curl https://TU-DOMINIO/v1/health
 | `EVENTS_FILE` | Archivo JSONL sin Postgres |
 | `API_KEY` | Clave compartida |
 | `PORT` | Default 8080 |
+
+Las variables de la tienda en línea (`DATABASE_URL`, `TIENDA_PUBLICA_*`) viven
+en el proyecto de Cloudflare Pages, no aquí: ver [sección 14](#14-tienda-en-línea-landingpages).
 
 ### Build producción (embeber hub en app)
 
@@ -634,6 +642,65 @@ POSIA es un punto de venta para comercios. Los datos se almacenan **principalmen
 
 ---
 
+## 14. Tienda en línea (LandingPages)
+
+Sitio público donde el cliente final arma su pedido, recibe **folio + ticket** y
+continúa por **WhatsApp**. Vive en `LandingPages/la-fortuna/` y corre en
+**Cloudflare Pages**, no en el hub.
+
+### Por qué no en el hub
+
+El hub de Northflank está en plan gratuito y su trabajo es sincronizar las
+cajas. Poner ahí el tráfico de clientes lo haría competir con el sync y
+despertar el contenedor en frío en cada visita. Con Cloudflare, la tienda
+**no toca el hub**: sirve el sitio desde el borde y habla directo con Neon, y
+sigue funcionando aunque Northflank esté suspendido. Son dos tuberías de
+despliegue independientes sobre el mismo `main`.
+
+### Ruta del pedido
+
+```
+Navegador → POST /v1/public/pedidos (Cloudflare Pages Function)
+          → una transacción en Neon: sync_events + orders + order_lines
+          → pull normal de las cajas (/v1/events del hub)
+          → módulo Pedidos del POS (estado "recibido")
+```
+
+La función replica lo que hace `ProyectorEventosPostgres._pedido`: además de la
+proyección en `orders`, escribe el evento `orderUpserted` firmado con el
+dispositivo `tienda-web`, que es lo que las cajas descargan. El folio son los
+primeros 8 caracteres del id en mayúsculas — misma convención que
+`construirTicketDigitalPedido`. **Si esa proyección cambia en Dart, hay que
+actualizar `LandingPages/la-fortuna/lib/pedido.js`.**
+
+### Reglas de la superficie pública
+
+- **Nunca se publican existencias**; el catálogo solo muestra nombre, precio,
+  unidad, categoría y presentaciones con precio propio.
+- **Los precios se releen de Neon** al crear el pedido: el navegador solo indica
+  qué y cuánto, jamás a qué precio.
+- Las lecturas se cachean en el borde (catálogo 5 min, tienda 1 h) para no
+  quemar horas de cómputo de Neon.
+- El límite por IP se configura en Cloudflare (WAF → Rate limiting), no en el
+  código: en un entorno sin estado no sirve un contador en memoria.
+- Métodos de pago en línea: efectivo contra entrega y transferencia. Sin
+  crédito y sin cobro en el sitio.
+
+### Despliegue
+
+Cloudflare Pages conectado al repo, *root directory* `LandingPages/la-fortuna`,
+sin build command y con `public` como salida. `DATABASE_URL` va como **secreto**
+del proyecto. Detalle completo en `LandingPages/la-fortuna/README.md`.
+
+### Pendiente
+
+Fotografías del catálogo: hoy cada producto muestra un marcador con su inicial.
+El plan de almacenamiento está en `LandingPages/la-fortuna/PENDIENTE_FOTOS.md`
+(recomendación: Cloudflare R2 sobre la columna `products.ruta_imagen`, que ya
+existe y ya se sincroniza).
+
+---
+
 ## Referencias en código
 
 | Tema | Ruta |
@@ -644,3 +711,5 @@ POSIA es un punto de venta para comercios. Los datos se almacenan **principalmen
 | CI móvil | `.github/workflows/mobile-release.yml` |
 | iOS export | `apps/posia_pos/ios/ExportOptions.plist` |
 | API hub | `server/sync_api/README.md` |
+| Tienda en línea | `LandingPages/la-fortuna/README.md` |
+| Alta de pedidos web | `LandingPages/la-fortuna/lib/pedido.js` |

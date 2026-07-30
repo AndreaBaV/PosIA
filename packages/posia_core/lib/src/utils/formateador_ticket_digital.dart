@@ -116,7 +116,7 @@ TicketDigitalContenido construirTicketDigitalVenta({
     }
   }
 
-final notasPie = <String>['Gracias por su compra. Contamos con servicio a domicilio, puede realizar su pedido al número: 722 652 7751 (WhatsApp).'];
+final notasPie = <String>['Gracias por su compra. Contamos con servicio a domicilio, puede realizar su pedido al número: $WHATSAPP_TIENDA_LEGIBLE (WhatsApp).'];
 
   return TicketDigitalContenido(
     tipo: TipoDocumentoTicketDigital.venta,

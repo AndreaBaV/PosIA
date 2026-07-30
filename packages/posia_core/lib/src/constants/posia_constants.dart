@@ -116,3 +116,11 @@ const String NOMBRE_COMERCIAL_APP = 'La Fortuna';
 
 /// Carpeta bajo Documents para tickets, etiquetas y archivos locales.
 const String CARPETA_DOCUMENTOS_APP = 'La Fortuna';
+
+/// WhatsApp de la tienda para pedidos y seguimiento (formato legible).
+const String WHATSAPP_TIENDA_LEGIBLE = '722 652 7751';
+
+/// Mismo WhatsApp en formato internacional para enlaces wa.me (52 + 10 digitos).
+///
+/// La tienda en linea lo replica en `LandingPages/la-fortuna/lib/constantes.js`.
+const String WHATSAPP_TIENDA_PREDETERMINADO = '527226527751';
