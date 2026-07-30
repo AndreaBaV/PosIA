@@ -7,7 +7,8 @@
 	<meta name="description" content="Catálogo y pedidos en línea de La Fortuna. Levanta tu pedido y da seguimiento por WhatsApp.">
 	<title>La Fortuna — Tienda en línea</title>
 	<link rel="stylesheet" href="estilos.css">
-	<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>">
+	<link rel="icon" type="image/png" href="logo-192.png">
+	<link rel="apple-touch-icon" href="logo-192.png">
 </head>
 <body>
 	<a class="salto-contenido" href="#contenido">Ir al contenido</a>
@@ -15,7 +16,7 @@
 	<header class="encabezado">
 		<div class="encabezado__barra contenedor">
 			<a class="marca" href="#/catalogo">
-				<span class="marca__logo" aria-hidden="true">LF</span>
+				<img class="marca__logo" src="logo-la-fortuna.png" alt="" width="44" height="40" decoding="async">
 				<span class="marca__texto">
 					<strong data-tienda-nombre>La Fortuna</strong>
 					<small>Tienda en línea</small>
@@ -24,7 +25,10 @@
 			<div class="encabezado__acciones">
 				<a class="boton boton--plano" href="#/seguimiento">Mi pedido</a>
 				<button class="boton boton--carrito" type="button" data-abrir-carrito aria-label="Abrir carrito">
-					<span aria-hidden="true">🛒</span>
+					<svg class="icono" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+						<path d="M2.5 4h2.4l2.6 11h9.9l2.4-8H7.4"/>
+						<circle cx="10" cy="19.4" r="1.5"/><circle cx="17.4" cy="19.4" r="1.5"/>
+					</svg>
 					<span class="contador" data-carrito-contador hidden>0</span>
 				</button>
 			</div>
@@ -35,17 +39,22 @@
 		<!-- Vista catálogo -->
 		<section class="vista" data-vista="catalogo">
 			<div class="portada">
-				<div class="contenedor">
+				<div class="contenedor portada__interior">
+					<img class="portada__logo" src="logo-la-fortuna.png" alt="Logotipo de La Fortuna" width="120" height="110" decoding="async">
+					<div>
 					<h1>Haz tu pedido en línea</h1>
 					<p>Elige lo que necesitas del catálogo, envíanos el pedido y te damos
 						seguimiento por WhatsApp hasta la entrega.</p>
+					</div>
 				</div>
 			</div>
 
 			<div class="contenedor filtros">
 				<label class="buscador">
 					<span class="visualmente-oculto">Buscar producto</span>
-					<span class="buscador__icono" aria-hidden="true">🔍</span>
+					<svg class="icono buscador__icono" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+						<circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/>
+					</svg>
 					<input type="search" placeholder="Buscar producto…" autocomplete="off"
 						data-buscador enterkeyhint="search">
 				</label>
@@ -117,7 +126,11 @@
 	<aside class="carrito" data-carrito hidden aria-label="Carrito de compra">
 		<header class="carrito__encabezado">
 			<h2>Tu pedido</h2>
-			<button class="boton boton--icono" type="button" data-cerrar-carrito aria-label="Cerrar">✕</button>
+			<button class="boton boton--icono" type="button" data-cerrar-carrito aria-label="Cerrar pedido">
+				<svg class="icono" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+					<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>
+				</svg>
+			</button>
 		</header>
 
 		<div class="carrito__cuerpo" data-carrito-cuerpo></div>

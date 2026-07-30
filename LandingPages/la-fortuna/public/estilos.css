@@ -78,10 +78,16 @@ a { color: var(--verde-oscuro); }
 .marca { display: flex; align-items: center; gap: .6rem; text-decoration: none; color: inherit; }
 
 .marca__logo {
-	display: grid; place-items: center;
-	width: 40px; height: 40px; border-radius: 12px;
-	background: var(--verde); color: var(--blanco);
-	font-weight: 700; letter-spacing: .5px;
+	width: 44px; height: 40px;
+	object-fit: contain; display: block;
+}
+
+/* Iconos de linea: sustituyen a los emojis, heredan el color del texto y
+   se ven igual en cualquier sistema. */
+.icono {
+	width: 22px; height: 22px; flex: 0 0 auto;
+	fill: none; stroke: currentColor; stroke-width: 1.9;
+	stroke-linecap: round; stroke-linejoin: round;
 }
 
 .marca__texto { display: flex; flex-direction: column; line-height: 1.15; }
@@ -130,6 +136,17 @@ a { color: var(--verde-oscuro); }
 }
 .portada h1 { font-size: 1.75rem; }
 .portada p { margin: 0; max-width: 46ch; opacity: .92; }
+
+.portada__interior { display: flex; align-items: center; gap: 1.1rem; flex-wrap: wrap; }
+
+/* El logotipo es negro sobre transparente: va sobre un disco blanco para
+   que se lea encima del verde de la portada. */
+.portada__logo {
+	width: 92px; height: 92px; flex: 0 0 auto;
+	object-fit: contain; padding: .45rem;
+	background: var(--blanco); border-radius: 50%;
+	box-shadow: 0 3px 12px rgba(0, 0, 0, .18);
+}
 
 /* --- Filtros --- */
 
