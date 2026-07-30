@@ -221,6 +221,139 @@ void main() {
 		}
 	});
 
+	test('backfill: asigna codigo interno idempotente a productos activos sin codigo', () async {
+		await productoRepo.guardar(
+			const Producto(
+				id: 'prod-sin-cb',
+				nombre: 'Almendra Fileteada',
+				codigoBarras: '',
+				precioBase: 100.0,
+				unidadMedida: UnidadMedida.pieza,
+				rutaImagen: '',
+				activo: true,
+				tiendaId: 'tienda-1',
+			),
+		);
+		await productoRepo.guardar(
+			const Producto(
+				id: 'prod-con-cb',
+				nombre: 'Aceite 1L',
+				codigoBarras: '7501234567890',
+				precioBase: 30.0,
+				unidadMedida: UnidadMedida.pieza,
+				rutaImagen: '',
+				activo: true,
+				tiendaId: 'tienda-1',
+			),
+		);
+
+		await aplicador.autoSanarCatalogoLocal();
+
+		final sinCb = await productoRepo.obtenerPorId('prod-sin-cb');
+		expect(
+			sinCb!.codigoBarras,
+			generarCodigoInternoDesdeNombre('Almendra Fileteada'),
+			reason: 'el producto sin codigo recibe uno interno idempotente',
+		);
+		expect(sinCb.tieneCodigoInterno, isTrue);
+		final conCb = await productoRepo.obtenerPorId('prod-con-cb');
+		expect(
+			conCb!.codigoBarras,
+			'7501234567890',
+			reason: 'los productos con codigo real no se tocan',
+		);
+	});
+
+	test('fusiona productos duplicados por nombre (sin codigo real) reasignando ventas', () async {
+		for (final id in ['prod-almendra-a', 'prod-almendra-b']) {
+			await productoRepo.guardar(
+				Producto(
+					id: id,
+					nombre: 'Almendra',
+					codigoBarras: '',
+					precioBase: 50.0,
+					unidadMedida: UnidadMedida.pieza,
+					rutaImagen: '',
+					activo: true,
+					tiendaId: 'tienda-1',
+				),
+			);
+		}
+		// La ganadora tiene una linea de venta previa; la perdedora no.
+		await base.insert('sales', {
+			'id': 'sale-1',
+			'tienda_id': 'tienda-1',
+			'caja_id': 'caja-1',
+			'metodo_pago': 'efectivo',
+			'total': 50.0,
+			'creada_en': DateTime.now().toIso8601String(),
+		});
+		await base.insert('sale_lines', {
+			'venta_id': 'sale-1',
+			'producto_id': 'prod-almendra-b',
+			'cantidad': 1.0,
+			'precio_unitario': 50.0,
+			'nombre_producto': 'Almendra',
+			'regla_precio': 'base',
+		});
+
+		await aplicador.autoSanarCatalogoLocal();
+
+		final ganadora = await productoRepo.obtenerPorId('prod-almendra-b');
+		final perdedora = await productoRepo.obtenerPorId('prod-almendra-a');
+		expect(ganadora!.activo, isTrue);
+		expect(perdedora!.activo, isFalse, reason: 'el duplicado se desactiva localmente');
+		final refPerdedora = await base.rawQuery(
+			'SELECT COUNT(*) AS c FROM sale_lines WHERE producto_id = ?',
+			['prod-almendra-a'],
+		);
+		expect(refPerdedora.first['c'], 0, reason: 'referencias reasignadas al canonico');
+	});
+
+	test('desactiva categorias stub huerfanas (sin productos asociados)', () async {
+		await categoriaRepo.guardar(
+			const Categoria(
+				id: 'cat-stub-huerfano',
+				nombre: 'Categoría',
+				icono: 'shopping_basket',
+				colorHex: '#4CAF50',
+				orden: 0,
+				activa: true,
+			),
+		);
+		// Otro stub que sí tiene un producto activo apuntándolo: se conserva.
+		await categoriaRepo.guardar(
+			const Categoria(
+				id: 'cat-stub-con-productos',
+				nombre: 'Categoría',
+				icono: 'shopping_basket',
+				colorHex: '#4CAF50',
+				orden: 0,
+				activa: true,
+			),
+		);
+		await productoRepo.guardar(
+			const Producto(
+				id: 'prod-x',
+				nombre: 'Producto X',
+				codigoBarras: 'cbx',
+				precioBase: 5.0,
+				unidadMedida: UnidadMedida.pieza,
+				rutaImagen: '',
+				activo: true,
+				tiendaId: 'tienda-1',
+				categoriaId: 'cat-stub-con-productos',
+			),
+		);
+
+		await aplicador.autoSanarCatalogoLocal();
+
+		final huerfana = await categoriaRepo.obtenerPorId('cat-stub-huerfano');
+		final referenciada = await categoriaRepo.obtenerPorId('cat-stub-con-productos');
+		expect(huerfana!.activa, isFalse, reason: 'stub sin productos se desactiva');
+		expect(referenciada!.activa, isTrue, reason: 'stub referenciado sigue vivo hasta que llegue su evento real');
+	});
+
 	test('es re-ejecutable sin efectos adicionales (idempotente)', () async {
 		await categoriaRepo.guardar(
 			const Categoria(
