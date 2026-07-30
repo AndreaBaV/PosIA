@@ -33,9 +33,14 @@ export function whatsappTienda(env) {
 const tiendasResueltas = new Map();
 
 /**
- * Tienda cuyo catalogo se publica.
+ * Sucursal que queda asignada a los pedidos web.
  *
- * Con `TIENDA_PUBLICA_ID` se usa esa; sin ella, la primera tienda activa.
+ * El catalogo es UNIFICADO: se publica el de todas las sucursales activas sin
+ * importar de cual sea cada producto. Pero `orders.tienda_id` es obligatorio
+ * (es lo que hace que el pedido aparezca en el modulo Pedidos), asi que hay
+ * que elegir una: con `TIENDA_PUBLICA_ID` se respeta esa; sin ella, la que
+ * tenga mas catalogo publicable, que es la que mas probablemente surta.
+ *
  * Se memoiza por isolate porque no cambia entre despliegues.
  */
 export async function resolverTienda(sql, env) {
@@ -50,7 +55,14 @@ export async function resolverTienda(sql, env) {
 				[configurada],
 			)
 		: await sql.query(
-				'SELECT id, direccion FROM stores WHERE activa = 1 ORDER BY nombre ASC LIMIT 1',
+				`SELECT s.id, s.direccion
+				 FROM stores s
+				 JOIN products p
+					ON p.tienda_id = s.id AND p.activo = 1 AND p.precio_base > 0
+				 WHERE s.activa = 1
+				 GROUP BY s.id, s.direccion, s.nombre
+				 ORDER BY COUNT(p.id) DESC, s.nombre ASC
+				 LIMIT 1`,
 			);
 	if (!filas.length) {
 		throw new ErrorPeticion('La tienda en linea aun no esta configurada', 503);

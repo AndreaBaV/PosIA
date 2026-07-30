@@ -50,6 +50,10 @@ permitido y ancho de banda ilimitado.
   en `orders` / `order_lines`. Replicar la proyección evita depender de que el
   hub esté despierto; a cambio, `lib/pedido.js` queda acoplado a
   `ProyectorEventosPostgres._pedido` y ambos deben moverse juntos.
+- Catálogo **unificado**: se publica el de todas las sucursales activas,
+  deduplicado por nombre (gana la ficha de la tienda principal, si no la más
+  barata). Los pedidos se centralizan en la tienda principal porque
+  `orders.tienda_id` es obligatorio; el administrador los reasigna después.
 - Los precios se releen de Neon al crear el pedido: el navegador nunca fija
   importes.
 - Lecturas cacheadas en el borde (catálogo 5 min, tienda 1 h) para no quemar

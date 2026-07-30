@@ -4,14 +4,13 @@
 
 import { consultarCategorias } from '../../../lib/catalogo.js';
 import { CACHE_CATALOGO_SEGUNDOS } from '../../../lib/constantes.js';
-import { conectar, resolverTienda } from '../../../lib/neon.js';
+import { conectar } from '../../../lib/neon.js';
 import { conCacheDeBorde, json } from '../../../lib/respuesta.js';
 
 export async function onRequestGet(context) {
 	return conCacheDeBorde(context, CACHE_CATALOGO_SEGUNDOS, async () => {
 		const sql = conectar(context.env);
-		const tienda = await resolverTienda(sql, context.env);
-		const datos = await consultarCategorias(sql, tienda.id);
+		const datos = await consultarCategorias(sql);
 		return json(datos, { cacheSegundos: CACHE_CATALOGO_SEGUNDOS });
 	});
 }

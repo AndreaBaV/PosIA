@@ -88,7 +88,7 @@ export function componerNotas(notas, aDomicilio) {
 export async function crearPedido(sql, { tiendaId, nombreTienda, whatsapp, cuerpo }) {
 	const entrega = validarEntrega(cuerpo);
 	const solicitadas = leerLineasSolicitadas(cuerpo?.lineas);
-	const lineas = await resolverLineas(sql, tiendaId, solicitadas);
+	const lineas = await resolverLineas(sql, solicitadas);
 	const total = redondearMonto(
 		lineas.reduce((suma, linea) => suma + linea.subtotal, 0),
 	);
@@ -187,13 +187,15 @@ export async function crearPedido(sql, { tiendaId, nombreTienda, whatsapp, cuerp
  *
  * El navegador solo dice QUE y CUANTO; el importe se calcula aqui.
  */
-async function resolverLineas(sql, tiendaId, solicitadas) {
+async function resolverLineas(sql, solicitadas) {
 	const ids = [...new Set(solicitadas.map((s) => s.productoId))];
+	// Catalogo unificado: el producto vale de cualquier sucursal activa.
 	const filas = await sql.query(
-		`SELECT id, nombre, precio_base
-		 FROM products
-		 WHERE activo = 1 AND tienda_id = $1 AND id = ANY($2)`,
-		[tiendaId, ids],
+		`SELECT p.id, p.nombre, p.precio_base
+		 FROM products p
+		 JOIN stores s ON s.id = p.tienda_id AND s.activa = 1
+		 WHERE p.activo = 1 AND p.precio_base > 0 AND p.id = ANY($1)`,
+		[ids],
 	);
 	const productos = new Map(filas.map((fila) => [fila.id, fila]));
 	const presentaciones = await cargarPresentaciones(sql, ids);
@@ -231,7 +233,7 @@ async function resolverLineas(sql, tiendaId, solicitadas) {
 // --- Seguimiento -------------------------------------------------------------
 
 /** Busca un pedido por folio (primeros 8 caracteres del id, en mayusculas). */
-export async function consultarPedido(sql, tiendaId, folioCrudo, { nombreTienda, whatsapp }) {
+export async function consultarPedido(sql, folioCrudo, { nombreTienda, whatsapp }) {
 	const folio = String(folioCrudo ?? '').trim().toUpperCase();
 	if (!/^[0-9A-F]{8}$/.test(folio)) {
 		throw new ErrorPeticion('Folio invalido', 404);
@@ -240,10 +242,10 @@ export async function consultarPedido(sql, tiendaId, folioCrudo, { nombreTienda,
 		`SELECT id, nombre_entrega, telefono_entrega, direccion_entrega,
 			metodo_pago, total, notas, estado, creado_en
 		 FROM orders
-		 WHERE upper(left(id, 8)) = $1 AND tienda_id = $2
+		 WHERE upper(left(id, 8)) = $1 AND notas LIKE 'Pedido web%'
 		 ORDER BY creado_en DESC
 		 LIMIT 1`,
-		[folio, tiendaId],
+		[folio],
 	);
 	if (!filas.length) {
 		throw new ErrorPeticion('No encontramos ese folio', 404);

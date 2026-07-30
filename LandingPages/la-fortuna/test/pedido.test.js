@@ -191,15 +191,15 @@ test('el folio y el enlace de WhatsApp viajan en la respuesta', async () => {
 
 test('el folio se valida antes de tocar la base', async () => {
 	const sql = sqlFalso();
-	await assert.rejects(consultarPedido(sql, TIENDA, 'no-es-folio', OPCIONES), /Folio invalido/);
-	await assert.rejects(consultarPedido(sql, TIENDA, '', OPCIONES), /Folio invalido/);
+	await assert.rejects(consultarPedido(sql, 'no-es-folio', OPCIONES), /Folio invalido/);
+	await assert.rejects(consultarPedido(sql, '', OPCIONES), /Folio invalido/);
 	assert.equal(sql.llamadas.length, 0, 'no debe consultarse la base con un folio inválido');
 });
 
 test('un folio inexistente responde 404 y no filtra información', async () => {
 	const sql = sqlFalso({ pedidos: [] });
 	await assert.rejects(
-		consultarPedido(sql, TIENDA, '7f3a9c21', OPCIONES),
+		consultarPedido(sql, '7f3a9c21', OPCIONES),
 		(error) => error.codigo === 404 && /No encontramos ese folio/.test(error.message),
 	);
 });
@@ -221,7 +221,7 @@ test('el seguimiento devuelve el pedido con sus partidas', async () => {
 			{ nombre_producto: 'Frijol negro (Bulto 25 kg)', cantidad: 2, precio_unitario: 890, subtotal: 1780 },
 		],
 	});
-	const pedido = await consultarPedido(sql, TIENDA, '7f3a9c21', OPCIONES);
+	const pedido = await consultarPedido(sql, '7f3a9c21', OPCIONES);
 	assert.equal(pedido.folio, '7F3A9C21');
 	assert.equal(pedido.estado, 'asignado');
 	assert.equal(pedido.total, 1780);
@@ -229,8 +229,8 @@ test('el seguimiento devuelve el pedido con sus partidas', async () => {
 
 	const consulta = consultasCon(sql, 'FROM orders')[0];
 	assert.ok(
-		consulta.texto.includes('tienda_id = $2'),
-		'el folio siempre se acota a la tienda publicada',
+		consulta.texto.includes("notas LIKE 'Pedido web%'"),
+		'solo se exponen pedidos del canal web, no los levantados en mostrador',
 	);
 });
 

@@ -8,21 +8,26 @@
 import { LIMITE_PAGINA_CATALOGO } from './constantes.js';
 import { redondearMonto } from './dinero.js';
 
-/** Categorias activas con al menos un producto publicable. */
-export async function consultarCategorias(sql, tiendaId) {
+/**
+ * Categorias activas con al menos un producto publicable.
+ *
+ * Catalogo UNIFICADO: cuenta productos de todas las sucursales activas. El
+ * total se calcula sobre nombres distintos, igual que la vitrina, para que no
+ * infle con el mismo producto repetido en varias sucursales.
+ */
+export async function consultarCategorias(sql) {
 	const filas = await sql.query(
-		`SELECT c.id, c.nombre, COUNT(p.id) AS total
+		`SELECT c.id, c.nombre, COUNT(DISTINCT lower(btrim(p.nombre))) AS total
 		 FROM categories c
 		 JOIN products p
 			ON p.categoria_id = c.id
 			AND p.activo = 1
-			AND p.tienda_id = $1
 			AND p.precio_base > 0
+		 JOIN stores s ON s.id = p.tienda_id AND s.activa = 1
 		 WHERE c.activa = 1
 		 GROUP BY c.id, c.nombre, c.orden
 		 HAVING COUNT(p.id) > 0
 		 ORDER BY c.orden ASC, c.nombre ASC`,
-		[tiendaId],
 	);
 	return {
 		categorias: filas.map((fila) => ({
@@ -39,7 +44,7 @@ export async function consultarCategorias(sql, tiendaId) {
  * Se pide un producto de mas que el limite para saber si hay pagina
  * siguiente sin pagar un COUNT(*) sobre todo el catalogo.
  */
-export async function consultarCatalogo(sql, tiendaId, opciones = {}) {
+export async function consultarCatalogo(sql, tiendaPrincipalId, opciones = {}) {
 	const busqueda = (opciones.q ?? '').trim();
 	const categoriaId = (opciones.categoria ?? '').trim();
 	const limite = Math.min(
@@ -48,8 +53,8 @@ export async function consultarCatalogo(sql, tiendaId, opciones = {}) {
 	);
 	const salto = Math.max(Number(opciones.desde) || 0, 0);
 
-	const condiciones = ['p.activo = 1', 'p.tienda_id = $1', 'p.precio_base > 0'];
-	const parametros = [tiendaId];
+	const condiciones = ['p.activo = 1', 'p.precio_base > 0'];
+	const parametros = [tiendaPrincipalId];
 
 	if (busqueda) {
 		parametros.push(`%${escaparLike(busqueda)}%`, busqueda);
@@ -65,14 +70,23 @@ export async function consultarCatalogo(sql, tiendaId, opciones = {}) {
 	}
 
 	parametros.push(limite + 1, salto);
+	// DISTINCT ON deja una sola ficha por producto aunque exista en varias
+	// sucursales: gana la de la tienda principal y, si no esta ahi, la mas
+	// barata. Sin esto el mismo articulo saldria repetido en la vitrina.
 	const filas = await sql.query(
-		`SELECT p.id, p.nombre, p.precio_base, p.unidad_medida,
-			p.categoria_id, p.notas, c.nombre AS categoria_nombre
-		 FROM products p
-		 LEFT JOIN categories c ON c.id = p.categoria_id
-		 WHERE ${condiciones.join(' AND ')}
-		 ORDER BY p.nombre ASC
-		 LIMIT $${parametros.length - 1} OFFSET $${parametros.length}`,
+		`SELECT * FROM (
+			SELECT DISTINCT ON (lower(btrim(p.nombre)))
+				p.id, p.nombre, p.precio_base, p.unidad_medida,
+				p.categoria_id, p.notas, c.nombre AS categoria_nombre
+			FROM products p
+			JOIN stores s ON s.id = p.tienda_id AND s.activa = 1
+			LEFT JOIN categories c ON c.id = p.categoria_id
+			WHERE ${condiciones.join(' AND ')}
+			ORDER BY lower(btrim(p.nombre)),
+				(p.tienda_id = $1) DESC, p.precio_base ASC, p.id ASC
+		) unicos
+		ORDER BY unicos.nombre ASC
+		LIMIT $${parametros.length - 1} OFFSET $${parametros.length}`,
 		parametros,
 	);
 

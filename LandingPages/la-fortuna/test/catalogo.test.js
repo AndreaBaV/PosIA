@@ -37,13 +37,31 @@ test('el catálogo nunca consulta ni publica existencias', async () => {
 	]);
 });
 
-test('solo salen productos activos, de la tienda y con precio', async () => {
+test('solo salen productos activos y con precio, de cualquier sucursal', async () => {
 	const sql = sqlFalso({ productos: [] });
 	await consultarCatalogo(sql, TIENDA);
 	const consulta = consultasCon(sql, 'FROM products')[0];
 	assert.ok(consulta.texto.includes('p.activo = 1'));
-	assert.ok(consulta.texto.includes('p.tienda_id = $1'));
 	assert.ok(consulta.texto.includes('p.precio_base > 0'));
+	assert.ok(
+		!/AND p\.tienda_id = \$\d+/.test(consulta.texto),
+		'el catálogo es unificado: la sucursal no filtra (solo desempata)',
+	);
+	assert.ok(
+		consulta.texto.includes('JOIN stores s ON s.id = p.tienda_id AND s.activa = 1'),
+		'pero sí se excluyen las sucursales dadas de baja',
+	);
+});
+
+test('un producto repetido en varias sucursales sale una sola vez', async () => {
+	const sql = sqlFalso({ productos: [] });
+	await consultarCatalogo(sql, TIENDA);
+	const consulta = consultasCon(sql, 'FROM products')[0];
+	assert.ok(consulta.texto.includes('DISTINCT ON (lower(btrim(p.nombre)))'));
+	assert.ok(
+		consulta.texto.includes('(p.tienda_id = $1) DESC, p.precio_base ASC'),
+		'gana la ficha de la tienda principal y, si no está, la más barata',
+	);
 	assert.equal(consulta.parametros[0], TIENDA);
 });
 
@@ -112,11 +130,15 @@ test('sin productos no se consultan presentaciones', async () => {
 
 test('las categorías vacías no se listan', async () => {
 	const sql = sqlFalso({ categorias: [{ id: 'cat-1', nombre: 'Abarrotes', total: 12 }] });
-	const datos = await consultarCategorias(sql, TIENDA);
+	const datos = await consultarCategorias(sql);
 	assert.deepEqual(datos.categorias, [{ id: 'cat-1', nombre: 'Abarrotes', total: 12 }]);
 	const consulta = consultasCon(sql, 'FROM categories')[0];
 	assert.ok(consulta.texto.includes('HAVING COUNT(p.id) > 0'));
 	assert.ok(consulta.texto.includes('c.activa = 1'));
+	assert.ok(
+		consulta.texto.includes('COUNT(DISTINCT lower(btrim(p.nombre)))'),
+		'el total no debe inflarse con el mismo producto de varias sucursales',
+	);
 });
 
 test('los comodines de LIKE se escapan', () => {

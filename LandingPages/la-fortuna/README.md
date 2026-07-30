@@ -78,7 +78,13 @@ Reglas que aplica el servidor:
   unidad, categoría y presentaciones con precio propio. Sin existencias.
 - **Los precios se releen de Neon** al crear el pedido; el navegador solo dice
   *qué* y *cuánto*, jamás *a qué precio*.
-- Solo salen productos `activo = 1`, de la tienda publicada y con precio > 0.
+- **Catálogo unificado**: se publica el de todas las sucursales activas, sin
+  importar de cuál sea cada producto. Un artículo que existe en varias sale una
+  sola vez (gana la ficha de la tienda principal; si no está ahí, la más barata).
+- Solo salen productos `activo = 1` con precio > 0.
+- Los pedidos se centralizan en la **tienda principal** (la de mayor catálogo, o
+  la que fije `TIENDA_PUBLICA_ID`) porque `orders.tienda_id` es obligatorio;
+  desde ahí el administrador los reasigna a otra sucursal o a un empleado.
 - Tope de 100 partidas y 9 999 unidades por partida.
 - Las lecturas se cachean en el borde (catálogo 5 min, tienda 1 h): cientos de
   visitas consumen una sola consulta a Neon. Es lo que mantiene el cómputo de
@@ -89,7 +95,7 @@ Reglas que aplica el servidor:
 | Variable | Requerida | Descripción |
 |----------|-----------|-------------|
 | `DATABASE_URL` | sí | Cadena de conexión de Neon. Cárgala como **Secret**, no como variable normal |
-| `TIENDA_PUBLICA_ID` | no | Tienda publicada; sin ella, la primera activa |
+| `TIENDA_PUBLICA_ID` | no | Sucursal que recibe los pedidos; sin ella, la de mayor catálogo. No limita lo que se publica |
 | `TIENDA_PUBLICA_NOMBRE` | no | Default `La Fortuna` |
 | `TIENDA_PUBLICA_WHATSAPP` | no | Default `527226527751` (52 + 10 dígitos) |
 
