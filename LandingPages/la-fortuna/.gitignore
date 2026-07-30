@@ -1,0 +1,4 @@
+node_modules/
+.wrangler/
+# Secretos locales de wrangler (DATABASE_URL de la rama de pruebas)
+.dev.vars

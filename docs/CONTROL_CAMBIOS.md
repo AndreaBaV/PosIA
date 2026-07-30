@@ -7,6 +7,66 @@ Historial consolidado de versiones e implementaciones.
 
 ---
 
+## 2026-07-29 — Tienda en línea La Fortuna (`LandingPages/la-fortuna/`)
+
+### Alcance
+Catálogo público de Neon + captura de pedidos por parte del cliente final, con
+folio, ticket y seguimiento por WhatsApp. Sin mostrar existencias.
+
+### Dónde corre y por qué
+En **Cloudflare Pages**, no en el hub. El hub de Northflank está en plan
+gratuito y su trabajo es sincronizar las cajas; el tráfico de clientes lo haría
+competir con el sync y despertar el contenedor en frío en cada visita. La
+tienda habla **directo con Neon** y no toca el hub, así que sigue en pie aunque
+Northflank esté suspendido. Dos tuberías de despliegue independientes sobre el
+mismo `main`.
+
+Se descartó Vercel: su plan gratuito (Hobby) es solo para uso no comercial y
+Pro cuesta ~USD 240/año por lo mismo que Cloudflare da gratis con uso comercial
+permitido y ancho de banda ilimitado.
+
+### Cambios
+- **`LandingPages/la-fortuna/public/` (nuevo)**: sitio estático sin build (HTML,
+  CSS y JS vanilla). Catálogo con búsqueda, filtro por categoría y paginación
+  ("Ver más"), carrito persistente en `localStorage`, formulario de entrega
+  (domicilio o recoger), vista de folio + ticket imprimible y consulta de
+  pedido por folio. Móvil primero.
+- **`functions/v1/public/*` (nuevo)**: Cloudflare Pages Functions con
+  `/v1/public/{tienda,categorias,catalogo,pedidos,pedidos/{folio}}`, más
+  `_middleware.js` para CORS y traducción de errores.
+- **`lib/` (nuevo)**: lógica portable sin dependencias de Cloudflare —
+  consultas del catálogo, validación y re-precio del pedido, texto del ticket
+  y enlace de WhatsApp. Cambiar de proveedor solo obliga a reescribir los
+  archivos delgados de `functions/`.
+- **`test/` (nuevo)**: 28 pruebas con `node --test` y un doble del cliente SQL;
+  cubren re-precio, límites, folio, formato del ticket y la forma exacta de las
+  escrituras, sin necesidad de base de datos.
+- **`posia_constants.dart`**: WhatsApp de la tienda como constante (el pie del
+  ticket ya no repite el número).
+
+### Decisiones
+- El alta escribe en **una transacción** el evento `orderUpserted` en
+  `sync_events` (firmado con el dispositivo `tienda-web`) **más** su proyección
+  en `orders` / `order_lines`. Replicar la proyección evita depender de que el
+  hub esté despierto; a cambio, `lib/pedido.js` queda acoplado a
+  `ProyectorEventosPostgres._pedido` y ambos deben moverse juntos.
+- Los precios se releen de Neon al crear el pedido: el navegador nunca fija
+  importes.
+- Lecturas cacheadas en el borde (catálogo 5 min, tienda 1 h) para no quemar
+  horas de cómputo de Neon.
+- El límite por IP se configura en el WAF de Cloudflare, no en el código: en un
+  entorno sin estado un contador en memoria no sirve.
+- El folio son los primeros 8 caracteres del id en mayúsculas, igual que
+  `construirTicketDigitalPedido`.
+- Presentaciones con precio propio (caja, bulto) se ofrecen como opción; la
+  partida viaja con el nombre de la presentación y su precio unitario.
+
+### Pendiente
+Fotografías del catálogo: `LandingPages/la-fortuna/PENDIENTE_FOTOS.md`. Mientras
+tanto cada producto muestra un marcador con su inicial.
+
+---
+
 ## 2026-07-15 — Diagnóstico: hub inalcanzable sin logs en Northflank
 
 ### Problema

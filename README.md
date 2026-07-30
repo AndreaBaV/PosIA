@@ -30,7 +30,9 @@ POSIA/
 │   ├── posia_hardware/     # Contratos de hardware
 │   └── posia_ui/           # Componentes visuales de caja
 ├── docs/                   # Documentación técnica
-└── server/                 # Hub de sync (API + Postgres)
+├── server/                 # Hub de sync (API + Postgres)
+└── LandingPages/
+    └── la-fortuna/         # Tienda en línea (Cloudflare Pages + Neon)
 ```
 
 ## Documentación
@@ -40,6 +42,7 @@ POSIA/
 | [docs/MANUAL_TECNICO.md](docs/MANUAL_TECNICO.md) | Arquitectura, despliegue, builds, sync, publicación móvil |
 | [docs/MANUAL_USUARIO.md](docs/MANUAL_USUARIO.md) | Operación de caja y admin; inventario de funciones |
 | [docs/CONTROL_CAMBIOS.md](docs/CONTROL_CAMBIOS.md) | Historial de versiones |
+| [LandingPages/la-fortuna/README.md](LandingPages/la-fortuna/README.md) | Tienda en línea: catálogo público, pedidos y WhatsApp |
 
 ## Requisitos
 

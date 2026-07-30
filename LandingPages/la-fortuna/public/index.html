@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="es-MX">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+	<meta name="theme-color" content="#0f7a4a">
+	<meta name="description" content="Catálogo y pedidos en línea de La Fortuna. Levanta tu pedido y da seguimiento por WhatsApp.">
+	<title>La Fortuna — Tienda en línea</title>
+	<link rel="stylesheet" href="estilos.css">
+	<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>">
+</head>
+<body>
+	<a class="salto-contenido" href="#contenido">Ir al contenido</a>
+
+	<header class="encabezado">
+		<div class="encabezado__barra contenedor">
+			<a class="marca" href="#/catalogo">
+				<span class="marca__logo" aria-hidden="true">LF</span>
+				<span class="marca__texto">
+					<strong data-tienda-nombre>La Fortuna</strong>
+					<small>Tienda en línea</small>
+				</span>
+			</a>
+			<div class="encabezado__acciones">
+				<a class="boton boton--plano" href="#/seguimiento">Mi pedido</a>
+				<button class="boton boton--carrito" type="button" data-abrir-carrito aria-label="Abrir carrito">
+					<span aria-hidden="true">🛒</span>
+					<span class="contador" data-carrito-contador hidden>0</span>
+				</button>
+			</div>
+		</div>
+	</header>
+
+	<main id="contenido">
+		<!-- Vista catálogo -->
+		<section class="vista" data-vista="catalogo">
+			<div class="portada">
+				<div class="contenedor">
+					<h1>Haz tu pedido en línea</h1>
+					<p>Elige lo que necesitas del catálogo, envíanos el pedido y te damos
+						seguimiento por WhatsApp hasta la entrega.</p>
+				</div>
+			</div>
+
+			<div class="contenedor filtros">
+				<label class="buscador">
+					<span class="visualmente-oculto">Buscar producto</span>
+					<span class="buscador__icono" aria-hidden="true">🔍</span>
+					<input type="search" placeholder="Buscar producto…" autocomplete="off"
+						data-buscador enterkeyhint="search">
+				</label>
+				<div class="categorias" role="group" aria-label="Categorías" data-categorias></div>
+			</div>
+
+			<div class="contenedor">
+				<p class="aviso" data-catalogo-estado hidden></p>
+				<div class="rejilla" data-rejilla></div>
+				<div class="cargar-mas">
+					<button class="boton boton--secundario" type="button" data-cargar-mas hidden>
+						Ver más productos
+					</button>
+				</div>
+			</div>
+		</section>
+
+		<!-- Vista confirmación / ticket -->
+		<section class="vista" data-vista="pedido" hidden>
+			<div class="contenedor estrecho">
+				<div class="ticket" data-ticket></div>
+				<div class="acciones-ticket">
+					<a class="boton boton--whatsapp" target="_blank" rel="noopener" data-ticket-whatsapp>
+						Dar seguimiento por WhatsApp
+					</a>
+					<button class="boton boton--secundario" type="button" data-imprimir>Imprimir o guardar PDF</button>
+					<a class="boton boton--plano" href="#/catalogo">Seguir comprando</a>
+				</div>
+			</div>
+		</section>
+
+		<!-- Vista seguimiento -->
+		<section class="vista" data-vista="seguimiento" hidden>
+			<div class="contenedor estrecho">
+				<h1>Seguimiento de pedido</h1>
+				<p>Escribe el folio que recibiste al hacer tu pedido.</p>
+				<form class="formulario" data-form-seguimiento>
+					<label>
+						<span>Folio</span>
+						<input name="folio" maxlength="8" required placeholder="Ej. 7F3A9C21"
+							autocomplete="off" spellcheck="false" class="campo-folio">
+					</label>
+					<button class="boton boton--primario" type="submit">Consultar</button>
+				</form>
+				<p class="aviso" data-seguimiento-estado hidden></p>
+				<div class="ticket" data-seguimiento-ticket hidden></div>
+				<div class="acciones-ticket" data-seguimiento-acciones hidden>
+					<a class="boton boton--whatsapp" target="_blank" rel="noopener" data-seguimiento-whatsapp>
+						Escribir por WhatsApp
+					</a>
+				</div>
+			</div>
+		</section>
+	</main>
+
+	<footer class="pie">
+		<div class="contenedor">
+			<p><strong data-tienda-nombre>La Fortuna</strong> <span data-tienda-direccion></span></p>
+			<p>Pedidos y seguimiento por WhatsApp:
+				<a data-tienda-whatsapp target="_blank" rel="noopener">enviar mensaje</a>
+			</p>
+			<p class="pie__nota">Precios en pesos mexicanos, sujetos a cambio sin previo aviso.
+				Confirmamos disponibilidad y tiempo de entrega por WhatsApp.</p>
+		</div>
+	</footer>
+
+	<!-- Carrito -->
+	<div class="fondo-modal" data-fondo hidden></div>
+	<aside class="carrito" data-carrito hidden aria-label="Carrito de compra">
+		<header class="carrito__encabezado">
+			<h2>Tu pedido</h2>
+			<button class="boton boton--icono" type="button" data-cerrar-carrito aria-label="Cerrar">✕</button>
+		</header>
+
+		<div class="carrito__cuerpo" data-carrito-cuerpo></div>
+
+		<form class="carrito__pie formulario" data-form-pedido hidden>
+			<div class="total">
+				<span>Total</span>
+				<strong data-carrito-total>$0.00</strong>
+			</div>
+
+			<label>
+				<span>Nombre de quien recibe *</span>
+				<input name="nombre" required maxlength="120" autocomplete="name">
+			</label>
+
+			<label>
+				<span>WhatsApp / teléfono *</span>
+				<input name="telefono" required inputmode="tel" maxlength="20"
+					placeholder="10 dígitos" autocomplete="tel">
+			</label>
+
+			<fieldset class="opciones">
+				<legend>¿Cómo lo entregamos?</legend>
+				<label class="opcion">
+					<input type="radio" name="entrega" value="domicilio" checked>
+					<span>A domicilio</span>
+				</label>
+				<label class="opcion">
+					<input type="radio" name="entrega" value="tienda">
+					<span>Recojo en la tienda</span>
+				</label>
+			</fieldset>
+
+			<label data-campo-direccion>
+				<span>Dirección de entrega *</span>
+				<textarea name="direccion" rows="2" maxlength="300"
+					placeholder="Calle, número, colonia y referencias"></textarea>
+			</label>
+
+			<label>
+				<span>Forma de pago</span>
+				<select name="metodoPago">
+					<option value="efectivo">Efectivo contra entrega</option>
+					<option value="transferencia">Transferencia</option>
+				</select>
+			</label>
+
+			<label>
+				<span>Notas (opcional)</span>
+				<textarea name="notas" rows="2" maxlength="500"
+					placeholder="Horario preferido, indicaciones…"></textarea>
+			</label>
+
+			<p class="aviso aviso--error" data-pedido-error hidden></p>
+
+			<button class="boton boton--primario boton--bloque" type="submit" data-enviar-pedido>
+				Enviar pedido
+			</button>
+			<p class="pie__nota">Al enviar recibirás un folio y tu ticket. El pago y la
+				entrega se confirman por WhatsApp.</p>
+		</form>
+	</aside>
+
+	<div class="brindis" data-brindis hidden role="status" aria-live="polite"></div>
+
+	<script src="app.js"></script>
+</body>
+</html>

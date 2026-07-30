@@ -1,0 +1,13 @@
+# Configuracion de Cloudflare Pages para la tienda en linea de La Fortuna.
+#
+# El despliegue real se hace desde el panel de Cloudflare conectando el repo
+# (root directory: LandingPages/la-fortuna). Este archivo sirve para
+# `wrangler pages dev` en local y deja el nombre del proyecto por escrito.
+#
+# Las variables sensibles (DATABASE_URL) NO van aqui: se cargan como
+# secretos en el panel, y en local desde .dev.vars (ignorado por Git).
+
+name = "la-fortuna"
+pages_build_output_dir = "public"
+compatibility_date = "2026-07-29"
+compatibility_flags = ["nodejs_compat"]
