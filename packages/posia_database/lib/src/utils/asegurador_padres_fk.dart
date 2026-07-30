@@ -551,14 +551,29 @@ class AseguradorPadresFk {
 	Future<void> asegurarProducto(
 		String? productoId, {
 		String? tiendaId,
+		String? nombreSnapshot,
+		String? codigoBarrasSnapshot,
+		double? precioSnapshot,
+		String? unidadMedidaSnapshot,
+		String? moduloVerticalSnapshot,
+		String? categoriaIdSnapshot,
 	}) async {
 		if (productoId == null || productoId.trim().isEmpty) {
 			return;
 		}
+		final tienda = tiendaId?.trim().isNotEmpty == true ? tiendaId!.trim() : _tiendaSync;
 		if (await _existe('products', productoId)) {
+			await _enriquecerStubProductoSiAplica(
+				productoId,
+				nombreSnapshot: nombreSnapshot,
+				codigoBarrasSnapshot: codigoBarrasSnapshot,
+				precioSnapshot: precioSnapshot,
+				unidadMedidaSnapshot: unidadMedidaSnapshot,
+				moduloVerticalSnapshot: moduloVerticalSnapshot,
+				categoriaIdSnapshot: categoriaIdSnapshot,
+			);
 			return;
 		}
-		final tienda = tiendaId?.trim().isNotEmpty == true ? tiendaId!.trim() : _tiendaSync;
 		await asegurarTienda(tienda);
 		final variante = await _variantePorId(productoId);
 		if (variante != null) {
@@ -590,21 +605,68 @@ class AseguradorPadresFk {
 			);
 			return;
 		}
+		final presentacion = await _presentacionPorId(productoId);
+		if (presentacion != null) {
+			// Mismo patron que variantes: el carrito usa el id de presentacion
+			// como producto vendible. El padre FK debe conservar el concepto.
+			await asegurarProducto(
+				presentacion['producto_id'] as String?,
+				tiendaId: tienda,
+			);
+			final nombrePadre = await _nombreProducto(
+				presentacion['producto_id']! as String,
+			);
+			final precio = (presentacion['precio'] as num?)?.toDouble();
+			await _baseDatos.insert(
+				'products',
+				{
+					'id': productoId,
+					'nombre': nombrePadre != null
+						? '$nombrePadre - ${presentacion['nombre']}'
+						: presentacion['nombre'] as String,
+					'codigo_barras': presentacion['codigo_barras'] ?? '',
+					'precio_base': precio ?? 0.0,
+					'unidad_medida': UnidadMedida.pieza.name,
+					'ruta_imagen': '',
+					'activo': presentacion['activo'],
+					'tienda_id': tienda,
+					'modulo_vertical': ModuloVertical.general.name,
+					// Stub local para satisfacer FK de held_ticket_lines; no es
+					// un producto de catalogo y no debe proyectarse a Neon.
+					'notas': '__stub_fk__',
+					'costo_unitario': 0.0,
+					'favorito_caja': 0,
+					'permite_stock_negativo': 1,
+				},
+				conflictAlgorithm: ConflictAlgorithm.ignore,
+			);
+			return;
+		}
+		final nombre = (nombreSnapshot ?? '').trim().isNotEmpty
+			? nombreSnapshot!.trim()
+			: 'Producto';
+		final codigo = codigoBarrasSnapshot?.trim() ?? '';
+		final precio = precioSnapshot ?? 0.0;
 		// Stub FK local: no debe subirse al catálogo Neon como producto real.
 		// Sin la marca, este placeholder se replica y reemplaza al producto
 		// legítimo que comparte su id en el resto de los equipos.
+		// Si hay snapshot del ticket (nombre/precio/codigo), se usa para no
+		// perder el concepto al recuperar el carrito apartado.
 		await _baseDatos.insert(
 			'products',
 			{
 				'id': productoId,
-				'nombre': 'Producto',
-				'codigo_barras': '',
-				'precio_base': 0.0,
-				'unidad_medida': UnidadMedida.pieza.name,
+				'nombre': nombre,
+				'codigo_barras': codigo,
+				'precio_base': precio,
+				'unidad_medida':
+					unidadMedidaSnapshot ?? UnidadMedida.pieza.name,
 				'ruta_imagen': '',
 				'activo': 1,
 				'tienda_id': tienda,
-				'modulo_vertical': ModuloVertical.general.name,
+				'modulo_vertical':
+					moduloVerticalSnapshot ?? ModuloVertical.general.name,
+				'categoria_id': categoriaIdSnapshot,
 				'notas': '__stub_fk__',
 				'costo_unitario': 0.0,
 				'favorito_caja': 0,
@@ -614,9 +676,74 @@ class AseguradorPadresFk {
 		);
 	}
 
+	/// Si ya existe un stub generico, lo enriquece con el snapshot del ticket.
+	Future<void> _enriquecerStubProductoSiAplica(
+		String productoId, {
+		String? nombreSnapshot,
+		String? codigoBarrasSnapshot,
+		double? precioSnapshot,
+		String? unidadMedidaSnapshot,
+		String? moduloVerticalSnapshot,
+		String? categoriaIdSnapshot,
+	}) async {
+		final nombre = (nombreSnapshot ?? '').trim();
+		if (nombre.isEmpty) {
+			return;
+		}
+		final filas = await _baseDatos.query(
+			'products',
+			where: 'id = ?',
+			whereArgs: [productoId],
+			limit: 1,
+		);
+		if (filas.isEmpty) {
+			return;
+		}
+		final fila = filas.first;
+		final notas = (fila['notas'] as String? ?? '').trim();
+		final nombreActual = (fila['nombre'] as String? ?? '').trim();
+		final codigoActual = (fila['codigo_barras'] as String? ?? '').trim();
+		final precioActual = (fila['precio_base'] as num?)?.toDouble() ?? 0.0;
+		final esStub = notas == '__stub_fk__' ||
+			(nombreActual == 'Producto' &&
+				codigoActual.isEmpty &&
+				precioActual == 0.0);
+		if (!esStub) {
+			return;
+		}
+		await _baseDatos.update(
+			'products',
+			{
+				'nombre': nombre,
+				if (codigoBarrasSnapshot != null)
+					'codigo_barras': codigoBarrasSnapshot.trim(),
+				if (precioSnapshot != null) 'precio_base': precioSnapshot,
+				if (unidadMedidaSnapshot != null)
+					'unidad_medida': unidadMedidaSnapshot,
+				if (moduloVerticalSnapshot != null)
+					'modulo_vertical': moduloVerticalSnapshot,
+				if (categoriaIdSnapshot != null)
+					'categoria_id': categoriaIdSnapshot,
+				'notas': '__stub_fk__',
+			},
+			where: 'id = ?',
+			whereArgs: [productoId],
+		);
+	}
+
 	Future<Map<String, Object?>?> _variantePorId(String id) async {
 		final filas = await _baseDatos.query(
 			'product_variants',
+			where: 'id = ?',
+			whereArgs: [id],
+			limit: 1,
+		);
+		return filas.isEmpty ? null : filas.first;
+	}
+
+	Future<Map<String, Object?>?> _presentacionPorId(String id) async {
+		final filas = await _baseDatos.query(
+			'presentaciones_producto',
 			where: 'id = ?',
 			whereArgs: [id],
 			limit: 1,
@@ -794,10 +921,26 @@ class AseguradorPadresFk {
 		await asegurarCliente(ticket.clienteId);
 		await asegurarVendedor(ticket.vendedorId, tiendaId: ticket.tiendaId);
 		for (final linea in ticket.lineas) {
-			await asegurarProducto(linea.productoId, tiendaId: ticket.tiendaId);
+			await asegurarProducto(
+				linea.productoId,
+				tiendaId: ticket.tiendaId,
+				nombreSnapshot: linea.nombreProducto,
+				codigoBarrasSnapshot: linea.codigoBarras,
+				precioSnapshot: linea.precioUnitario,
+				unidadMedidaSnapshot: linea.unidadMedida.name,
+				moduloVerticalSnapshot: linea.moduloVertical.name,
+				categoriaIdSnapshot: linea.categoriaId,
+			);
+			if (linea.productoStockId != null &&
+				linea.productoStockId != linea.productoId) {
+				await asegurarProducto(
+					linea.productoStockId,
+					tiendaId: ticket.tiendaId,
+				);
+			}
 			await asegurarLoteFarmacia(
 				linea.loteId,
-				productoId: linea.productoId,
+				productoId: linea.productoStockId ?? linea.productoId,
 				tiendaId: ticket.tiendaId,
 			);
 		}

@@ -710,15 +710,77 @@ class ServicioCaja {
       _vendedorActivo = await _vendedorRepository?.obtenerPorId(ticket.vendedorId!);
     }
     for (final linea in ticket.lineas) {
-      final producto = await _productoRepository.obtenerPorId(linea.productoId);
+      final producto = await _resolverProductoTicketEspera(linea);
       _lineasCarrito.add(
-        linea.aLineaCarrito(producto ?? linea.productoRespaldo(_tiendaId)),
+        await _lineaCarritoDesdeTicketEspera(linea, producto),
       );
     }
     _descuentoTicket = redondearMonto(ticket.descuentoTicket);
     _ajustarDescuentoTicketAlCarrito();
     await _recalcularDescuentoCombos();
     await repo.eliminar(ticketId);
+  }
+
+  /// Resuelve el producto al recuperar un ticket apartado.
+  ///
+  /// Prioridad: presentacion viva → catalogo real → snapshot del ticket.
+  /// Nunca usa un stub FK generico ("Producto") si hay snapshot con concepto.
+  Future<Producto> _resolverProductoTicketEspera(LineaTicketEspera linea) async {
+    final presentacion = await _presentacionRepository?.obtenerPorId(
+      linea.productoId,
+    );
+    if (presentacion != null) {
+      final padre = await _productoRepository.obtenerPorId(
+        presentacion.productoId,
+      );
+      if (padre != null && !padre.esStubFk) {
+        final precio = presentacion.precio ??
+            redondearMonto(padre.precioBase * presentacion.factorABase);
+        return padre.copiarCon(
+          id: presentacion.id,
+          nombre: '${padre.nombre} - ${presentacion.nombre}',
+          codigoBarras: presentacion.codigoBarras.isNotEmpty
+              ? presentacion.codigoBarras
+              : padre.codigoBarras,
+          precioBase: precio,
+        );
+      }
+    }
+    final catalogo = await _productoRepository.obtenerPorId(linea.productoId);
+    if (catalogo == null || catalogo.esStubFk) {
+      return linea.productoRespaldo(_tiendaId);
+    }
+    return catalogo;
+  }
+
+  /// Reconstruye la linea de carrito conservando factor de presentacion.
+  Future<LineaCarrito> _lineaCarritoDesdeTicketEspera(
+    LineaTicketEspera linea,
+    Producto producto,
+  ) async {
+    var factor = linea.factorABase > 0 ? linea.factorABase : 1.0;
+    var stockId = linea.productoStockId;
+    // Tickets antiguos no persistian factor/stock; completar desde presentacion.
+    if (stockId == null) {
+      final presentacion = await _presentacionRepository?.obtenerPorId(
+        linea.productoId,
+      );
+      if (presentacion != null && !presentacion.esPresentacionBase) {
+        factor = presentacion.factorABase;
+        stockId = presentacion.productoId;
+      }
+    }
+    return LineaCarrito(
+      producto: producto,
+      cantidad: linea.cantidad,
+      precioUnitario: linea.precioUnitario,
+      reglaPrecio: linea.reglaPrecio,
+      loteId: linea.loteId,
+      etiquetaLote: linea.etiquetaLote,
+      descuentoLinea: linea.descuentoLinea,
+      factorABase: factor,
+      productoStockId: stockId,
+    );
   }
 
   /// Elimina un ticket apartado sin recuperarlo.
