@@ -827,8 +827,8 @@ class _DialogoSeleccionarProductosState extends State<_DialogoSeleccionarProduct
 												),
 											title: Text(p.nombre),
 											subtitle: Text(
-												p.codigoBarras.isNotEmpty
-													? '${formatearMoneda(p.precioBase)} · ${p.codigoBarras}'
+												p.codigoBarrasVisible.isNotEmpty
+													? '${formatearMoneda(p.precioBase)} · ${p.codigoBarrasVisible}'
 													: formatearMoneda(p.precioBase),
 											),
 											onTap: () => _tocar(p),

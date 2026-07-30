@@ -255,8 +255,10 @@ class _PantallaPedidosAdminState extends ConsumerState<PantallaPedidosAdmin>
 												}),
 												title: Text(producto.nombre),
 												subtitle: Text(
-													'${formatearMoneda(producto.precioBase)} · '
-													'${producto.codigoBarras}',
+													producto.codigoBarrasVisible.isNotEmpty
+														? '${formatearMoneda(producto.precioBase)} · '
+															'${producto.codigoBarrasVisible}'
+														: formatearMoneda(producto.precioBase),
 												),
 												secondary: seleccionado
 													? SizedBox(

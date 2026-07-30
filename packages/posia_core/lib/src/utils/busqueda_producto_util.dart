@@ -35,6 +35,54 @@ String normalizarTextoBusqueda(String texto) {
 	return s;
 }
 
+/// Prefijo que marca un código de barras generado internamente por el sistema
+/// para un producto sin código real (deduplicación por nombre).
+///
+/// Nunca se muestra al usuario final (ver [Producto.codigoBarrasVisible]).
+const String PREFIJO_CODIGO_INTERNO = '#';
+
+/// Genera un código interno idempotente derivado del nombre del producto.
+///
+/// Todos los dispositivos generan exactamente el mismo código para el mismo
+/// nombre normalizado, así que dos altas separadas del mismo producto
+/// (importaciones a granel, altas paralelas en distintas cajas) colisionan en
+/// el índice único `(tienda_id, codigo_barras) WHERE activo=1` y no se
+/// duplican en el catálogo.
+///
+/// Formato: `#nombre-normalizado` (minúsculas, sin acentos, solo letras y
+/// dígitos separados por guiones). Cadena vacía si el nombre no contiene
+/// caracteres alfanuméricos utilizables.
+String generarCodigoInternoDesdeNombre(String nombre) {
+	final normalizado = normalizarTextoBusqueda(nombre.trim());
+	final buffer = StringBuffer();
+	var ultimoFueGuion = true;
+	for (final rune in normalizado.runes) {
+		final c = String.fromCharCode(rune);
+		final esAlfanumerico = RegExp(r'[a-z0-9]').hasMatch(c);
+		if (esAlfanumerico) {
+			buffer.write(c);
+			ultimoFueGuion = false;
+		} else if (!ultimoFueGuion) {
+			buffer.write('-');
+			ultimoFueGuion = true;
+		}
+	}
+	var codigo = buffer.toString();
+	while (codigo.endsWith('-')) {
+		codigo = codigo.substring(0, codigo.length - 1);
+	}
+	if (codigo.isEmpty) {
+		return '';
+	}
+	return '$PREFIJO_CODIGO_INTERNO$codigo';
+}
+
+/// `true` cuando el código proporcionado fue generado por el sistema y no
+/// corresponde a un código de barras real capturado o escaneado.
+bool esCodigoBarrasInterno(String codigo) {
+	return codigo.startsWith(PREFIJO_CODIGO_INTERNO);
+}
+
 /// Coincide un token de consulta con una palabra del nombre (prefijo, substring o abreviatura).
 bool _tokenCoincideConPalabra(String token, String palabra) {
 	if (token.isEmpty) {
@@ -120,8 +168,12 @@ int puntajeBusquedaProducto(Producto producto, String consulta) {
 		return 0;
 	}
 	final nombre = normalizarTextoBusqueda(producto.nombre);
-	final codigo = normalizarTextoBusqueda(producto.codigoBarras);
-	if (codigo == q) {
+	// El código interno es un espejo del nombre; ignorarlo en el puntaje evita
+	// dobles conteos cuando el usuario escribe parte del nombre.
+	final codigo = esCodigoBarrasInterno(producto.codigoBarras)
+		? ''
+		: normalizarTextoBusqueda(producto.codigoBarras);
+	if (codigo.isNotEmpty && codigo == q) {
 		return 1000;
 	}
 	if (nombre == q) {

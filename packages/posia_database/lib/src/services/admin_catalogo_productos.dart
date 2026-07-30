@@ -129,6 +129,26 @@ class AdminCatalogoProductos {
 		}
 	}
 
+	/// Localiza el producto existente que debe reutilizarse al re-crear un
+	/// producto sin código de barras real. Prioriza la coincidencia por el
+	/// código interno autogenerado (idempotente y estable) y cae al legacy de
+	/// coincidencia por nombre para catálogos anteriores a este fix.
+	Future<Producto?> _buscarExistenteParaCodigoInterno({
+		required String codigoInterno,
+		required String nombre,
+	}) async {
+		if (codigoInterno.isNotEmpty) {
+			final porCodigo = await _productoRepository.buscarPorCodigoBarras(
+				codigoInterno,
+				tiendaId: _tiendaActivaId,
+			);
+			if (porCodigo != null) {
+				return porCodigo;
+			}
+		}
+		return _productoRepository.buscarActivoPorNombre(nombre);
+	}
+
 	Future<void> validarCodigoBarrasUnico(
 		String codigoBarras, {
 		String? excluirProductoId,
@@ -191,24 +211,38 @@ class AdminCatalogoProductos {
 		if (req.categoriaId.isEmpty) {
 			throw StateError('La categoria es obligatoria');
 		}
-		await validarCodigoBarrasUnico(req.codigoBarras);
 		validarPrecioVenta(req.precioBase, req.costoUnitario);
 		for (final escala in req.escalasMayoreo) {
 			validarPrecioVenta(escala.precioUnitario, req.costoUnitario);
 		}
 		final unidad = _unidadPorCategoria(req.categoriaId, req.unidadMedida);
-		// Sin código de barras (p. ej. importación a granel) no hay forma de
-		// detectar un duplicado por código; reutilizar el producto activo con el
-		// mismo nombre evita crear una copia cada vez que se reimporta la misma
-		// lista de precios. Con código de barras, ese ya es el mecanismo de
-		// deduplicación (validarCodigoBarrasUnico arriba) y no hace falta esto.
-		final existente = req.codigoBarras.trim().isEmpty
-			? await _productoRepository.buscarActivoPorNombre(req.nombre)
+		// Sin código de barras real, el sistema autogenera un código interno
+		// idempotente derivado del nombre. Con eso el mismo índice único
+		// (tienda_id, codigo_barras) bloquea duplicados por nombre — el mismo
+		// mecanismo que hoy funciona para los productos con código real.
+		//
+		// La reutilización silenciosa solo aplica cuando el código lo generó
+		// el sistema (código en blanco de origen): si el usuario tecleó un
+		// código duplicado se sigue lanzando el error para que edite el
+		// producto existente en lugar de crear otra copia sin darse cuenta.
+		final codigoCapturado = req.codigoBarras.trim();
+		final codigoAutogenerado = codigoCapturado.isEmpty;
+		final codigoResuelto = codigoAutogenerado
+			? generarCodigoInternoDesdeNombre(req.nombre)
+			: codigoCapturado;
+		if (!codigoAutogenerado) {
+			await validarCodigoBarrasUnico(codigoCapturado);
+		}
+		final aReutilizar = codigoAutogenerado
+			? await _buscarExistenteParaCodigoInterno(
+				codigoInterno: codigoResuelto,
+				nombre: req.nombre,
+			)
 			: null;
 		final producto = Producto(
-			id: existente?.id ?? _generadorId.v4(),
+			id: aReutilizar?.id ?? _generadorId.v4(),
 			nombre: req.nombre.trim(),
-			codigoBarras: req.codigoBarras.trim(),
+			codigoBarras: codigoResuelto,
 			precioBase: redondearMonto(req.precioBase),
 			unidadMedida: unidad,
 			rutaImagen: '',
@@ -223,13 +257,14 @@ class AdminCatalogoProductos {
 			costoUnitario: redondearMonto(req.costoUnitario),
 			permiteStockNegativo: req.permiteStockNegativo,
 		);
+		final reutilizado = aReutilizar != null;
 		await _enTransaccion((tx) async {
 			await _productoRepository.guardar(producto, db: tx);
 			final ahora = DateTime.now().toUtc();
 			// Al reutilizar un producto existente no se toca su stock: pisarlo con
 			// el stock inicial del formulario/importación borraría inventario real
 			// ya vendido o repuesto.
-			if (existente == null) {
+			if (!reutilizado) {
 				await _inventarioRepository.guardarStock(
 					StockNivel(
 						productoId: producto.id,
@@ -417,10 +452,21 @@ class AdminCatalogoProductos {
 		if (producto.categoriaId == null || producto.categoriaId!.isEmpty) {
 			throw StateError('La categoria es obligatoria');
 		}
-		await validarCodigoBarrasUnico(
-			producto.codigoBarras,
-			excluirProductoId: producto.id,
-		);
+		final codigoCapturado = producto.codigoBarras.trim();
+		// Si el usuario dejó el código en blanco o venía de un stub interno,
+		// se regenera el código interno idempotente derivado del nombre para
+		// mantener la deduplicación por índice único.
+		final codigoResuelto = codigoCapturado.isEmpty || esCodigoBarrasInterno(codigoCapturado)
+			? generarCodigoInternoDesdeNombre(producto.nombre)
+			: codigoCapturado;
+		// El código interno no dispara `validarCodigoBarrasUnico` (choques
+		// consigo mismo son ruido). El código real capturado sí se valida.
+		if (codigoCapturado.isNotEmpty && !esCodigoBarrasInterno(codigoResuelto)) {
+			await validarCodigoBarrasUnico(
+				codigoResuelto,
+				excluirProductoId: producto.id,
+			);
+		}
 		validarPrecioVenta(producto.precioBase, producto.costoUnitario);
 		if (escalasMayoreo != null) {
 			for (final escala in escalasMayoreo) {
@@ -432,6 +478,7 @@ class AdminCatalogoProductos {
 			producto.unidadMedida,
 		);
 		final actualizado = producto.copiarCon(
+			codigoBarras: codigoResuelto,
 			moduloVertical: _derivarModuloVertical(producto.categoriaId!, unidad),
 			unidadMedida: unidad,
 			precioBase: redondearMonto(producto.precioBase),
@@ -571,11 +618,17 @@ class AdminCatalogoProductos {
 		required String codigoBarras,
 		required double precioBase,
 	}) async {
-		await validarCodigoBarrasUnico(codigoBarras);
+		final codigoCapturado = codigoBarras.trim();
+		final codigoResuelto = codigoCapturado.isEmpty
+			? generarCodigoInternoDesdeNombre(nombre)
+			: codigoCapturado;
+		if (codigoCapturado.isNotEmpty) {
+			await validarCodigoBarrasUnico(codigoCapturado);
+		}
 		final producto = Producto(
 			id: _generadorId.v4(),
 			nombre: nombre,
-			codigoBarras: codigoBarras,
+			codigoBarras: codigoResuelto,
 			precioBase: redondearMonto(precioBase),
 			unidadMedida: UnidadMedida.pieza,
 			rutaImagen: '',

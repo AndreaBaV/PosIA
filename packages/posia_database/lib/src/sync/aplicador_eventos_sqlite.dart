@@ -153,6 +153,9 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 	Future<void> autoSanarCatalogoLocal() async {
 		await _autoSanarTiendasStub();
 		await _autoSanarCategoriasDuplicadas();
+		await _autoSanarProductosSinCodigoInterno();
+		await _autoSanarProductosDuplicados();
+		await _autoSanarCategoriasStubHuerfanas();
 	}
 
 	/// Desactiva localmente tiendas placeholder (creadas por integridad FK)
@@ -248,6 +251,218 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 					);
 				});
 			}
+		}
+	}
+
+	/// Backfill del código interno para productos activos que arrastran un
+	/// `codigo_barras` vacío desde versiones anteriores. Sin código no hay
+	/// forma de que el índice único bloquee un duplicado por nombre, así que
+	/// cualquier reimportación acababa creando otra fila.
+	///
+	/// El código se deriva del nombre normalizado y es idempotente: todos los
+	/// dispositivos rellenan el mismo valor sin necesidad de un evento
+	/// coordinador, y `_aplicarProductoRemoto` ya hace el mismo relleno para
+	/// los productos que sigan llegando en blanco desde otros equipos.
+	Future<void> _autoSanarProductosSinCodigoInterno() async {
+		final filas = await _baseDatos.query(
+			'products',
+			columns: ['id', 'nombre', 'notas'],
+			where: "activo = 1 AND (codigo_barras IS NULL OR codigo_barras = '')",
+		);
+		for (final fila in filas) {
+			final notas = (fila['notas'] as String? ?? '').trim();
+			if (notas == '__stub_fk__') {
+				continue;
+			}
+			final nombre = (fila['nombre'] as String? ?? '').trim();
+			if (nombre.isEmpty || nombre == 'Producto') {
+				continue;
+			}
+			final codigo = generarCodigoInternoDesdeNombre(nombre);
+			if (codigo.isEmpty) {
+				continue;
+			}
+			try {
+				await _baseDatos.update(
+					'products',
+					{'codigo_barras': codigo},
+					where: 'id = ?',
+					whereArgs: [fila['id']],
+				);
+			} on DatabaseException catch (error) {
+				if (!error.isUniqueConstraintError()) {
+					rethrow;
+				}
+				// Otra fila activa en la misma tienda ya tiene el código
+				// interno: el sanador de duplicados que corre a continuación
+				// hará la fusión. Aquí basta con dejar la fila en blanco.
+			}
+		}
+	}
+
+	/// Fusiona localmente productos duplicados por código de barras (real o
+	/// interno) que quedaron activos, y también los que comparten nombre
+	/// normalizado cuando ninguno tiene código real. Puramente local: reasigna
+	/// referencias transaccionales al canónico y desactiva a los perdedores,
+	/// sin emitir eventos — todos los dispositivos convergen al mismo canónico
+	/// por selección determinística.
+	Future<void> _autoSanarProductosDuplicados() async {
+		final filas = await _baseDatos.rawQuery(
+			'''
+			SELECT id, nombre, codigo_barras, tienda_id, notas
+			FROM products
+			WHERE activo = 1
+			''',
+		);
+		final grupos = <String, List<Map<String, Object?>>>{};
+		for (final fila in filas) {
+			final notas = (fila['notas'] as String? ?? '').trim();
+			if (notas == '__stub_fk__') {
+				continue;
+			}
+			final nombre = (fila['nombre'] as String? ?? '').trim();
+			if (nombre.isEmpty || nombre == 'Producto') {
+				continue;
+			}
+			final codigo = (fila['codigo_barras'] as String? ?? '').trim();
+			final tiendaId = (fila['tienda_id'] as String? ?? '').trim();
+			final String clave;
+			if (codigo.isEmpty || esCodigoBarrasInterno(codigo)) {
+				// Sin código real: agrupar por nombre normalizado (por tienda,
+				// para respetar el índice único que también es por tienda).
+				clave = 'n|$tiendaId|${normalizarTextoBusqueda(nombre)}';
+			} else {
+				// Con código real: agrupar por código (mismo criterio del
+				// índice único, cubre duplicados heredados anteriores al
+				// índice).
+				clave = 'c|$tiendaId|${codigo.toLowerCase()}';
+			}
+			grupos.putIfAbsent(clave, () => []).add(fila);
+		}
+		for (final grupo in grupos.values) {
+			if (grupo.length <= 1) {
+				continue;
+			}
+			// Canónico determinístico: la fila con más referencias
+			// transaccionales (ventas, apartados, traspasos, pedidos,
+			// cotizaciones, compras) o, en empate, el id más chico.
+			final conteos = <String, int>{};
+			for (final fila in grupo) {
+				final id = fila['id']! as String;
+				conteos[id] = await _referenciasTransaccionalesDeProducto(id);
+			}
+			grupo.sort((a, b) {
+				final porConteo = (conteos[b['id']] ?? 0)
+					.compareTo(conteos[a['id']] ?? 0);
+				if (porConteo != 0) {
+					return porConteo;
+				}
+				return (a['id']! as String).compareTo(b['id']! as String);
+			});
+			final canonicoId = grupo.first['id']! as String;
+			for (final perdedora in grupo.skip(1)) {
+				final perdedorId = perdedora['id']! as String;
+				await _baseDatos.transaction((tx) async {
+					await _reasignarReferenciasProducto(
+						tx,
+						desdeId: perdedorId,
+						haciaId: canonicoId,
+					);
+					// Baja lógica: mantener la fila viva por historial y para
+					// no revivir la fila como stub en un pull posterior.
+					await tx.update(
+						'products',
+						{
+							'activo': 0,
+							// Vaciar el código de barras del perdedor libera el
+							// slot del índice único para el canónico.
+							'codigo_barras': '',
+						},
+						where: 'id = ?',
+						whereArgs: [perdedorId],
+					);
+				});
+			}
+		}
+	}
+
+	/// Suma referencias transaccionales que apuntan a este producto. Es la
+	/// mejor señal de "cuál es el real": la fila con más ventas registradas
+	/// gana el canónico y así conserva su historial.
+	Future<int> _referenciasTransaccionalesDeProducto(String productoId) async {
+		const tablas = [
+			'sale_lines',
+			'held_ticket_lines',
+			'transfer_lines',
+			'purchase_lines',
+			'order_lines',
+			'quote_lines',
+		];
+		var total = 0;
+		for (final tabla in tablas) {
+			final filas = await _baseDatos.rawQuery(
+				'SELECT COUNT(*) AS c FROM $tabla WHERE producto_id = ?',
+				[productoId],
+			);
+			total += (filas.first['c'] as int?) ?? 0;
+		}
+		return total;
+	}
+
+	/// Redirige todas las FK transaccionales del producto perdedor al canónico.
+	/// Los catálogos hijos con CASCADE (variantes, presentaciones, escalas,
+	/// stock, listas de precios, promociones) se dejan intactos en la fila
+	/// perdedora: al quedar inactiva ya no aparecen en caja, y borrarlas
+	/// destruiría info que hasta ahora nadie ha pedido reconstruir.
+	Future<void> _reasignarReferenciasProducto(
+		Transaction tx, {
+		required String desdeId,
+		required String haciaId,
+	}) async {
+		const tablas = [
+			'sale_lines',
+			'held_ticket_lines',
+			'transfer_lines',
+			'purchase_lines',
+			'order_lines',
+			'quote_lines',
+			'customer_discounts',
+		];
+		for (final tabla in tablas) {
+			await tx.rawUpdate(
+				'UPDATE $tabla SET producto_id = ? WHERE producto_id = ?',
+				[haciaId, desdeId],
+			);
+		}
+	}
+
+	/// Desactiva localmente los stubs de categoría que no tienen ningún
+	/// producto activo apuntándolos. Sin esta limpieza los stubs sobreviven
+	/// para siempre y aparecen en la barra de categorías de caja como chips
+	/// "Categoría" sin nombre real.
+	Future<void> _autoSanarCategoriasStubHuerfanas() async {
+		final repo = _categoriaRepository;
+		if (repo == null) {
+			return;
+		}
+		final todas = await repo.listarTodas();
+		for (final categoria in todas) {
+			if (!categoria.esStubFk || !categoria.activa) {
+				continue;
+			}
+			final referencias = await _baseDatos.rawQuery(
+				'''
+				SELECT COUNT(*) AS c
+				FROM products
+				WHERE categoria_id = ? AND activo = 1
+				''',
+				[categoria.id],
+			);
+			final refs = (referencias.first['c'] as int?) ?? 0;
+			if (refs > 0) {
+				continue;
+			}
+			await repo.guardar(categoria.copiarCon(activa: false));
 		}
 	}
 
@@ -1014,10 +1229,20 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		await _asegurarTiendaPadre(tiendaId);
 		final unidadNombre = payload['unidadMedida'] as String? ?? UnidadMedida.pieza.name;
 		final verticalNombre = payload['moduloVertical'] as String? ?? ModuloVertical.general.name;
+		final nombreRemoto = payload['nombre'] as String? ?? '';
+		final codigoRemoto = (payload['codigoBarras'] as String? ?? '').trim();
+		// Backfill idempotente: cualquier producto de negocio que llegue sin
+		// código real recibe un código interno derivado del nombre. Así el
+		// índice único `(tienda_id, codigo_barras)` bloquea futuros duplicados
+		// aunque provengan de dispositivos que aún no ejecutaban este código.
+		final esStubEntrante = (payload['notas'] as String? ?? '').trim() == '__stub_fk__';
+		final codigoResuelto = codigoRemoto.isEmpty && !esStubEntrante && nombreRemoto.trim().isNotEmpty
+			? generarCodigoInternoDesdeNombre(nombreRemoto)
+			: codigoRemoto;
 		final producto = Producto(
 			id: productoId,
-			nombre: payload['nombre'] as String? ?? '',
-			codigoBarras: payload['codigoBarras'] as String? ?? '',
+			nombre: nombreRemoto,
+			codigoBarras: codigoResuelto,
 			precioBase: (payload['precioBase'] as num?)?.toDouble() ?? 0.0,
 			unidadMedida: UnidadMedida.values.firstWhere(
 				(valor) => valor.name == unidadNombre,

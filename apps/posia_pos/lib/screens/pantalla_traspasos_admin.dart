@@ -322,8 +322,8 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 										: Text(
 											_origenEsAlmacen
 												? 'Stock: ${stockPorProducto[producto.id]?.toStringAsFixed(0) ?? '0'}'
-												: producto.codigoBarras.isNotEmpty
-													? producto.codigoBarras
+												: producto.codigoBarrasVisible.isNotEmpty
+													? producto.codigoBarrasVisible
 													: 'Sin código',
 											style: const TextStyle(fontSize: 12.0),
 										),

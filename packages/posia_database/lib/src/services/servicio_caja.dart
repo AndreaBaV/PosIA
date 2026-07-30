@@ -190,12 +190,18 @@ class ServicioCaja {
   }
 
   /// Lista categorias activas para barra de caja.
+  ///
+  /// Excluye stubs FK ("Categoría" con icono y color por defecto): son un
+  /// mecanismo de integridad — creados cuando un producto llegó antes que su
+  /// categoría real — y no representan un grupo de negocio; mostrarlos en la
+  /// barra deja chips "Categoría" vacíos que confunden al usuario.
   Future<List<Categoria>> listarCategorias() async {
     final repo = _categoriaRepository;
     if (repo == null) {
       return [];
     }
-    return repo.listarActivas();
+    final todas = await repo.listarActivas();
+    return todas.where((c) => !c.esStubFk).toList();
   }
 
   /// Lista productos activos, opcionalmente filtrados por categoria.
