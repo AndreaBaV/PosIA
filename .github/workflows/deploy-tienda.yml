@@ -1,0 +1,59 @@
+name: Deploy tienda en línea
+
+# Despliega LandingPages/la-fortuna a Cloudflare Pages.
+#
+# Tubería independiente del hub: solo corre cuando cambia la tienda, así que
+# tocar el sitio no reconstruye el contenedor de Northflank ni al revés.
+#
+# Requiere un secreto en GitHub (Settings → Secrets and variables → Actions):
+#   CLOUDFLARE_API_TOKEN  — token con permiso "Cloudflare Pages: Edit"
+# El account id no es secreto (aparece en las URLs del panel) y va abajo.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'LandingPages/la-fortuna/**'
+      - '.github/workflows/deploy-tienda.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-tienda
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  desplegar:
+    name: Pruebas y despliegue
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: LandingPages/la-fortuna
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: LandingPages/la-fortuna/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      # Puerta de calidad: si el re-precio o el armado del pedido se rompen,
+      # no se publica. Las pruebas no tocan la base de datos.
+      - name: Pruebas
+        run: npm test
+
+      - name: Desplegar a Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: e612d4cf128eeb80b861ec7b0ba44fd7
+          workingDirectory: LandingPages/la-fortuna
+          command: pages deploy --project-name=la-fortuna --branch=main
