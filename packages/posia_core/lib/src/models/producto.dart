@@ -3,6 +3,7 @@ library;
 
 import '../enums/modulo_vertical.dart';
 import '../enums/unidad_medida.dart';
+import '../utils/busqueda_producto_util.dart' show esCodigoBarrasInterno;
 
 /// Representa un articulo vendible en catalogo.
 class Producto {
@@ -51,6 +52,14 @@ class Producto {
 	bool requiereLote() {
 		return moduloVertical == ModuloVertical.farmacia;
 	}
+
+	/// `true` cuando el código de barras fue generado automáticamente por el
+	/// sistema (deduplicación por nombre para productos sin código real).
+	bool get tieneCodigoInterno => esCodigoBarrasInterno(codigoBarras);
+
+	/// Código de barras visible al usuario. Cadena vacía cuando el código es
+	/// interno: es un mecanismo de integridad, no información de negocio.
+	String get codigoBarrasVisible => tieneCodigoInterno ? '' : codigoBarras;
 
 	/// Placeholder creado por integridad FK (sync fuera de orden).
 	///

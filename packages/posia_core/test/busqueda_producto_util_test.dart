@@ -77,4 +77,70 @@ void main() {
 		expect(normalizarTextoBusqueda('Café Maíz'), 'cafe maiz');
 		expect(normalizarTextoBusqueda('SAMAN'), 'saman');
 	});
+
+	group('generarCodigoInternoDesdeNombre', () {
+		test('es idempotente para el mismo nombre normalizado', () {
+			expect(
+				generarCodigoInternoDesdeNombre('Almendra Fileteada'),
+				generarCodigoInternoDesdeNombre('almendra   fileteada'),
+			);
+			expect(
+				generarCodigoInternoDesdeNombre('Café Maíz'),
+				generarCodigoInternoDesdeNombre('cafe maiz'),
+			);
+		});
+
+		test('produce codigos distintos para nombres distintos', () {
+			expect(
+				generarCodigoInternoDesdeNombre('Almendra'),
+				isNot(equals(generarCodigoInternoDesdeNombre('Almendra Fileteada'))),
+			);
+		});
+
+		test('nombre vacio o solo simbolos devuelve cadena vacia', () {
+			expect(generarCodigoInternoDesdeNombre(''), '');
+			expect(generarCodigoInternoDesdeNombre('   '), '');
+			expect(generarCodigoInternoDesdeNombre('###'), '');
+		});
+
+		test('siempre inicia con el prefijo interno', () {
+			expect(
+				generarCodigoInternoDesdeNombre('Arroz')
+					.startsWith(PREFIJO_CODIGO_INTERNO),
+				isTrue,
+			);
+		});
+	});
+
+	group('esCodigoBarrasInterno', () {
+		test('marca los codigos autogenerados', () {
+			expect(
+				esCodigoBarrasInterno(
+					generarCodigoInternoDesdeNombre('Almendra'),
+				),
+				isTrue,
+			);
+			expect(esCodigoBarrasInterno('#alm'), isTrue);
+		});
+
+		test('no confunde codigos reales como internos', () {
+			expect(esCodigoBarrasInterno('7501234567890'), isFalse);
+			expect(esCodigoBarrasInterno('ABC-1234'), isFalse);
+			expect(esCodigoBarrasInterno(''), isFalse);
+		});
+	});
+
+	test('Producto.codigoBarrasVisible oculta codigo interno', () {
+		final interno = _producto(
+			'1',
+			'Almendra',
+			codigo: generarCodigoInternoDesdeNombre('Almendra'),
+		);
+		expect(interno.tieneCodigoInterno, isTrue);
+		expect(interno.codigoBarrasVisible, '');
+
+		final real = _producto('2', 'Aceite', codigo: '7501234567890');
+		expect(real.tieneCodigoInterno, isFalse);
+		expect(real.codigoBarrasVisible, '7501234567890');
+	});
 }
