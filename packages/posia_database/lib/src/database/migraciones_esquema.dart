@@ -1441,7 +1441,11 @@ class MigracionesEsquema {
 	/// cliente acaba de actualizar). Con la fecha, gana la edicion mas
 	/// reciente, igual que decide el hub en Neon.
 	static Future<void> migrarVersion38A39(Database base) async {
-		await base.execute('ALTER TABLE products ADD COLUMN actualizado_en TEXT');
+		// Idempotente: este paso puede reintentarse (p. ej. si una migracion
+		// posterior de la misma corrida falla y el dispositivo reabre la base
+		// en el siguiente arranque). `ALTER TABLE ADD COLUMN` sin este guardia
+		// revienta con "duplicate column name" la segunda vez.
+		await _agregarColumnaSiNoExiste(base, 'products', 'actualizado_en', 'TEXT');
 	}
 
 	/// v6.23: codigo de barras unico por tienda entre productos activos.
