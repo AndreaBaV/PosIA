@@ -4,12 +4,14 @@ library;
 import 'dart:async';
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:posia_core/posia_core.dart';
 import 'package:posia_database/posia_database.dart';
 import 'package:posia_pricing/posia_pricing.dart';
+import 'package:posia_sync/posia_sync.dart';
 import 'package:posia_ui/posia_ui.dart';
 import 'package:posia_voice/posia_voice.dart';
 
@@ -53,6 +55,8 @@ class _PantallaFormularioProductoState
   bool _vozInicializada = false;
   bool _finalizandoVoz = false;
   String _transcripcionVoz = '';
+  String? _rutaImagen;
+  bool _subiendoImagen = false;
 
   bool get _esEdicion => widget.productoExistente != null;
 
@@ -75,6 +79,7 @@ class _PantallaFormularioProductoState
       _proveedorId = p.proveedorId;
       _activo = p.activo;
       _permiteStockNegativo = p.permiteStockNegativo;
+      _rutaImagen = p.rutaImagen.trim().isEmpty ? null : p.rutaImagen.trim();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _cargarEscalas(p.id);
         _cargarStock(p.id);
@@ -634,6 +639,8 @@ class _PantallaFormularioProductoState
           ),
         ),
         const SizedBox(height: 12.0),
+        _tarjetaFotoProducto(),
+        const SizedBox(height: 12.0),
         TextField(
           controller: _nombreController,
           decoration: const InputDecoration(
@@ -743,6 +750,198 @@ class _PantallaFormularioProductoState
     );
   }
 
+  /// Foto que ve el catalogo de la tienda en linea.
+  ///
+  /// Solo disponible al editar: subir la foto necesita el id del producto
+  /// ya guardado (la clave en R2 se arma con ese id), y crearlo antes de
+  /// tiempo solo para tener un id complicaria el alta sin ganar nada -el
+  /// usuario guarda el producto una vez y luego le agrega la foto, como ya
+  /// hace con el inventario.
+  Widget _tarjetaFotoProducto() {
+    if (!_esEdicion) {
+      return const Card(
+        margin: EdgeInsets.zero,
+        child: ListTile(
+          leading: Icon(Icons.photo_camera_outlined),
+          title: Text('Foto del producto'),
+          subtitle: Text('Guarda el producto primero para poder agregarle foto'),
+        ),
+      );
+    }
+    final servicioImagenes = ref.watch(servicioImagenesProductoProvider);
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8.0),
+              child: _rutaImagen != null
+                  ? Image.network(
+                      _rutaImagen!,
+                      width: 64.0,
+                      height: 64.0,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => _marcadorSinFoto(),
+                    )
+                  : _marcadorSinFoto(),
+            ),
+            const SizedBox(width: 12.0),
+            Expanded(
+              child: servicioImagenes == null
+                  ? const Text(
+                      'Tienda en línea no configurada: no se puede subir foto',
+                      style: TextStyle(color: Colors.grey),
+                    )
+                  : const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('Foto del producto'),
+                        Text(
+                          'Se ve en el catálogo de la tienda en línea',
+                          style: TextStyle(fontSize: 12.0, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+            ),
+            if (servicioImagenes != null)
+              _subiendoImagen
+                  ? const SizedBox(
+                      width: 20.0,
+                      height: 20.0,
+                      child: CircularProgressIndicator(strokeWidth: 2.0),
+                    )
+                  : TextButton(
+                      onPressed: () => _seleccionarYSubirFoto(servicioImagenes),
+                      child: Text(_rutaImagen != null ? 'Cambiar' : 'Agregar'),
+                    ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _marcadorSinFoto() {
+    return Container(
+      width: 64.0,
+      height: 64.0,
+      color: Colors.grey.shade200,
+      child: const Icon(Icons.image_not_supported_outlined, color: Colors.grey),
+    );
+  }
+
+  TipoImagenProducto? _tipoImagenDesdeNombre(String nombre) {
+    switch (nombre.toLowerCase().split('.').last) {
+      case 'jpg':
+      case 'jpeg':
+        return TipoImagenProducto.jpeg;
+      case 'png':
+        return TipoImagenProducto.png;
+      case 'webp':
+        return TipoImagenProducto.webp;
+      default:
+        return null;
+    }
+  }
+
+  Future<void> _seleccionarYSubirFoto(ServicioImagenesProducto servicio) async {
+    final producto = widget.productoExistente;
+    if (producto == null) {
+      return;
+    }
+    final resultado = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      withData: true,
+    );
+    if (resultado == null || resultado.files.isEmpty) {
+      return;
+    }
+    final archivo = resultado.files.first;
+    final bytes = archivo.bytes;
+    if (bytes == null) {
+      if (!mounted) {
+        return;
+      }
+      PosiaNotificaciones.mostrarSnackBar(
+        context,
+        const SnackBar(
+          content: Text('No se pudo leer el archivo'),
+          backgroundColor: PosiaColors.cancelar,
+        ),
+      );
+      return;
+    }
+    final tipo = _tipoImagenDesdeNombre(archivo.name);
+    if (tipo == null) {
+      if (!mounted) {
+        return;
+      }
+      PosiaNotificaciones.mostrarSnackBar(
+        context,
+        const SnackBar(
+          content: Text('Formato no soportado (usa JPG, PNG o WEBP)'),
+          backgroundColor: PosiaColors.cancelar,
+        ),
+      );
+      return;
+    }
+    if (bytes.length > TAMANO_MAXIMO_IMAGEN_PRODUCTO_BYTES) {
+      if (!mounted) {
+        return;
+      }
+      PosiaNotificaciones.mostrarSnackBar(
+        context,
+        const SnackBar(
+          content: Text('La imagen supera el tamaño máximo (5 MB)'),
+          backgroundColor: PosiaColors.cancelar,
+        ),
+      );
+      return;
+    }
+    setState(() => _subiendoImagen = true);
+    final url = await servicio.subirFoto(
+      productoId: producto.id,
+      bytes: bytes,
+      tipo: tipo,
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() => _subiendoImagen = false);
+    if (url == null) {
+      PosiaNotificaciones.mostrarSnackBar(
+        context,
+        const SnackBar(
+          content: Text('No se pudo subir la foto, intenta de nuevo'),
+          backgroundColor: PosiaColors.cancelar,
+        ),
+      );
+      return;
+    }
+    try {
+      final servicioAdmin = await ref.read(servicioAdminProvider.future);
+      await servicioAdmin.actualizarProducto(producto.copiarCon(rutaImagen: url));
+      if (!mounted) {
+        return;
+      }
+      setState(() => _rutaImagen = url);
+      PosiaNotificaciones.mostrarSnackBar(
+        context,
+        const SnackBar(content: Text('Foto actualizada')),
+      );
+    } on StateError catch (e) {
+      if (!mounted) {
+        return;
+      }
+      PosiaNotificaciones.mostrarSnackBar(
+        context,
+        SnackBar(content: Text(e.message), backgroundColor: PosiaColors.cancelar),
+      );
+    }
+  }
+
   Widget _pestanaPreciosYVenta() {
     final costo =
         parsearPrecioTexto(_costoController.text) ??
@@ -830,12 +1029,10 @@ class _PantallaFormularioProductoState
     return ListView(
       padding: const EdgeInsets.all(16.0),
       children: [
-        if (_esEdicion)
-          const ListTile(
-            leading: Icon(Icons.info_outline),
-            title: Text('Stock inicial solo aplica al crear producto'),
-          )
-        else ...[
+        if (_esEdicion) ...[
+          _tarjetaInventarioActual(),
+          const SizedBox(height: 12.0),
+        ] else ...[
           TextField(
             controller: _stockController,
             keyboardType: TextInputType.number,
@@ -866,6 +1063,123 @@ class _PantallaFormularioProductoState
         ),
       ],
     );
+  }
+
+  /// Inventario actual: solo lectura aqui -editarlo a mano rompia el
+  /// historial de movimientos. Un ajuste real pasa por "Editar por conteo",
+  /// que registra el movimiento (con motivo) igual que el resto de la app.
+  Widget _tarjetaInventarioActual() {
+    return Card(
+      margin: EdgeInsets.zero,
+      child: ListTile(
+        leading: const Icon(Icons.inventory_2_outlined),
+        title: const Text('Inventario actual'),
+        subtitle: Text(
+          '${_formatearCantidadEscala(double.tryParse(_stockController.text) ?? 0.0)} '
+          '${_vendePorPeso ? 'kg' : 'pza'}',
+        ),
+        trailing: TextButton(
+          onPressed: _abrirAjustePorConteo,
+          child: const Text('Editar por conteo'),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _abrirAjustePorConteo() async {
+    final producto = widget.productoExistente;
+    if (producto == null) {
+      return;
+    }
+    final controller = TextEditingController(text: _stockController.text);
+    var motivoSeleccionado =
+        motivoInventarioPredeterminado(TipoMovimientoInventario.ajuste);
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialog) => AlertDialog(
+          title: const Text('Editar por conteo'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: controller,
+                autofocus: true,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(labelText: 'Cantidad contada'),
+              ),
+              const SizedBox(height: 12.0),
+              SelectorMotivoInventario(
+                tipo: TipoMovimientoInventario.ajuste,
+                valor: motivoSeleccionado,
+                alCambiar: (motivo) =>
+                    setDialog(() => motivoSeleccionado = motivo),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Aplicar'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmar != true) {
+      controller.dispose();
+      return;
+    }
+    final cantidad = double.tryParse(controller.text.trim().replaceAll(',', '.'));
+    controller.dispose();
+    if (cantidad == null || cantidad < 0) {
+      if (!mounted) {
+        return;
+      }
+      PosiaNotificaciones.mostrarSnackBar(
+        context,
+        const SnackBar(
+          content: Text('Cantidad inválida'),
+          backgroundColor: PosiaColors.cancelar,
+        ),
+      );
+      return;
+    }
+    try {
+      final servicio = await ref.read(servicioAdminProvider.future);
+      final operador = ref.read(sesionUsuarioProvider);
+      await servicio.registrarMovimientoInventario(
+        productoId: producto.id,
+        tipo: TipoMovimientoInventario.ajuste,
+        cantidad: cantidad,
+        motivo: motivoSeleccionado,
+        operador: operador,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() => _stockController.text = _formatearCantidadEscala(cantidad));
+      PosiaNotificaciones.mostrarSnackBar(
+        context,
+        SnackBar(
+          content: Text(
+            'Existencia ajustada a ${_formatearCantidadEscala(cantidad)}',
+          ),
+        ),
+      );
+    } on StateError catch (e) {
+      if (!mounted) {
+        return;
+      }
+      PosiaNotificaciones.mostrarSnackBar(
+        context,
+        SnackBar(content: Text(e.message), backgroundColor: PosiaColors.cancelar),
+      );
+    }
   }
 
   List<EscalaMayoreo> _parseEscalas(String productoId) {

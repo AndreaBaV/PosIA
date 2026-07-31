@@ -218,9 +218,23 @@
 	function tarjetaProducto(producto) {
 		var tarjeta = elemento('article', 'producto');
 
-		// Marcador con la inicial mientras el catalogo no tenga fotografias.
-		var imagen = elemento('div', 'producto__imagen', (producto.nombre || '?').charAt(0).toUpperCase());
-		imagen.setAttribute('aria-hidden', 'true');
+		var imagen;
+		if (producto.imagenUrl) {
+			imagen = elemento('img', 'producto__imagen');
+			imagen.src = producto.imagenUrl;
+			imagen.alt = producto.nombre || '';
+			imagen.loading = 'lazy';
+			// Foto rota o url vencida: no dejar un icono roto, volver al marcador.
+			imagen.addEventListener('error', function () {
+				var respaldo = elemento('div', 'producto__imagen', (producto.nombre || '?').charAt(0).toUpperCase());
+				respaldo.setAttribute('aria-hidden', 'true');
+				imagen.replaceWith(respaldo);
+			});
+		} else {
+			// Marcador con la inicial mientras el producto no tenga fotografia.
+			imagen = elemento('div', 'producto__imagen', (producto.nombre || '?').charAt(0).toUpperCase());
+			imagen.setAttribute('aria-hidden', 'true');
+		}
 		tarjeta.appendChild(imagen);
 
 		var cuerpo = elemento('div', 'producto__cuerpo');

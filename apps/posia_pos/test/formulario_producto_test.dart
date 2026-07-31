@@ -106,4 +106,130 @@ void main() {
 			);
 		},
 	);
+
+	testWidgets(
+		'editar producto muestra inventario actual y no el aviso viejo',
+		(tester) async {
+			const categoria = Categoria(
+				id: categoriaPruebaId,
+				nombre: 'Semillas',
+				icono: 'shopping_basket',
+				colorHex: '#4CAF50',
+				orden: 0,
+				activa: true,
+			);
+			const existente = Producto(
+				id: 'prod-1',
+				nombre: 'Arroz Quebrado',
+				codigoBarras: '',
+				precioBase: 18.0,
+				unidadMedida: UnidadMedida.kilogramo,
+				rutaImagen: '',
+				activo: true,
+				tiendaId: 'tienda-centro',
+				categoriaId: categoriaPruebaId,
+				costoUnitario: 12.0,
+			);
+
+			await tester.pumpWidget(
+				ProviderScope(
+					overrides: [
+						categoriasFormularioAdminProvider.overrideWithValue(
+							const AsyncValue.data([categoria]),
+						),
+						proveedoresFormularioAdminProvider.overrideWithValue(
+							const AsyncValue.data([]),
+						),
+					],
+					child: const MaterialApp(
+						home: PantallaFormularioProducto(productoExistente: existente),
+					),
+				),
+			);
+			await tester.pump();
+
+			// Pestaña "Inventario".
+			await tester.tap(find.text('Inventario'));
+			await tester.pumpAndSettle();
+
+			expect(find.text('Inventario actual'), findsOneWidget);
+			expect(find.text('Editar por conteo'), findsOneWidget);
+			expect(
+				find.text('Stock inicial solo aplica al crear producto'),
+				findsNothing,
+				reason: 'ese aviso ya no debe reemplazar el inventario editable',
+			);
+		},
+	);
+
+	testWidgets(
+		'alta de producto nuevo no ofrece subir foto todavia',
+		(tester) async {
+			await tester.pumpWidget(
+				ProviderScope(
+					overrides: [
+						categoriasFormularioAdminProvider.overrideWithValue(
+							const AsyncValue.data([]),
+						),
+						proveedoresFormularioAdminProvider.overrideWithValue(
+							const AsyncValue.data([]),
+						),
+					],
+					child: const MaterialApp(
+						home: PantallaFormularioProducto(),
+					),
+				),
+			);
+			await tester.pump();
+
+			expect(
+				find.text('Guarda el producto primero para poder agregarle foto'),
+				findsOneWidget,
+			);
+		},
+	);
+
+	testWidgets(
+		'editar producto sin tienda en línea configurada avisa en vez de ofrecer subir',
+		(tester) async {
+			const existente = Producto(
+				id: 'prod-1',
+				nombre: 'Arroz Quebrado',
+				codigoBarras: '',
+				precioBase: 18.0,
+				unidadMedida: UnidadMedida.kilogramo,
+				rutaImagen: '',
+				activo: true,
+				tiendaId: 'tienda-centro',
+				categoriaId: categoriaPruebaId,
+				costoUnitario: 12.0,
+			);
+
+			await tester.pumpWidget(
+				ProviderScope(
+					overrides: [
+						categoriasFormularioAdminProvider.overrideWithValue(
+							const AsyncValue.data([]),
+						),
+						proveedoresFormularioAdminProvider.overrideWithValue(
+							const AsyncValue.data([]),
+						),
+					],
+					child: const MaterialApp(
+						home: PantallaFormularioProducto(productoExistente: existente),
+					),
+				),
+			);
+			await tester.pump();
+
+			// El test no define POSIA_TIENDA_URL/POSIA_HUB_API_KEY: sin esos
+			// dart-defines, servicioImagenesProductoProvider es null.
+			expect(
+				find.text('Tienda en línea no configurada: no se puede subir foto'),
+				findsOneWidget,
+			);
+			expect(find.text('Agregar'), findsNothing);
+			expect(find.text('Cambiar'), findsNothing);
+		},
+	);
 }

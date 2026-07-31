@@ -8,6 +8,7 @@ import 'configuracion_entorno_io.dart'
 abstract final class ClavesEnv {
 	static const String hubUrl = 'POSIA_HUB_URL';
 	static const String hubApiKey = 'POSIA_HUB_API_KEY';
+	static const String tiendaUrl = 'POSIA_TIENDA_URL';
 	static const String limpiarCacheLocal = 'POSIA_LIMPIAR_CACHE_LOCAL';
 	static const String buildId = 'POSIA_BUILD_ID';
 	static const String databaseUrl = 'DATABASE_URL';
@@ -52,6 +53,7 @@ class ConfiguracionEntorno {
 
 	static String get hubUrl => obtener(ClavesEnv.hubUrl) ?? '';
 	static String get hubApiKey => obtener(ClavesEnv.hubApiKey) ?? '';
+	static String get tiendaUrl => obtener(ClavesEnv.tiendaUrl) ?? '';
 	static String? get databaseUrl => obtener(ClavesEnv.databaseUrl);
 	static bool get tieneHub =>
 		hubUrl.trim().isNotEmpty && hubApiKey.trim().isNotEmpty;

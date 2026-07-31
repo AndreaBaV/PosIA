@@ -1,7 +1,7 @@
 /* Consultas del catalogo publico.
 
    Regla de oro: la vitrina NUNCA expone existencias. Solo nombre, precio,
-   unidad, categoria, presentaciones y escalas de precio por cantidad.
+   unidad, categoria, imagen, presentaciones y escalas de precio por cantidad.
 
    Autor: Equipo POSIA · Matricula: POSIA-2026-001 */
 
@@ -88,7 +88,7 @@ export async function consultarCatalogo(sql, tiendaPrincipalId, opciones = {}) {
 		`SELECT * FROM (
 			SELECT DISTINCT ON (lower(btrim(p.nombre)))
 				p.id, p.nombre, p.precio_base, p.unidad_medida,
-				p.categoria_id, p.notas, c.nombre AS categoria_nombre
+				p.categoria_id, p.notas, p.ruta_imagen, c.nombre AS categoria_nombre
 			FROM products p
 			JOIN stores s ON s.id = p.tienda_id AND s.activa = 1
 			LEFT JOIN categories c ON c.id = p.categoria_id
@@ -109,6 +109,7 @@ export async function consultarCatalogo(sql, tiendaPrincipalId, opciones = {}) {
 		categoriaId: fila.categoria_id,
 		categoria: fila.categoria_nombre || 'Otros',
 		descripcion: (fila.notas ?? '').trim(),
+		imagenUrl: (fila.ruta_imagen ?? '').trim() || null,
 		presentaciones: [],
 		escalas: [],
 	}));

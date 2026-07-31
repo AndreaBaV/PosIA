@@ -87,6 +87,16 @@ const int TIMEOUT_HUB_DESPERTAR_SEGUNDOS = 60;
 /// Eventos por lote al empujar la cola local al hub.
 const int TAMANO_LOTE_SYNC_HUB = 40;
 
+/// Timeout al subir la foto de un producto a la tienda en linea (R2).
+///
+/// Mas alto que [TIMEOUT_HUB_SYNC_SEGUNDOS]: hasta 5 MB de imagen sobre la
+/// red de una tienda (WiFi lento, datos moviles) tarda mas que un JSON
+/// chico de sync.
+const int TIMEOUT_SUBIDA_IMAGEN_SEGUNDOS = 60;
+
+/// Tamano maximo de foto de producto que acepta /v1/admin/imagenes.
+const int TAMANO_MAXIMO_IMAGEN_PRODUCTO_BYTES = 5 * 1024 * 1024;
+
 /// Tiempo maximo que la fase de envio puede consumir en un ciclo de sync.
 ///
 /// Con colas de miles de eventos el envio completo no cabe en un ciclo; se

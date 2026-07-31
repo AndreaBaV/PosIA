@@ -17,6 +17,14 @@ abstract final class ConfiguracionDespliegue {
 		defaultValue: '',
 	);
 
+	/// Base de la tienda en linea (Cloudflare Pages), para /v1/admin/imagenes.
+	/// Reusa la misma clave que el hub (POSIA_HUB_API_KEY) para autenticarse
+	/// ahi: no hace falta que el build cargue un secreto mas.
+	static const String _tiendaUrlBuild = String.fromEnvironment(
+		'POSIA_TIENDA_URL',
+		defaultValue: '',
+	);
+
 	static const bool _limpiarCacheLocalBuild = bool.fromEnvironment(
 		'POSIA_LIMPIAR_CACHE_LOCAL',
 		defaultValue: false,
@@ -43,8 +51,20 @@ abstract final class ConfiguracionDespliegue {
 		return _hubApiKeyBuild.trim();
 	}
 
+	static String get tiendaUrl {
+		final desdeEnv = ConfiguracionEntorno.tiendaUrl.trim();
+		if (desdeEnv.isNotEmpty) {
+			return desdeEnv;
+		}
+		return _tiendaUrlBuild.trim();
+	}
+
 	static bool get usaHubEnNube =>
 		hubUrl.isNotEmpty && hubApiKey.isNotEmpty;
+
+	/// true si hay tienda en linea configurada para subir fotos de producto.
+	static bool get tieneSubidaImagenes =>
+		tiendaUrl.isNotEmpty && hubApiKey.isNotEmpty;
 
 	/// Si es true, borra SQLite local al primer arranque de cada [buildId].
 	static bool get limpiarCacheLocal {

@@ -96,6 +96,7 @@ jobs:
         env:
           POSIA_HUB_URL: ${{ secrets.POSIA_HUB_URL }}
           POSIA_HUB_API_KEY: ${{ secrets.POSIA_HUB_API_KEY }}
+          POSIA_TIENDA_URL: ${{ secrets.POSIA_TIENDA_URL }}
           POSIA_LIMPIAR_CACHE_LOCAL: ${{ env.POSIA_LIMPIAR_CACHE_LOCAL }}
         run: |
           if [ "${{ github.event_name }}" = "push" ]; then
@@ -108,6 +109,9 @@ jobs:
           ARGS="--dart-define=POSIA_BUILD_ID=$BUILD_ID"
           [ -n "$POSIA_HUB_URL" ] && ARGS="$ARGS --dart-define=POSIA_HUB_URL=$POSIA_HUB_URL"
           [ -n "$POSIA_HUB_API_KEY" ] && ARGS="$ARGS --dart-define=POSIA_HUB_API_KEY=$POSIA_HUB_API_KEY"
+          # Opcional: sin ella la app oculta el boton de foto de producto
+          # (ver ConfiguracionDespliegue.tieneSubidaImagenes), no bloquea el build.
+          [ -n "$POSIA_TIENDA_URL" ] && ARGS="$ARGS --dart-define=POSIA_TIENDA_URL=$POSIA_TIENDA_URL"
           [ "$POSIA_LIMPIAR_CACHE_LOCAL" = "true" ] && ARGS="$ARGS --dart-define=POSIA_LIMPIAR_CACHE_LOCAL=true"
           flutter build appbundle --release $ARGS
 
@@ -161,12 +165,14 @@ jobs:
         env:
           POSIA_HUB_URL: ${{ secrets.POSIA_HUB_URL }}
           POSIA_HUB_API_KEY: ${{ secrets.POSIA_HUB_API_KEY }}
+          POSIA_TIENDA_URL: ${{ secrets.POSIA_TIENDA_URL }}
           POSIA_LIMPIAR_CACHE_LOCAL: ${{ env.POSIA_LIMPIAR_CACHE_LOCAL }}
         run: |
           BUILD_ID=$(grep -E '^version:' pubspec.yaml | head -1 | awk '{print $2}' | tr -d '\r')
           ARGS="--dart-define=POSIA_BUILD_ID=$BUILD_ID"
           [ -n "$POSIA_HUB_URL" ] && ARGS="$ARGS --dart-define=POSIA_HUB_URL=$POSIA_HUB_URL"
           [ -n "$POSIA_HUB_API_KEY" ] && ARGS="$ARGS --dart-define=POSIA_HUB_API_KEY=$POSIA_HUB_API_KEY"
+          [ -n "$POSIA_TIENDA_URL" ] && ARGS="$ARGS --dart-define=POSIA_TIENDA_URL=$POSIA_TIENDA_URL"
           [ "$POSIA_LIMPIAR_CACHE_LOCAL" = "true" ] && ARGS="$ARGS --dart-define=POSIA_LIMPIAR_CACHE_LOCAL=true"
           flutter build apk --release $ARGS
 
@@ -317,6 +323,7 @@ jobs:
         env:
           POSIA_HUB_URL: ${{ secrets.POSIA_HUB_URL }}
           POSIA_HUB_API_KEY: ${{ secrets.POSIA_HUB_API_KEY }}
+          POSIA_TIENDA_URL: ${{ secrets.POSIA_TIENDA_URL }}
           POSIA_LIMPIAR_CACHE_LOCAL: ${{ env.POSIA_LIMPIAR_CACHE_LOCAL }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           IOS_PROVISION_PROFILE_NAME: ${{ secrets.IOS_PROVISION_PROFILE_NAME }}
@@ -329,6 +336,7 @@ jobs:
           ARGS="--dart-define=POSIA_BUILD_ID=$BUILD_ID"
           [ -n "$POSIA_HUB_URL" ] && ARGS="$ARGS --dart-define=POSIA_HUB_URL=$POSIA_HUB_URL"
           [ -n "$POSIA_HUB_API_KEY" ] && ARGS="$ARGS --dart-define=POSIA_HUB_API_KEY=$POSIA_HUB_API_KEY"
+          [ -n "$POSIA_TIENDA_URL" ] && ARGS="$ARGS --dart-define=POSIA_TIENDA_URL=$POSIA_TIENDA_URL"
           [ "$POSIA_LIMPIAR_CACHE_LOCAL" = "true" ] && ARGS="$ARGS --dart-define=POSIA_LIMPIAR_CACHE_LOCAL=true"
           flutter build ipa --release \
             --export-options-plist=ios/ExportOptions.plist \

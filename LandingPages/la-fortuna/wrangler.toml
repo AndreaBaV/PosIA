@@ -6,6 +6,16 @@
 #
 # Las variables sensibles (DATABASE_URL) NO van aqui: se cargan como
 # secretos en el panel, y en local desde .dev.vars (ignorado por Git).
+#
+# Para /v1/admin/imagenes (foto de producto -> R2), configurar en el panel
+# de Cloudflare Pages (Settings > Functions):
+#   - R2 bucket binding: variable "IMAGENES_PRODUCTOS" -> bucket R2 elegido.
+#   - Variable de entorno "IMAGENES_URL_BASE": URL publica del bucket (el
+#     dominio r2.dev que Cloudflare genera al activar "Public access", o un
+#     dominio propio conectado al bucket). Sin barra final.
+#   - Secreto "POSIA_HUB_API_KEY": el mismo valor que ya usan las builds
+#     moviles (GitHub secret POSIA_HUB_API_KEY) — es la clave que valida que
+#     la subida viene de la app POS, no un tercero.
 
 name = "la-fortuna"
 pages_build_output_dir = "public"

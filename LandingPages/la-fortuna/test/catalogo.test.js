@@ -32,9 +32,23 @@ test('el catálogo nunca consulta ni publica existencias', async () => {
 			'no debe tocarse ninguna tabla de inventario');
 	}
 	assert.deepEqual(Object.keys(datos.productos[0]).sort(), [
-		'categoria', 'categoriaId', 'descripcion', 'escalas', 'id', 'nombre',
-		'precio', 'presentaciones', 'unidad',
+		'categoria', 'categoriaId', 'descripcion', 'escalas', 'id', 'imagenUrl',
+		'nombre', 'precio', 'presentaciones', 'unidad',
 	]);
+});
+
+test('el catálogo expone la imagen del producto cuando existe, o null si no', async () => {
+	const conImagen = producto('p1', 'Frijol');
+	conImagen.ruta_imagen = 'https://pub-test.r2.dev/productos/p1-123.jpg';
+	const sinImagen = producto('p2', 'Arroz');
+	sinImagen.ruta_imagen = '';
+
+	const sql = sqlFalso({ productos: [conImagen, sinImagen] });
+	const datos = await consultarCatalogo(sql, TIENDA);
+
+	const [frijol, arroz] = datos.productos;
+	assert.equal(frijol.imagenUrl, 'https://pub-test.r2.dev/productos/p1-123.jpg');
+	assert.equal(arroz.imagenUrl, null);
 });
 
 test('el catálogo trae las escalas de precio por cantidad', async () => {

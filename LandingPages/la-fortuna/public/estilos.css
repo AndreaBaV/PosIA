@@ -194,13 +194,20 @@ a { color: var(--verde-oscuro); }
 	box-shadow: var(--sombra);
 }
 
-/* Marcador temporal mientras no hay fotografias del catalogo. */
+/* Marcador con la inicial cuando el producto no tiene fotografia. */
 .producto__imagen {
 	aspect-ratio: 4 / 3;
 	display: grid; place-items: center;
 	background: var(--verde-suave);
 	color: var(--verde-oscuro);
 	font-size: 1.9rem; font-weight: 700; letter-spacing: 1px;
+}
+
+/* Fotografia real del producto: mismo recuadro, recortada sin deformarse. */
+img.producto__imagen {
+	width: 100%;
+	object-fit: cover;
+	color: transparent; /* oculta el alt si la imagen no carga */
 }
 
 .producto__cuerpo { display: flex; flex-direction: column; gap: .4rem; padding: .7rem .75rem .85rem; flex: 1; }
