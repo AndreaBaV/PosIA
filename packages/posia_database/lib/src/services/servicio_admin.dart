@@ -1497,8 +1497,8 @@ class ServicioAdmin {
       }
     }
     await repo.guardar(rol);
-    await _emisorEventos.rolPersonalizado(rol);
-    await _sincronizarInmediatoConHub();
+    final eventoId = await _emisorEventos.rolPersonalizado(rol);
+    await _sincronizarEventoInmediato(eventoId);
     return rol;
   }
 
@@ -1539,8 +1539,9 @@ class ServicioAdmin {
       throw StateError('Rol personalizado no encontrado');
     }
     await repo.guardar(existente.copiarCon(activo: false));
-    await _emisorEventos.rolPersonalizado(existente.copiarCon(activo: false));
-    await _sincronizarInmediatoConHub();
+    final eventoId =
+        await _emisorEventos.rolPersonalizado(existente.copiarCon(activo: false));
+    await _sincronizarEventoInmediato(eventoId);
   }
 
   Future<List<Producto>> listarProductosCatalogoFiltrados({
@@ -1657,9 +1658,9 @@ class ServicioAdmin {
       throw StateError('Sin permiso para crear este usuario');
     }
     await repo.guardar(usuario);
-    await _registrarEventoUsuario(usuario);
+    final eventoId = await _registrarEventoUsuario(usuario);
     await _sincronizarVendedorVinculado(usuario);
-    await _sincronizarInmediatoConHub();
+    await _sincronizarEventoInmediato(eventoId);
     return usuario;
   }
 
@@ -1749,9 +1750,9 @@ class ServicioAdmin {
           rolFinal == RolUsuario.administrador && rolPersonalizadoFinal == null,
     );
     await repo.guardar(actualizado);
-    await _registrarEventoUsuario(actualizado);
+    final eventoId = await _registrarEventoUsuario(actualizado);
     await _sincronizarVendedorVinculado(actualizado);
-    await _sincronizarInmediatoConHub();
+    await _sincronizarEventoInmediato(eventoId);
     return actualizado;
   }
 
@@ -1832,8 +1833,8 @@ class ServicioAdmin {
     if (actualizado == null) {
       throw StateError('Usuario no encontrado');
     }
-    await _registrarEventoUsuario(actualizado);
-    await _sincronizarInmediatoConHub();
+    final eventoId = await _registrarEventoUsuario(actualizado);
+    await _sincronizarEventoInmediato(eventoId);
   }
 
   String? _resolverTiendaOperacion(Usuario? operador, String? tiendaId) {
@@ -3230,15 +3231,6 @@ class ServicioAdmin {
     return HubSyncClient(urlBase: hubUrl.trim(), claveApi: claveApi);
   }
 
-  /// Tras mutar usuarios, empuja a la nube y descarga cambios remotos.
-  Future<void> _sincronizarInmediatoConHub() async {
-    final hubUrl = await _configRepository.obtenerHubUrl();
-    if (hubUrl == null || hubUrl.trim().isEmpty) {
-      return;
-    }
-    await sincronizarManual();
-  }
-
   /// Evita colisionar con cuentas ya provisionadas en el hub (p. ej. bootstrap).
   Future<String> _resolverCodigoUsuarioDisponible(
     UsuarioRepository repo,
@@ -3288,16 +3280,39 @@ class ServicioAdmin {
 
   /// [usuario.id] debe existir en [_usuarioRepository]: el evento necesita el
   /// snapshot (pin/timestamps) que no vive en el modelo de dominio.
-  Future<void> _registrarEventoUsuario(Usuario usuario) async {
+  ///
+  /// Retorna el id del evento encolado (para empujarlo de inmediato con
+  /// [_sincronizarEventoInmediato]), o cadena vacia si no se emitio.
+  Future<String> _registrarEventoUsuario(Usuario usuario) async {
     final repo = _usuarioRepository;
     if (repo == null) {
-      return;
+      return '';
     }
     final snapshot = await repo.obtenerSnapshotSync(usuario.id);
     if (snapshot == null) {
+      return '';
+    }
+    return _emisorEventos.usuario(usuario, snapshot: snapshot);
+  }
+
+  /// Empuja solo [eventoId] al hub, sin reencolar ni esperar el catálogo
+  /// completo pendiente.
+  ///
+  /// `_sincronizarInmediatoConHub` (reencola TODO el catálogo local
+  /// pendiente y corre un ciclo completo de sync) es correcto para
+  /// operaciones masivas, pero usarlo tras dar de alta/editar un solo
+  /// usuario o rol dejaba el boton "Guardando..." colgado -a veces minutos-
+  /// en cuanto el catálogo local tenia unos cuantos cientos de productos: el
+  /// admin creia que la app se habia congelado, y si cerraba la app antes de
+  /// que el ciclo completo terminara, el usuario nuevo quedaba solo en
+  /// SQLite (el evento seguia pendiente en cola, pero nunca llego a
+  /// empujarse). El sync periodico de 60 s sigue encargandose del resto del
+  /// catálogo y de las descargas.
+  Future<void> _sincronizarEventoInmediato(String eventoId) async {
+    if (eventoId.isEmpty) {
       return;
     }
-    await _emisorEventos.usuario(usuario, snapshot: snapshot);
+    await _syncOrchestrator.sincronizarEventosPorIds([eventoId]);
   }
 
   // --- Almacenes ---

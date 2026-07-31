@@ -66,30 +66,34 @@ class AdminEmisorEventosSync {
 		);
 	}
 
-	Future<void> rolPersonalizado(RolPersonalizado rol) {
+	/// Retorna el id del evento encolado (para empujarlo de inmediato con
+	/// `sincronizarEventosPorIds`, sin reencolar ni empujar todo el catálogo
+	/// pendiente por una sola alta/edicion de rol), o cadena vacia si no se
+	/// emitio (stub FK).
+	Future<String> rolPersonalizado(RolPersonalizado rol) async {
 		// Stubs FK ("Rol") no son catálogo real; no contaminar Neon.
 		if (rol.esStubFk) {
-			return Future.value();
+			return '';
 		}
-		return _emitir(
-			SyncEvent(
-				id: _idEventoEspejo(TipoSyncEvento.customRoleUpserted, rol.id),
-				tiendaId: _tiendaActivaId,
-				dispositivoId: _cajaId,
-				tipo: TipoSyncEvento.customRoleUpserted,
-				payload: {
-					'id': rol.id,
-					'nombre': rol.nombre,
-					'descripcion': rol.descripcion,
-					'permisosAdmin': rol.permisosAdmin,
-					'categoriasPermitidas': rol.categoriasPermitidas,
-					'activo': rol.activo,
-					'tiendaId': rol.tiendaId,
-				},
-				creadoEn: DateTime.now().toUtc(),
-				estado: EstadoSyncEvento.pendiente,
-			),
+		final evento = SyncEvent(
+			id: _idEventoEspejo(TipoSyncEvento.customRoleUpserted, rol.id),
+			tiendaId: _tiendaActivaId,
+			dispositivoId: _cajaId,
+			tipo: TipoSyncEvento.customRoleUpserted,
+			payload: {
+				'id': rol.id,
+				'nombre': rol.nombre,
+				'descripcion': rol.descripcion,
+				'permisosAdmin': rol.permisosAdmin,
+				'categoriasPermitidas': rol.categoriasPermitidas,
+				'activo': rol.activo,
+				'tiendaId': rol.tiendaId,
+			},
+			creadoEn: DateTime.now().toUtc(),
+			estado: EstadoSyncEvento.pendiente,
 		);
+		await _emitir(evento);
+		return evento.id;
 	}
 
 	Future<void> cliente(Cliente cliente) {
@@ -781,33 +785,40 @@ class AdminEmisorEventosSync {
 
 	/// [snapshot] viene de `UsuarioRepository.obtenerSnapshotSync`: contiene
 	/// campos (pin, timestamps) que no vive en el modelo `Usuario` de dominio.
-	Future<void> usuario(Usuario usuario, {required UsuarioSnapshotSync snapshot}) {
+	/// Retorna el id del evento encolado (para empujarlo de inmediato con
+	/// `sincronizarEventosPorIds`, sin reencolar ni empujar todo el catálogo
+	/// pendiente por una sola alta/edicion de usuario), o cadena vacia si no
+	/// se emitio (stub FK).
+	Future<String> usuario(
+		Usuario usuario, {
+		required UsuarioSnapshotSync snapshot,
+	}) async {
 		// Stubs FK ("Usuario" con codigo sync-) no son personal real.
 		if (usuario.esStubFk) {
-			return Future.value();
+			return '';
 		}
-		return _emitir(
-			SyncEvent(
-				id: _idEventoEspejo(TipoSyncEvento.userUpserted, usuario.id),
-				tiendaId: _tiendaActivaId,
-				dispositivoId: _cajaId,
-				tipo: TipoSyncEvento.userUpserted,
-				payload: {
-					'id': usuario.id,
-					'nombre': usuario.nombre,
-					'codigo': usuario.codigo,
-					'rol': usuario.rol.name,
-					'tiendaId': usuario.tiendaId,
-					'rolPersonalizadoId': usuario.rolPersonalizadoId,
-					'activo': usuario.activo,
-					'pinCredencial': snapshot.pinCredencial,
-					'creadoEn': snapshot.creadoEn,
-					'actualizadoEn': snapshot.actualizadoEn,
-				},
-				creadoEn: DateTime.now().toUtc(),
-				estado: EstadoSyncEvento.pendiente,
-			),
+		final evento = SyncEvent(
+			id: _idEventoEspejo(TipoSyncEvento.userUpserted, usuario.id),
+			tiendaId: _tiendaActivaId,
+			dispositivoId: _cajaId,
+			tipo: TipoSyncEvento.userUpserted,
+			payload: {
+				'id': usuario.id,
+				'nombre': usuario.nombre,
+				'codigo': usuario.codigo,
+				'rol': usuario.rol.name,
+				'tiendaId': usuario.tiendaId,
+				'rolPersonalizadoId': usuario.rolPersonalizadoId,
+				'activo': usuario.activo,
+				'pinCredencial': snapshot.pinCredencial,
+				'creadoEn': snapshot.creadoEn,
+				'actualizadoEn': snapshot.actualizadoEn,
+			},
+			creadoEn: DateTime.now().toUtc(),
+			estado: EstadoSyncEvento.pendiente,
 		);
+		await _emitir(evento);
+		return evento.id;
 	}
 
 	/// Encola la lapida de un producto borrado por el administrador.
