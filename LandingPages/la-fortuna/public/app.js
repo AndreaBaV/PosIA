@@ -434,6 +434,44 @@
 		persistirCarrito();
 	}
 
+	// Lineas guardadas en localStorage ANTES de que existieran las escalas de
+	// precio no traen `escalas`/`precioBase` (la clave ni existe en el
+	// objeto, a diferencia de un producto que de verdad no tiene tramos: ese
+	// trae `escalas: []`). Editar su cantidad en el carrito se quedaba con el
+	// precio plano que tenian guardado, escalado linealmente, en vez de
+	// consultar el tramo que corresponde. Se completan una sola vez al
+	// arrancar, sin que el cliente tenga que vaciar el carrito.
+	function migrarCarritoLegado() {
+		var idsFaltantes = [];
+		estado.carrito.forEach(function (linea) {
+			if (!linea.presentacionId && linea.escalas === undefined &&
+				idsFaltantes.indexOf(linea.productoId) === -1) {
+				idsFaltantes.push(linea.productoId);
+			}
+		});
+		if (!idsFaltantes.length) { return; }
+		pedir('/v1/public/catalogo?ids=' + idsFaltantes.map(encodeURIComponent).join(','))
+			.then(function (datos) {
+				var porId = {};
+				(datos.productos || []).forEach(function (p) { porId[p.id] = p; });
+				var huboCambios = false;
+				estado.carrito.forEach(function (linea) {
+					if (linea.presentacionId || linea.escalas !== undefined) { return; }
+					var producto = porId[linea.productoId];
+					if (!producto) { return; }
+					linea.precioBase = producto.precio;
+					linea.escalas = producto.escalas || [];
+					recalcularPrecioLinea(linea);
+					huboCambios = true;
+				});
+				if (huboCambios) { persistirCarrito(); }
+			})
+			.catch(function () {
+				// Sin conexion momentanea: el carrito sigue mostrando el precio
+				// anterior y se reintenta la migracion en el siguiente arranque.
+			});
+	}
+
 	function abrirCarrito(abierto) {
 		$('[data-carrito]').hidden = !abierto;
 		$('[data-fondo]').hidden = !abierto;
@@ -667,6 +705,7 @@
 
 	function iniciar() {
 		pintarCarrito();
+		migrarCarritoLegado();
 
 		$('[data-abrir-carrito]').addEventListener('click', function () { abrirCarrito(true); });
 		$('[data-cerrar-carrito]').addEventListener('click', function () { abrirCarrito(false); });

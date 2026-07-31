@@ -47,15 +47,26 @@ export async function consultarCategorias(sql) {
 export async function consultarCatalogo(sql, tiendaPrincipalId, opciones = {}) {
 	const busqueda = (opciones.q ?? '').trim();
 	const categoriaId = (opciones.categoria ?? '').trim();
-	const limite = Math.min(
-		Math.max(Number(opciones.limite) || LIMITE_PAGINA_CATALOGO, 1),
-		LIMITE_PAGINA_CATALOGO,
-	);
-	const salto = Math.max(Number(opciones.desde) || 0, 0);
+	// Lista acotada de ids (p. ej. para refrescar precio/escalas de un
+	// carrito guardado): sin paginar, se traen todos los que pidan.
+	const idsFiltro = Array.isArray(opciones.ids)
+		? [...new Set(opciones.ids.map((id) => String(id).trim()).filter(Boolean))]
+		: [];
+	const limite = idsFiltro.length
+		? idsFiltro.length
+		: Math.min(
+			Math.max(Number(opciones.limite) || LIMITE_PAGINA_CATALOGO, 1),
+			LIMITE_PAGINA_CATALOGO,
+		);
+	const salto = idsFiltro.length ? 0 : Math.max(Number(opciones.desde) || 0, 0);
 
 	const condiciones = ['p.activo = 1', 'p.precio_base > 0'];
 	const parametros = [tiendaPrincipalId];
 
+	if (idsFiltro.length) {
+		parametros.push(idsFiltro);
+		condiciones.push(`p.id = ANY($${parametros.length})`);
+	}
 	if (busqueda) {
 		parametros.push(`%${escaparLike(busqueda)}%`, busqueda);
 		condiciones.push(

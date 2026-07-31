@@ -12,11 +12,15 @@ export async function onRequestGet(context) {
 		const parametros = new URL(context.request.url).searchParams;
 		const sql = conectar(context.env);
 		const tienda = await resolverTienda(sql, context.env);
+		const idsCrudo = (parametros.get('ids') || '').trim();
 		const datos = await consultarCatalogo(sql, tienda.id, {
 			q: parametros.get('q'),
 			categoria: parametros.get('categoria'),
 			limite: parametros.get('limite'),
 			desde: parametros.get('desde'),
+			// Refresca precio/escalas de un carrito ya guardado (ids
+			// separados por coma), sin paginar ni filtrar por texto.
+			ids: idsCrudo ? idsCrudo.split(',') : undefined,
 		});
 		return json(datos, { cacheSegundos: CACHE_CATALOGO_SEGUNDOS });
 	});

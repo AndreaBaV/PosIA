@@ -55,6 +55,31 @@ test('el catálogo trae las escalas de precio por cantidad', async () => {
 	);
 });
 
+test('opciones.ids filtra por producto sin paginar, para refrescar un carrito guardado', async () => {
+	const sql = sqlFalso({
+		productos: [producto('carne', 'Bistec'), producto('pollo', 'Pechuga')],
+	});
+	const datos = await consultarCatalogo(sql, TIENDA, { ids: ['carne', 'pollo'] });
+
+	const consulta = sql.llamadas.find((l) => l.texto.includes('FROM products'));
+	assert.ok(consulta.texto.includes('p.id = ANY('),
+		'debe filtrar por id cuando se piden ids especificos');
+	assert.deepEqual(consulta.parametros[1], ['carne', 'pollo']);
+	// Sin paginar: no debe faltar ningun producto de la lista pedida por
+	// culpa del LIMIT normal de la vitrina.
+	assert.equal(datos.hayMas, false);
+	assert.equal(datos.productos.length, 2);
+});
+
+test('opciones.ids ignorado si viene vacio: se comporta como el catalogo normal', async () => {
+	const sql = sqlFalso({ productos: [producto('p1', 'Frijol')] });
+	await consultarCatalogo(sql, TIENDA, { ids: [] });
+
+	const consulta = sql.llamadas.find((l) => l.texto.includes('FROM products'));
+	assert.ok(!consulta.texto.includes('p.id = ANY('),
+		'una lista vacia no debe agregar el filtro por id');
+});
+
 test('solo salen productos activos y con precio, de cualquier sucursal', async () => {
 	const sql = sqlFalso({ productos: [] });
 	await consultarCatalogo(sql, TIENDA);
