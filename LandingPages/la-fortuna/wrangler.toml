@@ -4,20 +4,24 @@
 # (root directory: LandingPages/la-fortuna). Este archivo sirve para
 # `wrangler pages dev` en local y deja el nombre del proyecto por escrito.
 #
-# Las variables sensibles (DATABASE_URL) NO van aqui: se cargan como
-# secretos en el panel, y en local desde .dev.vars (ignorado por Git).
+# Las variables sensibles (DATABASE_URL, POSIA_HUB_API_KEY) NO van aqui: se
+# cargan como secretos en el panel (Settings > Variables and secrets), y en
+# local desde .dev.vars (ignorado por Git).
 #
-# Para /v1/admin/imagenes (foto de producto -> R2), configurar en el panel
-# de Cloudflare Pages (Settings > Functions):
-#   - R2 bucket binding: variable "IMAGENES_PRODUCTOS" -> bucket R2 elegido.
-#   - Variable de entorno "IMAGENES_URL_BASE": URL publica del bucket (el
-#     dominio r2.dev que Cloudflare genera al activar "Public access", o un
-#     dominio propio conectado al bucket). Sin barra final.
-#   - Secreto "POSIA_HUB_API_KEY": el mismo valor que ya usan las builds
-#     moviles (GitHub secret POSIA_HUB_API_KEY) — es la clave que valida que
-#     la subida viene de la app POS, no un tercero.
+# Los bindings de este proyecto se gestionan desde este archivo (asi lo
+# marca el panel de Cloudflare Pages: "Bindings... managed through
+# wrangler.toml"), no desde Settings > Functions > Bindings.
 
 name = "la-fortuna"
 pages_build_output_dir = "public"
 compatibility_date = "2026-07-29"
 compatibility_flags = ["nodejs_compat"]
+
+# Foto de producto -> R2 (POST /v1/admin/imagenes). URL publica del bucket:
+# Settings > Public access del bucket en el panel de R2.
+[[r2_buckets]]
+binding = "IMAGENES_PRODUCTOS"
+bucket_name = "posia-imagenes-productos"
+
+[vars]
+IMAGENES_URL_BASE = "https://pub-5fe6548e4cf54b34af59493c0c8f31fd.r2.dev"
