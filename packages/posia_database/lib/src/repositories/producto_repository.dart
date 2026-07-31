@@ -224,7 +224,16 @@ class ProductoRepository {
 			proveedorId: producto.proveedorId,
 		);
 		final exec = db ?? _baseDatos;
-		final datos = _mapearProductoMapa(producto);
+		// Si el llamador no trae una fecha de edicion explicita (los eventos
+		// remotos SI la traen: la fecha real en que se hizo el cambio, no
+		// cuando este dispositivo la aplico), se estampa ahora. Sin esto la
+		// resolucion de colisiones de catalogo (ver `_resolverColisionAlInsertar`)
+		// no tendria forma de saber "cual version es mas reciente" para las
+		// escrituras locales normales (alta/edicion desde administracion).
+		final productoAGuardar = producto.actualizadoEn == null
+			? producto.copiarCon(actualizadoEn: DateTime.now().toUtc())
+			: producto;
+		final datos = _mapearProductoMapa(productoAGuardar);
 		// NUNCA ConflictAlgorithm.replace aqui. `INSERT OR REPLACE` resuelve el
 		// conflicto de clave primaria BORRANDO la fila existente antes de
 		// insertar la nueva, y desde la migracion v33 ese borrado dispara
@@ -239,12 +248,12 @@ class ProductoRepository {
 			'products',
 			datos,
 			where: 'id = ?',
-			whereArgs: [producto.id],
+			whereArgs: [productoAGuardar.id],
 		);
 		if (filasActualizadas > 0) {
 			return;
 		}
-		if (producto.codigoBarras.trim().isEmpty) {
+		if (productoAGuardar.codigoBarras.trim().isEmpty) {
 			// Sin codigo no hay indice unico que pueda chocar: alta directa.
 			await exec.insert(
 				'products',
@@ -259,7 +268,7 @@ class ProductoRepository {
 			if (!error.isUniqueConstraintError()) {
 				rethrow;
 			}
-			await _resolverColisionAlInsertar(exec, producto, datos);
+			await _resolverColisionAlInsertar(exec, productoAGuardar, datos);
 		}
 	}
 
@@ -270,10 +279,20 @@ class ProductoRepository {
 	/// producto entrante desaparecia sin dejar rastro (ni error, ni fila, ni
 	/// evento en cuarentena) y el dispositivo quedaba con un catalogo
 	/// incompleto aunque su cursor de sync ya estuviera al dia. Aqui el
-	/// entrante SIEMPRE queda persistido: se decide el canonico con la misma
-	/// regla deterministica que usa el autosanador periodico (mas referencias
-	/// transaccionales locales gana; empate -> id mas chico), asi que ningun
-	/// dispositivo pierde datos y todos convergen a la misma eleccion.
+	/// entrante SIEMPRE queda persistido.
+	///
+	/// Quien "gana" (que sus valores -precio, costo, nombre- terminen en la
+	/// fila activa) lo decide `actualizado_en`: la edicion mas reciente
+	/// manda, igual que el hub decide en Neon (`ProyectorEventosPostgres.
+	/// _producto`: el ultimo evento que llega sobreescribe el canonico). Si
+	/// ninguno de los dos lados tiene fecha (bases de antes de este
+	/// seguimiento) se cae a la regla anterior -mas referencias
+	/// transaccionales gana, empate por id- como respaldo.
+	///
+	/// La fila EXISTENTE conserva siempre su id (no rompe referencias
+	/// transaccionales -ventas, stock- que ya la usan); solo sus VALORES se
+	/// sobreescriben cuando el entrante gana. El id del entrante queda como
+	/// alias inactivo con el codigo vacio, para no volver a chocar.
 	Future<void> _resolverColisionAlInsertar(
 		DatabaseExecutor exec,
 		Producto entrante,
@@ -281,7 +300,7 @@ class ProductoRepository {
 	) async {
 		final filasExistente = await exec.query(
 			'products',
-			columns: ['id'],
+			columns: ['id', 'actualizado_en'],
 			where: 'tienda_id = ? AND codigo_barras = ? AND activo = 1 AND id <> ?',
 			whereArgs: [entrante.tiendaId, entrante.codigoBarras, entrante.id],
 			limit: 1,
@@ -297,37 +316,47 @@ class ProductoRepository {
 			return;
 		}
 		final existenteId = filasExistente.first['id']! as String;
-		final refsExistente =
-			await contarReferenciasTransaccionalesProducto(exec, existenteId);
-		final refsEntrante =
-			await contarReferenciasTransaccionalesProducto(exec, entrante.id);
-		final entranteGana = productoGanaColision(
-			idA: entrante.id,
-			refsA: refsEntrante,
-			idB: existenteId,
-			refsB: refsExistente,
+		final existenteActualizadoEn = DateTime.tryParse(
+			filasExistente.first['actualizado_en'] as String? ?? '',
 		);
+		final entranteActualizadoEn = entrante.actualizadoEn;
+		final bool entranteGana;
+		if (entranteActualizadoEn != null || existenteActualizadoEn != null) {
+			// Al menos un lado tiene fecha conocida: un lado sin fecha se trata
+			// como "desconocida hace mucho" y pierde contra cualquier fecha real.
+			final centinela = DateTime.utc(1970);
+			entranteGana = (entranteActualizadoEn ?? centinela)
+				.isAfter(existenteActualizadoEn ?? centinela);
+		} else {
+			final refsExistente =
+				await contarReferenciasTransaccionalesProducto(exec, existenteId);
+			final refsEntrante =
+				await contarReferenciasTransaccionalesProducto(exec, entrante.id);
+			entranteGana = productoGanaColision(
+				idA: entrante.id,
+				refsA: refsEntrante,
+				idB: existenteId,
+				refsB: refsExistente,
+			);
+		}
 		if (entranteGana) {
+			final datosRemapeados = Map<String, Object?>.from(datosEntrante)
+				..['id'] = existenteId;
 			await exec.update(
 				'products',
-				{'activo': 0, 'codigo_barras': ''},
+				datosRemapeados,
 				where: 'id = ?',
 				whereArgs: [existenteId],
 			);
-			await exec.insert(
-				'products',
-				datosEntrante,
-				conflictAlgorithm: ConflictAlgorithm.replace,
-			);
-		} else {
-			// El existente gana: el entrante queda preservado como historial
-			// inactivo (nunca se pierde), sin codigo para no volver a chocar.
-			await exec.insert(
-				'products',
-				{...datosEntrante, 'activo': 0, 'codigo_barras': ''},
-				conflictAlgorithm: ConflictAlgorithm.ignore,
-			);
 		}
+		// El id propio del entrante queda como alias inactivo -gane o no-: asi
+		// se conserva su dato completo (costo, notas, lo que haya capturado el
+		// usuario) sin competir por el slot del codigo activo.
+		await exec.insert(
+			'products',
+			{...datosEntrante, 'activo': 0, 'codigo_barras': ''},
+			conflictAlgorithm: ConflictAlgorithm.ignore,
+		);
 	}
 
 	/// Convierte fila SQLite a entidad [Producto].
@@ -370,6 +399,9 @@ class ProductoRepository {
 			favoritoCaja: ((fila['favorito_caja'] as num?)?.toInt() ?? 0) == 1,
 			permiteStockNegativo:
 				((fila['permite_stock_negativo'] as num?)?.toInt() ?? 0) == 1,
+			actualizadoEn: DateTime.tryParse(
+				fila['actualizado_en'] as String? ?? '',
+			),
 		);
 	}
 
@@ -414,6 +446,7 @@ class ProductoRepository {
 			'costo_unitario': producto.costoUnitario,
 			'favorito_caja': producto.favoritoCaja ? 1 : 0,
 			'permite_stock_negativo': producto.permiteStockNegativo ? 1 : 0,
+			'actualizado_en': producto.actualizadoEn?.toUtc().toIso8601String(),
 		};
 	}
 

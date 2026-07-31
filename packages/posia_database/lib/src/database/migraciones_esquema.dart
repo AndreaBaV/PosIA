@@ -613,6 +613,7 @@ class MigracionesEsquema {
 		await migrarVersion35A36(base);
 		await migrarVersion36A37(base);
 		await migrarVersion37A38(base);
+		await migrarVersion38A39(base);
 	}
 
 	/// Tabla guia `ejemplo` en bases ya existentes (v10 → v11).
@@ -1428,6 +1429,19 @@ class MigracionesEsquema {
 			CREATE INDEX IF NOT EXISTS idx_sync_cuarentena_seq
 			ON sync_eventos_cuarentena(seq)
 		''');
+	}
+
+	/// v6.24: fecha de ultima edicion por producto.
+	///
+	/// Sin esto, una colision de catalogo (dos ids distintos con el mismo
+	/// codigo de barras -normalmente un alta duplicada hecha en un
+	/// dispositivo con catalogo local incompleto) solo podia resolverse por
+	/// cuantas ventas tenia cada lado, que no dice nada sobre cual version
+	/// tiene los datos correctos/mas recientes (p. ej. un costo que el
+	/// cliente acaba de actualizar). Con la fecha, gana la edicion mas
+	/// reciente, igual que decide el hub en Neon.
+	static Future<void> migrarVersion38A39(Database base) async {
+		await base.execute('ALTER TABLE products ADD COLUMN actualizado_en TEXT');
 	}
 
 	/// v6.23: codigo de barras unico por tienda entre productos activos.

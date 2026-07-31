@@ -25,6 +25,7 @@ class Producto {
 		this.costoUnitario = 0.0,
 		this.favoritoCaja = false,
 		this.permiteStockNegativo = true,
+		this.actualizadoEn,
 	});
 
 	final String id;
@@ -44,6 +45,17 @@ class Producto {
 	final double costoUnitario;
 	final bool favoritoCaja;
 	final bool permiteStockNegativo;
+
+	/// Momento de la ultima edicion de este producto, si se conoce.
+	///
+	/// Para un evento remoto es la fecha real en que se hizo el cambio (no
+	/// cuando este dispositivo lo aplico). Para una escritura local sin
+	/// fecha explicita, `ProductoRepository.guardar` la estampa con la hora
+	/// actual. Decide quien gana cuando un producto entrante choca por
+	/// codigo de barras con uno ya activo: manda la edicion mas reciente, no
+	/// cuantas ventas tenga cada lado ni el orden en que llegaron los
+	/// eventos.
+	final DateTime? actualizadoEn;
 
 	bool requierePeso() {
 		return unidadMedida == UnidadMedida.kilogramo;
@@ -94,6 +106,7 @@ class Producto {
 		double? costoUnitario,
 		bool? favoritoCaja,
 		bool? permiteStockNegativo,
+		DateTime? actualizadoEn,
 	}) {
 		return Producto(
 			id: id ?? this.id,
@@ -113,6 +126,7 @@ class Producto {
 			costoUnitario: costoUnitario ?? this.costoUnitario,
 			favoritoCaja: favoritoCaja ?? this.favoritoCaja,
 			permiteStockNegativo: permiteStockNegativo ?? this.permiteStockNegativo,
+			actualizadoEn: actualizadoEn ?? this.actualizadoEn,
 		);
 	}
 }

@@ -1279,6 +1279,10 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			costoUnitario: (payload['costoUnitario'] as num?)?.toDouble() ?? 0.0,
 			favoritoCaja: payload['favoritoCaja'] as bool? ?? false,
 			permiteStockNegativo: payload['permiteStockNegativo'] as bool? ?? true,
+			// Fecha real de la edicion (no cuando este dispositivo la aplica): es
+			// lo que permite que una colision de catalogo la compare contra la
+			// fecha de una fila local y decida quien es mas reciente de verdad.
+			actualizadoEn: evento.creadoEn,
 		);
 		// Un stub FK que ya viaje en la cola (emitido por una version anterior o
 		// por otro equipo) no debe degradar al producto real: `guardar` usa
