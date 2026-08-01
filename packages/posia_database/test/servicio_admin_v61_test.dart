@@ -711,5 +711,72 @@ void main() {
 			);
 			await fixture.cerrar();
 		});
+
+		// Regresion documentada: la subida de foto (POST /v1/admin/imagenes) y
+		// el guardado del formulario de producto son dos llamadas separadas a
+		// actualizarProducto. Si el formulario reconstruye el Producto a
+		// partir de un snapshot capturado ANTES de la subida y no le vuelve a
+		// meter la rutaImagen actual, actualizarProducto persiste la ruta
+		// vacia del snapshot y borra la URL que la subida acababa de dejar.
+		// Sintoma que ve el usuario: "agrego la foto, salgo y vuelvo a entrar
+		// y ya no esta". El fix vive en pantalla_formulario_producto.dart —
+		// _guardar pasa rutaImagen: _rutaImagen ?? '' explicitamente— y este
+		// test protege el contrato subyacente: dos actualizarProducto
+		// seguidos con la ruta correcta la conservan.
+		test('actualizarProducto conserva la foto cuando se pasa la URL viva', () async {
+			final fixture = await FixtureAdmin.abrir();
+			final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
+			final producto = await servicio.registrarProductoCompleto(
+				AltaProductoRequest(
+					nombre: 'Arroz Quebrado',
+					codigoBarras: 'foto-arroz',
+					precioBase: 18.0,
+					costoUnitario: 12.0,
+					categoriaId: fixture.categoriaId,
+				),
+			);
+			expect(producto.rutaImagen, '');
+
+			// Subida de foto: el endpoint de imagenes escribe la URL en la
+			// fila del producto.
+			const url = 'https://tienda.example.com/productos/arroz-1.jpg';
+			await servicio.actualizarProducto(producto.copiarCon(rutaImagen: url));
+			expect((await servicio.obtenerProducto(producto.id))!.rutaImagen, url);
+
+			// Guardado del formulario que edita otro campo. El formulario ya
+			// sabe la URL nueva (la subida la persistio y la puso en
+			// _rutaImagen), asi que la vuelve a mandar en el Producto que
+			// arma para actualizarProducto: la foto queda intacta.
+			await servicio.actualizarProducto(
+				producto.copiarCon(nombre: 'Arroz Quebrado Premium', rutaImagen: url),
+			);
+			final resultado = await servicio.obtenerProducto(producto.id);
+			expect(resultado, isNotNull);
+			expect(resultado!.nombre, 'Arroz Quebrado Premium');
+			expect(
+				resultado.rutaImagen,
+				url,
+				reason:
+					'guardar el formulario despues de subir foto no debe borrar la '
+					'URL cuando el widget arma el Producto con la ruta viva',
+			);
+
+			// La cara opuesta —guardar con el snapshot viejo (rutaImagen
+			// vacia)— si borra la foto. Documenta el bug que motivo el fix
+			// en pantalla_formulario_producto.dart.
+			await servicio.actualizarProducto(
+				producto.copiarCon(nombre: 'Arroz Quebrado Reserva'),
+			);
+			final tras = await servicio.obtenerProducto(producto.id);
+			expect(
+				tras!.rutaImagen,
+				'',
+				reason:
+					'guardar con el snapshot original -sin rutaImagen- borra la '
+					'foto: por eso el formulario debe pasarla explicitamente',
+			);
+
+			await fixture.cerrar();
+		});
 	});
 }

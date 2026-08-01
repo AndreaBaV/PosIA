@@ -1384,6 +1384,13 @@ class _PantallaFormularioProductoState
       final empaqueLegacy = await _resolverEmpaqueLegacy(servicio);
       if (_esEdicion) {
         final base = widget.productoExistente!;
+        // Se pasa `rutaImagen` explicitamente. La foto se sube y se guarda
+        // en un flujo aparte (_seleccionarYSubirFoto), asi que
+        // widget.productoExistente conserva la rutaImagen vieja (vacia) que
+        // se paso al abrir el formulario. Sin este campo, copiarCon caia a
+        // base.rutaImagen y el guardado del formulario le borraba a la
+        // fila la URL recien subida: el usuario "agregaba la foto" y al
+        // salir de la pantalla y volver a entrar ya no estaba.
         final actualizado = base.copiarCon(
           nombre: nombre,
           codigoBarras: _codigoController.text.trim(),
@@ -1397,6 +1404,7 @@ class _PantallaFormularioProductoState
           notas: _notasController.text.trim(),
           activo: _activo,
           permiteStockNegativo: _permiteStockNegativo,
+          rutaImagen: _rutaImagen ?? '',
         );
         await servicio.actualizarProducto(
           actualizado,
