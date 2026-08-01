@@ -923,9 +923,18 @@ class _PantallaFormularioProductoState
     try {
       final servicioAdmin = await ref.read(servicioAdminProvider.future);
       await servicioAdmin.actualizarProducto(producto.copiarCon(rutaImagen: url));
+      // Empuja el productUpserted de inmediato (no espera el sync periodico
+      // de 60 s): sin esto la foto tardaba en verse en la tienda en linea, y
+      // si el admin cerraba la app antes del siguiente ciclo, el evento
+      // quedaba pendiente sin subir.
+      await servicioAdmin.sincronizarPresentacionesProducto(producto.id);
       if (!mounted) {
         return;
       }
+      // La lista de "Productos" (pantalla_productos_admin.dart) guarda una
+      // copia en cache: sin invalidarla, volver a entrar a este producto
+      // reabre el formulario con el Producto viejo (sin la foto nueva).
+      ref.invalidate(productosCatalogoAdminProvider);
       setState(() => _rutaImagen = url);
       PosiaNotificaciones.mostrarSnackBar(
         context,
