@@ -266,6 +266,12 @@ Future<void> _imprimirVentaRemotaTrasSync(Ref ref, SyncEvent evento) async {
 	if (esPlataformaMovilNativa()) {
 		return;
 	}
+	final antiguedad = DateTime.now().toUtc().difference(evento.creadoEn.toUtc());
+	if (antiguedad.inSeconds > UMBRAL_REIMPRESION_VENTA_REMOTA_SEGUNDOS) {
+		// Venta atrasada (p. ej. este equipo estuvo apagado/offline): el
+		// dispositivo que la origino ya la imprimio en su momento.
+		return;
+	}
 	try {
 		final contenedor = await ref.read(contenedorServiciosProvider.future);
 		final servicio = contenedor.servicioAdmin;
