@@ -5,7 +5,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:posia_core/posia_core.dart';
 import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
@@ -29,7 +28,13 @@ class _PantallaAsistenciaAdminState extends ConsumerState<PantallaAsistenciaAdmi
 	@override
 	void initState() {
 		super.initState();
-		WidgetsBinding.instance.addPostFrameCallback((_) => _sincronizarYRefrescar());
+		// Solo refresca listado local; el sync completo al abrir competia con
+		// "Generar PIN" por el candado de SQLite y dejaba Generando… colgado.
+		WidgetsBinding.instance.addPostFrameCallback((_) {
+			if (mounted) {
+				ref.invalidate(entradasAsistenciaDiaProvider);
+			}
+		});
 		_autoRefresco = Timer.periodic(const Duration(seconds: 12), (_) {
 			if (mounted) {
 				ref.invalidate(entradasAsistenciaDiaProvider);
@@ -138,9 +143,8 @@ class _PantallaAsistenciaAdminState extends ConsumerState<PantallaAsistenciaAdmi
 									final tienda = tiendas[e.tiendaId];
 									final hora =
 										e.entradaEn.toLocal().toString().substring(11, 16);
-									final salida = e.salidaEn == null
-										? null
-										: e.salidaEn!.toLocal().toString().substring(11, 16);
+									final salida =
+										e.salidaEn?.toLocal().toString().substring(11, 16);
 									final horario = salida == null ? hora : '$hora–$salida';
 									return ListTile(
 										leading: const Icon(Icons.person),

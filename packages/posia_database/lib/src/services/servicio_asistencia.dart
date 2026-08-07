@@ -1,6 +1,7 @@
 /// Servicio de asistencia con PIN y geocerca.
 library;
 
+import 'dart:async';
 import 'dart:math';
 
 import 'package:posia_core/posia_core.dart';
@@ -53,8 +54,9 @@ class ServicioAsistencia {
 
 	/// Genera PIN de 4 digitos visible en laptop admin (TTL 10 min).
 	///
-	/// Empuja el desafio al hub de inmediato para que el celular del empleado
-	/// pueda validarlo sin esperar el ciclo periodico de 60 s.
+	/// Guarda el desafio en local y devuelve el PIN de inmediato. El push al
+	/// hub corre en paralelo con tope corto: el timeout HTTP de envio es de
+	/// hasta 180 s y dejaba la UI en "Generando…" mientras el hub despertaba.
 	Future<DesafioPinGenerado> generarDesafioPin(String creadoPor) async {
 		final tienda = await _tiendaRepository.obtenerPorId(_tiendaId);
 		if (tienda == null) {
@@ -80,11 +82,18 @@ class ServicioAsistencia {
 		);
 		// Tienda ya validada arriba: dentro del tx no llamar al asegurador FK
 		// (usa otra conexion y puede deadlockear con sqflite).
-		await _baseDatos.transaction((tx) async {
-			await _asistenciaRepository.desactivarDesafiosTienda(_tiendaId, db: tx);
-			await _asistenciaRepository.guardarDesafio(desafio, db: tx);
-		});
-		final sincronizado = await _emitirEvento(
+		try {
+			await _baseDatos.transaction((tx) async {
+				await _asistenciaRepository.desactivarDesafiosTienda(_tiendaId, db: tx);
+				await _asistenciaRepository.guardarDesafio(desafio, db: tx);
+			}).timeout(const Duration(seconds: 12));
+		} on TimeoutException {
+			throw StateError(
+				'La base local esta ocupada (sincronizando). Espere un momento y reintente.',
+			);
+		}
+
+		final sincronizado = await _empujarAsistenciaConTopeUi(
 			TipoSyncEvento.attendanceChallengeCreated,
 			claveEntidad: desafio.id,
 			{
@@ -96,7 +105,6 @@ class ServicioAsistencia {
 				'radioMetros': desafio.radioMetros,
 				'pinHash': desafio.pinHash,
 			},
-			empujarAhora: true,
 		);
 		return DesafioPinGenerado(
 			desafio: desafio,
@@ -186,7 +194,7 @@ class ServicioAsistencia {
 			desafioId: abierta.desafioId,
 		);
 		await _asistenciaRepository.guardarRegistro(salida);
-		await _emitirEvento(
+		await _empujarAsistenciaConTopeUi(
 			TipoSyncEvento.attendanceCheckedOut,
 			claveEntidad: salida.id,
 			{
@@ -195,7 +203,6 @@ class ServicioAsistencia {
 				'tiendaId': salida.tiendaId,
 				'salidaEn': salida.salidaEn!.toIso8601String(),
 			},
-			empujarAhora: true,
 		);
 		return salida;
 	}
@@ -352,7 +359,7 @@ class ServicioAsistencia {
 			desafioId: desafioId,
 		);
 		await _asistenciaRepository.guardarRegistro(registro);
-		await _emitirEvento(
+		await _empujarAsistenciaConTopeUi(
 			TipoSyncEvento.attendanceCheckedIn,
 			claveEntidad: registro.id,
 			{
@@ -365,7 +372,6 @@ class ServicioAsistencia {
 				'longitud': registro.longitud,
 				'desafioId': registro.desafioId,
 			},
-			empujarAhora: true,
 		);
 		return registro;
 	}
@@ -401,6 +407,32 @@ class ServicioAsistencia {
 			return resultado.exitoso;
 		} on Object {
 			// La operacion local ya quedo guardada; el ciclo periodico reintenta.
+			return false;
+		}
+	}
+
+	/// Empuje inmediato con tope para la UI (entrada/salida/PIN).
+	///
+	/// El POST al hub puede tardar hasta [TIMEOUT_HUB_ENVIO_EVENTOS_SEGUNDOS]
+	/// (180 s). Si no confirma a tiempo, devolvemos false y el Future del push
+	/// sigue en background; el ciclo de 60 s reintenta si hiciera falta.
+	Future<bool?> _empujarAsistenciaConTopeUi(
+		TipoSyncEvento tipo,
+		Map<String, Object?> payload, {
+		required String claveEntidad,
+	}) async {
+		final push = _emitirEvento(
+			tipo,
+			payload,
+			claveEntidad: claveEntidad,
+			empujarAhora: true,
+		);
+		try {
+			return await push.timeout(
+				const Duration(seconds: 8),
+				onTimeout: () => false,
+			);
+		} on Object {
 			return false;
 		}
 	}
