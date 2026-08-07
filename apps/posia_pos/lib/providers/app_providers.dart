@@ -22,9 +22,6 @@ import '../bootstrap/limpiador_cache_local.dart';
 import '../sync/sincronizador_automatico.dart';
 import '../services/gestor_sesion_persistente.dart';
 import '../util/plataforma_util.dart';
-import '../utils/imprimir_ticket_digital_util.dart';
-import '../utils/ticket_credito_util.dart';
-import '../utils/ticket_venta_util.dart';
 import 'refresco_catalogo.dart';
 
 /// Estado de inicializacion de la aplicacion.
@@ -103,8 +100,9 @@ final contenedorServiciosProvider = FutureProvider<ContenedorServicios>((ref) as
 /// Sincronizador automatico activo mientras vive la app.
 final sincronizadorAutomaticoProvider = FutureProvider<SincronizadorAutomatico>((ref) async {
 	final contenedor = await ref.watch(contenedorServiciosProvider.future);
-	contenedor.syncOrchestrator.alAplicarEventoRemoto =
-		(evento) => _imprimirVentaRemotaTrasSync(ref, evento);
+	// Sin autoimpresión por sync: con impresora de red el dispositivo que
+	// cobra ya imprime; reimprimir al recibir el evento duplicaba tickets
+	// (y cruzaba sucursales). La reimpresión manual sigue disponible.
 	final sincronizador = SincronizadorAutomatico(
 		orquestador: contenedor.syncOrchestrator,
 		sincronizarConCatalogo: () async {
@@ -257,72 +255,6 @@ bool _permitirRespaldoArchivoEnPlataforma(
 		return false;
 	}
 	return true;
-}
-
-Future<void> _imprimirVentaRemotaTrasSync(Ref ref, SyncEvent evento) async {
-	if (esPlataformaMovilNativa()) {
-		return;
-	}
-	try {
-		final contenedor = await ref.read(contenedorServiciosProvider.future);
-		final servicio = contenedor.servicioAdmin;
-		final config = await servicio.obtenerConfigDispositivo();
-		// Misma tienda + otra caja + reciente. Nunca reimprimir ventas de otra
-		// sucursal (p. ej. PC de tienda 2 conectada en la red de tienda 1).
-		if (!debeImprimirVentaRemotaTrasSync(
-			evento: evento,
-			tiendaLocalId: config.tiendaId,
-			dispositivoLocalId: config.cajaId,
-		)) {
-			return;
-		}
-		final configImpresora = await servicio.obtenerConfigImpresora();
-		if (!_dispositivoPuedeImprimirFisicamente(configImpresora)) {
-			return;
-		}
-		final ventaId = evento.payload['ventaId'] as String? ?? '';
-		if (ventaId.isEmpty) {
-			return;
-		}
-		final venta = await servicio.obtenerVenta(ventaId);
-		if (venta == null) {
-			return;
-		}
-		final hardware = await ref.read(hardwareRegistryProvider.future);
-		final impresora = hardware.obtenerImpresora();
-		if (venta.metodoPago == MetodoPago.credito) {
-			final pagares = await obtenerTicketsDigitalesPagareCredito(
-				venta: venta,
-				servicioAdmin: servicio,
-			);
-			await imprimirTicketsDigitales(
-				impresora: impresora,
-				contenidos: pagares,
-			);
-			return;
-		}
-		final digital = await obtenerTicketDigitalVenta(
-			venta: venta,
-			servicioAdmin: servicio,
-			config: config,
-		);
-		await imprimirTicketDigital(
-			impresora: impresora,
-			contenido: digital,
-		);
-	} on Object {
-		// La venta ya quedó en SQLite; no bloquear el ciclo de sync.
-	}
-}
-
-bool _dispositivoPuedeImprimirFisicamente(ConfigImpresora config) {
-	if (config.modo == 'archivo') {
-		return false;
-	}
-	if (config.modo == 'usb_windows') {
-		return config.nombreImpresoraUsb.trim().isNotEmpty;
-	}
-	return config.hostRed.trim().isNotEmpty;
 }
 
 Future<String> _resolverDirectorioTickets() async {
