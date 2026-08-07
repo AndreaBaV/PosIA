@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'admin_providers.dart';
 import 'app_providers.dart' show carritoNotifierProvider;
+import 'asistencia_providers.dart';
 
 /// Relee el catalogo en las pantallas abiertas tras sincronizar.
 ///
@@ -17,6 +18,7 @@ Future<void> refrescarCachesProductosTrasSync(Ref ref) async {
 	ref.invalidate(productosCatalogoAdminProvider);
 	ref.invalidate(categoriasFormularioAdminProvider);
 	ref.invalidate(proveedoresFormularioAdminProvider);
+	ref.invalidate(entradasAsistenciaDiaProvider);
 	if (ref.read(carritoNotifierProvider).hasValue) {
 		await ref
 			.read(carritoNotifierProvider.notifier)

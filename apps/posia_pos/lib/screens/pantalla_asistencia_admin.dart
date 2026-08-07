@@ -1,6 +1,8 @@
 /// Panel admin: PIN de asistencia y entradas del dia.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:posia_core/posia_core.dart';
@@ -8,6 +10,7 @@ import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
 import '../providers/app_providers.dart';
+import '../providers/asistencia_providers.dart';
 
 class PantallaAsistenciaAdmin extends ConsumerStatefulWidget {
 	const PantallaAsistenciaAdmin({super.key});
@@ -20,13 +23,54 @@ class PantallaAsistenciaAdmin extends ConsumerStatefulWidget {
 class _PantallaAsistenciaAdminState extends ConsumerState<PantallaAsistenciaAdmin> {
 	String? _pinActivo;
 	DateTime? _expiraPin;
+	bool _generando = false;
+	Timer? _autoRefresco;
+
+	@override
+	void initState() {
+		super.initState();
+		WidgetsBinding.instance.addPostFrameCallback((_) => _sincronizarYRefrescar());
+		_autoRefresco = Timer.periodic(const Duration(seconds: 12), (_) {
+			if (mounted) {
+				ref.invalidate(entradasAsistenciaDiaProvider);
+			}
+		});
+	}
+
+	Future<void> _sincronizarYRefrescar() async {
+		try {
+			final contenedor = await ref.read(contenedorServiciosProvider.future);
+			await contenedor.syncOrchestrator.sincronizarCompleto();
+		} on Object {
+			// El listado local sigue; el ciclo periodico reintenta.
+		}
+		if (mounted) {
+			ref.invalidate(entradasAsistenciaDiaProvider);
+		}
+	}
+
+	@override
+	void dispose() {
+		_autoRefresco?.cancel();
+		super.dispose();
+	}
 
 	@override
 	Widget build(BuildContext context) {
-		final entradasAsync = ref.watch(_entradasDiaProvider);
+		final entradasAsync = ref.watch(entradasAsistenciaDiaProvider);
 		final usuariosAsync = ref.watch(_usuariosNombresProvider);
+		final tiendasAsync = ref.watch(_tiendasNombresProvider);
 		return Scaffold(
-			appBar: AppBar(title: const Text('Asistencia')),
+			appBar: AppBar(
+				title: const Text('Asistencia'),
+				actions: [
+					IconButton(
+						tooltip: 'Actualizar',
+						onPressed: _sincronizarYRefrescar,
+						icon: const Icon(Icons.refresh),
+					),
+				],
+			),
 			body: ListView(
 				padding: const EdgeInsets.all(16),
 				children: [
@@ -39,6 +83,13 @@ class _PantallaAsistenciaAdminState extends ConsumerState<PantallaAsistenciaAdmi
 									const Text(
 										'PIN de entrada (4 dígitos)',
 										style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+									),
+									const SizedBox(height: 8),
+									const Text(
+										'Válido 10 minutos. El empleado debe marcar en un '
+										'dispositivo de esta misma tienda.',
+										textAlign: TextAlign.center,
+										style: TextStyle(color: Colors.grey, fontSize: 13),
 									),
 									const SizedBox(height: 12),
 									Text(
@@ -58,9 +109,9 @@ class _PantallaAsistenciaAdminState extends ConsumerState<PantallaAsistenciaAdmi
 										),
 									const SizedBox(height: 16),
 									FilledButton.icon(
-										onPressed: _generarPin,
+										onPressed: _generando ? null : _generarPin,
 										icon: const Icon(Icons.pin),
-										label: const Text('Generar PIN'),
+										label: Text(_generando ? 'Generando…' : 'Generar PIN'),
 									),
 								],
 							),
@@ -75,21 +126,32 @@ class _PantallaAsistenciaAdminState extends ConsumerState<PantallaAsistenciaAdmi
 					entradasAsync.when(
 						data: (entradas) {
 							final nombres = usuariosAsync.value ?? {};
+							final tiendas = tiendasAsync.value ?? {};
 							if (entradas.isEmpty) {
-								return const Text('Sin registros hoy');
+								return const Text(
+									'Sin registros hoy. Se actualiza solo al sincronizar.',
+								);
 							}
 							return Column(
 								children: entradas.map((e) {
 									final nombre = nombres[e.usuarioId] ?? e.usuarioId;
+									final tienda = tiendas[e.tiendaId];
+									final hora =
+										e.entradaEn.toLocal().toString().substring(11, 16);
+									final salida = e.salidaEn == null
+										? null
+										: e.salidaEn!.toLocal().toString().substring(11, 16);
+									final horario = salida == null ? hora : '$hora–$salida';
 									return ListTile(
 										leading: const Icon(Icons.person),
 										title: Text(nombre),
 										subtitle: Text(
-											'${e.entradaEn.toLocal().toString().substring(11, 16)} · ${e.metodo}',
+											'$horario · ${e.metodo}'
+											'${tienda == null ? '' : ' · $tienda'}',
 										),
 										trailing: e.abierto
 											? const Chip(label: Text('Activo'))
-											: null,
+											: const Chip(label: Text('Salida')),
 									);
 								}).toList(),
 							);
@@ -107,38 +169,39 @@ class _PantallaAsistenciaAdminState extends ConsumerState<PantallaAsistenciaAdmi
 		if (usuario == null) {
 			return;
 		}
+		setState(() => _generando = true);
 		final contenedor = await ref.read(contenedorServiciosProvider.future);
 		final asistencia = contenedor.servicioAsistencia;
 		if (asistencia == null) {
-			if (!mounted) {
-				return;
+			if (mounted) {
+				setState(() => _generando = false);
+				PosiaNotificaciones.mostrarSnackBar(
+					context,
+					const SnackBar(
+						content: Text('Servicio de asistencia no disponible'),
+						backgroundColor: PosiaColors.cancelar,
+					),
+				);
 			}
-			PosiaNotificaciones.mostrarSnackBar(
-				context,
-				const SnackBar(
-					content: Text('Servicio de asistencia no disponible'),
-					backgroundColor: PosiaColors.cancelar,
-				),
-			);
 			return;
 		}
 		try {
 			final resultado = await asistencia.generarDesafioPin(usuario.id);
+			if (!mounted) {
+				return;
+			}
 			setState(() {
 				_pinActivo = resultado.pinPlano;
 				_expiraPin = resultado.desafio.expiraEn;
 			});
-			ref.invalidate(_entradasDiaProvider);
-			if (!mounted) {
-				return;
-			}
+			ref.invalidate(entradasAsistenciaDiaProvider);
 			if (resultado.sincronizadoConHub == false) {
 				PosiaNotificaciones.mostrarSnackBar(
 					context,
 					const SnackBar(
 						content: Text(
 							'PIN listo en este equipo. Si el empleado usa otro '
-							'dispositivo, sincronice o espere unos segundos.',
+							'dispositivo, espere unos segundos.',
 						),
 						duration: Duration(seconds: 4),
 					),
@@ -148,20 +211,29 @@ class _PantallaAsistenciaAdminState extends ConsumerState<PantallaAsistenciaAdmi
 			if (!mounted) {
 				return;
 			}
-			PosiaNotificaciones.mostrarSnackBar(context, 
-				SnackBar(content: Text('$error'), backgroundColor: PosiaColors.cancelar),
+			PosiaNotificaciones.mostrarSnackBar(
+				context,
+				SnackBar(
+					content: Text('$error'),
+					backgroundColor: PosiaColors.cancelar,
+				),
 			);
+		} finally {
+			if (mounted) {
+				setState(() => _generando = false);
+			}
 		}
 	}
 }
-
-final _entradasDiaProvider = FutureProvider<List<RegistroAsistencia>>((ref) async {
-	final contenedor = await ref.watch(contenedorServiciosProvider.future);
-	return contenedor.servicioAsistencia?.listarEntradasDelDia() ?? [];
-});
 
 final _usuariosNombresProvider = FutureProvider<Map<String, String>>((ref) async {
 	final servicio = await ref.watch(servicioAdminProvider.future);
 	final usuarios = await servicio.listarUsuarios();
 	return {for (final u in usuarios) u.id: u.nombre};
+});
+
+final _tiendasNombresProvider = FutureProvider<Map<String, String>>((ref) async {
+	final servicio = await ref.watch(servicioAdminProvider.future);
+	final tiendas = await servicio.listarTodasLasTiendas();
+	return {for (final t in tiendas) t.id: t.nombre};
 });
