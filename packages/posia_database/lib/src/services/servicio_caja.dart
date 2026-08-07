@@ -1352,6 +1352,7 @@ class ServicioCaja {
         'descuentoTicket': venta.descuentoTicket,
         'metodoPago': venta.metodoPago.name,
         'clienteId': venta.clienteId,
+        'vendedorId': venta.vendedorId,
         'creditoDias': venta.creditoDias,
         'creditoVenceEn': venta.creditoVenceEn?.toIso8601String(),
         'lineas': venta.lineas

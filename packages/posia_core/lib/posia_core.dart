@@ -86,6 +86,7 @@ export 'src/utils/id_posia.dart';
 export 'src/utils/periodo_util.dart';
 export 'src/utils/permisos_usuario.dart';
 export 'src/utils/politica_acceso_admin.dart';
+export 'src/utils/regla_impresion_venta_remota.dart';
 export 'src/utils/validador_codigo_usuario.dart';
 export 'src/utils/moneda_util.dart';
 export 'src/utils/traspaso_util.dart';

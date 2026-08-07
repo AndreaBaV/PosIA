@@ -2492,6 +2492,15 @@ class ServicioAdmin {
     return _tiendaRepository.obtenerPorId(_tiendaActivaId);
   }
 
+  /// Tienda por id (p. ej. encabezado de ticket de una venta remota).
+  Future<Tienda?> obtenerTiendaPorId(String tiendaId) async {
+    final id = tiendaId.trim();
+    if (id.isEmpty) {
+      return null;
+    }
+    return _tiendaRepository.obtenerPorId(id);
+  }
+
   FiltroVentas filtroVentasPeriodo({required int dias}) {
     return filtroVentasPeriodoTienda(_tiendaActivaId, dias: dias);
   }

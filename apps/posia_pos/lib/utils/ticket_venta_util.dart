@@ -4,6 +4,18 @@ library;
 import 'package:posia_core/posia_core.dart';
 import 'package:posia_database/posia_database.dart';
 
+/// Tienda del ticket: la de la venta, no la activa del dispositivo que imprime.
+Future<Tienda?> _tiendaDeVenta(
+  ServicioAdmin servicioAdmin,
+  Venta venta,
+) async {
+  final deVenta = await servicioAdmin.obtenerTiendaPorId(venta.tiendaId);
+  if (deVenta != null) {
+    return deVenta;
+  }
+  return servicioAdmin.obtenerTiendaActiva();
+}
+
 /// Resuelve datos de tienda, caja, vendedor y cliente para el ticket.
 Future<String> construirTextoTicketVenta({
   required Venta venta,
@@ -11,7 +23,7 @@ Future<String> construirTextoTicketVenta({
   ConfigDispositivo? config,
   double? montoRecibido,
 }) async {
-  final tienda = await servicioAdmin.obtenerTiendaActiva();
+  final tienda = await _tiendaDeVenta(servicioAdmin, venta);
   final cliente = venta.clienteId != null
       ? await servicioAdmin.obtenerCliente(venta.clienteId!)
       : null;
@@ -40,7 +52,7 @@ Future<TicketDigitalContenido> obtenerTicketDigitalVenta({
   ConfigDispositivo? config,
   double? montoRecibido,
 }) async {
-  final tienda = await servicioAdmin.obtenerTiendaActiva();
+  final tienda = await _tiendaDeVenta(servicioAdmin, venta);
   final cliente = venta.clienteId != null
       ? await servicioAdmin.obtenerCliente(venta.clienteId!)
       : null;

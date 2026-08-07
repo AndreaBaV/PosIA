@@ -76,7 +76,11 @@ class _PantallaAsistenciaMovilState
         return;
       }
       final contenedor = await ref.read(contenedorServiciosProvider.future);
-      await contenedor.servicioAsistencia?.registrarEntradaConPin(
+      final asistencia = contenedor.servicioAsistencia;
+      if (asistencia == null) {
+        throw StateError('Servicio de asistencia no disponible');
+      }
+      await asistencia.registrarEntradaConPin(
         usuarioId: usuario.id,
         pin: _pinController.text.trim(),
         latitud: pos.latitude,
@@ -140,7 +144,11 @@ class _PantallaAsistenciaMovilState
         return;
       }
       final contenedor = await ref.read(contenedorServiciosProvider.future);
-      await contenedor.servicioAsistencia?.registrarEntradaBiometrica(
+      final asistencia = contenedor.servicioAsistencia;
+      if (asistencia == null) {
+        throw StateError('Servicio de asistencia no disponible');
+      }
+      await asistencia.registrarEntradaBiometrica(
         usuarioId: usuario.id,
         latitud: pos.latitude,
         longitud: pos.longitude,
@@ -183,7 +191,11 @@ class _PantallaAsistenciaMovilState
     setState(() => _cargando = true);
     try {
       final contenedor = await ref.read(contenedorServiciosProvider.future);
-      await contenedor.servicioAsistencia?.registrarSalida(usuario.id);
+      final asistencia = contenedor.servicioAsistencia;
+      if (asistencia == null) {
+        throw StateError('Servicio de asistencia no disponible');
+      }
+      await asistencia.registrarSalida(usuario.id);
       await _cargarEstado();
       if (!mounted) {
         return;

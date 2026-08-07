@@ -15,7 +15,7 @@ Future<Position> obtenerUbicacionActual() async {
 	final concedido = await solicitarPermisoUbicacion();
 	if (!concedido) {
 		throw StateError(
-			'Permita el acceso a la ubicación para usar el mapa',
+			'Permita el acceso a la ubicación para marcar asistencia',
 		);
 	}
 	final gpsActivo = await Geolocator.isLocationServiceEnabled();

@@ -109,7 +109,7 @@ const int PRESUPUESTO_ENVIO_SYNC_SEGUNDOS = 300;
 const int UMBRAL_NO_REENCOLAR_CATALOGO = 200;
 
 /// Antiguedad maxima (desde `creadoEn`) de una venta remota para reimprimirla
-/// al aplicarse por sync.
+/// al aplicarse por sync **en otra caja de la misma tienda**.
 ///
 /// El pull incremental no distingue una venta que otra caja acaba de cerrar
 /// (quiero imprimirla aqui, es la unica que la vio) de una venta atrasada de
@@ -117,6 +117,9 @@ const int UMBRAL_NO_REENCOLAR_CATALOGO = 200;
 /// telefono vendiendo con la PC apagada): en ambos casos llega por el mismo
 /// callback al aplicar el evento. Sin este umbral, prender la PC reimprime
 /// en cascada todo lo que el telefono ya despacho mientras estaba sola.
+///
+/// Ademas, [debeImprimirVentaRemotaTrasSync] exige misma tienda: una PC de la
+/// tienda 2 nunca reimprime ventas de la tienda 1 aunque compartan hub.
 const int UMBRAL_REIMPRESION_VENTA_REMOTA_SEGUNDOS = 180;
 
 /// Nombre del servicio mDNS para descubrimiento LAN.

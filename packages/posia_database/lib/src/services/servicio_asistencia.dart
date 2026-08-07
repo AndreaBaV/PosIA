@@ -16,10 +16,14 @@ class DesafioPinGenerado {
 	const DesafioPinGenerado({
 		required this.desafio,
 		required this.pinPlano,
+		this.sincronizadoConHub,
 	});
 
 	final DesafioAsistencia desafio;
 	final String pinPlano;
+
+	/// null = sin hub; true = ya en el hub; false = encolado pero no confirmado.
+	final bool? sincronizadoConHub;
 }
 
 /// Coordina entrada/salida de empleados sin hardware biometrico externo.
@@ -48,6 +52,9 @@ class ServicioAsistencia {
 	final Random _random = Random.secure();
 
 	/// Genera PIN de 4 digitos visible en laptop admin (TTL 5 min).
+	///
+	/// Empuja el desafio al hub de inmediato para que el celular del empleado
+	/// pueda validarlo sin esperar el ciclo periodico de 60 s.
 	Future<DesafioPinGenerado> generarDesafioPin(String creadoPor) async {
 		final tienda = await _tiendaRepository.obtenerPorId(_tiendaId);
 		if (tienda == null) {
@@ -75,7 +82,7 @@ class ServicioAsistencia {
 			await _asistenciaRepository.desactivarDesafiosTienda(_tiendaId, db: tx);
 			await _asistenciaRepository.guardarDesafio(desafio, db: tx);
 		});
-		await _emitirEvento(
+		final sincronizado = await _emitirEvento(
 			TipoSyncEvento.attendanceChallengeCreated,
 			claveEntidad: desafio.id,
 			{
@@ -87,42 +94,47 @@ class ServicioAsistencia {
 				'radioMetros': desafio.radioMetros,
 				'pinHash': desafio.pinHash,
 			},
+			empujarAhora: true,
 		);
-		return DesafioPinGenerado(desafio: desafio, pinPlano: pin);
+		return DesafioPinGenerado(
+			desafio: desafio,
+			pinPlano: pin,
+			sincronizadoConHub: sincronizado,
+		);
 	}
 
 	/// Registra entrada validando PIN y ubicacion del telefono.
+	///
+	/// Si no hay desafio local o el PIN no coincide, intenta un sync con el hub
+	/// (el PIN se genera en otro dispositivo) y reintenta una vez.
 	Future<RegistroAsistencia> registrarEntradaConPin({
 		required String usuarioId,
 		required String pin,
 		required double latitud,
 		required double longitud,
 	}) async {
-		final abierta = await _asistenciaRepository.obtenerEntradaAbierta(usuarioId);
-		if (abierta != null) {
-			throw StateError('Ya tiene una entrada abierta');
+		try {
+			return await _entradaConPinLocal(
+				usuarioId: usuarioId,
+				pin: pin,
+				latitud: latitud,
+				longitud: longitud,
+			);
+		} on StateError catch (error) {
+			if (!_esErrorDesafioOPin(error)) {
+				rethrow;
+			}
+			final sincronizo = await _intentarSincronizarHub();
+			if (!sincronizo) {
+				rethrow;
+			}
+			return _entradaConPinLocal(
+				usuarioId: usuarioId,
+				pin: pin,
+				latitud: latitud,
+				longitud: longitud,
+			);
 		}
-		final desafio = await _asistenciaRepository.obtenerDesafioActivo(_tiendaId);
-		if (desafio == null) {
-			throw StateError('No hay PIN de asistencia activo');
-		}
-		if (!_verificarPin(pin, desafio.pinHash)) {
-			throw StateError('PIN incorrecto o expirado');
-		}
-		_validarUbicacion(
-			latitud: latitud,
-			longitud: longitud,
-			latCentro: desafio.latitud!,
-			lonCentro: desafio.longitud!,
-			radioMetros: desafio.radioMetros,
-		);
-		return _crearEntrada(
-			usuarioId: usuarioId,
-			metodo: 'pin_gps',
-			latitud: latitud,
-			longitud: longitud,
-			desafioId: desafio.id,
-		);
 	}
 
 	/// Registra entrada por geocerca + biometria del telefono.
@@ -131,27 +143,26 @@ class ServicioAsistencia {
 		required double latitud,
 		required double longitud,
 	}) async {
-		final abierta = await _asistenciaRepository.obtenerEntradaAbierta(usuarioId);
-		if (abierta != null) {
-			throw StateError('Ya tiene una entrada abierta');
+		try {
+			return await _entradaBiometricaLocal(
+				usuarioId: usuarioId,
+				latitud: latitud,
+				longitud: longitud,
+			);
+		} on StateError catch (error) {
+			if (!error.message.contains('coordenadas')) {
+				rethrow;
+			}
+			final sincronizo = await _intentarSincronizarHub();
+			if (!sincronizo) {
+				rethrow;
+			}
+			return _entradaBiometricaLocal(
+				usuarioId: usuarioId,
+				latitud: latitud,
+				longitud: longitud,
+			);
 		}
-		final tienda = await _tiendaRepository.obtenerPorId(_tiendaId);
-		if (tienda?.latitud == null || tienda?.longitud == null) {
-			throw StateError('Tienda sin coordenadas configuradas');
-		}
-		_validarUbicacion(
-			latitud: latitud,
-			longitud: longitud,
-			latCentro: tienda!.latitud!,
-			lonCentro: tienda.longitud!,
-			radioMetros: tienda.radioMetrosAsistencia,
-		);
-		return _crearEntrada(
-			usuarioId: usuarioId,
-			metodo: 'geocerca_biometrica',
-			latitud: latitud,
-			longitud: longitud,
-		);
 	}
 
 	Future<RegistroAsistencia> registrarSalida(String usuarioId) async {
@@ -179,14 +190,23 @@ class ServicioAsistencia {
 				'usuarioId': salida.usuarioId,
 				'salidaEn': salida.salidaEn!.toIso8601String(),
 			},
+			empujarAhora: true,
 		);
 		return salida;
 	}
 
+	/// Entradas del dia calendario local (Mexico UTC-6, no el dia UTC).
 	Future<List<RegistroAsistencia>> listarEntradasDelDia([DateTime? dia]) async {
-		return _asistenciaRepository.listarPorTiendaDia(
+		final referencia = (dia ?? DateTime.now()).toLocal();
+		final inicioLocal = DateTime(
+			referencia.year,
+			referencia.month,
+			referencia.day,
+		);
+		return _asistenciaRepository.listarPorTiendaRango(
 			_tiendaId,
-			dia ?? DateTime.now().toUtc(),
+			inicioLocal.toUtc(),
+			inicioLocal.add(const Duration(days: 1)).toUtc(),
 		);
 	}
 
@@ -198,8 +218,80 @@ class ServicioAsistencia {
 		return _asistenciaRepository.obtenerEntradaAbierta(usuarioId);
 	}
 
+	Future<RegistroAsistencia> _entradaConPinLocal({
+		required String usuarioId,
+		required String pin,
+		required double latitud,
+		required double longitud,
+	}) async {
+		final abierta = await _asistenciaRepository.obtenerEntradaAbierta(usuarioId);
+		if (abierta != null) {
+			throw StateError('Ya tiene una entrada abierta');
+		}
+		final desafio = await _asistenciaRepository.obtenerDesafioActivo(_tiendaId);
+		if (desafio == null) {
+			throw StateError('No hay PIN de asistencia activo');
+		}
+		if (!_verificarPin(pin, desafio.pinHash)) {
+			throw StateError('PIN incorrecto o expirado');
+		}
+		final latCentro = desafio.latitud;
+		final lonCentro = desafio.longitud;
+		if (latCentro == null || lonCentro == null) {
+			throw StateError('Tienda sin coordenadas configuradas');
+		}
+		_validarUbicacion(
+			latitud: latitud,
+			longitud: longitud,
+			latCentro: latCentro,
+			lonCentro: lonCentro,
+			radioMetros: desafio.radioMetros,
+		);
+		return _crearEntrada(
+			usuarioId: usuarioId,
+			metodo: 'pin_gps',
+			latitud: latitud,
+			longitud: longitud,
+			desafioId: desafio.id,
+		);
+	}
+
+	Future<RegistroAsistencia> _entradaBiometricaLocal({
+		required String usuarioId,
+		required double latitud,
+		required double longitud,
+	}) async {
+		final abierta = await _asistenciaRepository.obtenerEntradaAbierta(usuarioId);
+		if (abierta != null) {
+			throw StateError('Ya tiene una entrada abierta');
+		}
+		final tienda = await _tiendaRepository.obtenerPorId(_tiendaId);
+		if (tienda?.latitud == null || tienda?.longitud == null) {
+			throw StateError('Tienda sin coordenadas configuradas');
+		}
+		_validarUbicacion(
+			latitud: latitud,
+			longitud: longitud,
+			latCentro: tienda!.latitud!,
+			lonCentro: tienda.longitud!,
+			radioMetros: tienda.radioMetrosAsistencia,
+		);
+		return _crearEntrada(
+			usuarioId: usuarioId,
+			metodo: 'geocerca_biometrica',
+			latitud: latitud,
+			longitud: longitud,
+		);
+	}
+
 	bool _verificarPin(String pin, String pinCredencial) {
 		return HasherPin.verificar(pin, pinCredencial);
+	}
+
+	bool _esErrorDesafioOPin(StateError error) {
+		final mensaje = error.message;
+		return mensaje.contains('PIN') || mensaje.contains('desafio') ||
+			mensaje.contains('No hay PIN');
 	}
 
 	void _validarUbicacion({
@@ -253,22 +345,28 @@ class ServicioAsistencia {
 				'longitud': registro.longitud,
 				'desafioId': registro.desafioId,
 			},
+			empujarAhora: true,
 		);
 		return registro;
 	}
 
-	Future<void> _emitirEvento(
+	/// Encola el evento y, si [empujarAhora], lo sube al hub sin esperar el ciclo.
+	///
+	/// Retorna null si no hay hub; true si el push confirmo envio; false si fallo.
+	Future<bool?> _emitirEvento(
 		TipoSyncEvento tipo,
 		Map<String, Object?> payload, {
 		required String claveEntidad,
+		bool empujarAhora = false,
 	}) async {
 		final sync = _syncOrchestrator;
 		if (sync == null) {
-			return;
+			return null;
 		}
+		final eventoId = _idEventoEspejo(tipo, claveEntidad);
 		await sync.registrarEvento(
 			SyncEvent(
-				id: _idEventoEspejo(tipo, claveEntidad),
+				id: eventoId,
 				tiendaId: _tiendaId,
 				dispositivoId: _dispositivoId,
 				tipo: tipo,
@@ -277,6 +375,29 @@ class ServicioAsistencia {
 				estado: EstadoSyncEvento.pendiente,
 			),
 		);
+		if (!empujarAhora || !sync.tieneHubConfigurado()) {
+			return sync.tieneHubConfigurado() ? false : null;
+		}
+		try {
+			final resultado = await sync.sincronizarEventosPorIds([eventoId]);
+			return resultado.exitoso;
+		} on Object {
+			// La operacion local ya quedo guardada; el ciclo periodico reintenta.
+			return false;
+		}
+	}
+
+	Future<bool> _intentarSincronizarHub() async {
+		final sync = _syncOrchestrator;
+		if (sync == null || !sync.tieneHubConfigurado()) {
+			return false;
+		}
+		try {
+			await sync.sincronizarCompleto();
+			return true;
+		} on Object {
+			return false;
+		}
 	}
 
 	/// ID de evento determinístico: reintentos de sync no duplican el evento.

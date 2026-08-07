@@ -4,6 +4,11 @@ library;
 import 'package:posia_core/posia_core.dart';
 import 'package:posia_database/posia_database.dart';
 
+Future<Tienda?> _tiendaDeVenta(ServicioAdmin servicio, Venta venta) async {
+  return await servicio.obtenerTiendaPorId(venta.tiendaId) ??
+      await servicio.obtenerTiendaActiva();
+}
+
 /// Construye las dos copias del pagare (administrador y cliente).
 Future<List<String>> construirTextosPagareCredito({
   required Venta venta,
@@ -16,7 +21,7 @@ Future<List<String>> construirTextosPagareCredito({
   if (cliente == null) {
     throw StateError('Cliente no encontrado');
   }
-  final tienda = await servicioAdmin.obtenerTiendaActiva();
+  final tienda = await _tiendaDeVenta(servicioAdmin, venta);
   final nombreTienda = tienda?.nombre ?? 'Tienda';
   final direccionTienda = tienda?.direccion;
   final args = (
@@ -63,7 +68,7 @@ Future<TicketDigitalContenido> obtenerTicketDigitalPagareCliente({
   if (cliente == null) {
     throw StateError('Cliente no encontrado');
   }
-  final tienda = await servicioAdmin.obtenerTiendaActiva();
+  final tienda = await _tiendaDeVenta(servicioAdmin, venta);
   return construirTicketDigitalPagare(
     venta: venta,
     nombreTienda: tienda?.nombre ?? 'Tienda',
@@ -88,7 +93,7 @@ Future<List<TicketDigitalContenido>> obtenerTicketsDigitalesPagareCredito({
   if (cliente == null) {
     throw StateError('Cliente no encontrado');
   }
-  final tienda = await servicioAdmin.obtenerTiendaActiva();
+  final tienda = await _tiendaDeVenta(servicioAdmin, venta);
   final nombreTienda = tienda?.nombre ?? 'Tienda';
   final direccionTienda = tienda?.direccion;
   final args = (
@@ -126,7 +131,7 @@ Future<String> construirTextoLiquidacionCredito({
   required Venta venta,
   required ServicioAdmin servicioAdmin,
 }) async {
-  final tienda = await servicioAdmin.obtenerTiendaActiva();
+  final tienda = await _tiendaDeVenta(servicioAdmin, venta);
   final cliente = venta.clienteId != null
       ? await servicioAdmin.obtenerCliente(venta.clienteId!)
       : null;
@@ -145,7 +150,7 @@ Future<TicketDigitalContenido> obtenerTicketDigitalLiquidacionCredito({
   required Venta venta,
   required ServicioAdmin servicioAdmin,
 }) async {
-  final tienda = await servicioAdmin.obtenerTiendaActiva();
+  final tienda = await _tiendaDeVenta(servicioAdmin, venta);
   final cliente = venta.clienteId != null
       ? await servicioAdmin.obtenerCliente(venta.clienteId!)
       : null;

@@ -110,6 +110,16 @@ class _PantallaAsistenciaAdminState extends ConsumerState<PantallaAsistenciaAdmi
 		final contenedor = await ref.read(contenedorServiciosProvider.future);
 		final asistencia = contenedor.servicioAsistencia;
 		if (asistencia == null) {
+			if (!mounted) {
+				return;
+			}
+			PosiaNotificaciones.mostrarSnackBar(
+				context,
+				const SnackBar(
+					content: Text('Servicio de asistencia no disponible'),
+					backgroundColor: PosiaColors.cancelar,
+				),
+			);
 			return;
 		}
 		try {
@@ -119,6 +129,21 @@ class _PantallaAsistenciaAdminState extends ConsumerState<PantallaAsistenciaAdmi
 				_expiraPin = resultado.desafio.expiraEn;
 			});
 			ref.invalidate(_entradasDiaProvider);
+			if (!mounted) {
+				return;
+			}
+			if (resultado.sincronizadoConHub == false) {
+				PosiaNotificaciones.mostrarSnackBar(
+					context,
+					const SnackBar(
+						content: Text(
+							'PIN listo en este equipo. Si el empleado usa otro '
+							'dispositivo, sincronice o espere unos segundos.',
+						),
+						duration: Duration(seconds: 4),
+					),
+				);
+			}
 		} catch (error) {
 			if (!mounted) {
 				return;

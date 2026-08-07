@@ -1169,9 +1169,12 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			tiendaId: evento.tiendaId,
 			cajaId: evento.dispositivoId,
 			clienteId: evento.payload['clienteId'] as String?,
+			vendedorId: evento.payload['vendedorId'] as String?,
 			lineas: lineas,
 			metodoPago: metodo,
 			total: (evento.payload['total'] as num?)?.toDouble() ?? 0.0,
+			descuentoTicket:
+				(evento.payload['descuentoTicket'] as num?)?.toDouble() ?? 0.0,
 			creadaEn: evento.creadoEn,
 		);
 		await _ventaRepository.guardar(venta, db: ejecutor);
@@ -2068,6 +2071,7 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 				(valor) => valor.name == reglaNombre,
 				orElse: () => ReglaPrecio.precioBase,
 			),
+			descuentoLinea: (cruda['descuentoLinea'] as num?)?.toDouble() ?? 0.0,
 			loteId: cruda['loteId'] as String?,
 			etiquetaLote: cruda['etiquetaLote'] as String?,
 		);

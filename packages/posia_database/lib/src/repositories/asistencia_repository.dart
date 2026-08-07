@@ -105,10 +105,23 @@ class AsistenciaRepository {
 	) async {
 		final inicio = DateTime.utc(dia.year, dia.month, dia.day);
 		final fin = inicio.add(const Duration(days: 1));
+		return listarPorTiendaRango(tiendaId, inicio, fin);
+	}
+
+	/// Lista registros de [tiendaId] con entrada en [inicio, fin) (instantes UTC).
+	Future<List<RegistroAsistencia>> listarPorTiendaRango(
+		String tiendaId,
+		DateTime inicio,
+		DateTime fin,
+	) async {
 		final filas = await _baseDatos.query(
 			'registros_asistencia',
 			where: 'tienda_id = ? AND entrada_en >= ? AND entrada_en < ?',
-			whereArgs: [tiendaId, inicio.toIso8601String(), fin.toIso8601String()],
+			whereArgs: [
+				tiendaId,
+				inicio.toUtc().toIso8601String(),
+				fin.toUtc().toIso8601String(),
+			],
 			orderBy: 'entrada_en ASC',
 		);
 		return filas.map(_mapearRegistro).toList();

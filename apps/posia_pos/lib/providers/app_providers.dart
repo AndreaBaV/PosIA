@@ -260,21 +260,22 @@ bool _permitirRespaldoArchivoEnPlataforma(
 }
 
 Future<void> _imprimirVentaRemotaTrasSync(Ref ref, SyncEvent evento) async {
-	if (evento.tipo != TipoSyncEvento.saleCompleted) {
-		return;
-	}
 	if (esPlataformaMovilNativa()) {
-		return;
-	}
-	final antiguedad = DateTime.now().toUtc().difference(evento.creadoEn.toUtc());
-	if (antiguedad.inSeconds > UMBRAL_REIMPRESION_VENTA_REMOTA_SEGUNDOS) {
-		// Venta atrasada (p. ej. este equipo estuvo apagado/offline): el
-		// dispositivo que la origino ya la imprimio en su momento.
 		return;
 	}
 	try {
 		final contenedor = await ref.read(contenedorServiciosProvider.future);
 		final servicio = contenedor.servicioAdmin;
+		final config = await servicio.obtenerConfigDispositivo();
+		// Misma tienda + otra caja + reciente. Nunca reimprimir ventas de otra
+		// sucursal (p. ej. PC de tienda 2 conectada en la red de tienda 1).
+		if (!debeImprimirVentaRemotaTrasSync(
+			evento: evento,
+			tiendaLocalId: config.tiendaId,
+			dispositivoLocalId: config.cajaId,
+		)) {
+			return;
+		}
 		final configImpresora = await servicio.obtenerConfigImpresora();
 		if (!_dispositivoPuedeImprimirFisicamente(configImpresora)) {
 			return;
@@ -287,7 +288,6 @@ Future<void> _imprimirVentaRemotaTrasSync(Ref ref, SyncEvent evento) async {
 		if (venta == null) {
 			return;
 		}
-		final config = await servicio.obtenerConfigDispositivo();
 		final hardware = await ref.read(hardwareRegistryProvider.future);
 		final impresora = hardware.obtenerImpresora();
 		if (venta.metodoPago == MetodoPago.credito) {
