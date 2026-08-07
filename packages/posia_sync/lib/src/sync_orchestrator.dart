@@ -84,6 +84,40 @@ class SyncOrchestrator {
     await _colaLocal.encolar(evento);
   }
 
+  /// Encola y empuja de inmediato el mismo evento (sin reconsultar la cola).
+  ///
+  /// Evita la carrera lectura/escritura de la cola dual donde un
+  /// [sincronizarEventosPorIds] justo despues de [registrarEvento] no veia
+  /// el pendiente y la asistencia nunca subia al hub.
+  Future<ResultadoEnvioHub> registrarYEmpujar(SyncEvent evento) async {
+    await _colaLocal.encolar(evento);
+    final tienda = evento.tiendaId.trim().isNotEmpty ? evento.tiendaId : _tiendaId;
+    final dispositivo = evento.dispositivoId.trim().isNotEmpty
+        ? evento.dispositivoId
+        : _dispositivoId;
+    if (tienda.trim().isEmpty || dispositivo.trim().isEmpty) {
+      await _colaLocal.marcarError(evento.id);
+      return const ResultadoEnvioHub(
+        exitoso: false,
+        error: 'tiendaId/dispositivoId vacio',
+      );
+    }
+    if (!tieneHubConfigurado() && _clienteLan == null) {
+      return const ResultadoEnvioHub(exitoso: false, error: 'sin hub');
+    }
+    final resultado = await _transmitirLoteConDetalle(
+      [evento],
+      tiendaId: tienda,
+      dispositivoId: dispositivo,
+    );
+    if (resultado.exitoso) {
+      await _colaLocal.marcarEnviado(evento.id);
+    } else {
+      await _colaLocal.marcarError(evento.id);
+    }
+    return resultado;
+  }
+
   /// Empuja solo los ids indicados (p. ej. empaque recien guardado).
   ///
   /// Evita que la cola antigua (centenas de eventos en error) consuma los
@@ -432,10 +466,9 @@ class SyncOrchestrator {
       // los nombres de categoría) nunca vuelve y quedan stubs "Categoría".
       incluirEventosPropios: desdeOrigen,
       // Reconstrucción desde origen = replay de TODO el historial de la
-      // tienda (cursor a 0), no solo lo pendiente reciente. Si se dispara el
-      // callback de impresión aquí, la caja reimprime cada venta que la
-      // tienda haya hecho jamás. Ese callback es solo para ventas nuevas
-      // llegando de otras cajas en el sync normal.
+      // tienda (cursor a 0), no solo lo pendiente reciente. El hook
+      // [alAplicarEventoRemoto] (si alguien lo conecta) no debe dispararse
+      // aquí: reimprimiría cada venta histórica de la tienda.
       esReconstruccionDesdeOrigen: desdeOrigen,
       alProgreso: alProgreso,
     );

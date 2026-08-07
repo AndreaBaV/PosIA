@@ -51,7 +51,7 @@ class ServicioAsistencia {
 	final Uuid _generadorId = const Uuid();
 	final Random _random = Random.secure();
 
-	/// Genera PIN de 4 digitos visible en laptop admin (TTL 5 min).
+	/// Genera PIN de 4 digitos visible en laptop admin (TTL 10 min).
 	///
 	/// Empuja el desafio al hub de inmediato para que el celular del empleado
 	/// pueda validarlo sin esperar el ciclo periodico de 60 s.
@@ -71,13 +71,15 @@ class ServicioAsistencia {
 			id: _generadorId.v4(),
 			tiendaId: _tiendaId,
 			pinHash: credencial,
-			expiraEn: DateTime.now().toUtc().add(const Duration(minutes: 5)),
+			expiraEn: DateTime.now().toUtc().add(const Duration(minutes: 10)),
 			creadoPor: creadoPor,
 			latitud: tienda.latitud,
 			longitud: tienda.longitud,
 			radioMetros: tienda.radioMetrosAsistencia,
 			activo: true,
 		);
+		// Tienda ya validada arriba: dentro del tx no llamar al asegurador FK
+		// (usa otra conexion y puede deadlockear con sqflite).
 		await _baseDatos.transaction((tx) async {
 			await _asistenciaRepository.desactivarDesafiosTienda(_tiendaId, db: tx);
 			await _asistenciaRepository.guardarDesafio(desafio, db: tx);
@@ -88,7 +90,7 @@ class ServicioAsistencia {
 			{
 				'id': desafio.id,
 				'tiendaId': desafio.tiendaId,
-				'expiraEn': desafio.expiraEn.toIso8601String(),
+				'expiraEn': desafio.expiraEn.toUtc().toIso8601String(),
 				'latitud': desafio.latitud,
 				'longitud': desafio.longitud,
 				'radioMetros': desafio.radioMetros,
@@ -105,14 +107,15 @@ class ServicioAsistencia {
 
 	/// Registra entrada validando PIN y ubicacion del telefono.
 	///
-	/// Si no hay desafio local o el PIN no coincide, intenta un sync con el hub
-	/// (el PIN se genera en otro dispositivo) y reintenta una vez.
+	/// Siempre intenta sync primero: el PIN se genera en la laptop admin y el
+	/// hash debe llegar al celular antes de validar.
 	Future<RegistroAsistencia> registrarEntradaConPin({
 		required String usuarioId,
 		required String pin,
 		required double latitud,
 		required double longitud,
 	}) async {
+		await _intentarSincronizarHub();
 		try {
 			return await _entradaConPinLocal(
 				usuarioId: usuarioId,
@@ -124,6 +127,7 @@ class ServicioAsistencia {
 			if (!_esErrorDesafioOPin(error)) {
 				rethrow;
 			}
+			// Segundo intento por si el push del admin llego milisegundos despues.
 			final sincronizo = await _intentarSincronizarHub();
 			if (!sincronizo) {
 				rethrow;
@@ -188,6 +192,7 @@ class ServicioAsistencia {
 			{
 				'registroId': salida.id,
 				'usuarioId': salida.usuarioId,
+				'tiendaId': salida.tiendaId,
 				'salidaEn': salida.salidaEn!.toIso8601String(),
 			},
 			empujarAhora: true,
@@ -196,18 +201,30 @@ class ServicioAsistencia {
 	}
 
 	/// Entradas del dia calendario local (Mexico UTC-6, no el dia UTC).
-	Future<List<RegistroAsistencia>> listarEntradasDelDia([DateTime? dia]) async {
+	///
+	/// Con [sincronizarPrimero] baja del hub las entradas hechas en otros
+	/// dispositivos (p. ej. biometria en el celular) antes de listar.
+	/// Con [todasLasTiendas] lista el dia completo del tenant (panel admin).
+	Future<List<RegistroAsistencia>> listarEntradasDelDia({
+		DateTime? dia,
+		bool sincronizarPrimero = false,
+		bool todasLasTiendas = false,
+	}) async {
+		if (sincronizarPrimero) {
+			await _intentarSincronizarHub();
+		}
 		final referencia = (dia ?? DateTime.now()).toLocal();
 		final inicioLocal = DateTime(
 			referencia.year,
 			referencia.month,
 			referencia.day,
 		);
-		return _asistenciaRepository.listarPorTiendaRango(
-			_tiendaId,
-			inicioLocal.toUtc(),
-			inicioLocal.add(const Duration(days: 1)).toUtc(),
-		);
+		final inicio = inicioLocal.toUtc();
+		final fin = inicioLocal.add(const Duration(days: 1)).toUtc();
+		if (todasLasTiendas) {
+			return _asistenciaRepository.listarPorRango(inicio, fin);
+		}
+		return _asistenciaRepository.listarPorTiendaRango(_tiendaId, inicio, fin);
 	}
 
 	Future<DesafioAsistencia?> obtenerDesafioActivo() {
@@ -230,7 +247,10 @@ class ServicioAsistencia {
 		}
 		final desafio = await _asistenciaRepository.obtenerDesafioActivo(_tiendaId);
 		if (desafio == null) {
-			throw StateError('No hay PIN de asistencia activo');
+			throw StateError(
+				'No hay PIN de asistencia activo. Genérelo en Admin → Asistencia '
+				'en un equipo de esta misma tienda y espere a que sincronice.',
+			);
 		}
 		if (!_verificarPin(pin, desafio.pinHash)) {
 			throw StateError('PIN incorrecto o expirado');
@@ -363,23 +383,21 @@ class ServicioAsistencia {
 		if (sync == null) {
 			return null;
 		}
-		final eventoId = _idEventoEspejo(tipo, claveEntidad);
-		await sync.registrarEvento(
-			SyncEvent(
-				id: eventoId,
-				tiendaId: _tiendaId,
-				dispositivoId: _dispositivoId,
-				tipo: tipo,
-				payload: payload,
-				creadoEn: DateTime.now().toUtc(),
-				estado: EstadoSyncEvento.pendiente,
-			),
+		final evento = SyncEvent(
+			id: _idEventoEspejo(tipo, claveEntidad),
+			tiendaId: _tiendaId,
+			dispositivoId: _dispositivoId,
+			tipo: tipo,
+			payload: payload,
+			creadoEn: DateTime.now().toUtc(),
+			estado: EstadoSyncEvento.pendiente,
 		);
 		if (!empujarAhora || !sync.tieneHubConfigurado()) {
+			await sync.registrarEvento(evento);
 			return sync.tieneHubConfigurado() ? false : null;
 		}
 		try {
-			final resultado = await sync.sincronizarEventosPorIds([eventoId]);
+			final resultado = await sync.registrarYEmpujar(evento);
 			return resultado.exitoso;
 		} on Object {
 			// La operacion local ya quedo guardada; el ciclo periodico reintenta.

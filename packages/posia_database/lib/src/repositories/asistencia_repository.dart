@@ -4,6 +4,7 @@ library;
 import 'package:posia_core/posia_core.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../database/conexion_operativa_ruteada.dart';
 import '../utils/asegurador_padres_fk.dart';
 
 /// Persiste desafios PIN y registros de entrada/salida.
@@ -19,7 +20,12 @@ class AsistenciaRepository {
 		DesafioAsistencia desafio, {
 		DatabaseExecutor? db,
 	}) async {
-		await _padresFk.asegurarTienda(desafio.tiendaId);
+		// Si [db] es una Transaction, NO tocar la conexion externa: en sqflite
+		// eso encola detras del tx y provoca deadlock (PIN que "se genera" en
+		// pantalla pero nunca queda legible / sync que no aplica el desafio).
+		if (db == null) {
+			await _padresFk.asegurarTienda(desafio.tiendaId);
+		}
 		final exec = db ?? _baseDatos;
 		await exec.insert(
 			'desafios_asistencia',
@@ -27,7 +33,7 @@ class AsistenciaRepository {
 				'id': desafio.id,
 				'tienda_id': desafio.tiendaId,
 				'pin_hash': desafio.pinHash,
-				'expira_en': desafio.expiraEn.toIso8601String(),
+				'expira_en': desafio.expiraEn.toUtc().toIso8601String(),
 				'creado_por': desafio.creadoPor,
 				'latitud': desafio.latitud,
 				'longitud': desafio.longitud,
@@ -51,19 +57,28 @@ class AsistenciaRepository {
 		);
 	}
 
+	/// Garantiza fila padre de tienda sin abrir una transaccion.
+	Future<void> asegurarTiendaPadre(String tiendaId) {
+		return _padresFk.asegurarTienda(tiendaId);
+	}
+
+	/// Desafio activo y no expirado. Compara fechas en Dart (no por texto ISO).
 	Future<DesafioAsistencia?> obtenerDesafioActivo(String tiendaId) async {
-		final ahora = DateTime.now().toUtc().toIso8601String();
-		final filas = await _baseDatos.query(
+		final filas = await _consultar(
 			'desafios_asistencia',
-			where: 'tienda_id = ? AND activo = 1 AND expira_en > ?',
-			whereArgs: [tiendaId, ahora],
+			where: 'tienda_id = ? AND activo = 1',
+			whereArgs: [tiendaId],
 			orderBy: 'expira_en DESC',
-			limit: 1,
+			lecturaFresca: true,
 		);
-		if (filas.isEmpty) {
-			return null;
+		final ahora = DateTime.now().toUtc();
+		for (final fila in filas) {
+			final desafio = _mapearDesafio(fila);
+			if (desafio.expiraEn.toUtc().isAfter(ahora)) {
+				return desafio;
+			}
 		}
-		return _mapearDesafio(filas.first);
+		return null;
 	}
 
 	Future<void> guardarRegistro(RegistroAsistencia registro) async {
@@ -74,8 +89,8 @@ class AsistenciaRepository {
 				'id': registro.id,
 				'usuario_id': registro.usuarioId,
 				'tienda_id': registro.tiendaId,
-				'entrada_en': registro.entradaEn.toIso8601String(),
-				'salida_en': registro.salidaEn?.toIso8601String(),
+				'entrada_en': registro.entradaEn.toUtc().toIso8601String(),
+				'salida_en': registro.salidaEn?.toUtc().toIso8601String(),
 				'metodo': registro.metodo,
 				'latitud': registro.latitud,
 				'longitud': registro.longitud,
@@ -86,12 +101,13 @@ class AsistenciaRepository {
 	}
 
 	Future<RegistroAsistencia?> obtenerEntradaAbierta(String usuarioId) async {
-		final filas = await _baseDatos.query(
+		final filas = await _consultar(
 			'registros_asistencia',
 			where: 'usuario_id = ? AND salida_en IS NULL',
 			whereArgs: [usuarioId],
 			orderBy: 'entrada_en DESC',
 			limit: 1,
+			lecturaFresca: true,
 		);
 		if (filas.isEmpty) {
 			return null;
@@ -114,7 +130,7 @@ class AsistenciaRepository {
 		DateTime inicio,
 		DateTime fin,
 	) async {
-		final filas = await _baseDatos.query(
+		final filas = await _consultar(
 			'registros_asistencia',
 			where: 'tienda_id = ? AND entrada_en >= ? AND entrada_en < ?',
 			whereArgs: [
@@ -123,6 +139,25 @@ class AsistenciaRepository {
 				fin.toUtc().toIso8601String(),
 			],
 			orderBy: 'entrada_en ASC',
+			lecturaFresca: true,
+		);
+		return filas.map(_mapearRegistro).toList();
+	}
+
+	/// Lista registros con entrada en [inicio, fin) (instantes UTC), todas las tiendas.
+	Future<List<RegistroAsistencia>> listarPorRango(
+		DateTime inicio,
+		DateTime fin,
+	) async {
+		final filas = await _consultar(
+			'registros_asistencia',
+			where: 'entrada_en >= ? AND entrada_en < ?',
+			whereArgs: [
+				inicio.toUtc().toIso8601String(),
+				fin.toUtc().toIso8601String(),
+			],
+			orderBy: 'entrada_en ASC',
+			lecturaFresca: true,
 		);
 		return filas.map(_mapearRegistro).toList();
 	}
@@ -132,13 +167,45 @@ class AsistenciaRepository {
 		required DateTime inicio,
 		required DateTime fin,
 	}) async {
-		final filas = await _baseDatos.query(
+		final filas = await _consultar(
 			'registros_asistencia',
 			where: 'usuario_id = ? AND entrada_en >= ? AND entrada_en < ?',
-			whereArgs: [usuarioId, inicio.toIso8601String(), fin.toIso8601String()],
+			whereArgs: [
+				usuarioId,
+				inicio.toUtc().toIso8601String(),
+				fin.toUtc().toIso8601String(),
+			],
 			orderBy: 'entrada_en ASC',
 		);
 		return filas.map(_mapearRegistro).toList();
+	}
+
+	/// Consulta; con [lecturaFresca] usa la conexion de escritura si existe.
+	Future<List<Map<String, Object?>>> _consultar(
+		String tabla, {
+		String? where,
+		List<Object?>? whereArgs,
+		String? orderBy,
+		int? limit,
+		bool lecturaFresca = false,
+	}) async {
+		final base = _baseDatos;
+		if (lecturaFresca && base is ConexionOperativaRuteada) {
+			return base.queryEscritura(
+				tabla,
+				where: where,
+				whereArgs: whereArgs,
+				orderBy: orderBy,
+				limit: limit,
+			);
+		}
+		return base.query(
+			tabla,
+			where: where,
+			whereArgs: whereArgs,
+			orderBy: orderBy,
+			limit: limit,
+		);
 	}
 
 	DesafioAsistencia _mapearDesafio(Map<String, Object?> fila) {

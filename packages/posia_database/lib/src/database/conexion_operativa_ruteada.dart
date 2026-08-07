@@ -189,6 +189,36 @@ class ConexionOperativaRuteada implements Database {
   @override
   Database get database => _escritura;
 
+  /// Lectura sobre la conexion de escritura (ve commits propios al instante).
+  ///
+  /// Usar tras un write reciente cuando el snapshot de [_lectura] puede ir
+  /// atrasado respecto al WAL (p. ej. desafio PIN de asistencia).
+  Future<List<Map<String, Object?>>> queryEscritura(
+    String table, {
+    bool? distinct,
+    List<String>? columns,
+    String? where,
+    List<Object?>? whereArgs,
+    String? groupBy,
+    String? having,
+    String? orderBy,
+    int? limit,
+    int? offset,
+  }) {
+    return _escritura.query(
+      table,
+      distinct: distinct,
+      columns: columns,
+      where: where,
+      whereArgs: whereArgs,
+      groupBy: groupBy,
+      having: having,
+      orderBy: orderBy,
+      limit: limit,
+      offset: offset,
+    );
+  }
+
   @override
   String get path => _escritura.path;
 

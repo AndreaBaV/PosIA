@@ -1970,24 +1970,27 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			return;
 		}
 		final tiendaId = payload['tiendaId'] as String? ?? evento.tiendaId;
+		final pinHash = payload['pinHash'] as String? ?? '';
+		if (pinHash.isEmpty) {
+			return;
+		}
+		final desafio = DesafioAsistencia(
+			id: id,
+			tiendaId: tiendaId,
+			pinHash: pinHash,
+			expiraEn: DateTime.parse(
+				payload['expiraEn'] as String? ?? evento.creadoEn.toIso8601String(),
+			),
+			creadoPor: evento.dispositivoId,
+			latitud: (payload['latitud'] as num?)?.toDouble(),
+			longitud: (payload['longitud'] as num?)?.toDouble(),
+			radioMetros: (payload['radioMetros'] as num?)?.toDouble() ?? 150,
+			activo: true,
+		);
+		await repo.asegurarTiendaPadre(tiendaId);
 		await _baseDatos.transaction((tx) async {
 			await repo.desactivarDesafiosTienda(tiendaId, db: tx);
-			await repo.guardarDesafio(
-				DesafioAsistencia(
-					id: id,
-					tiendaId: tiendaId,
-					pinHash: payload['pinHash'] as String? ?? '',
-					expiraEn: DateTime.parse(
-						payload['expiraEn'] as String? ?? evento.creadoEn.toIso8601String(),
-					),
-					creadoPor: evento.dispositivoId,
-					latitud: (payload['latitud'] as num?)?.toDouble(),
-					longitud: (payload['longitud'] as num?)?.toDouble(),
-					radioMetros: (payload['radioMetros'] as num?)?.toDouble() ?? 150,
-					activo: true,
-				),
-				db: tx,
-			);
+			await repo.guardarDesafio(desafio, db: tx);
 		});
 	}
 
@@ -2027,17 +2030,19 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		if (registroId.isEmpty) {
 			return;
 		}
-		final abierta = await repo.obtenerEntradaAbierta(
-			payload['usuarioId'] as String? ?? '',
-		);
+		final usuarioId = payload['usuarioId'] as String? ?? '';
+		final tiendaId = payload['tiendaId'] as String? ?? evento.tiendaId;
+		final abierta = usuarioId.isEmpty
+			? null
+			: await repo.obtenerEntradaAbierta(usuarioId);
 		final base = abierta?.id == registroId
 			? abierta!
 			: RegistroAsistencia(
 				id: registroId,
-				usuarioId: payload['usuarioId'] as String? ?? '',
-				tiendaId: evento.tiendaId,
+				usuarioId: usuarioId,
+				tiendaId: tiendaId,
 				entradaEn: evento.creadoEn,
-				metodo: '',
+				metodo: payload['metodo'] as String? ?? '',
 			);
 		await repo.guardarRegistro(
 			RegistroAsistencia(

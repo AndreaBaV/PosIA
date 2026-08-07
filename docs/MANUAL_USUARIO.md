@@ -494,9 +494,10 @@ Al compilar el release se embeben hub y API key (ver manual técnico §11). Cada
 ### Asistencia
 
 1. Configure **latitud, longitud y radio** en Admin → **Tiendas**.
-2. Admin → **Asistencia** → **Generar PIN** (válido 5 minutos).
-3. El empleado abre **Asistencia** en el celular e ingresa el PIN dentro del radio de la tienda.
+2. Admin → **Asistencia** → **Generar PIN** (válido 10 minutos).
+3. El empleado abre **Asistencia** en el celular e ingresa el PIN dentro del radio de la tienda (mismo establecimiento / misma tienda en la app).
 4. Alternativa: **Entrada con biometría** (Face ID / huella) en la geocerca.
+5. En el panel admin use **Actualizar** para ver entradas hechas en otros dispositivos.
 
 ### Nómina
 
