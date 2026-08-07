@@ -170,12 +170,7 @@ class _PantallaListasPreciosAdminState extends ConsumerState<PantallaListasPreci
 		String listaId,
 	) {
 		final filtrados = detalle.items.where((item) {
-			if (_filtro.isEmpty) {
-				return true;
-			}
-			final q = _filtro.toLowerCase();
-			return item.producto.nombre.toLowerCase().contains(q) ||
-				item.producto.codigoBarras.toLowerCase().contains(q);
+			return productoCoincideBusqueda(item.producto, _filtro);
 		}).toList();
 
 		return Column(
@@ -605,17 +600,7 @@ class _DialogoAgregarProductoListaState extends State<_DialogoAgregarProductoLis
 	}
 
 	List<Producto> get _filtrados {
-		if (_filtro.isEmpty) {
-			return widget.productos;
-		}
-		final q = _filtro.toLowerCase();
-		return widget.productos
-			.where(
-				(p) =>
-					p.nombre.toLowerCase().contains(q) ||
-					p.codigoBarras.toLowerCase().contains(q),
-			)
-			.toList();
+		return filtrarProductosPorBusqueda(widget.productos, _filtro);
 	}
 
 	void _seleccionarProducto(Producto producto) {

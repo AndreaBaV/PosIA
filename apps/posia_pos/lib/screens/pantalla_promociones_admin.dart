@@ -757,17 +757,7 @@ class _DialogoSeleccionarProductosState extends State<_DialogoSeleccionarProduct
 	List<Producto> get _filtrados {
 		final activos = widget.productos.where((p) => p.activo).toList()
 			..sort((a, b) => a.nombre.compareTo(b.nombre));
-		if (_filtro.isEmpty) {
-			return activos;
-		}
-		final q = _filtro.toLowerCase();
-		return activos
-			.where(
-				(p) =>
-					p.nombre.toLowerCase().contains(q) ||
-					p.codigoBarras.toLowerCase().contains(q),
-			)
-			.toList();
+		return filtrarProductosPorBusqueda(activos, _filtro);
 	}
 
 	void _tocar(Producto producto) {

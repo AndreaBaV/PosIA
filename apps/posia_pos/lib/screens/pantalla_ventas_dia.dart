@@ -69,7 +69,7 @@ class _PantallaVentasDiaState extends ConsumerState<PantallaVentasDia> {
 					CampoBusqueda(
 						controlador: _busquedaController,
 						sugerencia: 'Buscar producto, monto o ticket...',
-						alCambiar: (v) => setState(() => _busqueda = v.trim().toLowerCase()),
+						alCambiar: (v) => setState(() => _busqueda = v.trim()),
 					),
 					Expanded(
 						child: datosAsync.when(
@@ -341,14 +341,14 @@ class _PantallaVentasDiaState extends ConsumerState<PantallaVentasDia> {
 			if (_busqueda.isEmpty) {
 				return true;
 			}
-			if (formatearMoneda(venta.total).toLowerCase().contains(_busqueda)) {
+			if (textoContieneBusqueda(formatearMoneda(venta.total), _busqueda)) {
 				return true;
 			}
-			if (venta.id.toLowerCase().contains(_busqueda)) {
+			if (textoContieneBusqueda(venta.id, _busqueda)) {
 				return true;
 			}
 			for (final linea in venta.lineas) {
-				if (linea.nombreProducto.toLowerCase().contains(_busqueda)) {
+				if (textoContieneBusqueda(linea.nombreProducto, _busqueda)) {
 					return true;
 				}
 			}
@@ -361,7 +361,7 @@ class _PantallaVentasDiaState extends ConsumerState<PantallaVentasDia> {
 			return productos;
 		}
 		return productos
-			.where((p) => p.nombreProducto.toLowerCase().contains(_busqueda))
+			.where((p) => textoContieneBusqueda(p.nombreProducto, _busqueda))
 			.toList();
 	}
 

@@ -46,8 +46,8 @@ class _PantallaMovimientosInventarioState
 							return true;
 						}
 						final nombre = datos.nombresProducto[m.productoId] ?? '';
-						return nombre.toLowerCase().contains(_filtro.toLowerCase()) ||
-							m.motivo.toLowerCase().contains(_filtro.toLowerCase());
+						return textoContieneBusqueda(nombre, _filtro) ||
+							textoContieneBusqueda(m.motivo, _filtro);
 					}).toList();
 					return CustomScrollView(
 						keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,

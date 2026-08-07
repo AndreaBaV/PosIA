@@ -35,6 +35,24 @@ String normalizarTextoBusqueda(String texto) {
 	return s;
 }
 
+/// Indica si [texto] contiene [consulta] ignorando mayúsculas y acentos.
+bool textoContieneBusqueda(String texto, String consulta) {
+	final q = normalizarTextoBusqueda(consulta).trim();
+	if (q.isEmpty) {
+		return true;
+	}
+	return normalizarTextoBusqueda(texto).contains(q);
+}
+
+/// Indica si el producto coincide con la consulta (mismo criterio que la caja).
+bool productoCoincideBusqueda(Producto producto, String consulta) {
+	final q = normalizarTextoBusqueda(consulta).trim();
+	if (q.isEmpty) {
+		return true;
+	}
+	return puntajeBusquedaProducto(producto, q) > 0;
+}
+
 /// Prefijo que marca un código de barras generado internamente por el sistema
 /// para un producto sin código real (deduplicación por nombre).
 ///

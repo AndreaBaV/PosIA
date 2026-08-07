@@ -134,17 +134,7 @@ class _PantallaInventarioAdminState extends ConsumerState<PantallaInventarioAdmi
 
 									}
 
-									if (_filtro.isEmpty) {
-
-										return true;
-
-									}
-
-									return r.nombreProducto.toLowerCase().contains(
-
-										_filtro.toLowerCase(),
-
-									);
+									return textoContieneBusqueda(r.nombreProducto, _filtro);
 
 								}).toList();
 

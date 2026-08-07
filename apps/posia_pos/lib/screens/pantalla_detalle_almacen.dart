@@ -49,16 +49,13 @@ class _PantallaDetalleAlmacenState extends ConsumerState<PantallaDetalleAlmacen>
 					CampoBusqueda(
 						controlador: _busquedaController,
 						sugerencia: 'Buscar producto...',
-						alCambiar: (v) => setState(() => _filtro = v.trim().toLowerCase()),
+						alCambiar: (v) => setState(() => _filtro = v.trim()),
 					),
 					Expanded(
 						child: inventarioAsync.when(
 							data: (lineas) {
 								final filtradas = lineas.where((l) {
-									if (_filtro.isEmpty) {
-										return true;
-									}
-									return l.nombreProducto.toLowerCase().contains(_filtro);
+									return textoContieneBusqueda(l.nombreProducto, _filtro);
 								}).toList();
 								final totalUnidades = filtradas.fold<double>(
 									0.0,
@@ -352,13 +349,9 @@ class _DialogoSeleccionProductoAlmacenState extends State<_DialogoSeleccionProdu
 
 	@override
 	Widget build(BuildContext context) {
-		final filtrados = widget.productos.where((p) {
-			if (_filtro.isEmpty) {
-				return true;
-			}
-			final f = _filtro.toLowerCase();
-			return p.nombre.toLowerCase().contains(f) || p.codigoBarras.contains(f);
-		}).take(30).toList();
+		final filtrados = filtrarProductosPorBusqueda(widget.productos, _filtro)
+			.take(30)
+			.toList();
 
 		return AlertDialog(
 			title: const Text('Producto a ingresar'),

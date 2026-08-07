@@ -123,13 +123,13 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 						if (_filtro.isEmpty) {
 							return true;
 						}
-						final q = _filtro.toLowerCase();
+						if (productoCoincideBusqueda(p, _filtro)) {
+							return true;
+						}
 						final cat = p.categoriaId == null
 							? ''
-							: nombresCat[p.categoriaId]?.toLowerCase() ?? '';
-						return p.nombre.toLowerCase().contains(q) ||
-							p.codigoBarras.toLowerCase().contains(q) ||
-							cat.contains(q);
+							: nombresCat[p.categoriaId] ?? '';
+						return textoContieneBusqueda(cat, _filtro);
 					}).toList();
 					if (_esFaltantes) {
 						filtrados.sort((a, b) {

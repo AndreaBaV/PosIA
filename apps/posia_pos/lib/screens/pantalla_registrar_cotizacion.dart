@@ -178,18 +178,13 @@ class _PantallaRegistrarCotizacionState extends ConsumerState<PantallaRegistrarC
 						padding: EdgeInsets.zero,
 						controlador: _busquedaController,
 						sugerencia: 'Buscar producto',
-						alCambiar: (v) => setState(() => _filtroProducto = v.trim().toLowerCase()),
+						alCambiar: (v) => setState(() => _filtroProducto = v.trim()),
 					),
 					const SizedBox(height: 8.0),
 					productosAsync.when(
 						data: (productos) {
-							final filtrados = productos.where((p) {
-								if (_filtroProducto.isEmpty) {
-									return true;
-								}
-								return p.nombre.toLowerCase().contains(_filtroProducto) ||
-									p.codigoBarras.contains(_filtroProducto);
-							}).toList();
+							final filtrados =
+								filtrarProductosPorBusqueda(productos, _filtroProducto);
 							if (filtrados.isEmpty) {
 								return const Text('Sin productos en catálogo');
 							}

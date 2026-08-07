@@ -126,14 +126,10 @@ class _PantallaComprasAdminState extends ConsumerState<PantallaComprasAdmin>
 	Widget _buildNuevaCompra(DatosComprasAdmin datos) {
 		final proveedorId = _proveedorIdSeleccionado(datos.proveedores);
 		final productos = _productosFiltrados(datos.productos, proveedorId);
-		final productosVisibles = productos.where((p) {
-			if (_filtroProducto.isEmpty) {
-				return true;
-			}
-			final q = _filtroProducto.toLowerCase();
-			return p.nombre.toLowerCase().contains(q) ||
-				p.codigoBarras.toLowerCase().contains(q);
-		}).toList();
+		final productosVisibles = filtrarProductosPorBusqueda(
+			productos,
+			_filtroProducto,
+		);
 		final margenTeclado = _margenInferiorTeclado(context);
 		final ubicacion = _ubicacionSeleccionada(datos);
 
@@ -568,17 +564,16 @@ class _PantallaComprasAdminState extends ConsumerState<PantallaComprasAdmin>
 			if (_filtroHistorial.isEmpty) {
 				return true;
 			}
-			final q = _filtroHistorial.toLowerCase();
 			final proveedor = datos.nombresProveedor[c.proveedorId] ?? '';
-			if (proveedor.toLowerCase().contains(q)) {
+			if (textoContieneBusqueda(proveedor, _filtroHistorial)) {
 				return true;
 			}
 			for (final linea in c.lineas) {
-				if (linea.nombreProducto.toLowerCase().contains(q)) {
+				if (textoContieneBusqueda(linea.nombreProducto, _filtroHistorial)) {
 					return true;
 				}
 			}
-			return c.notas.toLowerCase().contains(q);
+			return textoContieneBusqueda(c.notas, _filtroHistorial);
 		}).toList();
 
 		return Column(

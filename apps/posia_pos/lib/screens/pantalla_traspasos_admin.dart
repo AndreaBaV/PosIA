@@ -127,14 +127,10 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 					e.producto.id: e.cantidad,
 			}
 			: <String, double>{};
-		final productosFiltrados = productos.where((p) {
-			if (_filtroProducto.isEmpty) {
-				return true;
-			}
-			final q = _filtroProducto.toLowerCase();
-			return p.nombre.toLowerCase().contains(q) ||
-				p.codigoBarras.toLowerCase().contains(q);
-		}).toList();
+		final productosFiltrados = filtrarProductosPorBusqueda(
+			productos,
+			_filtroProducto,
+		);
 
 		return Column(
 			children: [
@@ -377,17 +373,16 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 			if (_filtroHistorial.isEmpty) {
 				return true;
 			}
-			final q = _filtroHistorial.toLowerCase();
 			final origen = datos.nombreUbicacion(t.tiendaOrigenId);
 			final destino = datos.nombreUbicacion(t.tiendaDestinoId);
 			for (final linea in t.lineas) {
-				if (linea.nombreProducto.toLowerCase().contains(q)) {
+				if (textoContieneBusqueda(linea.nombreProducto, _filtroHistorial)) {
 					return true;
 				}
 			}
-			return origen.toLowerCase().contains(q) ||
-				destino.toLowerCase().contains(q) ||
-				t.notas.toLowerCase().contains(q);
+			return textoContieneBusqueda(origen, _filtroHistorial) ||
+				textoContieneBusqueda(destino, _filtroHistorial) ||
+				textoContieneBusqueda(t.notas, _filtroHistorial);
 		}).toList();
 
 		return Column(

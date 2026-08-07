@@ -70,7 +70,7 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 					CampoBusqueda(
 						controlador: _busquedaController,
 						sugerencia: 'Buscar por monto, producto o cliente...',
-						alCambiar: (v) => setState(() => _filtro = v.trim().toLowerCase()),
+						alCambiar: (v) => setState(() => _filtro = v.trim()),
 					),
 					Expanded(
 						child: historialAsync.when(
@@ -124,7 +124,7 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 		if (_filtro.isEmpty) {
 			return true;
 		}
-		if (formatearMoneda(item.total).toLowerCase().contains(_filtro)) {
+		if (textoContieneBusqueda(formatearMoneda(item.total), _filtro)) {
 			return true;
 		}
 		return switch (item.tipo) {
@@ -135,7 +135,7 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 
 	bool _coincideFiltroVenta(Venta venta) {
 		for (final linea in venta.lineas) {
-			if (linea.nombreProducto.toLowerCase().contains(_filtro)) {
+			if (textoContieneBusqueda(linea.nombreProducto, _filtro)) {
 				return true;
 			}
 		}
@@ -143,14 +143,14 @@ class _PantallaHistorialVentasState extends ConsumerState<PantallaHistorialVenta
 	}
 
 	bool _coincideFiltroPedido(Pedido pedido) {
-		if (pedido.nombreEntrega.toLowerCase().contains(_filtro)) {
+		if (textoContieneBusqueda(pedido.nombreEntrega, _filtro)) {
 			return true;
 		}
 		if (pedido.telefonoEntrega.contains(_filtro)) {
 			return true;
 		}
 		for (final linea in pedido.lineas) {
-			if (linea.nombreProducto.toLowerCase().contains(_filtro)) {
+			if (textoContieneBusqueda(linea.nombreProducto, _filtro)) {
 				return true;
 			}
 		}

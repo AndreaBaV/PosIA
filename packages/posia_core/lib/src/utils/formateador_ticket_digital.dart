@@ -116,7 +116,9 @@ TicketDigitalContenido construirTicketDigitalVenta({
     }
   }
 
-final notasPie = <String>['Gracias por su compra. Contamos con servicio a domicilio, puede realizar su pedido al número: $WHATSAPP_TIENDA_LEGIBLE (WhatsApp).'];
+  final notasPie = <String>[
+    'Gracias por su compra. Favor de verificar su cambio y mercancía al momento. Contamos con servicio a domicilio, puede realizar su pedido al número: $WHATSAPP_TIENDA_LEGIBLE (WhatsApp).',
+  ];
 
   return TicketDigitalContenido(
     tipo: TipoDocumentoTicketDigital.venta,

@@ -95,14 +95,7 @@ class _PantallaEtiquetasAdminState extends ConsumerState<PantallaEtiquetasAdmin>
 	}
 
 	List<Producto> get _filtrados {
-		final texto = _busquedaCtrl.text.trim().toLowerCase();
-		if (texto.isEmpty) {
-			return _productos;
-		}
-		return _productos.where((p) {
-			return p.nombre.toLowerCase().contains(texto) ||
-				p.codigoBarras.toLowerCase().contains(texto);
-		}).toList();
+		return filtrarProductosPorBusqueda(_productos, _busquedaCtrl.text);
 	}
 
 	Future<void> _mostrarVistaPrevia() async {

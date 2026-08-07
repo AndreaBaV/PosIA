@@ -146,14 +146,10 @@ class _PantallaPedidosAdminState extends ConsumerState<PantallaPedidosAdmin>
 		final datosAsync = ref.watch(_pedidosDatosProvider);
 		return datosAsync.when(
 			data: (datos) {
-				final productos = datos.productos.where((p) {
-					if (_filtroProducto.isEmpty) {
-						return true;
-					}
-					final q = _filtroProducto.toLowerCase();
-					return p.nombre.toLowerCase().contains(q) ||
-						p.codigoBarras.toLowerCase().contains(q);
-				}).toList();
+				final productos = filtrarProductosPorBusqueda(
+					datos.productos,
+					_filtroProducto,
+				);
 				return Column(
 					children: [
 						Expanded(
