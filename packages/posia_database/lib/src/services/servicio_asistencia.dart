@@ -101,29 +101,23 @@ class ServicioAsistencia {
 			'radioMetros': desafio.radioMetros,
 			'pinHash': desafio.pinHash,
 		};
-		// Empuje en background: el PIN ya es util en este equipo.
-		unawaited(
-			_emitirEvento(
-				TipoSyncEvento.attendanceChallengeCreated,
-				payload,
-				claveEntidad: desafio.id,
-				empujarAhora: true,
-			),
+		// Espera breve al hub: el celular necesita el PIN ahi, no solo local.
+		final sincronizado = await _empujarAsistenciaConTopeUi(
+			TipoSyncEvento.attendanceChallengeCreated,
+			payload,
+			claveEntidad: desafio.id,
 		);
-		final sync = _syncOrchestrator;
 		return DesafioPinGenerado(
 			desafio: desafio,
 			pinPlano: pin,
-			sincronizadoConHub: sync == null || !sync.tieneHubConfigurado()
-				? null
-				: false,
+			sincronizadoConHub: sincronizado,
 		);
 	}
 
 	/// Registra entrada validando PIN y ubicacion del telefono.
 	///
-	/// Primero intenta local (si el ciclo periodico ya trajo el desafio). Si
-	/// falta, hace pull rapido con reintentos cortos — no un sync completo.
+	/// Primero intenta local; si falta, pide el desafio activo al hub (sin
+	/// recorrer el log) y reintenta. El pull incremental queda como respaldo.
 	Future<RegistroAsistencia> registrarEntradaConPin({
 		required String usuarioId,
 		required String pin,
@@ -143,9 +137,25 @@ class ServicioAsistencia {
 			}
 		}
 
+		// Atajo: espejo Postgres del hub (segundos), no miles de eventos.
+		await _intentarTraerDesafioDirecto();
+		try {
+			return await _entradaConPinLocal(
+				usuarioId: usuarioId,
+				pin: pin,
+				latitud: latitud,
+				longitud: longitud,
+			);
+		} on StateError catch (error) {
+			if (!_esErrorDesafioOPin(error)) {
+				rethrow;
+			}
+		}
+
 		StateError? ultimo;
-		for (var intento = 0; intento < 6; intento++) {
+		for (var intento = 0; intento < 3; intento++) {
 			await _intentarPullRapido();
+			await _intentarTraerDesafioDirecto();
 			try {
 				return await _entradaConPinLocal(
 					usuarioId: usuarioId,
@@ -158,15 +168,15 @@ class ServicioAsistencia {
 					rethrow;
 				}
 				ultimo = error;
-				if (intento < 5) {
+				if (intento < 2) {
 					await Future<void>.delayed(const Duration(milliseconds: 700));
 				}
 			}
 		}
 		throw ultimo ??
 			StateError(
-				'No hay PIN de asistencia activo. Genérelo en Admin → Asistencia '
-				'y espere unos segundos.',
+				'No hay PIN de asistencia activo para esta tienda. Genérelo en '
+				'Admin → Asistencia en un equipo de la misma tienda.',
 			);
 	}
 
@@ -276,8 +286,8 @@ class ServicioAsistencia {
 		final desafio = await _asistenciaRepository.obtenerDesafioActivo(_tiendaId);
 		if (desafio == null) {
 			throw StateError(
-				'No hay PIN de asistencia activo. Genérelo en Admin → Asistencia '
-				'en un equipo de esta misma tienda y espere a que sincronice.',
+				'No hay PIN de asistencia activo para esta tienda. Genérelo en '
+				'Admin → Asistencia en un equipo de la misma tienda.',
 			);
 		}
 		if (!_verificarPin(pin, desafio.pinHash)) {
@@ -466,6 +476,18 @@ class ServicioAsistencia {
 		try {
 			await sync.traerCambiosRapido();
 			return true;
+		} on Object {
+			return false;
+		}
+	}
+
+	Future<bool> _intentarTraerDesafioDirecto() async {
+		final sync = _syncOrchestrator;
+		if (sync == null || !sync.tieneHubConfigurado()) {
+			return false;
+		}
+		try {
+			return await sync.traerDesafioAsistenciaActivo(tiendaId: _tiendaId);
 		} on Object {
 			return false;
 		}

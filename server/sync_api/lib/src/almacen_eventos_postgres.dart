@@ -280,6 +280,63 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 		return (resultado.first[0] as num?)?.toInt() ?? 0;
 	}
 
+	/// Desafio PIN activo y no vencido de [tiendaId], o null.
+	///
+	/// Evita que el celular tenga que ponerse al dia con todo el log solo
+	/// para validar un PIN generado hace segundos en otro equipo.
+	Future<Map<String, Object?>?> obtenerDesafioAsistenciaActivo(
+		String tiendaId,
+	) async {
+		final tienda = tiendaId.trim();
+		if (tienda.isEmpty) {
+			return null;
+		}
+		final pool = await _obtenerPool();
+		// No comparar expira_en como texto: Neon/driver puede devolver
+		// "2026-08-08 00:30Z" (espacio) vs ISO con "T" y el > falla.
+		final filas = await pool.execute(
+			Sql.named('''
+				SELECT id, tienda_id, pin_hash, expira_en, creado_por,
+					latitud, longitud, radio_metros, activo
+				FROM attendance_challenges
+				WHERE tienda_id = @tienda AND activo = 1
+				ORDER BY expira_en DESC
+				LIMIT 8
+			'''),
+			parameters: {'tienda': tienda},
+		);
+		final ahora = DateTime.now().toUtc();
+		for (final fila in filas) {
+			final c = fila.toColumnMap();
+			final expiraCrudo = c['expira_en'];
+			final DateTime? expira = switch (expiraCrudo) {
+				final DateTime d => d.toUtc(),
+				final String s => DateTime.tryParse(s)?.toUtc(),
+				_ => null,
+			};
+			if (expira == null || !expira.isAfter(ahora)) {
+				continue;
+			}
+			final pinHash = c['pin_hash'] as String? ?? '';
+			final id = c['id'] as String? ?? '';
+			if (id.isEmpty || pinHash.isEmpty) {
+				continue;
+			}
+			return {
+				'id': id,
+				'tiendaId': c['tienda_id'] as String? ?? tienda,
+				'pinHash': pinHash,
+				'expiraEn': expira.toIso8601String(),
+				'creadoPor': c['creado_por'] as String? ?? '',
+				'latitud': c['latitud'],
+				'longitud': c['longitud'],
+				'radioMetros': c['radio_metros'] ?? 150,
+				'activo': true,
+			};
+		}
+		return null;
+	}
+
 	@override
 	Future<void> cerrar() async {
 		await _pool?.close();

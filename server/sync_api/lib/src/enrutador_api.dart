@@ -49,7 +49,8 @@ class EnrutadorApi {
 			..get('/v1/events/head', _manejarCabezaEventos)
 			..get('/v1/events', _manejarConsultaEventos)
 			..get('/v1/catalog/audit', _manejarAuditoriaCatalogo)
-			..get('/v1/catalog/events', _manejarCatalogoCompacto);
+			..get('/v1/catalog/events', _manejarCatalogoCompacto)
+			..get('/v1/attendance/challenge', _manejarDesafioAsistenciaActivo);
 		return const Pipeline()
 			.addMiddleware(logRequests())
 			.addMiddleware(_validarClaveApi())
@@ -241,6 +242,26 @@ class EnrutadorApi {
 	/// descargando paginas completas del historial.
 	Future<Response> _manejarCabezaEventos(Request solicitud) async {
 		return _respuestaJson({'lastSeq': await _almacen.obtenerUltimoSeq()});
+	}
+
+	/// Entrega el desafio PIN activo de una tienda (sin recorrer el log).
+	Future<Response> _manejarDesafioAsistenciaActivo(Request solicitud) async {
+		final almacen = _almacen;
+		if (almacen is! AlmacenEventosPostgres) {
+			return _respuestaJson(
+				{'error': 'Asistencia no disponible sin Postgres'},
+				codigo: 503,
+			);
+		}
+		final tiendaId = solicitud.url.queryParameters['storeId'] ?? '';
+		if (tiendaId.trim().isEmpty) {
+			return _respuestaJson({'error': 'storeId es obligatorio'}, codigo: 400);
+		}
+		final desafio = await almacen.obtenerDesafioAsistenciaActivo(tiendaId);
+		if (desafio == null) {
+			return _respuestaJson({'challenge': null});
+		}
+		return _respuestaJson({'challenge': desafio});
 	}
 
 	/// Middleware que exige cabecera x-api-key cuando hay clave.

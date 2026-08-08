@@ -59,9 +59,15 @@ class _PantallaAsistenciaMovilState
     _prefetchEnCurso = true;
     try {
       final contenedor = await ref.read(contenedorServiciosProvider.future);
-      await contenedor.syncOrchestrator.traerCambiosRapido();
+      final sync = contenedor.syncOrchestrator;
+      // Atajo al espejo del hub; el pull completo es respaldo si la ruta
+      // aun no esta desplegada.
+      final ok = await sync.traerDesafioAsistenciaActivo();
+      if (!ok) {
+        await sync.traerCambiosRapido();
+      }
     } on Object {
-      // Best-effort: al marcar se reintenta el pull.
+      // Best-effort: al marcar se reintenta.
     } finally {
       _prefetchEnCurso = false;
     }

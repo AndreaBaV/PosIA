@@ -252,6 +252,37 @@ class HubSyncClient {
     }
   }
 
+  /// Desafio PIN activo de [tiendaId] leido del espejo Postgres del hub.
+  ///
+  /// null = sin desafio, hub caido, o ruta aun no desplegada (404/503).
+  Future<Map<String, Object?>?> obtenerDesafioAsistenciaActivo(
+    String tiendaId,
+  ) async {
+    final tienda = tiendaId.trim();
+    if (tienda.isEmpty) {
+      return null;
+    }
+    final uri = Uri.parse('$_urlBase/v1/attendance/challenge').replace(
+      queryParameters: {'storeId': tienda},
+    );
+    try {
+      final respuesta = await _clienteHttp
+          .get(uri, headers: _construirCabeceras())
+          .timeout(const Duration(seconds: TIMEOUT_HUB_SYNC_SEGUNDOS));
+      if (respuesta.statusCode != 200) {
+        return null;
+      }
+      final json = jsonDecode(respuesta.body) as Map<String, dynamic>;
+      final challenge = json['challenge'];
+      if (challenge is! Map) {
+        return null;
+      }
+      return Map<String, Object?>.from(challenge);
+    } on Object {
+      return null;
+    }
+  }
+
   /// Indica si el hub tiene Postgres y puede autenticar usuarios.
   ///
   /// Wrapper retrocompatible sobre [verificarEstadoAuth].

@@ -105,6 +105,47 @@ class SyncOrchestrator {
     }
   }
 
+  /// Baja el desafio PIN activo de [tiendaId] sin recorrer el log de sync.
+  ///
+  /// Un celular atrasado miles de eventos no puede esperar el pull completo
+  /// solo para marcar entrada; esta ruta lee el espejo del hub y aplica un
+  /// evento sintetico local. Retorna true si habia desafio y se guardo.
+  Future<bool> traerDesafioAsistenciaActivo({String? tiendaId}) async {
+    final clienteHub = _clienteHub;
+    final aplicador = _aplicadorRemoto;
+    if (clienteHub == null || aplicador == null) {
+      return false;
+    }
+    final tienda = (tiendaId ?? _tiendaId).trim();
+    if (tienda.isEmpty) {
+      return false;
+    }
+    try {
+      final challenge = await clienteHub.obtenerDesafioAsistenciaActivo(tienda);
+      if (challenge == null) {
+        return false;
+      }
+      final id = challenge['id'] as String? ?? '';
+      final pinHash = challenge['pinHash'] as String? ?? '';
+      if (id.isEmpty || pinHash.isEmpty) {
+        return false;
+      }
+      final evento = SyncEvent(
+        id: 'attendanceChallengeCreated:$id',
+        tiendaId: tienda,
+        dispositivoId: challenge['creadoPor'] as String? ?? 'hub',
+        tipo: TipoSyncEvento.attendanceChallengeCreated,
+        payload: challenge,
+        creadoEn: DateTime.now().toUtc(),
+        estado: EstadoSyncEvento.enviado,
+      );
+      await aplicador.aplicarEvento(evento);
+      return true;
+    } on Object {
+      return false;
+    }
+  }
+
   /// Encola y empuja de inmediato el mismo evento (sin reconsultar la cola).
   ///
   /// Evita la carrera lectura/escritura de la cola dual donde un

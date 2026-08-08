@@ -199,15 +199,26 @@ class _PantallaAsistenciaAdminState extends ConsumerState<PantallaAsistenciaAdmi
 				_expiraPin = resultado.desafio.expiraEn;
 			});
 			ref.invalidate(entradasAsistenciaDiaProvider);
-			if (resultado.sincronizadoConHub != true) {
+			if (resultado.sincronizadoConHub == true) {
 				PosiaNotificaciones.mostrarSnackBar(
 					context,
 					const SnackBar(
 						content: Text(
-							'PIN listo. En el otro dispositivo marque en unos '
-							'segundos (se baja solo al validar).',
+							'PIN listo en la nube. El empleado puede marcarlo '
+							'ya (misma tienda).',
 						),
-						duration: Duration(seconds: 4),
+						duration: Duration(seconds: 3),
+					),
+				);
+			} else if (resultado.sincronizadoConHub == false) {
+				PosiaNotificaciones.mostrarSnackBar(
+					context,
+					const SnackBar(
+						content: Text(
+							'PIN guardado aquí. Si el celular no lo acepta, '
+							'espere unos segundos o revise que sea la misma tienda.',
+						),
+						duration: Duration(seconds: 5),
 					),
 				);
 			}
