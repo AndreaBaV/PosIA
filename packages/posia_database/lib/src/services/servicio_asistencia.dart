@@ -54,9 +54,8 @@ class ServicioAsistencia {
 
 	/// Genera PIN de 4 digitos visible en laptop admin (TTL 10 min).
 	///
-	/// Guarda el desafio en local y devuelve el PIN de inmediato. El push al
-	/// hub corre en paralelo con tope corto: el timeout HTTP de envio es de
-	/// hasta 180 s y dejaba la UI en "Generando…" mientras el hub despertaba.
+	/// Devuelve el PIN apenas queda en SQLite local. El push al hub corre en
+	/// segundo plano (no bloquea la UI ni espera el timeout de 180 s).
 	Future<DesafioPinGenerado> generarDesafioPin(String creadoPor) async {
 		final tienda = await _tiendaRepository.obtenerPorId(_tiendaId);
 		if (tienda == null) {
@@ -93,37 +92,44 @@ class ServicioAsistencia {
 			);
 		}
 
-		final sincronizado = await _empujarAsistenciaConTopeUi(
-			TipoSyncEvento.attendanceChallengeCreated,
-			claveEntidad: desafio.id,
-			{
-				'id': desafio.id,
-				'tiendaId': desafio.tiendaId,
-				'expiraEn': desafio.expiraEn.toUtc().toIso8601String(),
-				'latitud': desafio.latitud,
-				'longitud': desafio.longitud,
-				'radioMetros': desafio.radioMetros,
-				'pinHash': desafio.pinHash,
-			},
+		final payload = <String, Object?>{
+			'id': desafio.id,
+			'tiendaId': desafio.tiendaId,
+			'expiraEn': desafio.expiraEn.toUtc().toIso8601String(),
+			'latitud': desafio.latitud,
+			'longitud': desafio.longitud,
+			'radioMetros': desafio.radioMetros,
+			'pinHash': desafio.pinHash,
+		};
+		// Empuje en background: el PIN ya es util en este equipo.
+		unawaited(
+			_emitirEvento(
+				TipoSyncEvento.attendanceChallengeCreated,
+				payload,
+				claveEntidad: desafio.id,
+				empujarAhora: true,
+			),
 		);
+		final sync = _syncOrchestrator;
 		return DesafioPinGenerado(
 			desafio: desafio,
 			pinPlano: pin,
-			sincronizadoConHub: sincronizado,
+			sincronizadoConHub: sync == null || !sync.tieneHubConfigurado()
+				? null
+				: false,
 		);
 	}
 
 	/// Registra entrada validando PIN y ubicacion del telefono.
 	///
-	/// Siempre intenta sync primero: el PIN se genera en la laptop admin y el
-	/// hash debe llegar al celular antes de validar.
+	/// Primero intenta local (si el ciclo periodico ya trajo el desafio). Si
+	/// falta, hace pull rapido con reintentos cortos — no un sync completo.
 	Future<RegistroAsistencia> registrarEntradaConPin({
 		required String usuarioId,
 		required String pin,
 		required double latitud,
 		required double longitud,
 	}) async {
-		await _intentarSincronizarHub();
 		try {
 			return await _entradaConPinLocal(
 				usuarioId: usuarioId,
@@ -135,18 +141,33 @@ class ServicioAsistencia {
 			if (!_esErrorDesafioOPin(error)) {
 				rethrow;
 			}
-			// Segundo intento por si el push del admin llego milisegundos despues.
-			final sincronizo = await _intentarSincronizarHub();
-			if (!sincronizo) {
-				rethrow;
-			}
-			return _entradaConPinLocal(
-				usuarioId: usuarioId,
-				pin: pin,
-				latitud: latitud,
-				longitud: longitud,
-			);
 		}
+
+		StateError? ultimo;
+		for (var intento = 0; intento < 6; intento++) {
+			await _intentarPullRapido();
+			try {
+				return await _entradaConPinLocal(
+					usuarioId: usuarioId,
+					pin: pin,
+					latitud: latitud,
+					longitud: longitud,
+				);
+			} on StateError catch (error) {
+				if (!_esErrorDesafioOPin(error)) {
+					rethrow;
+				}
+				ultimo = error;
+				if (intento < 5) {
+					await Future<void>.delayed(const Duration(milliseconds: 700));
+				}
+			}
+		}
+		throw ultimo ??
+			StateError(
+				'No hay PIN de asistencia activo. Genérelo en Admin → Asistencia '
+				'y espere unos segundos.',
+			);
 	}
 
 	/// Registra entrada por geocerca + biometria del telefono.
@@ -432,6 +453,19 @@ class ServicioAsistencia {
 				const Duration(seconds: 8),
 				onTimeout: () => false,
 			);
+		} on Object {
+			return false;
+		}
+	}
+
+	Future<bool> _intentarPullRapido() async {
+		final sync = _syncOrchestrator;
+		if (sync == null || !sync.tieneHubConfigurado()) {
+			return false;
+		}
+		try {
+			await sync.traerCambiosRapido();
+			return true;
 		} on Object {
 			return false;
 		}

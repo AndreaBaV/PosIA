@@ -199,13 +199,13 @@ class _PantallaAsistenciaAdminState extends ConsumerState<PantallaAsistenciaAdmi
 				_expiraPin = resultado.desafio.expiraEn;
 			});
 			ref.invalidate(entradasAsistenciaDiaProvider);
-			if (resultado.sincronizadoConHub == false) {
+			if (resultado.sincronizadoConHub != true) {
 				PosiaNotificaciones.mostrarSnackBar(
 					context,
 					const SnackBar(
 						content: Text(
-							'PIN listo en este equipo. Si el empleado usa otro '
-							'dispositivo, espere unos segundos.',
+							'PIN listo. En el otro dispositivo marque en unos '
+							'segundos (se baja solo al validar).',
 						),
 						duration: Duration(seconds: 4),
 					),

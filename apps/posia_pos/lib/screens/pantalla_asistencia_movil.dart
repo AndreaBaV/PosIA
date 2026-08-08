@@ -1,6 +1,8 @@
 /// Asistencia móvil: PIN, GPS y biometría.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
@@ -27,19 +29,42 @@ class _PantallaAsistenciaMovilState
   final _gestorBiometria = GestorAccesoBiometrico();
   RegistroAsistencia? _entradaAbierta;
   bool _cargando = false;
+  Timer? _prefetchPin;
+  bool _prefetchEnCurso = false;
 
   @override
   void initState() {
     super.initState();
     _pinFocus.addListener(() => setState(() {}));
     WidgetsBinding.instance.addPostFrameCallback((_) => _cargarEstado());
+    // Baja PINs recien generados en admin sin esperar el ciclo de 60 s.
+    _prefetchPin = Timer.periodic(const Duration(seconds: 3), (_) {
+      unawaited(_prefetchDesafioPin());
+    });
+    unawaited(_prefetchDesafioPin());
   }
 
   @override
   void dispose() {
+    _prefetchPin?.cancel();
     _pinController.dispose();
     _pinFocus.dispose();
     super.dispose();
+  }
+
+  Future<void> _prefetchDesafioPin() async {
+    if (!mounted || _entradaAbierta != null || _prefetchEnCurso) {
+      return;
+    }
+    _prefetchEnCurso = true;
+    try {
+      final contenedor = await ref.read(contenedorServiciosProvider.future);
+      await contenedor.syncOrchestrator.traerCambiosRapido();
+    } on Object {
+      // Best-effort: al marcar se reintenta el pull.
+    } finally {
+      _prefetchEnCurso = false;
+    }
   }
 
   Future<void> _cargarEstado() async {
@@ -133,7 +158,9 @@ class _PantallaAsistenciaMovilState
       );
       return;
     }
-    final ok = await _gestorBiometria.autenticarDispositivo('Confirma tu identidad');
+    final ok = await _gestorBiometria.autenticarDispositivo(
+      'Confirma tu identidad',
+    );
     if (!ok) {
       return;
     }

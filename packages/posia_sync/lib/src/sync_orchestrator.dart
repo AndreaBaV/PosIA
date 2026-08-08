@@ -84,6 +84,27 @@ class SyncOrchestrator {
     await _colaLocal.encolar(evento);
   }
 
+  /// Solo descarga eventos nuevos del hub (sin empujar cola ni auditar catalogo).
+  ///
+  /// Pensado para asistencia: el PIN generado en otro equipo debe llegar en
+  /// segundos, no esperar el ciclo completo (puede tardar minutos con cola
+  /// grande o auditoria de catalogo).
+  Future<int> traerCambiosRapido() async {
+    final clienteHub = _clienteHub;
+    if (clienteHub == null) {
+      return 0;
+    }
+    try {
+      final resultado = await _ejecutarPull(
+        clienteHub,
+        incluirEventosPropios: false,
+      );
+      return resultado.aplicados;
+    } on Object {
+      return 0;
+    }
+  }
+
   /// Encola y empuja de inmediato el mismo evento (sin reconsultar la cola).
   ///
   /// Evita la carrera lectura/escritura de la cola dual donde un
