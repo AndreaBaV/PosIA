@@ -81,6 +81,31 @@ class AsistenciaRepository {
 		return null;
 	}
 
+	/// Desafios activos no vencidos (cualquier tienda).
+	Future<List<DesafioAsistencia>> listarDesafiosActivos() async {
+		final filas = await _consultar(
+			'desafios_asistencia',
+			where: 'activo = 1',
+			orderBy: 'expira_en DESC',
+			lecturaFresca: true,
+		);
+		final ahora = DateTime.now().toUtc();
+		return filas
+			.map(_mapearDesafio)
+			.where((d) => d.expiraEn.toUtc().isAfter(ahora))
+			.toList();
+	}
+
+	/// Desafio cuyo PIN coincide, sin importar la tienda del dispositivo.
+	Future<DesafioAsistencia?> obtenerDesafioPorPin(String pin) async {
+		for (final desafio in await listarDesafiosActivos()) {
+			if (HasherPin.verificar(pin, desafio.pinHash)) {
+				return desafio;
+			}
+		}
+		return null;
+	}
+
 	Future<void> guardarRegistro(RegistroAsistencia registro) async {
 		await _padresFk.asegurarPadresDeRegistroAsistencia(registro);
 		await _baseDatos.insert(

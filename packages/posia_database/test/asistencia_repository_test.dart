@@ -87,4 +87,34 @@ void main() {
 		await repo.desactivarDesafiosTienda('tienda-1');
 		expect(await repo.obtenerDesafioActivo('tienda-1'), isNull);
 	});
+
+	test('obtenerDesafioPorPin encuentra PIN de otra tienda', () async {
+		await db.insert('stores', {
+			'id': 'tienda-2',
+			'nombre': 'Norte',
+			'direccion': '',
+			'activa': 1,
+			'latitud': 19.5,
+			'longitud': -99.2,
+			'radio_metros': 150,
+		});
+		final pin = '4321';
+		final hash = HasherPin.codificar(pin);
+		await repo.guardarDesafio(
+			DesafioAsistencia(
+				id: 'otro',
+				tiendaId: 'tienda-2',
+				pinHash: hash,
+				expiraEn: DateTime.now().toUtc().add(const Duration(minutes: 8)),
+				creadoPor: 'admin',
+				latitud: 19.5,
+				longitud: -99.2,
+				activo: true,
+			),
+		);
+		final hallado = await repo.obtenerDesafioPorPin(pin);
+		expect(hallado, isNotNull);
+		expect(hallado!.tiendaId, 'tienda-2');
+		expect(await repo.obtenerDesafioPorPin('0000'), isNull);
+	});
 }

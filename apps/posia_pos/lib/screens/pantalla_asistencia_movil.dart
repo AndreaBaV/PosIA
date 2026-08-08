@@ -60,9 +60,8 @@ class _PantallaAsistenciaMovilState
     try {
       final contenedor = await ref.read(contenedorServiciosProvider.future);
       final sync = contenedor.syncOrchestrator;
-      // Atajo al espejo del hub; el pull completo es respaldo si la ruta
-      // aun no esta desplegada.
-      final ok = await sync.traerDesafioAsistenciaActivo();
+      // Desafios de cualquier tienda: el PIN puede venir de otro equipo/sucursal.
+      final ok = await sync.traerDesafiosAsistenciaRecientes();
       if (!ok) {
         await sync.traerCambiosRapido();
       }

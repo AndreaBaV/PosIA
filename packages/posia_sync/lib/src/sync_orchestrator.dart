@@ -105,11 +105,11 @@ class SyncOrchestrator {
     }
   }
 
-  /// Baja el desafio PIN activo de [tiendaId] sin recorrer el log de sync.
+  /// Baja el desafio PIN activo de [tiendaId] sin ponerse al dia con el log.
   ///
-  /// Un celular atrasado miles de eventos no puede esperar el pull completo
-  /// solo para marcar entrada; esta ruta lee el espejo del hub y aplica un
-  /// evento sintetico local. Retorna true si habia desafio y se guardo.
+  /// 1) Ruta dedicada del hub (si ya esta desplegada).
+  /// 2) Si no, lee solo la punta del log (~1500 eventos) y aplica el desafio
+  ///    de esta tienda — sin avanzar el cursor de sync.
   Future<bool> traerDesafioAsistenciaActivo({String? tiendaId}) async {
     final clienteHub = _clienteHub;
     final aplicador = _aplicadorRemoto;
@@ -122,28 +122,135 @@ class SyncOrchestrator {
     }
     try {
       final challenge = await clienteHub.obtenerDesafioAsistenciaActivo(tienda);
-      if (challenge == null) {
-        return false;
+      if (challenge != null) {
+        return _aplicarPayloadDesafio(challenge, tienda: tienda);
       }
-      final id = challenge['id'] as String? ?? '';
-      final pinHash = challenge['pinHash'] as String? ?? '';
-      if (id.isEmpty || pinHash.isEmpty) {
-        return false;
-      }
-      final evento = SyncEvent(
-        id: 'attendanceChallengeCreated:$id',
-        tiendaId: tienda,
-        dispositivoId: challenge['creadoPor'] as String? ?? 'hub',
-        tipo: TipoSyncEvento.attendanceChallengeCreated,
-        payload: challenge,
-        creadoEn: DateTime.now().toUtc(),
-        estado: EstadoSyncEvento.enviado,
-      );
-      await aplicador.aplicarEvento(evento);
-      return true;
+      final n = await _traerDesafiosDesdePuntaLog(tiendaId: tienda);
+      return n > 0;
     } on Object {
       return false;
     }
+  }
+
+  /// Baja desafios PIN recientes de cualquier tienda (punta del log).
+  ///
+  /// El celular puede estar instalado en otra sucursal que el admin que
+  /// genero el PIN; la validacion luego elige por coincidencia de PIN.
+  Future<bool> traerDesafiosAsistenciaRecientes() async {
+    final clienteHub = _clienteHub;
+    final aplicador = _aplicadorRemoto;
+    if (clienteHub == null || aplicador == null) {
+      return false;
+    }
+    try {
+      // Intento dedicado para la tienda del dispositivo (si la ruta existe).
+      final propia = await clienteHub.obtenerDesafioAsistenciaActivo(_tiendaId);
+      if (propia != null) {
+        await _aplicarPayloadDesafio(propia, tienda: _tiendaId);
+      }
+      final n = await _traerDesafiosDesdePuntaLog();
+      return propia != null || n > 0;
+    } on Object {
+      return false;
+    }
+  }
+
+  Future<bool> _aplicarPayloadDesafio(
+    Map<String, Object?> challenge, {
+    required String tienda,
+  }) async {
+    final aplicador = _aplicadorRemoto;
+    if (aplicador == null) {
+      return false;
+    }
+    final id = challenge['id'] as String? ?? '';
+    final pinHash = challenge['pinHash'] as String? ?? '';
+    if (id.isEmpty || pinHash.isEmpty) {
+      return false;
+    }
+    final expira = DateTime.tryParse(
+      challenge['expiraEn'] as String? ?? '',
+    )?.toUtc();
+    if (expira != null && !expira.isAfter(DateTime.now().toUtc())) {
+      return false;
+    }
+    final evento = SyncEvent(
+      id: 'attendanceChallengeCreated:$id',
+      tiendaId: (challenge['tiendaId'] as String?)?.trim().isNotEmpty == true
+          ? challenge['tiendaId'] as String
+          : tienda,
+      dispositivoId: challenge['creadoPor'] as String? ?? 'hub',
+      tipo: TipoSyncEvento.attendanceChallengeCreated,
+      payload: challenge,
+      creadoEn: DateTime.now().toUtc(),
+      estado: EstadoSyncEvento.enviado,
+    );
+    await aplicador.aplicarEvento(evento);
+    return true;
+  }
+
+  /// Respaldo sin redesplegar hub: cosecha desafios de la punta del log.
+  ///
+  /// Si [tiendaId] no es null, solo aplica desafios de esa tienda; si es null,
+  /// aplica todos los no vencidos (para validar PIN entre sucursales).
+  Future<int> _traerDesafiosDesdePuntaLog({String? tiendaId}) async {
+    final clienteHub = _clienteHub;
+    final aplicador = _aplicadorRemoto;
+    if (clienteHub == null || aplicador == null) {
+      return 0;
+    }
+    final head = await clienteHub.obtenerUltimoSeqHub();
+    if (head == null || head <= 0) {
+      return 0;
+    }
+    const ventana = 1500;
+    var cursor = head > ventana ? head - ventana : 0;
+    final porTienda = <String, SyncEvent>{};
+    while (cursor < head) {
+      final cursorAntes = cursor;
+      final pagina = await clienteHub.obtenerEventos(desdeSeq: cursor);
+      if (!pagina.exitoso || pagina.eventos.isEmpty) {
+        break;
+      }
+      for (final evento in pagina.eventos) {
+        if (evento.seq > cursor) {
+          cursor = evento.seq;
+        }
+        if (evento.tipo != TipoSyncEvento.attendanceChallengeCreated) {
+          continue;
+        }
+        final tid =
+            (evento.payload['tiendaId'] as String?)?.trim().isNotEmpty == true
+                ? evento.payload['tiendaId'] as String
+                : evento.tiendaId;
+        if (tiendaId != null && tid != tiendaId) {
+          continue;
+        }
+        final pinHash = evento.payload['pinHash'] as String? ?? '';
+        if (pinHash.isEmpty || tid.trim().isEmpty) {
+          continue;
+        }
+        final expira = DateTime.tryParse(
+          evento.payload['expiraEn'] as String? ?? '',
+        )?.toUtc();
+        if (expira == null || !expira.isAfter(DateTime.now().toUtc())) {
+          continue;
+        }
+        porTienda[tid] = evento;
+      }
+      if (pagina.ultimoSeq > cursor) {
+        cursor = pagina.ultimoSeq;
+      }
+      if (cursor <= cursorAntes) {
+        break;
+      }
+    }
+    var aplicados = 0;
+    for (final evento in porTienda.values) {
+      await aplicador.aplicarEvento(evento);
+      aplicados = aplicados + 1;
+    }
+    return aplicados;
   }
 
   /// Encola y empuja de inmediato el mismo evento (sin reconsultar la cola).

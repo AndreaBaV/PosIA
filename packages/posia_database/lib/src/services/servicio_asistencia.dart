@@ -175,8 +175,8 @@ class ServicioAsistencia {
 		}
 		throw ultimo ??
 			StateError(
-				'No hay PIN de asistencia activo para esta tienda. Genérelo en '
-				'Admin → Asistencia en un equipo de la misma tienda.',
+				'No hay PIN de asistencia activo. Genérelo en Admin → Asistencia '
+				'y marque estando dentro del radio de esa tienda.',
 			);
 	}
 
@@ -283,15 +283,18 @@ class ServicioAsistencia {
 		if (abierta != null) {
 			throw StateError('Ya tiene una entrada abierta');
 		}
-		final desafio = await _asistenciaRepository.obtenerDesafioActivo(_tiendaId);
+		// El PIN identifica el desafio (tienda del admin que lo genero), no la
+		// tienda configurada en el celular del empleado.
+		final desafio = await _asistenciaRepository.obtenerDesafioPorPin(pin);
 		if (desafio == null) {
+			final hayActivo = (await _asistenciaRepository.listarDesafiosActivos())
+				.isNotEmpty;
 			throw StateError(
-				'No hay PIN de asistencia activo para esta tienda. Genérelo en '
-				'Admin → Asistencia en un equipo de la misma tienda.',
+				hayActivo
+					? 'PIN incorrecto o expirado'
+					: 'No hay PIN de asistencia activo. Genérelo en Admin → '
+						'Asistencia y marque dentro del radio de esa tienda.',
 			);
-		}
-		if (!_verificarPin(pin, desafio.pinHash)) {
-			throw StateError('PIN incorrecto o expirado');
 		}
 		final latCentro = desafio.latitud;
 		final lonCentro = desafio.longitud;
@@ -311,6 +314,7 @@ class ServicioAsistencia {
 			latitud: latitud,
 			longitud: longitud,
 			desafioId: desafio.id,
+			tiendaId: desafio.tiendaId,
 		);
 	}
 
@@ -340,10 +344,6 @@ class ServicioAsistencia {
 			latitud: latitud,
 			longitud: longitud,
 		);
-	}
-
-	bool _verificarPin(String pin, String pinCredencial) {
-		return HasherPin.verificar(pin, pinCredencial);
 	}
 
 	bool _esErrorDesafioOPin(StateError error) {
@@ -378,11 +378,16 @@ class ServicioAsistencia {
 		required double latitud,
 		required double longitud,
 		String? desafioId,
+		String? tiendaId,
 	}) async {
+		final tiendaRegistro = () {
+			final candidata = tiendaId?.trim() ?? '';
+			return candidata.isEmpty ? _tiendaId : candidata;
+		}();
 		final registro = RegistroAsistencia(
 			id: _generadorId.v4(),
 			usuarioId: usuarioId,
-			tiendaId: _tiendaId,
+			tiendaId: tiendaRegistro,
 			entradaEn: DateTime.now().toUtc(),
 			metodo: metodo,
 			latitud: latitud,
@@ -487,7 +492,9 @@ class ServicioAsistencia {
 			return false;
 		}
 		try {
-			return await sync.traerDesafioAsistenciaActivo(tiendaId: _tiendaId);
+			// Baja desafios recientes de cualquier tienda: el PIN del admin
+			// puede ser de otra sucursal que la configurada en el celular.
+			return await sync.traerDesafiosAsistenciaRecientes();
 		} on Object {
 			return false;
 		}
