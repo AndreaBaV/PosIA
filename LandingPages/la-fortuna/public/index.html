@@ -59,6 +59,39 @@
 						data-buscador enterkeyhint="search">
 				</label>
 				<div class="categorias" role="group" aria-label="Categorías" data-categorias></div>
+				<details class="filtros__mas">
+					<summary class="filtros__mas-boton">
+						<svg class="icono" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+							<line x1="4" y1="7" x2="20" y2="7"/>
+							<line x1="7" y1="12" x2="17" y2="12"/>
+							<line x1="10" y1="17" x2="14" y2="17"/>
+						</svg>
+						<span>Filtros y orden</span>
+						<span class="filtros__contador" data-filtros-contador hidden>0</span>
+					</summary>
+					<div class="filtros__panel">
+						<label class="filtro-inline">
+							<span>Ordenar por</span>
+							<select data-orden>
+								<option value="nombre">Nombre (A-Z)</option>
+								<option value="precio_asc">Precio: menor a mayor</option>
+								<option value="precio_desc">Precio: mayor a menor</option>
+							</select>
+						</label>
+						<label class="filtro-inline">
+							<span>Precio desde</span>
+							<input type="number" data-precio-min min="0" step="1" inputmode="decimal"
+								placeholder="0" autocomplete="off">
+						</label>
+						<label class="filtro-inline">
+							<span>Precio hasta</span>
+							<input type="number" data-precio-max min="0" step="1" inputmode="decimal"
+								placeholder="Sin tope" autocomplete="off">
+						</label>
+						<button class="boton boton--plano filtros__limpiar" type="button"
+							data-limpiar-filtros hidden>Limpiar filtros</button>
+					</div>
+				</details>
 			</div>
 
 			<div class="contenedor">
@@ -70,6 +103,16 @@
 					</button>
 				</div>
 			</div>
+
+			<!-- Otros productos relacionados: se muestra cuando la busqueda tiene
+				sugerencias que compartan categoria (o cuando no hubo resultados
+				pero si categorias afines por token). -->
+			<section class="contenedor sugerencias" data-sugerencias hidden aria-labelledby="titulo-sugerencias">
+				<h2 class="sugerencias__titulo" id="titulo-sugerencias">
+					Otros productos que te pueden interesar
+				</h2>
+				<div class="rejilla" data-rejilla-sugerencias></div>
+			</section>
 		</section>
 
 		<!-- Vista confirmación / ticket -->

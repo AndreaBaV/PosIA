@@ -179,6 +179,69 @@ a { color: var(--verde-oscuro); }
 }
 .chip[aria-pressed="true"] { background: var(--verde); border-color: var(--verde); color: var(--blanco); }
 
+/* --- Filtros extra (orden, precio) ---
+   Colapsados detras de <details> para no ahogar la vista movil. Cuando el
+   usuario aplica un filtro se muestra un contador junto al boton, para que
+   sepa que hay algo activo aunque el panel este cerrado. */
+
+.filtros__mas {
+	margin-top: .35rem;
+	border: 1px solid var(--linea); border-radius: 14px;
+	background: var(--blanco);
+	overflow: hidden;
+}
+.filtros__mas[open] { box-shadow: var(--sombra); }
+
+.filtros__mas-boton {
+	display: flex; align-items: center; gap: .5rem;
+	padding: .65rem .9rem;
+	font-weight: 600;
+	cursor: pointer;
+	list-style: none;
+	color: var(--tinta);
+	user-select: none;
+}
+.filtros__mas-boton::-webkit-details-marker { display: none; }
+.filtros__mas-boton:focus-visible { outline: 3px solid var(--maiz); outline-offset: -3px; }
+
+.filtros__contador {
+	margin-left: auto;
+	min-width: 22px; height: 22px; padding: 0 6px;
+	border-radius: 999px;
+	background: var(--verde); color: var(--blanco);
+	font-size: .74rem; font-weight: 700; line-height: 22px;
+	text-align: center;
+}
+
+.filtros__panel {
+	display: grid; gap: .6rem;
+	grid-template-columns: 1fr;
+	padding: 0 .9rem .9rem;
+	border-top: 1px solid var(--linea);
+}
+
+.filtro-inline {
+	display: flex; flex-direction: column; gap: .25rem;
+	font-size: .88rem;
+}
+.filtro-inline > span { font-weight: 600; color: var(--gris); }
+.filtro-inline select,
+.filtro-inline input {
+	font: inherit; border: 1px solid var(--linea); border-radius: 10px;
+	padding: .55rem .65rem; background: var(--blanco);
+	min-height: 42px;
+}
+
+.filtros__limpiar { justify-self: start; padding-left: 0; padding-right: 0; }
+
+@media (min-width: 720px) {
+	.filtros__panel {
+		grid-template-columns: repeat(3, 1fr) auto;
+		align-items: end;
+	}
+	.filtros__limpiar { justify-self: end; }
+}
+
 /* --- Rejilla de productos --- */
 
 .rejilla {
@@ -234,6 +297,21 @@ img.producto__imagen {
 
 .esqueleto { height: 218px; border-radius: var(--radio); background: linear-gradient(90deg, #eef2ef 25%, #e3eae5 50%, #eef2ef 75%); background-size: 400% 100%; animation: brillo 1.2s infinite; }
 @keyframes brillo { from { background-position: 100% 0; } to { background-position: 0 0; } }
+
+/* --- Sugerencias --- */
+
+.sugerencias {
+	padding-top: .5rem; padding-bottom: 1.75rem;
+	margin-top: .5rem;
+	border-top: 1px dashed var(--linea);
+}
+
+.sugerencias__titulo {
+	font-size: 1.05rem; margin: 1rem 0 .35rem;
+	color: var(--tinta);
+}
+
+.sugerencias .rejilla { padding-top: .35rem; }
 
 /* --- Avisos --- */
 
