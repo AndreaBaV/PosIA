@@ -18,6 +18,12 @@ export async function onRequestGet(context) {
 			categoria: parametros.get('categoria'),
 			limite: parametros.get('limite'),
 			desde: parametros.get('desde'),
+			// Filtros nuevos de la vitrina: rango de precio y orden. Los
+			// valores no numericos o fuera de la lista blanca los ignora
+			// `consultarCatalogo`, no hace falta validar aqui.
+			precioMin: parametros.get('precio_min'),
+			precioMax: parametros.get('precio_max'),
+			orden: parametros.get('orden'),
 			// Refresca precio/escalas de un carrito ya guardado (ids
 			// separados por coma), sin paginar ni filtrar por texto.
 			ids: idsCrudo ? idsCrudo.split(',') : undefined,

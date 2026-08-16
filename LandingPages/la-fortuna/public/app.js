@@ -23,6 +23,9 @@
 		carrito: leerJson(CLAVE_CARRITO, []),
 		categoria: '',
 		busqueda: '',
+		orden: 'nombre',
+		precioMin: '',
+		precioMax: '',
 		desde: 0,
 		hayMas: false,
 		peticion: 0,
@@ -165,11 +168,79 @@
 		cargarProductos();
 	}
 
+	// Instrumenta el panel colapsable de "Filtros y orden": orden alfabetico
+	// o por precio, y rango de precio min/max. Cada cambio reinicia la
+	// vitrina; el precio se debounce para no disparar una peticion por cada
+	// pulsacion.
+	function instrumentarFiltrosExtra() {
+		var seleccionOrden = $('[data-orden]');
+		var campoMin = $('[data-precio-min]');
+		var campoMax = $('[data-precio-max]');
+		var limpiar = $('[data-limpiar-filtros]');
+		var contador = $('[data-filtros-contador]');
+
+		function refrescarContador() {
+			var activos = 0;
+			if (estado.orden && estado.orden !== 'nombre') { activos += 1; }
+			if (estado.precioMin) { activos += 1; }
+			if (estado.precioMax) { activos += 1; }
+			if (activos > 0) {
+				contador.textContent = String(activos);
+				contador.hidden = false;
+				limpiar.hidden = false;
+			} else {
+				contador.hidden = true;
+				limpiar.hidden = true;
+			}
+		}
+
+		if (seleccionOrden) {
+			seleccionOrden.addEventListener('change', function () {
+				estado.orden = seleccionOrden.value || 'nombre';
+				refrescarContador();
+				reiniciarCatalogo();
+			});
+		}
+
+		// Cero o vacio equivalen a "sin filtro", asi no molestamos al
+		// usuario que teclea y borra por accidente.
+		var temporizadorPrecio = null;
+		function programarRecargaPrecio() {
+			clearTimeout(temporizadorPrecio);
+			temporizadorPrecio = setTimeout(function () {
+				var min = parseFloat(campoMin.value);
+				var max = parseFloat(campoMax.value);
+				estado.precioMin = Number.isFinite(min) && min > 0 ? String(min) : '';
+				estado.precioMax = Number.isFinite(max) && max > 0 ? String(max) : '';
+				refrescarContador();
+				reiniciarCatalogo();
+			}, 380);
+		}
+		if (campoMin) { campoMin.addEventListener('input', programarRecargaPrecio); }
+		if (campoMax) { campoMax.addEventListener('input', programarRecargaPrecio); }
+
+		if (limpiar) {
+			limpiar.addEventListener('click', function () {
+				if (seleccionOrden) { seleccionOrden.value = 'nombre'; }
+				if (campoMin) { campoMin.value = ''; }
+				if (campoMax) { campoMax.value = ''; }
+				estado.orden = 'nombre';
+				estado.precioMin = '';
+				estado.precioMax = '';
+				refrescarContador();
+				reiniciarCatalogo();
+			});
+		}
+
+		refrescarContador();
+	}
+
 	function cargarProductos() {
 		// Token de peticion: al cambiar de filtro o busqueda mientras una
 		// consulta esta en vuelo, la respuesta vieja se descarta en vez de
 		// pisar la rejilla (o de bloquear la nueva consulta).
 		var token = ++estado.peticion;
+		var primeraCarga = estado.desde === 0;
 		var aviso = $('[data-catalogo-estado]');
 		var rejilla = $('[data-rejilla]');
 		var boton = $('[data-cargar-mas]');
@@ -178,8 +249,9 @@
 		aviso.hidden = true;
 		aviso.className = 'aviso';
 
-		if (estado.desde === 0) {
+		if (primeraCarga) {
 			for (var i = 0; i < 8; i++) { rejilla.appendChild(elemento('div', 'esqueleto')); }
+			ocultarSugerencias();
 		}
 
 		var parametros = new URLSearchParams({
@@ -188,6 +260,9 @@
 		});
 		if (estado.busqueda) { parametros.set('q', estado.busqueda); }
 		if (estado.categoria) { parametros.set('categoria', estado.categoria); }
+		if (estado.orden && estado.orden !== 'nombre') { parametros.set('orden', estado.orden); }
+		if (estado.precioMin) { parametros.set('precio_min', estado.precioMin); }
+		if (estado.precioMax) { parametros.set('precio_max', estado.precioMax); }
 
 		pedir('/v1/public/catalogo?' + parametros.toString()).then(function (datos) {
 			if (token !== estado.peticion) { return; }
@@ -200,9 +275,12 @@
 			boton.hidden = !estado.hayMas;
 			if (!rejilla.children.length) {
 				aviso.textContent = estado.busqueda
-					? 'No encontramos "' + estado.busqueda + '". Prueba con otro nombre.'
+					? 'No encontramos "' + estado.busqueda + '". Mira si algo de abajo te sirve.'
 					: 'Aún no hay productos publicados en esta categoría.';
 				aviso.hidden = false;
+			}
+			if (primeraCarga) {
+				pintarSugerencias(datos.sugerencias || []);
 			}
 		}).catch(function (error) {
 			if (token !== estado.peticion) { return; }
@@ -213,6 +291,28 @@
 		}).then(function () {
 			if (token === estado.peticion) { boton.disabled = false; }
 		});
+	}
+
+	function ocultarSugerencias() {
+		var caja = $('[data-sugerencias]');
+		var rejilla = $('[data-rejilla-sugerencias]');
+		if (rejilla) { rejilla.textContent = ''; }
+		if (caja) { caja.hidden = true; }
+	}
+
+	function pintarSugerencias(lista) {
+		var caja = $('[data-sugerencias]');
+		var rejilla = $('[data-rejilla-sugerencias]');
+		if (!caja || !rejilla) { return; }
+		rejilla.textContent = '';
+		if (!lista.length) {
+			caja.hidden = true;
+			return;
+		}
+		lista.forEach(function (producto) {
+			rejilla.appendChild(tarjetaProducto(producto));
+		});
+		caja.hidden = false;
 	}
 
 	function tarjetaProducto(producto) {
@@ -749,6 +849,8 @@
 				reiniciarCatalogo();
 			}, 320);
 		});
+
+		instrumentarFiltrosExtra();
 
 		window.addEventListener('hashchange', rutear);
 

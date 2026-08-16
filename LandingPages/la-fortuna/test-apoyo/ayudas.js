@@ -11,10 +11,29 @@ export function sqlFalso(datos = {}) {
 	const llamadas = [];
 	const responder = (texto) => {
 		if (texto.includes('FROM stores')) return datos.tiendas ?? [];
-		if (texto.includes('FROM categories')) return datos.categorias ?? [];
+		if (texto.includes('FROM categories')) {
+			// `consultarCategorias` publica la lista pintando el chip;
+			// `categoriasPorTokens` —el fallback de sugerencias sin
+			// resultados directos— hace un SELECT DISTINCT c.id sin COUNT.
+			if (texto.includes('COUNT(')) {
+				return datos.categorias ?? [];
+			}
+			return datos.categoriasSugerencia ?? [];
+		}
 		if (texto.includes('FROM product_presentations')) return datos.presentaciones ?? [];
 		if (texto.includes('FROM wholesale_tiers')) return datos.escalas ?? [];
-		if (texto.includes('FROM products')) return datos.productos ?? [];
+		if (texto.includes('FROM products')) {
+			// La consulta de sugerencias es la unica que filtra por
+			// `p.categoria_id = ANY($2)` (mientras que `opciones.ids` filtra
+			// por `p.id = ANY(...)` y el filtro normal de categoria usa
+			// `= $N`). Con eso el mock decide sin depender del orden en que
+			// se llamo, para no romper `crearPedido` que tambien pega en
+			// products dos veces (validacion + registro).
+			if (texto.includes('p.categoria_id = ANY(')) {
+				return datos.sugerencias ?? [];
+			}
+			return datos.productos ?? [];
+		}
 		if (texto.includes('FROM order_lines')) return datos.lineasPedido ?? [];
 		if (texto.includes('FROM orders')) return datos.pedidos ?? [];
 		return [];
