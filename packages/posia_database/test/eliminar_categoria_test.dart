@@ -197,4 +197,65 @@ void main() {
 		expect(upserts.last.payload['categoriaId'], destino.id);
 		await fixture.cerrar();
 	});
+
+	test('mueve solo los productos seleccionados y deja el resto', () async {
+		final fixture = await FixtureAdmin.abrir();
+		final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
+		final destino = await servicio.registrarCategoria(nombre: 'Destino');
+		final uno = await servicio.registrarProductoCompleto(
+			AltaProductoRequest(
+				nombre: 'Uno',
+				codigoBarras: '7504',
+				precioBase: 10,
+				categoriaId: fixture.categoriaId,
+			),
+		);
+		final dos = await servicio.registrarProductoCompleto(
+			AltaProductoRequest(
+				nombre: 'Dos',
+				codigoBarras: '7505',
+				precioBase: 11,
+				categoriaId: fixture.categoriaId,
+			),
+		);
+		final tres = await servicio.registrarProductoCompleto(
+			AltaProductoRequest(
+				nombre: 'Tres',
+				codigoBarras: '7506',
+				precioBase: 12,
+				categoriaId: fixture.categoriaId,
+			),
+		);
+
+		final movidos = await servicio.moverProductosSeleccionados(
+			productoIds: [uno.id, dos.id],
+			destinoId: destino.id,
+		);
+		expect(movidos, 2);
+
+		final repo = ProductoRepository(baseDatos: fixture.base);
+		expect((await repo.obtenerPorId(uno.id))!.categoriaId, destino.id);
+		expect((await repo.obtenerPorId(dos.id))!.categoriaId, destino.id);
+		expect(
+			(await repo.obtenerPorId(tres.id))!.categoriaId,
+			fixture.categoriaId,
+		);
+
+		final categorias = await servicio.listarCategorias();
+		expect(categorias.map((c) => c.id), contains(fixture.categoriaId));
+
+		final cola = SyncEventRepository(baseDatos: fixture.base);
+		final upserts = (await cola.obtenerPendientes()).where(
+			(e) => e.tipo == TipoSyncEvento.productUpserted,
+		);
+		expect(
+			upserts.where((e) => e.payload['id'] == uno.id).last.payload['categoriaId'],
+			destino.id,
+		);
+		expect(
+			upserts.where((e) => e.payload['id'] == dos.id).last.payload['categoriaId'],
+			destino.id,
+		);
+		await fixture.cerrar();
+	});
 }

@@ -49,6 +49,27 @@ class AprovisionadorDispositivo {
 			urlBuild: ConfiguracionDespliegue.hubUrl,
 			claveBuild: ConfiguracionDespliegue.hubApiKey,
 		);
+		await refrescarTiendaUrl(
+			config: config,
+			urlBuild: ConfiguracionDespliegue.tiendaUrl,
+		);
+	}
+
+	/// Rellena la URL de la tienda en linea si el dispositivo aún no tiene una.
+	///
+	/// No pisa un valor puesto a mano en Configuración técnica (dominio propio).
+	static Future<void> refrescarTiendaUrl({
+		required ConfigRepository config,
+		required String urlBuild,
+	}) async {
+		final url = urlBuild.trim().replaceAll(RegExp(r'/+$'), '');
+		if (url.isEmpty) {
+			return;
+		}
+		final actual = await config.obtenerTiendaUrl();
+		if (actual == null || actual.isEmpty) {
+			await config.guardarTiendaUrl(url);
+		}
 	}
 
 	/// Sincroniza URL/clave del hub guardadas con los valores del build.

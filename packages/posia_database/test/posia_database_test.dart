@@ -42,6 +42,16 @@ void main() {
 		await base.close();
 	});
 
+	test('ConfigRepository guarda y normaliza URL de la tienda en linea',
+		() async {
+		final base = await abrirBasePrueba();
+		final repositorio = ConfigRepository(baseDatos: base);
+		await repositorio.guardarTiendaUrl('https://la-fortuna.pages.dev/');
+		final url = await repositorio.obtenerTiendaUrl();
+		expect(url, 'https://la-fortuna.pages.dev');
+		await base.close();
+	});
+
 	test('ConfigRepository guarda PIN administrativo', () async {
 		final base = await abrirBasePrueba();
 		final repositorio = ConfigRepository(baseDatos: base);

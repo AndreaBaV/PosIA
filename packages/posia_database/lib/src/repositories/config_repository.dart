@@ -17,6 +17,9 @@ const String claveConfigHubUrl = 'hub_url';
 /// Clave de configuracion para clave API del hub.
 const String claveConfigHubApiKey = 'hub_api_key';
 
+/// URL de la tienda en linea (subida de fotos a R2).
+const String claveConfigTiendaUrl = 'tienda_url';
+
 /// Clave de configuracion para PIN administrativo.
 const String claveConfigPinAdmin = 'pin_admin';
 
@@ -139,6 +142,23 @@ class ConfigRepository {
 	/// Guarda clave API del hub central.
 	Future<void> guardarHubApiKey(String clave) async {
 		await guardarValor(claveConfigHubApiKey, clave.trim());
+	}
+
+	/// URL de la tienda en linea (sin barra final) o null si no hay.
+	Future<String?> obtenerTiendaUrl() async {
+		final valor = await obtenerValor(claveConfigTiendaUrl);
+		if (valor == null || valor.trim().isEmpty) {
+			return null;
+		}
+		final limpio = valor.trim();
+		return limpio.endsWith('/')
+			? limpio.substring(0, limpio.length - 1)
+			: limpio;
+	}
+
+	/// Guarda URL de la tienda en linea; vacia vuelve al valor del build.
+	Future<void> guardarTiendaUrl(String url) async {
+		await guardarValor(claveConfigTiendaUrl, url.trim());
 	}
 
 	/// Lee identidad operativa del dispositivo (vacios hasta aprovisionar o sincronizar).

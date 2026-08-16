@@ -19,10 +19,35 @@ import '../providers/admin_providers.dart';
 import '../voz/servicio_voz_dispositivo.dart';
 import '../widgets/panel_empaques_producto.dart';
 
+/// Nombre para un producto clonado, sin repetir el sufijo si ya es una copia.
+String nombreCopiaProducto(String nombre) {
+  final base = nombre.trim();
+  if (base.isEmpty) {
+    return 'Copia';
+  }
+  final yaCopia = RegExp(r'^(.*) \(copia(?: (\d+))?\)$');
+  final coincidencia = yaCopia.firstMatch(base);
+  if (coincidencia != null) {
+    final n = int.tryParse(coincidencia.group(2) ?? '') ?? 1;
+    return '${coincidencia.group(1)} (copia ${n + 1})';
+  }
+  return '$base (copia)';
+}
+
 class PantallaFormularioProducto extends ConsumerStatefulWidget {
-  const PantallaFormularioProducto({this.productoExistente, super.key});
+  const PantallaFormularioProducto({
+    this.productoExistente,
+    this.clonarDesde,
+    super.key,
+  }) : assert(
+         productoExistente == null || clonarDesde == null,
+         'No se puede editar y clonar a la vez',
+       );
 
   final Producto? productoExistente;
+
+  /// Si no es null, el formulario nace como alta con los datos de este producto.
+  final Producto? clonarDesde;
 
   @override
   ConsumerState<PantallaFormularioProducto> createState() =>
@@ -60,29 +85,40 @@ class _PantallaFormularioProductoState
 
   bool get _esEdicion => widget.productoExistente != null;
 
+  bool get _esClon => widget.clonarDesde != null;
+
   @override
   void initState() {
     super.initState();
     _tabs = TabController(length: 3, vsync: this);
-    final p = widget.productoExistente;
-    if (p != null) {
-      _nombreController.text = p.nombre;
+    final origen = widget.productoExistente ?? widget.clonarDesde;
+    if (origen != null) {
+      _nombreController.text = _esClon
+          ? nombreCopiaProducto(origen.nombre)
+          : origen.nombre;
       // Mostrar solo el código real capturado. El código interno es un
       // mecanismo de deduplicación; si aparece en el campo, el usuario podría
       // editarlo por accidente y romper la equivalencia con el nombre.
-      _codigoController.text = p.codigoBarrasVisible;
-      _precioController.text = p.precioBase.toStringAsFixed(2);
-      _costoController.text = p.costoUnitario.toStringAsFixed(2);
-      _notasController.text = p.notas;
-      _categoriaId = p.categoriaId;
-      _unidad = p.unidadMedida;
-      _proveedorId = p.proveedorId;
-      _activo = p.activo;
-      _permiteStockNegativo = p.permiteStockNegativo;
-      _rutaImagen = p.rutaImagen.trim().isEmpty ? null : p.rutaImagen.trim();
+      // En un clon el código debe quedar vacío: el original lo sigue usando.
+      _codigoController.text = _esClon ? '' : origen.codigoBarrasVisible;
+      _precioController.text = origen.precioBase.toStringAsFixed(2);
+      _costoController.text = origen.costoUnitario.toStringAsFixed(2);
+      _notasController.text = origen.notas;
+      _categoriaId = origen.categoriaId;
+      _unidad = origen.unidadMedida;
+      _proveedorId = origen.proveedorId;
+      _activo = origen.activo;
+      _permiteStockNegativo = origen.permiteStockNegativo;
+      _rutaImagen = origen.rutaImagen.trim().isEmpty
+          ? null
+          : origen.rutaImagen.trim();
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _cargarEscalas(p.id);
-        _cargarStock(p.id);
+        _cargarEscalas(origen.id);
+        if (_esClon) {
+          _cargarDatosClon(origen.id);
+        } else {
+          _cargarStock(origen.id);
+        }
       });
     }
   }
@@ -103,6 +139,39 @@ class _PantallaFormularioProductoState
         break;
       }
     }
+  }
+
+  Future<void> _cargarDatosClon(String productoId) async {
+    final servicio = await ref.read(servicioAdminProvider.future);
+    final inventario = await servicio.obtenerInventarioConsolidado();
+    final presentaciones = await servicio.listarPresentacionesProducto(
+      productoId,
+    );
+    if (!mounted) {
+      return;
+    }
+    var minimo = '0';
+    for (final reg in inventario) {
+      if (reg.productoId == productoId &&
+          reg.tiendaId == servicio.tiendaActivaId) {
+        minimo = reg.stockMinimo.toStringAsFixed(0);
+        break;
+      }
+    }
+    setState(() {
+      _minimoController.text = minimo;
+      _stockController.text = '0';
+      _empaquesPendientes = [
+        for (final p in presentaciones)
+          if (!p.esPresentacionBase && p.activo)
+            EmpaqueProductoDraft(
+              nombre: p.nombre,
+              factorABase: p.factorABase,
+              tipoPresentacionId: p.tipoPresentacionId,
+              precio: p.precio,
+            ),
+      ];
+    });
   }
 
   Future<void> _cargarEscalas(String productoId) async {
@@ -503,7 +572,11 @@ class _PantallaFormularioProductoState
     final proveedoresAsync = ref.watch(proveedoresFormularioAdminProvider);
     return Scaffold(
       appBar: AppBar(
-        title: Text(_esEdicion ? 'Editar producto' : 'Nuevo producto'),
+        title: Text(
+          _esEdicion
+              ? 'Editar producto'
+              : (_esClon ? 'Clonar producto' : 'Nuevo producto'),
+        ),
         actions: [
           IconButton(
             tooltip: 'Cómo dictar un producto',
@@ -627,6 +700,20 @@ class _PantallaFormularioProductoState
     return ListView(
       padding: const EdgeInsets.all(16.0),
       children: [
+        if (_esClon) ...[
+          Card(
+            color: Colors.amber.shade50,
+            child: ListTile(
+              leading: const Icon(Icons.copy_outlined),
+              title: Text('Copia de ${widget.clonarDesde!.nombre}'),
+              subtitle: const Text(
+                'Revise el nombre y asigne un código de barras distinto. '
+                'El inventario empieza en cero.',
+              ),
+            ),
+          ),
+          const SizedBox(height: 12.0),
+        ],
         Card(
           color: Colors.blueGrey.shade50,
           child: const ListTile(
@@ -651,9 +738,12 @@ class _PantallaFormularioProductoState
         const SizedBox(height: 12.0),
         TextField(
           controller: _codigoController,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'Código de barras',
-            border: OutlineInputBorder(),
+            helperText: _esClon
+                ? 'Deje vacío o capture un código distinto al original'
+                : null,
+            border: const OutlineInputBorder(),
           ),
         ),
         const SizedBox(height: 12.0),
@@ -759,16 +849,34 @@ class _PantallaFormularioProductoState
   /// hace con el inventario.
   Widget _tarjetaFotoProducto() {
     if (!_esEdicion) {
-      return const Card(
+      final copiandoFoto = _rutaImagen != null;
+      return Card(
         margin: EdgeInsets.zero,
         child: ListTile(
-          leading: Icon(Icons.photo_camera_outlined),
-          title: Text('Foto del producto'),
-          subtitle: Text('Guarda el producto primero para poder agregarle foto'),
+          leading: copiandoFoto
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(8.0),
+                  child: Image.network(
+                    _rutaImagen!,
+                    width: 40.0,
+                    height: 40.0,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) =>
+                        const Icon(Icons.photo_camera_outlined),
+                  ),
+                )
+              : const Icon(Icons.photo_camera_outlined),
+          title: const Text('Foto del producto'),
+          subtitle: Text(
+            copiandoFoto
+                ? 'Se copiará la foto al guardar. Después puede cambiarla.'
+                : 'Guarda el producto primero para poder agregarle foto',
+          ),
         ),
       );
     }
-    final servicioImagenes = ref.watch(servicioImagenesProductoProvider);
+    final servicioImagenesAsync = ref.watch(servicioImagenesProductoProvider);
+    final servicioImagenes = servicioImagenesAsync.value;
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -789,9 +897,12 @@ class _PantallaFormularioProductoState
             ),
             const SizedBox(width: 12.0),
             Expanded(
-              child: servicioImagenes == null
+              child: servicioImagenesAsync.isLoading
+                  ? const Text('Preparando subida de foto…')
+                  : servicioImagenes == null
                   ? const Text(
-                      'Tienda en línea no configurada: no se puede subir foto',
+                      'Falta la API key del hub para subir fotos. '
+                      'Revísela en Configuración técnica.',
                       style: TextStyle(color: Colors.grey),
                     )
                   : const Column(
@@ -806,7 +917,13 @@ class _PantallaFormularioProductoState
                       ],
                     ),
             ),
-            if (servicioImagenes != null)
+            if (servicioImagenesAsync.isLoading)
+              const SizedBox(
+                width: 20.0,
+                height: 20.0,
+                child: CircularProgressIndicator(strokeWidth: 2.0),
+              )
+            else if (servicioImagenes != null)
               _subiendoImagen
                   ? const SizedBox(
                       width: 20.0,
@@ -1489,10 +1606,19 @@ class _PantallaFormularioProductoState
             productoId: producto.id,
             empaques: _empaquesPendientes,
           );
+        }
+        final foto = _rutaImagen ?? '';
+        final hayEmpaqueLegacy = _empaquesPendientes.isNotEmpty;
+        if (hayEmpaqueLegacy || foto.isNotEmpty) {
           await servicio.actualizarProducto(
             producto.copiarCon(
-              piezasPorCaja: empaqueLegacy.piezasPorCaja,
-              unidadesPorBulto: empaqueLegacy.unidadesPorBulto,
+              piezasPorCaja: hayEmpaqueLegacy
+                  ? empaqueLegacy.piezasPorCaja
+                  : producto.piezasPorCaja,
+              unidadesPorBulto: hayEmpaqueLegacy
+                  ? empaqueLegacy.unidadesPorBulto
+                  : producto.unidadesPorBulto,
+              rutaImagen: foto,
             ),
           );
         }

@@ -90,5 +90,26 @@ void main() {
 			final url = await config.obtenerHubUrl();
 			expect(url, 'https://hub.ejemplo.code.run');
 		});
+
+		test('rellena la URL de la tienda solo si el dispositivo no tiene una',
+			() async {
+			await AprovisionadorDispositivo.refrescarTiendaUrl(
+				config: config,
+				urlBuild: 'https://la-fortuna.pages.dev/',
+			);
+			expect(
+				await config.obtenerTiendaUrl(),
+				'https://la-fortuna.pages.dev',
+			);
+
+			await AprovisionadorDispositivo.refrescarTiendaUrl(
+				config: config,
+				urlBuild: 'https://otra.tienda.mx',
+			);
+			expect(
+				await config.obtenerTiendaUrl(),
+				'https://la-fortuna.pages.dev',
+			);
+		});
 	});
 }

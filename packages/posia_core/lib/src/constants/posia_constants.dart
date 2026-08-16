@@ -145,6 +145,12 @@ const int VIGENCIA_COTIZACION_DIAS = 7;
 /// Nombre comercial visible en interfaz, tickets y documentos.
 const String NOMBRE_COMERCIAL_APP = 'La Fortuna';
 
+/// URL pública de la tienda en línea (Cloudflare Pages) para subir fotos.
+///
+/// Un `--dart-define=POSIA_TIENDA_URL=...` o la Configuración técnica la
+/// sustituyen. Sin eso, las cajas de este repo suben a La Fortuna.
+const String URL_TIENDA_EN_LINEA_PREDETERMINADA = 'https://la-fortuna.pages.dev';
+
 /// Carpeta bajo Documents para tickets, etiquetas y archivos locales.
 const String CARPETA_DOCUMENTOS_APP = 'La Fortuna';
 

@@ -8,6 +8,15 @@ import 'package:posia_pos/screens/pantalla_formulario_producto.dart';
 import '../../../packages/posia_database/test/fixture_servicio_admin.dart';
 
 void main() {
+	final sinSubidaFotos =
+		servicioImagenesProductoProvider.overrideWith((ref) async => null);
+
+	test('nombreCopiaProducto agrega sufijo y numera copias sucesivas', () {
+		expect(nombreCopiaProducto('Arroz'), 'Arroz (copia)');
+		expect(nombreCopiaProducto('Arroz (copia)'), 'Arroz (copia 2)');
+		expect(nombreCopiaProducto('Arroz (copia 2)'), 'Arroz (copia 3)');
+		expect(nombreCopiaProducto('  '), 'Copia');
+	});
 	testWidgets('formulario producto valida categoria requerida', (tester) async {
 		await tester.pumpWidget(
 			ProviderScope(
@@ -81,6 +90,7 @@ void main() {
 						proveedoresFormularioAdminProvider.overrideWithValue(
 							const AsyncValue.data([]),
 						),
+						sinSubidaFotos,
 					],
 					child: const MaterialApp(
 						home: PantallaFormularioProducto(productoExistente: existente),
@@ -140,6 +150,7 @@ void main() {
 						proveedoresFormularioAdminProvider.overrideWithValue(
 							const AsyncValue.data([]),
 						),
+						sinSubidaFotos,
 					],
 					child: const MaterialApp(
 						home: PantallaFormularioProducto(productoExistente: existente),
@@ -190,7 +201,7 @@ void main() {
 	);
 
 	testWidgets(
-		'editar producto sin tienda en línea configurada avisa en vez de ofrecer subir',
+		'editar producto sin API key del hub avisa en vez de ofrecer subir',
 		(tester) async {
 			const existente = Producto(
 				id: 'prod-1',
@@ -214,6 +225,7 @@ void main() {
 						proveedoresFormularioAdminProvider.overrideWithValue(
 							const AsyncValue.data([]),
 						),
+						sinSubidaFotos,
 					],
 					child: const MaterialApp(
 						home: PantallaFormularioProducto(productoExistente: existente),
@@ -222,14 +234,64 @@ void main() {
 			);
 			await tester.pump();
 
-			// El test no define POSIA_TIENDA_URL/POSIA_HUB_API_KEY: sin esos
-			// dart-defines, servicioImagenesProductoProvider es null.
 			expect(
-				find.text('Tienda en línea no configurada: no se puede subir foto'),
+				find.textContaining('Falta la API key del hub para subir fotos'),
 				findsOneWidget,
 			);
 			expect(find.text('Agregar'), findsNothing);
 			expect(find.text('Cambiar'), findsNothing);
+		},
+	);
+
+	testWidgets(
+		'clonar producto abre alta con datos copiados y código vacío',
+		(tester) async {
+			const origen = Producto(
+				id: 'prod-1',
+				nombre: 'Arroz Quebrado',
+				codigoBarras: '750111222333',
+				precioBase: 18.0,
+				unidadMedida: UnidadMedida.kilogramo,
+				rutaImagen: '',
+				activo: true,
+				tiendaId: 'tienda-centro',
+				categoriaId: categoriaPruebaId,
+				costoUnitario: 12.0,
+			);
+
+			await tester.pumpWidget(
+				ProviderScope(
+					overrides: [
+						categoriasFormularioAdminProvider.overrideWithValue(
+							const AsyncValue.data([]),
+						),
+						proveedoresFormularioAdminProvider.overrideWithValue(
+							const AsyncValue.data([]),
+						),
+					],
+					child: const MaterialApp(
+						home: PantallaFormularioProducto(clonarDesde: origen),
+					),
+				),
+			);
+			await tester.pump();
+
+			expect(find.text('Clonar producto'), findsOneWidget);
+			expect(find.text('Copia de Arroz Quebrado'), findsOneWidget);
+			expect(
+				find.widgetWithText(TextField, 'Arroz Quebrado (copia)'),
+				findsOneWidget,
+			);
+			expect(
+				find.widgetWithText(TextField, '750111222333'),
+				findsNothing,
+				reason: 'el clon no debe reutilizar el código de barras original',
+			);
+			expect(find.text('Editar producto'), findsNothing);
+			expect(
+				find.text('Guarda el producto primero para poder agregarle foto'),
+				findsOneWidget,
+			);
 		},
 	);
 }

@@ -157,6 +157,55 @@ class ProductoRepository {
 		return mapa;
 	}
 
+	/// Productos cuyo id está en [ids].
+	Future<List<Producto>> listarPorIds(Iterable<String> ids) async {
+		final lista = ids.where((id) => id.isNotEmpty).toSet().toList();
+		if (lista.isEmpty) {
+			return const [];
+		}
+		final resultado = <Producto>[];
+		const tamano = 400;
+		for (var i = 0; i < lista.length; i += tamano) {
+			final fin = i + tamano > lista.length ? lista.length : i + tamano;
+			final lote = lista.sublist(i, fin);
+			final huecos = List.filled(lote.length, '?').join(',');
+			final filas = await _baseDatos.rawQuery(
+				'SELECT * FROM products WHERE id IN ($huecos)',
+				lote,
+			);
+			resultado.addAll(filas.map(_mapearProducto));
+		}
+		return resultado;
+	}
+
+	/// Cambia la categoria de los productos indicados.
+	Future<int> reasignarProductosPorIds({
+		required List<String> productoIds,
+		required String destinoId,
+	}) async {
+		final lista = productoIds.where((id) => id.isNotEmpty).toSet().toList();
+		if (lista.isEmpty) {
+			return 0;
+		}
+		final ahora = DateTime.now().toUtc().toIso8601String();
+		var n = 0;
+		const tamano = 400;
+		for (var i = 0; i < lista.length; i += tamano) {
+			final fin = i + tamano > lista.length ? lista.length : i + tamano;
+			final lote = lista.sublist(i, fin);
+			final huecos = List.filled(lote.length, '?').join(',');
+			n += await _baseDatos.rawUpdate(
+				'''
+				UPDATE products
+				SET categoria_id = ?, actualizado_en = ?
+				WHERE id IN ($huecos)
+				''',
+				[destinoId, ahora, ...lote],
+			);
+		}
+		return n;
+	}
+
 	/// Lista productos activos filtrados por categoria.
 	///
 	/// [tiendaId] Tienda propietaria del catalogo.

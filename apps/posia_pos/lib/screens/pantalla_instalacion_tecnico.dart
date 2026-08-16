@@ -27,6 +27,7 @@ class PantallaInstalacionTecnico extends ConsumerStatefulWidget {
 class _PantallaInstalacionTecnicoState extends ConsumerState<PantallaInstalacionTecnico> {
 	final _hubUrlController = TextEditingController();
 	final _hubApiKeyController = TextEditingController();
+	final _tiendaUrlController = TextEditingController();
 	final _nombreNegocioController = TextEditingController();
 	final _nombreTiendaController = TextEditingController(text: 'Principal');
 	final _codigoAdminController = TextEditingController(text: '1001');
@@ -43,6 +44,7 @@ class _PantallaInstalacionTecnicoState extends ConsumerState<PantallaInstalacion
 	void dispose() {
 		_hubUrlController.dispose();
 		_hubApiKeyController.dispose();
+		_tiendaUrlController.dispose();
 		_nombreNegocioController.dispose();
 		_nombreTiendaController.dispose();
 		_codigoAdminController.dispose();
@@ -86,6 +88,7 @@ class _PantallaInstalacionTecnicoState extends ConsumerState<PantallaInstalacion
 		if (hub != null) {
 			_hubUrlController.text = hub.url;
 			_hubApiKeyController.text = hub.apiKey;
+			_tiendaUrlController.text = hub.tiendaUrl;
 			_conectarNube = hub.url.isNotEmpty;
 		}
 		_datosCargados = true;
@@ -130,6 +133,18 @@ class _PantallaInstalacionTecnicoState extends ConsumerState<PantallaInstalacion
 							labelText: 'API Key del hub',
 							border: OutlineInputBorder(),
 							prefixIcon: Icon(Icons.key_outlined),
+						),
+					),
+					const SizedBox(height: 12.0),
+					TextField(
+						controller: _tiendaUrlController,
+						decoration: const InputDecoration(
+							labelText: 'URL de la tienda en línea',
+							hintText: URL_TIENDA_EN_LINEA_PREDETERMINADA,
+							helperText:
+								'Para subir fotos de producto. Vacío usa La Fortuna.',
+							border: OutlineInputBorder(),
+							prefixIcon: Icon(Icons.storefront_outlined),
 						),
 					),
 					const SizedBox(height: 12.0),
@@ -348,6 +363,7 @@ class _PantallaInstalacionTecnicoState extends ConsumerState<PantallaInstalacion
 			final usarHub = await servicio.guardarConexionHub(
 				hubUrl: _hubUrlController.text,
 				hubApiKey: _hubApiKeyController.text,
+				tiendaUrl: _tiendaUrlController.text,
 				soloOffline: !_conectarNube,
 				pinTecnico: widget.reconfiguracion ? '' : _pinTecnicoController.text,
 				nombreNegocio: _nombreNegocioController.text,
@@ -357,6 +373,7 @@ class _PantallaInstalacionTecnicoState extends ConsumerState<PantallaInstalacion
 				pinAdmin: _conectarNube ? '' : _pinAdminNegocioController.text,
 			);
 			ref.invalidate(servicioAutenticacionProvider);
+			ref.invalidate(servicioImagenesProductoProvider);
 			ref.invalidate(instalacionCompletaProvider);
 			ref.invalidate(configDispositivoProvider);
 			var mensaje = usarHub
@@ -397,14 +414,20 @@ final _hubInstalacionProvider = FutureProvider<_HubInstalacion>((ref) async {
 	return _HubInstalacion(
 		url: await servicio.obtenerHubUrl() ?? '',
 		apiKey: await servicio.obtenerHubApiKey(),
+		tiendaUrl: await servicio.obtenerTiendaUrl(),
 	);
 });
 
 class _HubInstalacion {
-	const _HubInstalacion({required this.url, required this.apiKey});
+	const _HubInstalacion({
+		required this.url,
+		required this.apiKey,
+		required this.tiendaUrl,
+	});
 
 	final String url;
 	final String apiKey;
+	final String tiendaUrl;
 }
 
 /// Abre el asistente tecnico tras validar el PIN del dispositivo.

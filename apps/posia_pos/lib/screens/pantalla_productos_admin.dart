@@ -29,6 +29,8 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 	String _filtro = '';
 	String? _categoriaFiltro;
 	_FiltroEstadoProducto _estadoFiltro = _FiltroEstadoProducto.activos;
+	var _modoSeleccion = false;
+	final _idsSeleccionados = <String>{};
 
 	@override
 	void dispose() {
@@ -37,6 +39,16 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 	}
 
 	bool get _esFaltantes => _estadoFiltro == _FiltroEstadoProducto.faltantes;
+
+	bool get _enSeleccion =>
+		!_esFaltantes && (_modoSeleccion || _idsSeleccionados.isNotEmpty);
+
+	void _salirSeleccion() {
+		setState(() {
+			_modoSeleccion = false;
+			_idsSeleccionados.clear();
+		});
+	}
 
 	@override
 	Widget build(BuildContext context) {
@@ -60,32 +72,60 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 		final alertas = alertasAsync.value ?? const <AlertaFaltante>[];
 		return Scaffold(
 			appBar: AppBar(
-				title: Text(_esFaltantes ? 'Faltantes' : 'Productos'),
+				leading: _enSeleccion
+					? IconButton(
+							icon: const Icon(Icons.close),
+							onPressed: _salirSeleccion,
+						)
+					: null,
+				title: Text(
+					_enSeleccion
+						? '${_idsSeleccionados.length} seleccionados'
+						: (_esFaltantes ? 'Faltantes' : 'Productos'),
+				),
 				actions: [
-					if (_esFaltantes && alertas.isNotEmpty) ...[
+					if (_enSeleccion)
 						IconButton(
-							icon: const Icon(Icons.download),
-							tooltip: 'Exportar CSV',
-							onPressed: () => _exportarFaltantes(context, alertas),
-						),
-						IconButton(
-							icon: const Icon(Icons.chat),
-							tooltip: 'Enviar por WhatsApp',
-							onPressed: () => _enviarFaltantesWhatsApp(context, alertas),
-						),
+							tooltip: 'Mover de categoría',
+							icon: const Icon(Icons.drive_file_move),
+							onPressed: _idsSeleccionados.isEmpty
+								? null
+								: () => _moverSeleccionados(
+										categoriasAsync.value ?? const [],
+									),
+						)
+					else ...[
+						if (_esFaltantes && alertas.isNotEmpty) ...[
+							IconButton(
+								icon: const Icon(Icons.download),
+								tooltip: 'Exportar CSV',
+								onPressed: () => _exportarFaltantes(context, alertas),
+							),
+							IconButton(
+								icon: const Icon(Icons.chat),
+								tooltip: 'Enviar por WhatsApp',
+								onPressed: () => _enviarFaltantesWhatsApp(context, alertas),
+							),
+						],
+						if (!_esFaltantes && puedeImportar)
+							IconButton(
+								icon: const Icon(Icons.upload_file),
+								tooltip: 'Importar por lote',
+								onPressed: () => _abrirImportacion(context),
+							),
+						if (!_esFaltantes)
+							IconButton(
+								tooltip: 'Seleccionar varios',
+								icon: const Icon(Icons.checklist),
+								onPressed: () => setState(() => _modoSeleccion = true),
+							),
+						if (!_esFaltantes)
+							IconButton(
+								icon: const Icon(Icons.add_circle, color: PosiaColors.cobrar),
+								iconSize: 32.0,
+								onPressed: () => _abrirFormulario(context),
+							),
 					],
-					if (!_esFaltantes && puedeImportar)
-						IconButton(
-							icon: const Icon(Icons.upload_file),
-							tooltip: 'Importar por lote',
-							onPressed: () => _abrirImportacion(context),
-						),
-					if (!_esFaltantes)
-						IconButton(
-							icon: const Icon(Icons.add_circle, color: PosiaColors.cobrar),
-							iconSize: 32.0,
-							onPressed: () => _abrirFormulario(context),
-						),
 				],
 			),
 			body: productosAsync.when(
@@ -197,10 +237,12 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 											selected: _estadoFiltro ==
 												_FiltroEstadoProducto.faltantes,
 											selectedColor: Colors.red.shade100,
-											onSelected: (_) => setState(
-												() => _estadoFiltro =
-													_FiltroEstadoProducto.faltantes,
-											),
+											onSelected: (_) => setState(() {
+												_estadoFiltro =
+													_FiltroEstadoProducto.faltantes;
+												_modoSeleccion = false;
+												_idsSeleccionados.clear();
+											}),
 										),
 									],
 								),
@@ -267,16 +309,27 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 												? 'Sin categoría'
 												: nombresCat[producto.categoriaId] ?? 'Categoría';
 											final bajoMinimo = alerta != null;
+											final seleccionado =
+												_idsSeleccionados.contains(producto.id);
 											return Card(
 												margin: const EdgeInsets.symmetric(
 													horizontal: 12.0,
 													vertical: 4.0,
 												),
-												color: bajoMinimo && _esFaltantes
-													? Colors.red.shade50
-													: null,
+												color: seleccionado
+													? PosiaColors.cobrar.withValues(alpha: 0.12)
+													: bajoMinimo && _esFaltantes
+														? Colors.red.shade50
+														: null,
 												child: ListTile(
-													leading: CircleAvatar(
+													selected: seleccionado,
+													leading: _enSeleccion
+														? Checkbox(
+																value: seleccionado,
+																onChanged: (_) =>
+																	_alternarSeleccion(producto.id),
+															)
+														: CircleAvatar(
 														backgroundColor: bajoMinimo && _esFaltantes
 															? PosiaColors.cancelar.withValues(alpha: 0.15)
 															: producto.activo
@@ -310,12 +363,14 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 																? '$catNombre · ${producto.codigoBarrasVisible}'
 																: catNombre,
 													),
-													trailing: _esFaltantes
+													trailing: _enSeleccion
+														? null
+														: _esFaltantes
 														? IconButton(
 															icon: const Icon(Icons.edit_outlined),
 															tooltip: 'Editar producto',
 															onPressed: () =>
-																_abrirFormulario(context, producto),
+																_abrirFormulario(context, producto: producto),
 														)
 														: Row(
 															mainAxisSize: MainAxisSize.min,
@@ -360,12 +415,26 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 																),
 															],
 														),
-													onTap: () => _abrirFormulario(context, producto),
+													onTap: () {
+														if (_enSeleccion) {
+															_alternarSeleccion(producto.id);
+															return;
+														}
+														_abrirFormulario(context, producto: producto);
+													},
+													onLongPress: _esFaltantes
+														? null
+														: () => setState(() {
+																_modoSeleccion = true;
+																_idsSeleccionados.add(producto.id);
+															}),
 												),
 											);
 										},
 									),
 							),
+							if (_enSeleccion)
+								_barraSeleccion(filtrados, categorias),
 						],
 					);
 				},
@@ -373,6 +442,247 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 				error: (error, _) => Center(child: Text(error.toString())),
 			),
 		);
+	}
+
+	void _alternarSeleccion(String productoId) {
+		setState(() {
+			_modoSeleccion = true;
+			if (_idsSeleccionados.contains(productoId)) {
+				_idsSeleccionados.remove(productoId);
+			} else {
+				_idsSeleccionados.add(productoId);
+			}
+		});
+	}
+
+	Widget _barraSeleccion(
+		List<Producto> visibles,
+		List<Categoria> categorias,
+	) {
+		final visiblesIds = visibles.map((p) => p.id).toSet();
+		final todosVisibles = visiblesIds.isNotEmpty &&
+			visiblesIds.every(_idsSeleccionados.contains);
+		return Material(
+			elevation: 6,
+			color: Theme.of(context).colorScheme.surfaceContainerHighest,
+			child: SafeArea(
+				top: false,
+				child: Padding(
+					padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+					child: Row(
+						children: [
+							TextButton(
+								onPressed: visibles.isEmpty
+									? null
+									: () => setState(() {
+											_modoSeleccion = true;
+											if (todosVisibles) {
+												_idsSeleccionados.removeAll(visiblesIds);
+											} else {
+												_idsSeleccionados.addAll(visiblesIds);
+											}
+										}),
+								child: Text(
+									todosVisibles ? 'Quitar visibles' : 'Elegir visibles',
+								),
+							),
+							const Spacer(),
+							FilledButton.icon(
+								onPressed: _idsSeleccionados.isEmpty
+									? null
+									: () => _moverSeleccionados(categorias),
+								icon: const Icon(Icons.drive_file_move),
+								label: Text(
+									'Mover ${_idsSeleccionados.length}',
+								),
+							),
+						],
+					),
+				),
+			),
+		);
+	}
+
+	Future<void> _moverSeleccionados(List<Categoria> categorias) async {
+		final usuario = ref.read(sesionUsuarioProvider);
+		final rol = ref.read(rolPersonalizadoSesionProvider);
+		final permitidas = usuario == null
+			? null
+			: PoliticaAccesoAdmin.categoriasProductoPermitidas(
+				usuario,
+				rol,
+			);
+		final destinos = categorias
+			.where(
+				(c) =>
+					c.activa &&
+					(permitidas == null || permitidas.contains(c.id)),
+			)
+			.toList();
+		if (destinos.isEmpty) {
+			PosiaNotificaciones.mostrarSnackBar(
+				context,
+				const SnackBar(
+					content: Text(
+						'Cree o active una categoría destino antes de mover.',
+					),
+				),
+			);
+			return;
+		}
+		var destinoId = destinos.length == 1 ? destinos.first.id : null;
+		final confirmar = await showDialog<bool>(
+			context: context,
+			builder: (ctx) => StatefulBuilder(
+				builder: (context, setDialogState) => AlertDialog(
+					title: const Text('Mover de categoría'),
+					content: Column(
+						mainAxisSize: MainAxisSize.min,
+						crossAxisAlignment: CrossAxisAlignment.stretch,
+						children: [
+							Text(
+								'Pasar ${_idsSeleccionados.length} producto'
+								'${_idsSeleccionados.length == 1 ? '' : 's'} '
+								'a otra categoría.',
+							),
+							const SizedBox(height: 16),
+							InputDecorator(
+								decoration: const InputDecoration(
+									labelText: 'Nueva categoría',
+									border: OutlineInputBorder(),
+								),
+								child: DropdownButtonHideUnderline(
+									child: DropdownButton<String>(
+										value: destinos.any((c) => c.id == destinoId)
+											? destinoId
+											: null,
+										isExpanded: true,
+										hint: const Text('Elija categoría'),
+										items: [
+											for (final c in destinos)
+												DropdownMenuItem(
+													value: c.id,
+													child: Text(c.nombre),
+												),
+										],
+										onChanged: (v) =>
+											setDialogState(() => destinoId = v),
+									),
+								),
+							),
+						],
+					),
+					actions: [
+						TextButton(
+							onPressed: () => Navigator.pop(ctx, false),
+							child: const Text('Cancelar'),
+						),
+						FilledButton(
+							onPressed: destinoId == null
+								? null
+								: () => Navigator.pop(ctx, true),
+							child: const Text('Mover'),
+						),
+					],
+				),
+			),
+		);
+		if (confirmar != true) {
+			return;
+		}
+		final elegido = destinoId;
+		if (elegido == null) {
+			return;
+		}
+		if (usuario != null &&
+			!PoliticaAccesoAdmin.puedeEditarProductoEnCategoria(
+				usuario,
+				rol,
+				elegido,
+			)) {
+			if (!mounted) {
+				return;
+			}
+			PosiaNotificaciones.mostrarSnackBar(
+				context,
+				const SnackBar(
+					content: Text('Sin permiso para mover a esa categoría'),
+					backgroundColor: PosiaColors.cancelar,
+				),
+			);
+			return;
+		}
+		final productos = ref.read(productosCatalogoAdminProvider).value ??
+			const <Producto>[];
+		final ids = <String>[];
+		var omitidos = 0;
+		for (final id in _idsSeleccionados) {
+			final producto = productos.where((p) => p.id == id).firstOrNull;
+			if (producto == null) {
+				ids.add(id);
+				continue;
+			}
+			if (usuario != null &&
+				!PoliticaAccesoAdmin.puedeEditarProductoEnCategoria(
+					usuario,
+					rol,
+					producto.categoriaId,
+				)) {
+				omitidos++;
+				continue;
+			}
+			ids.add(id);
+		}
+		if (ids.isEmpty) {
+			if (!mounted) {
+				return;
+			}
+			PosiaNotificaciones.mostrarSnackBar(
+				context,
+				const SnackBar(
+					content: Text('Sin permiso para mover esos productos'),
+					backgroundColor: PosiaColors.cancelar,
+				),
+			);
+			return;
+		}
+		try {
+			final servicio = await ref.read(servicioAdminProvider.future);
+			final n = await servicio.moverProductosSeleccionados(
+				productoIds: ids,
+				destinoId: elegido,
+			);
+			if (!mounted) {
+				return;
+			}
+			_salirSeleccion();
+			ref.invalidate(productosCatalogoAdminProvider);
+			await refrescarDatosMaestros(ref);
+			if (!mounted) {
+				return;
+			}
+			final extra = omitidos == 0
+				? ''
+				: ' ($omitidos sin permiso se omitieron)';
+			PosiaNotificaciones.mostrarSnackBar(
+				context,
+				SnackBar(
+					content: Text('Se movieron $n productos$extra'),
+					backgroundColor: PosiaColors.cobrar,
+				),
+			);
+		} on Object catch (error) {
+			if (!mounted) {
+				return;
+			}
+			PosiaNotificaciones.mostrarSnackBar(
+				context,
+				SnackBar(
+					content: Text('$error'),
+					backgroundColor: PosiaColors.cancelar,
+				),
+			);
+		}
 	}
 
 	Widget _barraFaltantes(
@@ -481,9 +791,10 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 	}
 
 	Future<void> _abrirFormulario(
-		BuildContext context, [
+		BuildContext context, {
 		Producto? producto,
-	]) async {
+		bool clonar = false,
+	}) async {
 		final usuario = ref.read(sesionUsuarioProvider);
 		final rolPersonalizado = ref.read(rolPersonalizadoSesionProvider);
 		if (usuario != null &&
@@ -495,8 +806,12 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 			)) {
 			PosiaNotificaciones.mostrarSnackBar(
 				context,
-				const SnackBar(
-					content: Text('Sin permiso para editar productos de esta categoría'),
+				SnackBar(
+					content: Text(
+						clonar
+							? 'Sin permiso para clonar productos de esta categoría'
+							: 'Sin permiso para editar productos de esta categoría',
+					),
 					backgroundColor: PosiaColors.cancelar,
 				),
 			);
@@ -505,7 +820,10 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 		final ok = await Navigator.push<bool>(
 			context,
 			MaterialPageRoute<bool>(
-				builder: (_) => PantallaFormularioProducto(productoExistente: producto),
+				builder: (_) => PantallaFormularioProducto(
+					productoExistente: clonar ? null : producto,
+					clonarDesde: clonar ? producto : null,
+				),
 			),
 		);
 		if (ok == true) {
@@ -531,7 +849,11 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 		Producto producto,
 	) async {
 		if (accion == 'editar') {
-			await _abrirFormulario(context, producto);
+			await _abrirFormulario(context, producto: producto);
+			return;
+		}
+		if (accion == 'clonar') {
+			await _abrirFormulario(context, producto: producto, clonar: true);
 			return;
 		}
 		if (accion == 'precio') {
@@ -607,6 +929,7 @@ class _PantallaProductosAdminState extends ConsumerState<PantallaProductosAdmin>
 	List<PopupMenuEntry<String>> _menuProducto(Producto producto) {
 		return [
 			const PopupMenuItem(value: 'editar', child: Text('Editar')),
+			const PopupMenuItem(value: 'clonar', child: Text('Clonar')),
 			const PopupMenuItem(
 				value: 'precio',
 				child: Text('Actualizar precio'),

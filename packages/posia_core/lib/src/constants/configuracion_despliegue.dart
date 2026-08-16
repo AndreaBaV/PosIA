@@ -2,6 +2,7 @@
 library;
 
 import '../config/configuracion_entorno.dart';
+import 'posia_constants.dart';
 
 /// URL y clave del hub embebidos en release (un despliegue por repo/tienda).
 ///
@@ -56,7 +57,11 @@ abstract final class ConfiguracionDespliegue {
 		if (desdeEnv.isNotEmpty) {
 			return desdeEnv;
 		}
-		return _tiendaUrlBuild.trim();
+		final build = _tiendaUrlBuild.trim();
+		if (build.isNotEmpty) {
+			return build;
+		}
+		return URL_TIENDA_EN_LINEA_PREDETERMINADA;
 	}
 
 	static bool get usaHubEnNube =>

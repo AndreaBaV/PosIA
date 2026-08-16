@@ -210,27 +210,13 @@ class AdminCategorias {
 		required String destinoId,
 	}) async {
 		final repoProd = _productoRepository;
-		final repoCat = _categoriaRepository;
-		if (repoProd == null || repoCat == null) {
+		if (repoProd == null) {
 			throw StateError('Repositorio de categorias no configurado');
 		}
-		final destino = destinoId.trim();
-		if (destino.isEmpty || destino == origenId) {
+		if (destinoId.trim() == origenId) {
 			throw StateError('Elija una categoría destino distinta');
 		}
-		final todas = await repoCat.listarTodas();
-		final destCat = todas.where((c) => c.id == destino).firstOrNull;
-		if (destCat == null || destCat.esStubFk) {
-			throw StateError('La categoría destino no existe');
-		}
-		final enterrada = await _lapidaRepository?.estaEliminada(
-			TipoLapida.categoria,
-			destino,
-		) ??
-			false;
-		if (enterrada) {
-			throw StateError('La categoría destino ya fue eliminada');
-		}
+		final destino = await _destinoValido(destinoId);
 		final productos = await repoProd.listarPorCategoriaId(origenId);
 		if (productos.isEmpty) {
 			return 0;
@@ -249,6 +235,58 @@ class AdminCategorias {
 			);
 		}
 		return productos.length;
+	}
+
+	/// Pasa los productos indicados a [destinoId] sin tocar el resto del grupo.
+	Future<int> moverProductosPorIds({
+		required List<String> productoIds,
+		required String destinoId,
+	}) async {
+		final repoProd = _productoRepository;
+		final destino = await _destinoValido(destinoId);
+		if (repoProd == null) {
+			throw StateError('Repositorio de categorias no configurado');
+		}
+		final productos = await repoProd.listarPorIds(productoIds);
+		final aMover = productos.where((p) => p.categoriaId != destino).toList();
+		if (aMover.isEmpty) {
+			return 0;
+		}
+		await repoProd.reasignarProductosPorIds(
+			productoIds: aMover.map((p) => p.id).toList(),
+			destinoId: destino,
+		);
+		for (final producto in aMover) {
+			await _emisorEventos.producto(
+				producto.copiarCon(categoriaId: destino),
+			);
+		}
+		return aMover.length;
+	}
+
+	Future<String> _destinoValido(String destinoId) async {
+		final repoCat = _categoriaRepository;
+		if (repoCat == null) {
+			throw StateError('Repositorio de categorias no configurado');
+		}
+		final destino = destinoId.trim();
+		if (destino.isEmpty) {
+			throw StateError('Elija una categoría destino');
+		}
+		final todas = await repoCat.listarTodas();
+		final destCat = todas.where((c) => c.id == destino).firstOrNull;
+		if (destCat == null || destCat.esStubFk) {
+			throw StateError('La categoría destino no existe');
+		}
+		final enterrada = await _lapidaRepository?.estaEliminada(
+			TipoLapida.categoria,
+			destino,
+		) ??
+			false;
+		if (enterrada) {
+			throw StateError('La categoría destino ya fue eliminada');
+		}
+		return destino;
 	}
 }
 

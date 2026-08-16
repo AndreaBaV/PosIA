@@ -1254,6 +1254,16 @@ class ServicioAdmin {
     );
   }
 
+  Future<int> moverProductosSeleccionados({
+    required List<String> productoIds,
+    required String destinoId,
+  }) {
+    return _categorias.moverProductosPorIds(
+      productoIds: productoIds,
+      destinoId: destinoId,
+    );
+  }
+
   Future<int> contarProductosDeCategoria(String categoriaId) {
     return _productoRepository.contarPorCategoria(categoriaId);
   }

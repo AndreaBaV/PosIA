@@ -77,18 +77,31 @@ final servicioAdminProvider = FutureProvider<ServicioAdmin>((ref) async {
 
 /// Cliente de subida de fotos de producto a la tienda en linea (R2).
 ///
-/// null si el build no trae `POSIA_TIENDA_URL`/`POSIA_HUB_API_KEY`: el
-/// deployment no tiene tienda en linea, o simplemente no se configuro
-/// todavia. La pantalla de producto oculta el boton de foto en ese caso en
-/// vez de mostrar un error confuso.
-final servicioImagenesProductoProvider = Provider<ServicioImagenesProducto?>((ref) {
-	if (!ConfiguracionDespliegue.tieneSubidaImagenes) {
+/// Usa la URL de la tienda (build, `.env`, Configuración técnica o la de
+/// La Fortuna) y la misma API key del hub que ya tiene la caja. null solo
+/// si no hay API key: sin ella Cloudflare rechaza la subida.
+final servicioImagenesProductoProvider =
+	FutureProvider<ServicioImagenesProducto?>((ref) async {
+	var url = ConfiguracionDespliegue.tiendaUrl.trim();
+	var clave = ConfiguracionDespliegue.hubApiKey.trim();
+	try {
+		final configRepo = await ref.watch(configDispositivoRepoProvider.future);
+		final urlGuardada = await configRepo.obtenerTiendaUrl();
+		if (urlGuardada != null && urlGuardada.isNotEmpty) {
+			url = urlGuardada;
+		}
+		if (clave.isEmpty) {
+			clave =
+				(await configRepo.obtenerValor(claveConfigHubApiKey))?.trim() ??
+				'';
+		}
+	} on Object {
+		// Tests del formulario y arranques sin SQLite: se queda lo del build.
+	}
+	if (url.isEmpty || clave.isEmpty) {
 		return null;
 	}
-	return ServicioImagenesProducto(
-		urlBase: ConfiguracionDespliegue.tiendaUrl,
-		claveApi: ConfiguracionDespliegue.hubApiKey,
-	);
+	return ServicioImagenesProducto(urlBase: url, claveApi: clave);
 });
 
 /// Indica si el tile administrativo es visible para el rol actual.

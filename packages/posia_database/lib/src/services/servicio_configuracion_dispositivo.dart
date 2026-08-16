@@ -20,6 +20,10 @@ class ServicioConfiguracionDispositivo {
 		return (await _config.obtenerValor(claveConfigHubApiKey)) ?? '';
 	}
 
+	Future<String> obtenerTiendaUrl() async {
+		return await _config.obtenerTiendaUrl() ?? '';
+	}
+
 	/// Prueba URL + clave sin guardar. Timeout largo para despertar hub suspendido.
 	Future<DiagnosticoConexionHub> probarConexionHub({
 		required String hubUrl,
@@ -41,6 +45,7 @@ class ServicioConfiguracionDispositivo {
 	Future<bool> guardarConexionHub({
 		String hubUrl = '',
 		String hubApiKey = '',
+		String tiendaUrl = '',
 		bool soloOffline = false,
 		String pinTecnico = '',
 		String nombreNegocio = '',
@@ -53,6 +58,7 @@ class ServicioConfiguracionDispositivo {
 		if (!usarHub) {
 			await _config.guardarHubUrl('');
 			await _config.guardarHubApiKey('');
+			await _config.guardarTiendaUrl('');
 			final actual = await _config.obtenerConfigDispositivo();
 			if (actual.tiendaId.isEmpty && pinAdmin.trim().length == LONGITUD_PIN_ADMIN) {
 				await AprovisionadorOffline.aprovisionar(
@@ -74,6 +80,10 @@ class ServicioConfiguracionDispositivo {
 			}
 			await _config.guardarHubUrl(url);
 			await _config.guardarHubApiKey(clave);
+			final tienda = tiendaUrl.trim().replaceAll(RegExp(r'/+$'), '');
+			await _config.guardarTiendaUrl(
+				tienda.isEmpty ? ConfiguracionDespliegue.tiendaUrl : tienda,
+			);
 		}
 		final pin = pinTecnico.trim();
 		if (pin.isNotEmpty) {
