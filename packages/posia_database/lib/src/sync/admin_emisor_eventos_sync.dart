@@ -857,14 +857,24 @@ class AdminEmisorEventosSync {
 	}
 
 	/// Encola la lapida de una categoria borrada por el administrador.
-	Future<void> categoriaEliminada(String categoriaId) {
+	///
+	/// [categoriaDestinoId] Si hay productos, las otras cajas los mueven ahi
+	/// al aplicar el evento (un solo evento, sin reenviar todo el catalogo).
+	Future<void> categoriaEliminada(
+		String categoriaId, {
+		String? categoriaDestinoId,
+	}) {
+		final destino = categoriaDestinoId?.trim() ?? '';
 		return _emitir(
 			SyncEvent(
 				id: _generadorId.v4(),
 				tiendaId: _tiendaActivaId,
 				dispositivoId: _cajaId,
 				tipo: TipoSyncEvento.categoryDeleted,
-				payload: {'id': categoriaId},
+				payload: {
+					'id': categoriaId,
+					if (destino.isNotEmpty) 'categoriaDestinoId': destino,
+				},
 				creadoEn: DateTime.now().toUtc(),
 				estado: EstadoSyncEvento.pendiente,
 			),

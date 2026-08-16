@@ -1249,10 +1249,21 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 	}
 
 	/// Aplica la lapida de una categoria borrada por un administrador.
+	///
+	/// Si el payload trae `categoriaDestinoId`, mueve los productos locales
+	/// a esa categoria (centralizar grupos sin dejar huerfanos).
 	Future<void> _aplicarCategoriaEliminadaRemota(SyncEvent evento) async {
 		final categoriaId = evento.payload['id'] as String? ?? '';
 		if (categoriaId.isEmpty) {
 			return;
+		}
+		final destinoId =
+			(evento.payload['categoriaDestinoId'] as String? ?? '').trim();
+		if (destinoId.isNotEmpty && destinoId != categoriaId) {
+			await _productoRepository.reasignarCategoria(
+				origenId: categoriaId,
+				destinoId: destinoId,
+			);
 		}
 		await _lapidas.registrar(
 			tipo: TipoLapida.categoria,

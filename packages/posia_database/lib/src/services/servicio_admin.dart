@@ -220,6 +220,7 @@ class ServicioAdmin {
       emisorEventos: _emisorEventos,
       categoriaRepository: categoriaRepository,
       lapidaRepository: LapidaRepository(baseDatos: baseDatos),
+      productoRepository: productoRepository,
     );
     _vendedores = AdminVendedores(vendedorRepository: vendedorRepository);
     _reportes = AdminReportes(
@@ -1239,8 +1240,32 @@ class ServicioAdmin {
     return _categorias.reordenarCategorias(idsOrdenados);
   }
 
-  Future<void> eliminarCategoria(String categoriaId) {
-    return _categorias.eliminarCategoria(categoriaId);
+  Future<List<ResumenGrupoCategoria>> listarGruposProductosCategoria() {
+    return _categorias.listarGruposProductos();
+  }
+
+  Future<int> moverProductosDeCategoria({
+    required String origenId,
+    required String destinoId,
+  }) {
+    return _categorias.moverProductos(
+      origenId: origenId,
+      destinoId: destinoId,
+    );
+  }
+
+  Future<int> contarProductosDeCategoria(String categoriaId) {
+    return _productoRepository.contarPorCategoria(categoriaId);
+  }
+
+  Future<void> eliminarCategoria(
+    String categoriaId, {
+    String? categoriaDestinoId,
+  }) {
+    return _categorias.eliminarCategoria(
+      categoriaId,
+      categoriaDestinoId: categoriaDestinoId,
+    );
   }
 
   Future<Producto> asignarCategoriaProducto(

@@ -282,6 +282,18 @@ class ProyectorEventosPostgres {
     if (id.isEmpty) {
       return;
     }
+    final destino =
+        (evento.payload['categoriaDestinoId'] as String? ?? '').trim();
+    if (destino.isNotEmpty && destino != id) {
+      await _sesion.execute(
+        Sql.named('''
+					UPDATE products
+					SET categoria_id = @destino
+					WHERE categoria_id = @origen
+				'''),
+        parameters: {'destino': destino, 'origen': id},
+      );
+    }
     await _registrarEliminacionPermanente(
       'categoria',
       id,

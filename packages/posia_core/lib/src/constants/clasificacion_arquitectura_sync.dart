@@ -621,9 +621,9 @@ abstract final class ClasificacionArquitecturaSync {
 		ContratoEventoSync(
 			tipo: TipoSyncEvento.categoryDeleted,
 			politica: PoliticaEventoSync.activo,
-			motivo: 'Borrado manual de categoria: lapida, gana sobre cualquier '
-				'categoryUpserted posterior',
-			tablasAfectadas: ['entidades_eliminadas', 'categories'],
+			motivo: 'Borrado manual de categoria: reasigna productos al destino, '
+				'lapida, gana sobre cualquier categoryUpserted posterior',
+			tablasAfectadas: ['entidades_eliminadas', 'categories', 'products'],
 		),
 	];
 

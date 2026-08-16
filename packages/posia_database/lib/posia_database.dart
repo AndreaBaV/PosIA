@@ -58,6 +58,7 @@ export 'src/repositories/variante_repository.dart';
 export 'src/repositories/vendedor_repository.dart';
 export 'src/repositories/venta_repository.dart';
 export 'src/services/admin_promociones.dart' show MiembroPromocion;
+export 'src/services/admin_categorias.dart' show ResumenGrupoCategoria;
 export 'src/services/servicio_admin.dart';
 export 'src/services/servicio_autenticacion.dart';
 export 'src/services/servicio_configuracion_dispositivo.dart';

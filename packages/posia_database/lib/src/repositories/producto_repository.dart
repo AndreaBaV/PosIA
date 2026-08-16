@@ -58,6 +58,105 @@ class ProductoRepository {
 		return (filas.first['total'] as int?) ?? 0;
 	}
 
+	/// Cuenta productos (activos e inactivos) asignados a una categoria.
+	Future<int> contarPorCategoria(String categoriaId) async {
+		final filas = await _baseDatos.rawQuery(
+			'SELECT COUNT(*) AS total FROM products WHERE categoria_id = ?',
+			[categoriaId],
+		);
+		return (filas.first['total'] as int?) ?? 0;
+	}
+
+	/// Mueve todos los productos de [origenId] a [destinoId].
+	///
+	/// Necesario antes de enterrar una categoria: la FK local impide borrar
+	/// el padre si aun hay hijos, y el catalogo no debe quedar huerfano.
+	Future<int> reasignarCategoria({
+		required String origenId,
+		required String destinoId,
+	}) {
+		return _baseDatos.update(
+			'products',
+			{
+				'categoria_id': destinoId,
+				'actualizado_en': DateTime.now().toUtc().toIso8601String(),
+			},
+			where: 'categoria_id = ?',
+			whereArgs: [origenId],
+		);
+	}
+
+	/// Productos sin categoria (null o cadena vacia).
+	Future<int> reasignarHuerfanos(String destinoId) {
+		return _baseDatos.rawUpdate(
+			'''
+			UPDATE products
+			SET categoria_id = ?, actualizado_en = ?
+			WHERE categoria_id IS NULL OR categoria_id = ''
+			''',
+			[destinoId, DateTime.now().toUtc().toIso8601String()],
+		);
+	}
+
+	/// Todos los productos de una categoria, o huerfanos si [categoriaId] vacio.
+	Future<List<Producto>> listarPorCategoriaId(String categoriaId) async {
+		if (categoriaId.isEmpty) {
+			final filas = await _baseDatos.rawQuery(
+				'''
+				SELECT * FROM products
+				WHERE categoria_id IS NULL OR categoria_id = ''
+				ORDER BY nombre ASC
+				''',
+			);
+			return filas.map(_mapearProducto).toList();
+		}
+		final filas = await _baseDatos.query(
+			'products',
+			where: 'categoria_id = ?',
+			whereArgs: [categoriaId],
+			orderBy: 'nombre ASC',
+		);
+		return filas.map(_mapearProducto).toList();
+	}
+
+	/// Conteo de productos por categoria_id. Clave vacia = sin categoria.
+	Future<Map<String, int>> contarAgrupadoPorCategoria() async {
+		final filas = await _baseDatos.rawQuery(
+			'''
+			SELECT categoria_id AS id, COUNT(*) AS total
+			FROM products
+			GROUP BY categoria_id
+			''',
+		);
+		final mapa = <String, int>{};
+		for (final fila in filas) {
+			final id = fila['id'] as String? ?? '';
+			final total = fila['total'];
+			mapa[id] = total is int ? total : int.tryParse('$total') ?? 0;
+		}
+		return mapa;
+	}
+
+	/// Hasta [limite] nombres de producto por categoria, para reconocer el grupo.
+	Future<Map<String, List<String>>> muestrasPorCategoria({int limite = 4}) async {
+		final filas = await _baseDatos.rawQuery(
+			'SELECT categoria_id AS id, nombre FROM products ORDER BY nombre ASC',
+		);
+		final mapa = <String, List<String>>{};
+		for (final fila in filas) {
+			final id = fila['id'] as String? ?? '';
+			final lista = mapa.putIfAbsent(id, () => <String>[]);
+			if (lista.length >= limite) {
+				continue;
+			}
+			final nombre = (fila['nombre'] as String? ?? '').trim();
+			if (nombre.isNotEmpty) {
+				lista.add(nombre);
+			}
+		}
+		return mapa;
+	}
+
 	/// Lista productos activos filtrados por categoria.
 	///
 	/// [tiendaId] Tienda propietaria del catalogo.
