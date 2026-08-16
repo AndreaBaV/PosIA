@@ -309,20 +309,30 @@ pw.Widget _celdaEncabezadoTabla(
 }
 
 pw.Widget _encabezadoTabla(TicketDigitalContenido contenido) {
+  final recepcion = contenido.mostrarColumnaRecepcion;
+  final importes = contenido.mostrarImportes;
   return pw.Container(
     padding: const pw.EdgeInsets.symmetric(vertical: 4),
     decoration: const pw.BoxDecoration(color: _grisFondo),
     child: pw.Row(
       children: [
         pw.Expanded(child: _celdaEncabezadoTabla('PRODUCTO')),
-        pw.SizedBox(
-          width: _anchoColumnaCantidad,
-          child: _celdaEncabezadoTabla('CANT', align: pw.TextAlign.center),
-        ),
+        if (importes || recepcion)
+          pw.SizedBox(
+            width: _anchoColumnaCantidad,
+            child: _celdaEncabezadoTabla(
+              importes ? 'CANT' : 'ENV',
+              align: pw.TextAlign.center,
+            ),
+          ),
         pw.SizedBox(
           width: _anchoColumnaImporte,
           child: _celdaEncabezadoTabla(
-            contenido.mostrarImportes ? 'IMPORTE' : 'ENVIADO',
+            importes
+                ? 'IMPORTE'
+                : recepcion
+                ? 'REC'
+                : 'CANTIDAD',
             align: pw.TextAlign.right,
           ),
         ),
@@ -333,11 +343,10 @@ pw.Widget _encabezadoTabla(TicketDigitalContenido contenido) {
 
 double get _altoEncabezadoTabla => _tamDetalleLinea * 1.2 + 8;
 
-pw.Widget _filaProducto(
-  LineaTicketDigital linea, {
-  required bool mostrarImportes,
-}) {
-  final detalle = mostrarImportes
+pw.Widget _filaProducto(LineaTicketDigital linea, TicketDigitalContenido contenido) {
+  final importes = contenido.mostrarImportes;
+  final recepcion = contenido.mostrarColumnaRecepcion;
+  final detalle = importes
       ? '${_cantidadLinea(linea.cantidad)} x '
             '${formatearMoneda(linea.precioUnitario)}'
       : null;
@@ -358,21 +367,26 @@ pw.Widget _filaProducto(
                 ),
               ),
             ),
-            pw.SizedBox(
-              width: _anchoColumnaCantidad,
-              child: pw.Text(
-                _cantidadLinea(linea.cantidad),
-                textAlign: pw.TextAlign.center,
-                style: const pw.TextStyle(
-                  fontSize: _tamLinea,
-                  color: _grisTexto,
+            if (importes || recepcion)
+              pw.SizedBox(
+                width: _anchoColumnaCantidad,
+                child: pw.Text(
+                  _cantidadLinea(linea.cantidad),
+                  textAlign: pw.TextAlign.center,
+                  style: const pw.TextStyle(
+                    fontSize: _tamLinea,
+                    color: _grisTexto,
+                  ),
                 ),
               ),
-            ),
             pw.SizedBox(
               width: _anchoColumnaImporte,
               child: pw.Text(
-                mostrarImportes ? formatearMoneda(linea.subtotal) : '________',
+                importes
+                    ? formatearMoneda(linea.subtotal)
+                    : recepcion
+                    ? '________'
+                    : '${_cantidadLinea(linea.cantidad)} u.',
                 textAlign: pw.TextAlign.right,
                 style: pw.TextStyle(
                   fontSize: _tamLinea,
@@ -404,10 +418,7 @@ pw.Widget _filaProducto(
   );
 }
 
-double _altoFilaProducto(
-  LineaTicketDigital linea, {
-  required bool mostrarImportes,
-}) {
+double _altoFilaProducto(LineaTicketDigital linea, bool mostrarImportes) {
   var alto =
       _altoTexto(
         linea.descripcion,
@@ -481,7 +492,7 @@ List<pw.Widget> _construirContenido({
     if (contenido.lineas.isNotEmpty) ...[
       _encabezadoTabla(contenido),
       for (final linea in contenido.lineas)
-        _filaProducto(linea, mostrarImportes: contenido.mostrarImportes),
+        _filaProducto(linea, contenido),
     ],
     _lineaDivisora(color: acento),
     if (contenido.descuentoTicket > 0)
@@ -577,7 +588,7 @@ double _calcularAltoPagina(
     alto = alto + _altoEncabezadoTabla;
     for (final linea in contenido.lineas) {
       alto = alto +
-          _altoFilaProducto(linea, mostrarImportes: contenido.mostrarImportes);
+          _altoFilaProducto(linea, contenido.mostrarImportes);
     }
   }
   alto = alto + _altoLineaDivisora;

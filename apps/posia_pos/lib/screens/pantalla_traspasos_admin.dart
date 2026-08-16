@@ -22,6 +22,16 @@ class PantallaTraspasosAdmin extends ConsumerStatefulWidget {
 
 class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 	with SingleTickerProviderStateMixin {
+	static final _estiloBotonAccionTraspaso = ButtonStyle(
+		visualDensity: VisualDensity.compact,
+		tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+		minimumSize: const WidgetStatePropertyAll(Size(0, 32)),
+		padding: const WidgetStatePropertyAll(
+			EdgeInsets.symmetric(horizontal: 10.0, vertical: 6.0),
+		),
+		textStyle: const WidgetStatePropertyAll(TextStyle(fontSize: 13.0)),
+	);
+
 	late final TabController _tabs;
 	final _notasController = TextEditingController();
 	final _busquedaHistorialController = TextEditingController();
@@ -109,12 +119,10 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 			? datos.tiendas
 			: datos.tiendas.where((t) => t.id != origenId).toList();
 		final destinosAlmacen = datos.almacenes
-			.where((a) => _origenEsAlmacen && a.id != origenId)
+			.where((a) => !_origenEsAlmacen || a.id != origenId)
 			.toList();
-		final destinoId = _origenEsAlmacen
-			? (_destinoEsAlmacen
-				? _almacenDestinoId ?? destinosAlmacen.firstOrNull?.id
-				: _tiendaDestinoId ?? destinosTienda.firstOrNull?.id)
+		final destinoId = _destinoEsAlmacen
+			? _almacenDestinoId ?? destinosAlmacen.firstOrNull?.id
 			: _tiendaDestinoId ?? destinosTienda.firstOrNull?.id;
 		final productos = _origenEsAlmacen
 			? (datos.productosPorAlmacen[origenId] ?? [])
@@ -140,6 +148,11 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 						crossAxisAlignment: CrossAxisAlignment.stretch,
 						children: [
 							SegmentedButton<bool>(
+								showSelectedIcon: false,
+								style: const ButtonStyle(
+									visualDensity: VisualDensity.compact,
+									tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+								),
 								segments: const [
 									ButtonSegment(value: false, label: Text('Tienda origen')),
 									ButtonSegment(value: true, label: Text('Almacén origen')),
@@ -147,7 +160,6 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 								selected: {_origenEsAlmacen},
 								onSelectionChanged: (v) => setState(() {
 									_origenEsAlmacen = v.first;
-									_destinoEsAlmacen = false;
 									_seleccionados.clear();
 								}),
 							),
@@ -198,20 +210,24 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 									),
 								),
 							const SizedBox(height: 8.0),
-							if (_origenEsAlmacen)
-								SegmentedButton<bool>(
-									segments: const [
-										ButtonSegment(value: false, label: Text('A tienda')),
-										ButtonSegment(value: true, label: Text('A almacén')),
-									],
-									selected: {_destinoEsAlmacen},
-									onSelectionChanged: (v) => setState(() {
-										_destinoEsAlmacen = v.first;
-										_seleccionados.clear();
-									}),
+							SegmentedButton<bool>(
+								showSelectedIcon: false,
+								style: const ButtonStyle(
+									visualDensity: VisualDensity.compact,
+									tapTargetSize: MaterialTapTargetSize.shrinkWrap,
 								),
-							if (_origenEsAlmacen) const SizedBox(height: 8.0),
-							if (_origenEsAlmacen && _destinoEsAlmacen)
+								segments: const [
+									ButtonSegment(value: false, label: Text('A tienda')),
+									ButtonSegment(value: true, label: Text('A almacén')),
+								],
+								selected: {_destinoEsAlmacen},
+								onSelectionChanged: (v) => setState(() {
+									_destinoEsAlmacen = v.first;
+									_seleccionados.clear();
+								}),
+							),
+							const SizedBox(height: 8.0),
+							if (_destinoEsAlmacen)
 								DropdownButtonFormField<String>(
 									initialValue: destinoId,
 									items: destinosAlmacen
@@ -225,9 +241,11 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 									onChanged: destinosAlmacen.isEmpty
 										? null
 										: (v) => setState(() => _almacenDestinoId = v),
-									decoration: const InputDecoration(
-										labelText: 'Almacén destino',
-										border: OutlineInputBorder(),
+									decoration: InputDecoration(
+										labelText: _origenEsAlmacen
+											? 'Almacén destino'
+											: 'Almacén destino (ingreso)',
+										border: const OutlineInputBorder(),
 									),
 								)
 							else
@@ -279,7 +297,7 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 				),
 				Expanded(
 					child: productosFiltrados.isEmpty
-						? const Center(child: Text('Sin productos en la tienda origen'))
+						? const Center(child: Text('Sin productos en el origen'))
 						: ListView.builder(
 							itemCount: productosFiltrados.length,
 							itemBuilder: (_, i) {
@@ -342,6 +360,7 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 							),
 							const SizedBox(height: 8.0),
 							FilledButton.icon(
+								style: _estiloBotonAccionTraspaso,
 								onPressed: origenId != null &&
 									destinoId != null &&
 									_seleccionados.isNotEmpty
@@ -354,7 +373,7 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 										destinoAlmacen: _destinoEsAlmacen,
 									)
 									: null,
-								icon: const Icon(Icons.swap_horiz),
+								icon: const Icon(Icons.swap_horiz, size: 18.0),
 								label: Text(
 									_seleccionados.isEmpty
 										? 'Seleccione productos'
@@ -419,6 +438,7 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 										),
 										trailing: pendiente
 											? FilledButton(
+												style: _estiloBotonAccionTraspaso,
 												onPressed: () => _recibirPendiente(t.id),
 												child: const Text('Recibir'),
 											)
@@ -471,51 +491,38 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 	}) async {
 		try {
 			final servicio = await ref.read(servicioAdminProvider.future);
-			if (desdeAlmacen) {
-				if (destinoAlmacen) {
-					await servicio.traspasarAlmacenAAlmacenMultiple(
-						almacenOrigenId: origenId,
-						almacenDestinoId: destinoId,
-						lineas: _construirLineas(),
-					);
-					if (!mounted) {
-						return;
-					}
-					PosiaNotificaciones.mostrarSnackBar(context, 
-						const SnackBar(
-							content: Text('Traspaso entre almacenes completado'),
-							backgroundColor: PosiaColors.cobrar,
-						),
-					);
-				} else {
-					await servicio.traspasarAlmacenATiendaMultiple(
-						almacenId: origenId,
-						tiendaDestinoId: destinoId,
-						lineas: _construirLineas(),
-					);
-					if (!mounted) {
-						return;
-					}
-					PosiaNotificaciones.mostrarSnackBar(context, 
-						const SnackBar(
-							content: Text('Abastecimiento desde almacén completado'),
-							backgroundColor: PosiaColors.cobrar,
-						),
-					);
-				}
-				ref.invalidate(_traspasosDatosProvider);
-				await refrescarDatosMaestros(ref);
-				_limpiarSeleccion();
-				_notasController.clear();
-				return;
+			final notas = _notasController.text.trim();
+			final Traspaso traspaso;
+			if (desdeAlmacen && destinoAlmacen) {
+				traspaso = await servicio.traspasarAlmacenAAlmacenMultiple(
+					almacenOrigenId: origenId,
+					almacenDestinoId: destinoId,
+					lineas: _construirLineas(),
+					notas: notas,
+				);
+			} else if (desdeAlmacen) {
+				traspaso = await servicio.traspasarAlmacenATiendaMultiple(
+					almacenId: origenId,
+					tiendaDestinoId: destinoId,
+					lineas: _construirLineas(),
+					notas: notas,
+				);
+			} else if (destinoAlmacen) {
+				traspaso = await servicio.traspasarTiendaAAlmacenMultiple(
+					tiendaOrigenId: origenId,
+					almacenDestinoId: destinoId,
+					lineas: _construirLineas(),
+					notas: notas,
+				);
+			} else {
+				traspaso = await servicio.realizarTraspasoMultiple(
+					tiendaOrigenId: origenId,
+					tiendaDestinoId: destinoId,
+					lineas: _construirLineas(),
+					notas: notas,
+					operador: operador,
+				);
 			}
-			final traspaso = await servicio.realizarTraspasoMultiple(
-				tiendaOrigenId: origenId,
-				tiendaDestinoId: destinoId,
-				lineas: _construirLineas(),
-				notas: _notasController.text.trim(),
-				operador: operador,
-			);
 			ref.invalidate(_traspasosDatosProvider);
 			await refrescarDatosMaestros(ref);
 			_limpiarSeleccion();
@@ -547,17 +554,26 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 			context: context,
 			builder: (ctx) => AlertDialog(
 				icon: const Icon(Icons.check_circle, color: PosiaColors.cobrar),
-				title: const Text('Traspaso realizado'),
+				title: Text(
+					tituloTicketTraspaso(
+						origenId: traspaso.tiendaOrigenId,
+						destinoId: traspaso.tiendaDestinoId,
+					),
+				),
 				content: Text(
 					'${traspaso.lineas.length} producto(s) transferidos.\n'
 					'¿Desea imprimir documentos?',
 				),
+				actionsOverflowAlignment: OverflowBarAlignment.end,
+				actionsPadding: const EdgeInsets.fromLTRB(12.0, 0.0, 12.0, 12.0),
 				actions: [
 					TextButton(
+						style: _estiloBotonAccionTraspaso,
 						onPressed: () => Navigator.pop(ctx),
 						child: const Text('Cerrar'),
 					),
 					TextButton(
+						style: _estiloBotonAccionTraspaso,
 						onPressed: () async {
 							final digital = construirTicketDigitalTraspasoImpresion(
 								traspaso: traspaso,
@@ -567,9 +583,10 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 							);
 							await compartirTicketDigitalWhatsApp(ctx, contenido: digital);
 						},
-						child: const Text('WhatsApp ticket'),
+						child: const Text('WhatsApp'),
 					),
 					TextButton(
+						style: _estiloBotonAccionTraspaso,
 						onPressed: () async {
 							await _imprimirTicket(
 								traspaso: traspaso,
@@ -583,6 +600,7 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 						child: const Text('Ticket'),
 					),
 					TextButton(
+						style: _estiloBotonAccionTraspaso,
 						onPressed: () async {
 							await _imprimirComprobante(
 								traspaso: traspaso,
@@ -596,6 +614,7 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 						child: const Text('Comprobante'),
 					),
 					FilledButton(
+						style: _estiloBotonAccionTraspaso,
 						onPressed: () async {
 							await _imprimirTicket(
 								traspaso: traspaso,
@@ -611,7 +630,7 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 								Navigator.pop(ctx);
 							}
 						},
-						child: const Text('Imprimir ambos'),
+						child: const Text('Ambos'),
 					),
 				],
 			),
@@ -675,9 +694,14 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 									],
 								),
 							),
-							Row(
+							OverflowBar(
+								alignment: MainAxisAlignment.end,
+								overflowAlignment: OverflowBarAlignment.end,
+								spacing: 4.0,
+								overflowSpacing: 4.0,
 								children: [
 									TextButton.icon(
+										style: _estiloBotonAccionTraspaso,
 										onPressed: () async {
 											final digital = construirTicketDigitalTraspasoImpresion(
 												traspaso: traspaso,
@@ -689,27 +713,29 @@ class _PantallaTraspasosAdminState extends ConsumerState<PantallaTraspasosAdmin>
 												contenido: digital,
 											);
 										},
-										icon: const Icon(Icons.chat),
+										icon: const Icon(Icons.chat, size: 16.0),
 										label: const Text('WhatsApp'),
 									),
 									TextButton.icon(
+										style: _estiloBotonAccionTraspaso,
 										onPressed: () => _imprimirTicket(
 											traspaso: traspaso,
 											datos: datos,
 										),
-										icon: const Icon(Icons.receipt),
+										icon: const Icon(Icons.receipt, size: 16.0),
 										label: const Text('Ticket'),
 									),
 									TextButton.icon(
+										style: _estiloBotonAccionTraspaso,
 										onPressed: () => _imprimirComprobante(
 											traspaso: traspaso,
 											datos: datos,
 										),
-										icon: const Icon(Icons.description),
+										icon: const Icon(Icons.description, size: 16.0),
 										label: const Text('Comprobante'),
 									),
-									const Spacer(),
 									FilledButton(
+										style: _estiloBotonAccionTraspaso,
 										onPressed: () => Navigator.pop(ctx),
 										child: const Text('Cerrar'),
 									),
@@ -834,7 +860,10 @@ class _DatosTraspasos {
 	String nombreUbicacion(String ubicacionId) {
 		final almacenId = decodificarAlmacenEnTraspaso(ubicacionId);
 		if (almacenId != null) {
-			return nombresAlmacen[almacenId] ?? 'Almacén';
+			return etiquetaUbicacionTraspaso(
+				ubicacionId: ubicacionId,
+				nombre: nombresAlmacen[almacenId] ?? 'Almacén',
+			);
 		}
 		return nombresTienda[ubicacionId] ?? '?';
 	}

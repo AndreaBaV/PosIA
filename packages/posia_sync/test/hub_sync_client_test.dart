@@ -300,4 +300,71 @@ void main() {
 		expect(usuarios.first.codigo, 'EMP001');
 		expect(usuarios.first.pinCredencial, 'hash123');
 	});
+
+	test('obtenerActualizacionApp decodifica manifiesto de Windows', () async {
+		final cliente = MockClient((request) async {
+			expect(request.url.path, '/v1/app/update');
+			expect(request.url.queryParameters['plataforma'], 'windows');
+			expect(request.headers['x-api-key'], 'clave-test');
+			return http.Response(
+				'''
+{
+  "version": "2.0.1",
+  "build": 151,
+  "notas": "Prueba",
+  "plataforma": "windows",
+  "paquete": {
+    "url": "https://hub.test/v1/app/files/POSIA-windows.zip",
+    "archivo": "POSIA-windows.zip"
+  }
+}
+''',
+				200,
+				headers: {'Content-Type': 'application/json'},
+			);
+		});
+		final hub = HubSyncClient(
+			urlBase: 'https://hub.test',
+			claveApi: 'clave-test',
+			clienteHttp: cliente,
+		);
+		final manifiesto = await hub.obtenerActualizacionApp('windows');
+		expect(manifiesto, isNotNull);
+		expect(manifiesto!.version, '2.0.1');
+		expect(manifiesto.build, 151);
+		expect(manifiesto.hayPaquete, isTrue);
+		expect(
+			manifiesto.paquete!.url,
+			'https://hub.test/v1/app/files/POSIA-windows.zip',
+		);
+	});
+
+	test('obtenerActualizacionApp 404 es null', () async {
+		final cliente = MockClient(
+			(request) async => http.Response('{"error":"Sin actualizaciones"}', 404),
+		);
+		final hub = HubSyncClient(
+			urlBase: 'https://hub.test',
+			clienteHttp: cliente,
+		);
+		expect(await hub.obtenerActualizacionApp('windows'), isNull);
+	});
+
+	test('obtenerUsoBase decodifica almacenamiento Neon', () async {
+		final cliente = MockClient((request) async {
+			expect(request.url.path, '/v1/db/usage');
+			return http.Response(
+				'{"bytesUsados":100,"bytesLimite":512,"tablas":[{"tabla":"sales","filas":3,"bytes":50}]}',
+				200,
+				headers: {'Content-Type': 'application/json'},
+			);
+		});
+		final hub = HubSyncClient(
+			urlBase: 'https://hub.test',
+			clienteHttp: cliente,
+		);
+		final uso = await hub.obtenerUsoBase();
+		expect(uso.bytesUsados, 100);
+		expect(uso.tablas.single.tabla, 'sales');
+	});
 }

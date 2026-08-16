@@ -112,7 +112,12 @@ class AdminClientes {
 				'No se puede eliminar: el cliente tiene cotizaciones registradas',
 			);
 		}
+		final existente = await repo.obtenerPorId(clienteId);
+		if (existente == null) {
+			return;
+		}
 		await repo.eliminar(clienteId);
+		await _emisorEventos.cliente(existente.copiarCon(activo: false));
 	}
 
 	Future<Cliente?> obtenerCliente(String clienteId) async {

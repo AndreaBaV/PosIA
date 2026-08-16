@@ -51,6 +51,8 @@ class TicketDigitalContenido {
     this.etiquetaSecundaria,
     this.creditoPlazoDias,
     this.creditoVenceEn,
+    this.tituloPersonalizado,
+    this.subtituloPersonalizado,
   });
 
   final TipoDocumentoTicketDigital tipo;
@@ -72,30 +74,46 @@ class TicketDigitalContenido {
   final int? creditoPlazoDias;
   /// Fecha limite de pago del credito.
   final DateTime? creditoVenceEn;
+  /// Si viene, sustituye el titulo derivado de [tipo].
+  final String? tituloPersonalizado;
+  /// Si viene, sustituye el subtitulo derivado de [tipo].
+  final String? subtituloPersonalizado;
 
-  String get tituloDocumento => switch (tipo) {
-    TipoDocumentoTicketDigital.venta => 'TICKET DE VENTA',
-    TipoDocumentoTicketDigital.cotizacion => 'COTIZACIÓN',
-    TipoDocumentoTicketDigital.pagare => 'PAGARÉ',
-    TipoDocumentoTicketDigital.liquidacionCredito => 'LIQUIDACIÓN DE CRÉDITO',
-    TipoDocumentoTicketDigital.corteCaja => 'CORTE DE CAJA',
-    TipoDocumentoTicketDigital.traspaso => 'TRASPASO',
-    TipoDocumentoTicketDigital.comprobanteTraspaso => 'COMPROBANTE TRASPASO',
-    TipoDocumentoTicketDigital.compra => 'COMPRA / ENTRADA',
-    TipoDocumentoTicketDigital.pedido => 'PEDIDO',
-  };
+  String get tituloDocumento =>
+      tituloPersonalizado?.trim().isNotEmpty == true
+      ? tituloPersonalizado!.trim()
+      : switch (tipo) {
+          TipoDocumentoTicketDigital.venta => 'TICKET DE VENTA',
+          TipoDocumentoTicketDigital.cotizacion => 'COTIZACIÓN',
+          TipoDocumentoTicketDigital.pagare => 'PAGARÉ',
+          TipoDocumentoTicketDigital.liquidacionCredito =>
+            'LIQUIDACIÓN DE CRÉDITO',
+          TipoDocumentoTicketDigital.corteCaja => 'CORTE DE CAJA',
+          TipoDocumentoTicketDigital.traspaso => 'TRASPASO',
+          TipoDocumentoTicketDigital.comprobanteTraspaso =>
+            'COMPROBANTE TRASPASO',
+          TipoDocumentoTicketDigital.compra => 'COMPRA / ENTRADA',
+          TipoDocumentoTicketDigital.pedido => 'PEDIDO',
+        };
 
-  String get subtituloDocumento => switch (tipo) {
-    TipoDocumentoTicketDigital.venta => 'Comprobante de compra',
-    TipoDocumentoTicketDigital.cotizacion => 'Documento informativo',
-    TipoDocumentoTicketDigital.pagare => 'Venta a crédito · una exhibición',
-    TipoDocumentoTicketDigital.liquidacionCredito => 'Comprobante de pago',
-    TipoDocumentoTicketDigital.corteCaja => 'Resumen de turno',
-    TipoDocumentoTicketDigital.traspaso => 'Documento de control interno',
-    TipoDocumentoTicketDigital.comprobanteTraspaso => 'Envío y recepción',
-    TipoDocumentoTicketDigital.compra => 'Entrada de mercancía',
-    TipoDocumentoTicketDigital.pedido => 'Resumen de entrega',
-  };
+  String get subtituloDocumento =>
+      subtituloPersonalizado?.trim().isNotEmpty == true
+      ? subtituloPersonalizado!.trim()
+      : switch (tipo) {
+          TipoDocumentoTicketDigital.venta => 'Comprobante de compra',
+          TipoDocumentoTicketDigital.cotizacion => 'Documento informativo',
+          TipoDocumentoTicketDigital.pagare => 'Venta a crédito · una exhibición',
+          TipoDocumentoTicketDigital.liquidacionCredito => 'Comprobante de pago',
+          TipoDocumentoTicketDigital.corteCaja => 'Resumen de turno',
+          TipoDocumentoTicketDigital.traspaso => 'Documento de control interno',
+          TipoDocumentoTicketDigital.comprobanteTraspaso => 'Envío y recepción',
+          TipoDocumentoTicketDigital.compra => 'Entrada de mercancía',
+          TipoDocumentoTicketDigital.pedido => 'Resumen de entrega',
+        };
+
+  /// Columna en blanco para confirmar cantidades al recibir.
+  bool get mostrarColumnaRecepcion =>
+      tipo == TipoDocumentoTicketDigital.comprobanteTraspaso;
 
   /// Si es false, la tabla muestra cantidades en lugar de importes.
   bool get mostrarImportes => switch (tipo) {

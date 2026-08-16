@@ -738,12 +738,188 @@ class HubSyncClient {
     }
   }
 
+  /// Consulta la version publicada para [plataforma] (`windows`, `android`, `ios`).
+  ///
+  /// null si el hub no tiene manifiesto (404) o no hay red.
+  Future<ManifestoActualizacionApp?> obtenerActualizacionApp(
+    String plataforma,
+  ) async {
+    final uri = Uri.parse('$_urlBase/v1/app/update').replace(
+      queryParameters: {'plataforma': plataforma},
+    );
+    try {
+      final respuesta = await _clienteHttp
+          .get(uri, headers: _construirCabeceras())
+          .timeout(const Duration(seconds: TIMEOUT_HUB_SYNC_SEGUNDOS));
+      if (respuesta.statusCode == 404) {
+        return null;
+      }
+      if (respuesta.statusCode < 200 || respuesta.statusCode >= 300) {
+        throw StateError(
+          'No se pudo consultar actualizaciones (HTTP ${respuesta.statusCode})',
+        );
+      }
+      final json = jsonDecode(respuesta.body);
+      if (json is! Map) {
+        return null;
+      }
+      return ManifestoActualizacionApp.desdeJson(
+        Map<String, Object?>.from(json),
+      );
+    } on StateError {
+      rethrow;
+    } on Object catch (error) {
+      throw StateError('No se pudo consultar actualizaciones: $error');
+    }
+  }
+
+  /// Descarga [url] en streaming. Si es del mismo hub, envia la API key.
+  Future<void> descargarArchivo({
+    required String url,
+    required void Function(List<int> chunk) alChunk,
+    void Function(int recibidos, int? total)? alProgreso,
+  }) async {
+    final uri = Uri.parse(url);
+    final cabeceras = <String, String>{};
+    if (_esMismaBase(uri)) {
+      final clave = _claveApi;
+      if (clave != null && clave.isNotEmpty) {
+        cabeceras['x-api-key'] = clave;
+      }
+    }
+    final solicitud = http.Request('GET', uri);
+    solicitud.headers.addAll(cabeceras);
+    final respuesta = await _clienteHttp
+        .send(solicitud)
+        .timeout(
+          const Duration(seconds: TIMEOUT_DESCARGA_ACTUALIZACION_SEGUNDOS),
+        );
+    if (respuesta.statusCode < 200 || respuesta.statusCode >= 300) {
+      throw StateError(
+        'No se pudo descargar el paquete (HTTP ${respuesta.statusCode})',
+      );
+    }
+    final total = respuesta.contentLength;
+    var recibidos = 0;
+    await for (final chunk in respuesta.stream) {
+      recibidos += chunk.length;
+      alChunk(chunk);
+      alProgreso?.call(recibidos, total);
+    }
+  }
+
+  bool _esMismaBase(Uri uri) {
+    final base = Uri.tryParse(_urlBase);
+    if (base == null) {
+      return false;
+    }
+    return uri.host == base.host &&
+        (uri.hasPort ? uri.port : _puertoPorDefecto(uri.scheme)) ==
+            (base.hasPort ? base.port : _puertoPorDefecto(base.scheme));
+  }
+
+  int _puertoPorDefecto(String scheme) => scheme == 'https' ? 443 : 80;
+
   Map<String, String> _construirCabeceras() {
     final clave = _claveApi;
     return {
       'Content-Type': 'application/json',
       if (clave != null && clave.isNotEmpty) 'x-api-key': clave,
     };
+  }
+
+  /// Uso de almacenamiento del proyecto Neon (plan gratuito 0.5 GB).
+  Future<UsoBaseNeon> obtenerUsoBase() async {
+    final uri = Uri.parse('$_urlBase/v1/db/usage');
+    final respuesta = await _clienteHttp
+        .get(uri, headers: _construirCabeceras())
+        .timeout(const Duration(seconds: TIMEOUT_HUB_DESPERTAR_SEGUNDOS));
+    if (respuesta.statusCode == 503) {
+      throw StateError('La gestión de base requiere el hub con Neon');
+    }
+    if (respuesta.statusCode < 200 || respuesta.statusCode >= 300) {
+      throw StateError(
+        'No se pudo consultar el uso de la nube (HTTP ${respuesta.statusCode})',
+      );
+    }
+    final json = jsonDecode(respuesta.body);
+    if (json is! Map) {
+      throw StateError('Respuesta de uso inválida');
+    }
+    return UsoBaseNeon.desdeJson(Map<String, Object?>.from(json));
+  }
+
+  /// Exporta historial anterior a [antesDe] para armar un Excel.
+  Future<ResultadoExportacionNeon> exportarHistorialNeon({
+    required DateTime antesDe,
+    required List<String> grupos,
+  }) async {
+    final uri = Uri.parse('$_urlBase/v1/db/export').replace(
+      queryParameters: {
+        'antesDe': antesDe.toUtc().toIso8601String(),
+        'grupos': grupos.join(','),
+      },
+    );
+    final respuesta = await _clienteHttp
+        .get(uri, headers: _construirCabeceras())
+        .timeout(const Duration(seconds: TIMEOUT_HUB_GESTION_NEON_SEGUNDOS));
+    if (respuesta.statusCode < 200 || respuesta.statusCode >= 300) {
+      throw StateError(
+        'No se pudo exportar (HTTP ${respuesta.statusCode})',
+      );
+    }
+    final json = jsonDecode(respuesta.body);
+    if (json is! Map) {
+      throw StateError('Respuesta de exportación inválida');
+    }
+    return ResultadoExportacionNeon.desdeJson(Map<String, Object?>.from(json));
+  }
+
+  /// Borra historial anterior a [antesDe] en Neon. No toca el catálogo.
+  Future<ResultadoPurgaNeon> purgarHistorialNeon({
+    required DateTime antesDe,
+    required List<String> grupos,
+  }) async {
+    final uri = Uri.parse('$_urlBase/v1/db/purge');
+    final respuesta = await _clienteHttp
+        .post(
+          uri,
+          headers: _construirCabeceras(),
+          body: jsonEncode({
+            'antesDe': antesDe.toUtc().toIso8601String(),
+            'grupos': grupos,
+            'confirmar': true,
+          }),
+        )
+        .timeout(const Duration(seconds: TIMEOUT_HUB_GESTION_NEON_SEGUNDOS));
+    if (respuesta.statusCode < 200 || respuesta.statusCode >= 300) {
+      throw StateError(
+        'No se pudo eliminar el historial (HTTP ${respuesta.statusCode})',
+      );
+    }
+    final json = jsonDecode(respuesta.body);
+    if (json is! Map) {
+      throw StateError('Respuesta de purga inválida');
+    }
+    return ResultadoPurgaNeon.desdeJson(Map<String, Object?>.from(json));
+  }
+
+  /// Colapsa eventos de catálogo duplicados en el log.
+  Future<int> compactarCatalogoNeon() async {
+    final uri = Uri.parse('$_urlBase/v1/db/compact');
+    final respuesta = await _clienteHttp
+        .post(uri, headers: _construirCabeceras(), body: '{}')
+        .timeout(const Duration(seconds: TIMEOUT_HUB_GESTION_NEON_SEGUNDOS));
+    if (respuesta.statusCode < 200 || respuesta.statusCode >= 300) {
+      throw StateError(
+        'No se pudo compactar el catálogo (HTTP ${respuesta.statusCode})',
+      );
+    }
+    final json = jsonDecode(respuesta.body);
+    if (json is! Map) {
+      return 0;
+    }
+    return (json['eventosCompactados'] as num?)?.toInt() ?? 0;
   }
 
   Map<String, Object?> _serializarEvento(SyncEvent evento) {

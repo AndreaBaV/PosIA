@@ -38,7 +38,9 @@ class PermisosAdmin {
 	static const tiendas = 'tiendas';
 	static const reportes = 'reportes';
 	static const sync = 'sync';
+	static const baseDatos = 'base_datos';
 	static const config = 'config';
+	static const actualizaciones = 'actualizaciones';
 	static const rolesPersonalizados = 'roles_personalizados';
 
 	/// Todas las claves que se pueden asignar a un rol personalizado.
@@ -69,6 +71,7 @@ class PermisosAdmin {
 		tiendas,
 		reportes,
 		sync,
+		baseDatos,
 		config,
 		rolesPersonalizados,
 	];
@@ -100,7 +103,9 @@ class PermisosAdmin {
 		tiendas: 'Tiendas',
 		reportes: 'Reportes',
 		sync: 'Estado de la nube',
+		baseDatos: 'Base de datos (nube)',
 		config: 'Configuración',
+		actualizaciones: 'Actualizaciones',
 		rolesPersonalizados: 'Roles personalizados',
 	};
 
@@ -124,6 +129,6 @@ class PermisosAdmin {
 			presentaciones,
 		],
 		'Personas': [clientes, proveedores],
-		'Sistema': [tiendas, reportes, sync, config],
+		'Sistema': [tiendas, reportes, sync, baseDatos, config],
 	};
 }

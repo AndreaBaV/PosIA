@@ -101,6 +101,10 @@ class ProyectorEventosPostgres {
         await _perfilEmpleado(evento);
       case 'payrollPeriodClosed':
         await _periodoNomina(evento);
+      case 'productDeleted':
+        await _productoEliminado(evento);
+      case 'categoryDeleted':
+        await _categoriaEliminada(evento);
       case 'productPresentationUpserted':
         // Legacy: reemplazado por productPresentationsReplaced.
         break;
@@ -137,6 +141,9 @@ class ProyectorEventosPostgres {
     final p = evento.payload;
     var id = p['id'] as String? ?? '';
     if (id.isEmpty) {
+      return;
+    }
+    if (await _estaEliminadoPermanente('producto', id)) {
       return;
     }
     final tiendaId = p['tiendaId'] as String? ?? evento.tiendaId;
@@ -254,6 +261,38 @@ class ProyectorEventosPostgres {
     }
   }
 
+  Future<void> _productoEliminado(EventoHub evento) async {
+    final id = evento.payload['id'] as String? ?? '';
+    if (id.isEmpty) {
+      return;
+    }
+    await _registrarEliminacionPermanente(
+      'producto',
+      id,
+      evento.creadoEn,
+    );
+    await _sesion.execute(
+      Sql.named('UPDATE products SET activo = 0 WHERE id = @id'),
+      parameters: {'id': id},
+    );
+  }
+
+  Future<void> _categoriaEliminada(EventoHub evento) async {
+    final id = evento.payload['id'] as String? ?? '';
+    if (id.isEmpty) {
+      return;
+    }
+    await _registrarEliminacionPermanente(
+      'categoria',
+      id,
+      evento.creadoEn,
+    );
+    await _sesion.execute(
+      Sql.named('UPDATE categories SET activa = 0 WHERE id = @id'),
+      parameters: {'id': id},
+    );
+  }
+
   Future<void> _cliente(EventoHub evento) async {
     final p = evento.payload;
     final id = p['id'] as String? ?? '';
@@ -301,6 +340,9 @@ class ProyectorEventosPostgres {
     final p = evento.payload;
     final id = p['id'] as String? ?? '';
     if (id.isEmpty) {
+      return;
+    }
+    if (await _estaEliminadoPermanente('categoria', id)) {
       return;
     }
     await _sesion.execute(
@@ -369,6 +411,21 @@ class ProyectorEventosPostgres {
       parameters: {'id': ventaId},
     );
     if (existente.isNotEmpty) {
+      if (p['creditoLiquidado'] == true) {
+        await _sesion.execute(
+          Sql.named('''
+						UPDATE sales
+						SET credito_liquidado = 1,
+							credito_liquidado_en = @liqEn
+						WHERE id = @id
+					'''),
+          parameters: {
+            'id': ventaId,
+            'liqEn': p['creditoLiquidadoEn'] ??
+                evento.creadoEn.toUtc().toIso8601String(),
+          },
+        );
+      }
       return;
     }
     await _asegurarTienda(evento.tiendaId);
@@ -379,12 +436,12 @@ class ProyectorEventosPostgres {
 					id, tienda_id, caja_id, cliente_id, metodo_pago, total,
 					creada_en, vendedor_id, estado, turno_caja_id,
 					descuento_ticket, monto_efectivo, monto_tarjeta, monto_transferencia,
-					credito_dias, credito_vence_en
+					credito_dias, credito_vence_en, credito_liquidado, credito_liquidado_en
 				) VALUES (
 					@id, @tienda, @caja, @cliente, @metodo, @total,
 					@creada, @vendedor, 'completada', @turno,
 					@descuento, @efectivo, @tarjeta, @transferencia,
-					@creditoDias, @creditoVence
+					@creditoDias, @creditoVence, @creditoLiq, @creditoLiqEn
 				)
 			'''),
       parameters: {
@@ -403,6 +460,8 @@ class ProyectorEventosPostgres {
         'transferencia': p['montoTransferencia'],
         'creditoDias': p['creditoDias'],
         'creditoVence': p['creditoVenceEn'],
+        'creditoLiq': _boolInt(p['creditoLiquidado']),
+        'creditoLiqEn': p['creditoLiquidadoEn'],
       },
     );
     final lineas = _listaMapas(p['lineas']);
@@ -411,10 +470,11 @@ class ProyectorEventosPostgres {
         Sql.named('''
 					INSERT INTO sale_lines (
 						venta_id, producto_id, nombre_producto, cantidad,
-						precio_unitario, regla_precio, lote_id, etiqueta_lote
+						precio_unitario, regla_precio, lote_id, etiqueta_lote,
+						descuento_linea
 					) VALUES (
 						@venta, @producto, @nombre, @cantidad,
-						@precio, @regla, @lote, @etiqueta
+						@precio, @regla, @lote, @etiqueta, @descuento
 					)
 				'''),
         parameters: {
@@ -426,6 +486,7 @@ class ProyectorEventosPostgres {
           'regla': linea['reglaPrecio'] ?? 'precioBase',
           'lote': linea['loteId'],
           'etiqueta': linea['etiquetaLote'],
+          'descuento': _dbl(linea['descuentoLinea']),
         },
       );
       await _deltaStock(
@@ -529,11 +590,12 @@ class ProyectorEventosPostgres {
 					id, tienda_origen_id, tienda_destino_id, estado,
 					solicitado_en, completado_en, notas
 				) VALUES (
-					@id, @origen, @destino, @estado, @solicitado, @completado, ''
+					@id, @origen, @destino, @estado, @solicitado, @completado, @notas
 				)
 				ON CONFLICT (id) DO UPDATE SET
 					estado = EXCLUDED.estado,
-					completado_en = EXCLUDED.completado_en
+					completado_en = EXCLUDED.completado_en,
+					notas = EXCLUDED.notas
 			'''),
       parameters: {
         'id': id,
@@ -542,6 +604,7 @@ class ProyectorEventosPostgres {
         'estado': estado,
         'solicitado': solicitado,
         'completado': completadoEn,
+        'notas': p['notas'] ?? '',
       },
     );
     await _sesion.execute(
@@ -586,7 +649,8 @@ class ProyectorEventosPostgres {
           -cantidad,
           solicitado,
         );
-      } else if (tiendaOrigen.isNotEmpty) {
+      } else if (tiendaOrigen.isNotEmpty &&
+          !esAlmacenCodificadoEnTraspaso(tiendaOrigen)) {
         await _deltaStock(productoId, tiendaOrigen, -cantidad, solicitado);
       }
       if (almacenDestino.isNotEmpty) {
@@ -596,7 +660,8 @@ class ProyectorEventosPostgres {
           cantidad,
           solicitado,
         );
-      } else if (tiendaDestino.isNotEmpty) {
+      } else if (tiendaDestino.isNotEmpty &&
+          !esAlmacenCodificadoEnTraspaso(tiendaDestino)) {
         await _deltaStock(productoId, tiendaDestino, cantidad, solicitado);
       }
     }
@@ -648,16 +713,21 @@ class ProyectorEventosPostgres {
     );
     var total = 0.0;
     for (final linea in lineasRestantes) {
-      final sub = _dbl(linea['cantidad']) * _dbl(linea['precio_unitario']);
+      final descuento = _dbl(linea['descuento_linea']);
+      var sub = _dbl(linea['cantidad']) * _dbl(linea['precio_unitario']) - descuento;
+      if (sub < 0) {
+        sub = 0;
+      }
       total = total + sub;
       await _sesion.execute(
         Sql.named('''
 					INSERT INTO sale_lines (
 						venta_id, producto_id, nombre_producto, cantidad,
-						precio_unitario, regla_precio, lote_id, etiqueta_lote
+						precio_unitario, regla_precio, lote_id, etiqueta_lote,
+						descuento_linea
 					) VALUES (
 						@venta, @producto, @nombre, @cantidad,
-						@precio, @regla, @lote, @etiqueta
+						@precio, @regla, @lote, @etiqueta, @descuento
 					)
 				'''),
         parameters: {
@@ -669,6 +739,7 @@ class ProyectorEventosPostgres {
           'regla': linea['regla_precio'],
           'lote': linea['lote_id'],
           'etiqueta': linea['etiqueta_lote'],
+          'descuento': descuento,
         },
       );
     }
@@ -1886,7 +1957,9 @@ class ProyectorEventosPostgres {
     double delta,
     String actualizadoEn,
   ) async {
-    if (productoId.isEmpty || tiendaId.isEmpty) {
+    if (productoId.isEmpty ||
+        tiendaId.isEmpty ||
+        esAlmacenCodificadoEnTraspaso(tiendaId)) {
       return;
     }
     await _sesion.execute(
@@ -1938,7 +2011,9 @@ class ProyectorEventosPostgres {
     double stockMinimo,
     String actualizadoEn,
   ) async {
-    if (productoId.isEmpty || tiendaId.isEmpty) {
+    if (productoId.isEmpty ||
+        tiendaId.isEmpty ||
+        esAlmacenCodificadoEnTraspaso(tiendaId)) {
       return;
     }
     await _sesion.execute(
@@ -1992,6 +2067,37 @@ class ProyectorEventosPostgres {
         .whereType<Map<Object?, Object?>>()
         .map((m) => Map<String, Object?>.from(m))
         .toList();
+  }
+
+  Future<bool> _estaEliminadoPermanente(String tipo, String id) async {
+    final existente = await _sesion.execute(
+      Sql.named('''
+				SELECT 1 FROM deleted_entities
+				WHERE tipo = @tipo AND entidad_id = @id
+				LIMIT 1
+			'''),
+      parameters: {'tipo': tipo, 'id': id},
+    );
+    return existente.isNotEmpty;
+  }
+
+  Future<void> _registrarEliminacionPermanente(
+    String tipo,
+    String id,
+    DateTime cuando,
+  ) async {
+    await _sesion.execute(
+      Sql.named('''
+				INSERT INTO deleted_entities (tipo, entidad_id, eliminado_en)
+				VALUES (@tipo, @id, @en)
+				ON CONFLICT (tipo, entidad_id) DO NOTHING
+			'''),
+      parameters: {
+        'tipo': tipo,
+        'id': id,
+        'en': cuando.toUtc().toIso8601String(),
+      },
+    );
   }
 
   double _dbl(Object? valor) => (valor as num?)?.toDouble() ?? 0.0;

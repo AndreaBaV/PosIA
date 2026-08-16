@@ -19,13 +19,16 @@ class AdminAlmacenes {
 	AdminAlmacenes({
 		required ProductoRepository productoRepository,
 		required AdminEmisorEventosSync emisorEventos,
+		required String tiendaActivaId,
 		AlmacenRepository? almacenRepository,
 	}) : _productoRepository = productoRepository,
 	     _emisorEventos = emisorEventos,
+	     _tiendaActivaId = tiendaActivaId,
 	     _almacenRepository = almacenRepository;
 
 	final ProductoRepository _productoRepository;
 	final AdminEmisorEventosSync _emisorEventos;
+	final String _tiendaActivaId;
 	final AlmacenRepository? _almacenRepository;
 	final Uuid _generadorId = const Uuid();
 
@@ -185,6 +188,24 @@ class AdminAlmacenes {
 				stockMinimo: stockActual?.stockMinimo ?? 0,
 			),
 		);
+		final delta = nuevo - anterior;
+		if (delta != 0.0) {
+			final motivo = switch (tipo) {
+				TipoMovimientoInventario.entrada => 'Entrada almacén',
+				TipoMovimientoInventario.salida => 'Salida almacén',
+				TipoMovimientoInventario.ajuste => 'Ajuste almacén',
+				TipoMovimientoInventario.traspasoSalida ||
+				TipoMovimientoInventario.traspasoEntrada ||
+				TipoMovimientoInventario.reversionVenta => 'Movimiento almacén',
+			};
+			await _emisorEventos.ajusteStock(
+				productoId,
+				delta,
+				motivo,
+				tiendaId: _tiendaActivaId,
+				almacenId: almacenId,
+			);
+		}
 	}
 
 	/// Productos con existencia en un almacen.

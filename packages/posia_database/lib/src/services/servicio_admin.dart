@@ -169,6 +169,7 @@ class ServicioAdmin {
     _almacenes = AdminAlmacenes(
       productoRepository: productoRepository,
       emisorEventos: _emisorEventos,
+      tiendaActivaId: tiendaActivaId,
       almacenRepository: almacenRepository,
     );
     _proveedores = AdminProveedores(
@@ -2007,31 +2008,10 @@ class ServicioAdmin {
     return _pedidosCotizaciones.eliminarCotizacion(cotizacionId);
   }
 
-  /// Registra cotizacion desde administracion (sin carrito de caja).
-  Future<Cotizacion> registrarCotizacion({
+  Future<List<LineaCotizacion>> _resolverLineasCotizacion({
     required List<LineaCotizacion> lineas,
-    String? clienteId,
-    String nombre = '',
-    String notas = '',
-    int vigenciaDias = VIGENCIA_COTIZACION_DIAS,
-    String? vendedorId,
+    Cliente? cliente,
   }) async {
-    final repo = _cotizacionRepository;
-    if (repo == null) {
-      throw StateError('Repositorio de cotizaciones no configurado');
-    }
-    if (lineas.isEmpty) {
-      throw StateError('Agregue al menos un producto a la cotización');
-    }
-    if (vigenciaDias <= 0) {
-      throw StateError('Indique días de vigencia válidos');
-    }
-    Cliente? cliente;
-    String? nombreCliente;
-    if (clienteId != null) {
-      cliente = await _clienteRepository?.obtenerPorId(clienteId);
-      nombreCliente = cliente?.nombre;
-    }
     final lineasResueltas = <LineaCotizacion>[];
     for (final solicitud in lineas) {
       if (solicitud.cantidad <= 0) {
@@ -2058,6 +2038,38 @@ class ServicioAdmin {
         ),
       );
     }
+    return lineasResueltas;
+  }
+
+  /// Registra cotizacion desde administracion (sin carrito de caja).
+  Future<Cotizacion> registrarCotizacion({
+    required List<LineaCotizacion> lineas,
+    String? clienteId,
+    String nombre = '',
+    String notas = '',
+    int vigenciaDias = VIGENCIA_COTIZACION_DIAS,
+    String? vendedorId,
+  }) async {
+    final repo = _cotizacionRepository;
+    if (repo == null) {
+      throw StateError('Repositorio de cotizaciones no configurado');
+    }
+    if (lineas.isEmpty) {
+      throw StateError('Agregue al menos un producto a la cotización');
+    }
+    if (vigenciaDias <= 0) {
+      throw StateError('Indique días de vigencia válidos');
+    }
+    Cliente? cliente;
+    String? nombreCliente;
+    if (clienteId != null) {
+      cliente = await _clienteRepository?.obtenerPorId(clienteId);
+      nombreCliente = cliente?.nombre;
+    }
+    final lineasResueltas = await _resolverLineasCotizacion(
+      lineas: lineas,
+      cliente: cliente,
+    );
     final cotizacion = Cotizacion(
       id: _generadorId.v4(),
       tiendaId: _tiendaActivaId,
@@ -2070,6 +2082,58 @@ class ServicioAdmin {
       creadaEn: DateTime.now().toUtc(),
       cajaId: _cajaId,
       vendedorId: vendedorId,
+      lineas: lineasResueltas,
+    );
+    await repo.guardar(cotizacion);
+    await _emisorEventos.cotizacion(cotizacion);
+    return cotizacion;
+  }
+
+  Future<Cotizacion> actualizarCotizacion({
+    required String cotizacionId,
+    required List<LineaCotizacion> lineas,
+    String? clienteId,
+    String nombre = '',
+    String notas = '',
+    int vigenciaDias = VIGENCIA_COTIZACION_DIAS,
+    String? vendedorId,
+  }) async {
+    final repo = _cotizacionRepository;
+    if (repo == null) {
+      throw StateError('Repositorio de cotizaciones no configurado');
+    }
+    final existente = await repo.obtenerPorId(cotizacionId);
+    if (existente == null) {
+      throw StateError('Cotización no encontrada');
+    }
+    if (lineas.isEmpty) {
+      throw StateError('Agregue al menos un producto a la cotización');
+    }
+    if (vigenciaDias <= 0) {
+      throw StateError('Indique días de vigencia válidos');
+    }
+    Cliente? cliente;
+    String? nombreCliente;
+    if (clienteId != null) {
+      cliente = await _clienteRepository?.obtenerPorId(clienteId);
+      nombreCliente = cliente?.nombre;
+    }
+    final lineasResueltas = await _resolverLineasCotizacion(
+      lineas: lineas,
+      cliente: cliente,
+    );
+    final cotizacion = Cotizacion(
+      id: existente.id,
+      tiendaId: existente.tiendaId,
+      nombre: nombre.trim(),
+      clienteId: clienteId,
+      nombreCliente: nombreCliente,
+      total: Cotizacion.calcularTotalDesdeLineas(lineasResueltas),
+      notas: notas.trim(),
+      vigenciaDias: vigenciaDias,
+      creadaEn: existente.creadaEn,
+      cajaId: existente.cajaId,
+      vendedorId: vendedorId ?? existente.vendedorId,
       lineas: lineasResueltas,
     );
     await repo.guardar(cotizacion);
@@ -2459,6 +2523,7 @@ class ServicioAdmin {
       creditoLiquidadoEn: DateTime.now().toUtc(),
     );
     await _ventaRepository.actualizarCreditoLiquidado(actualizada);
+    await _emisorEventos.ventaCompletada(actualizada);
     return actualizada;
   }
 
@@ -2834,6 +2899,21 @@ class ServicioAdmin {
     if (ventas.isNotEmpty) {
       return false;
     }
+    final tienda = await _tiendaRepository.obtenerPorId(tiendaId);
+    if (tienda == null) {
+      return false;
+    }
+    await _emisorEventos.tienda(
+      Tienda(
+        id: tienda.id,
+        nombre: tienda.nombre,
+        direccion: tienda.direccion,
+        activa: false,
+        latitud: tienda.latitud,
+        longitud: tienda.longitud,
+        radioMetrosAsistencia: tienda.radioMetrosAsistencia,
+      ),
+    );
     await _tiendaRepository.eliminar(tiendaId);
     return true;
   }
@@ -2889,6 +2969,9 @@ class ServicioAdmin {
       }
     } else {
       await _ventaRepository.eliminar(ventaId);
+    }
+    if (venta.estado == EstadoVenta.completada) {
+      await _emisorEventos.anulacion(venta);
     }
     return true;
   }
@@ -3178,12 +3261,14 @@ class ServicioAdmin {
     );
   }
 
-  Future<void> _registrarEventoTraspasoAlmacen({
+  Future<Traspaso> _registrarEventoTraspasoAlmacen({
     required String movimientoId,
-    required String almacenOrigenId,
+    String? almacenOrigenId,
     String? almacenDestinoId,
+    String? tiendaOrigenId,
     String? tiendaDestinoId,
     required List<LineaTraspasoSolicitud> lineas,
+    String notas = '',
   }) async {
     final lineasTraspaso = <LineaTraspaso>[];
     for (final linea in lineas) {
@@ -3201,21 +3286,34 @@ class ServicioAdmin {
       );
     }
     if (lineasTraspaso.isEmpty) {
-      return;
+      throw StateError('Seleccione al menos un producto');
     }
-    final destinoId = tiendaDestinoId != null && tiendaDestinoId.isNotEmpty
-        ? tiendaDestinoId
-        : (almacenDestinoId != null && almacenDestinoId.isNotEmpty
-              ? codificarAlmacenEnTraspaso(almacenDestinoId)
-              : '');
+    final origenAlmacen =
+        almacenOrigenId != null && almacenOrigenId.isNotEmpty;
+    final destinoAlmacen =
+        almacenDestinoId != null && almacenDestinoId.isNotEmpty;
+    final origenId = origenAlmacen
+        ? codificarAlmacenEnTraspaso(almacenOrigenId)
+        : (tiendaOrigenId ?? '');
+    final destinoId = destinoAlmacen
+        ? codificarAlmacenEnTraspaso(almacenDestinoId)
+        : (tiendaDestinoId ?? '');
+    final notasLimpias = notas.trim().isNotEmpty
+        ? notas.trim()
+        : (origenAlmacen && destinoAlmacen
+              ? 'Traspaso entre almacenes'
+              : origenAlmacen
+              ? 'Abastecimiento desde almacén'
+              : 'Ingreso a almacén');
+    final ahora = DateTime.now().toUtc();
     final traspaso = Traspaso(
       id: movimientoId,
-      tiendaOrigenId: codificarAlmacenEnTraspaso(almacenOrigenId),
+      tiendaOrigenId: origenId,
       tiendaDestinoId: destinoId,
       estado: EstadoTraspaso.completado,
-      solicitadoEn: DateTime.now().toUtc(),
-      completadoEn: DateTime.now().toUtc(),
-      notas: 'Abastecimiento desde almacén',
+      solicitadoEn: ahora,
+      completadoEn: ahora,
+      notas: notasLimpias,
       lineas: lineasTraspaso,
     );
     final repo = _traspasoRepository;
@@ -3228,6 +3326,7 @@ class ServicioAdmin {
       almacenOrigenId: almacenOrigenId,
       almacenDestinoId: almacenDestinoId,
     );
+    return traspaso;
   }
 
   Future<HubSyncClient?> _clienteHubOpcional() async {
@@ -3334,11 +3433,12 @@ class ServicioAdmin {
     return _almacenes.registrarAlmacen(nombre, tiendaId: tiendaId);
   }
 
-  Future<void> traspasarAlmacenATienda({
+  Future<Traspaso> traspasarAlmacenATienda({
     required String almacenId,
     required String tiendaDestinoId,
     required String productoId,
     required double cantidad,
+    String notas = '',
   }) async {
     final almacenRepo = _almacenRepository;
     if (almacenRepo == null) {
@@ -3384,13 +3484,14 @@ class ServicioAdmin {
         db: tx,
       );
     });
-    await _registrarEventoTraspasoAlmacen(
+    return _registrarEventoTraspasoAlmacen(
       movimientoId: movimientoId,
       almacenOrigenId: almacenId,
       tiendaDestinoId: tiendaDestinoId,
       lineas: [
         LineaTraspasoSolicitud(productoId: productoId, cantidad: cantidad),
       ],
+      notas: notas,
     );
   }
 
@@ -3425,10 +3526,11 @@ class ServicioAdmin {
     return _almacenes.listarProductosConStockAlmacen(almacenId);
   }
 
-  Future<void> traspasarAlmacenATiendaMultiple({
+  Future<Traspaso> traspasarAlmacenATiendaMultiple({
     required String almacenId,
     required String tiendaDestinoId,
     required List<LineaTraspasoSolicitud> lineas,
+    String notas = '',
   }) async {
     final movimientoId = _generadorId.v4();
     await _enTransaccion((tx) async {
@@ -3477,18 +3579,20 @@ class ServicioAdmin {
         );
       }
     });
-    await _registrarEventoTraspasoAlmacen(
+    return _registrarEventoTraspasoAlmacen(
       movimientoId: movimientoId,
       almacenOrigenId: almacenId,
       tiendaDestinoId: tiendaDestinoId,
       lineas: lineas,
+      notas: notas,
     );
   }
 
-  Future<void> traspasarAlmacenAAlmacenMultiple({
+  Future<Traspaso> traspasarAlmacenAAlmacenMultiple({
     required String almacenOrigenId,
     required String almacenDestinoId,
     required List<LineaTraspasoSolicitud> lineas,
+    String notas = '',
   }) async {
     if (almacenOrigenId == almacenDestinoId) {
       throw StateError('El almacén origen y destino deben ser distintos');
@@ -3540,11 +3644,77 @@ class ServicioAdmin {
         );
       }
     });
-    await _registrarEventoTraspasoAlmacen(
+    return _registrarEventoTraspasoAlmacen(
       movimientoId: movimientoId,
       almacenOrigenId: almacenOrigenId,
       almacenDestinoId: almacenDestinoId,
       lineas: lineas,
+      notas: notas,
+    );
+  }
+
+  Future<Traspaso> traspasarTiendaAAlmacenMultiple({
+    required String tiendaOrigenId,
+    required String almacenDestinoId,
+    required List<LineaTraspasoSolicitud> lineas,
+    String notas = '',
+  }) async {
+    if (lineas.isEmpty) {
+      throw StateError('Seleccione al menos un producto');
+    }
+    final movimientoId = _generadorId.v4();
+    await _enTransaccion((tx) async {
+      final almacenRepo = _almacenRepository;
+      if (almacenRepo == null) {
+        throw StateError('Almacenes no disponibles');
+      }
+      for (final linea in lineas) {
+        if (linea.cantidad <= 0) {
+          continue;
+        }
+        final stockTienda = await _inventarioRepository.obtenerStock(
+          linea.productoId,
+          tiendaOrigenId,
+          db: tx,
+        );
+        final anteriorTienda = stockTienda?.cantidad ?? 0.0;
+        if (anteriorTienda < linea.cantidad) {
+          throw StateError('Stock insuficiente en tienda origen');
+        }
+        final ahora = DateTime.now().toUtc();
+        await _inventarioRepository.guardarStock(
+          StockNivel(
+            productoId: linea.productoId,
+            tiendaId: tiendaOrigenId,
+            cantidad: anteriorTienda - linea.cantidad,
+            actualizadoEn: ahora,
+            stockMinimo: stockTienda?.stockMinimo ?? 0,
+          ),
+          db: tx,
+        );
+        final stockAlmacen = await almacenRepo.obtenerStock(
+          linea.productoId,
+          almacenDestinoId,
+          db: tx,
+        );
+        await almacenRepo.guardarStock(
+          StockAlmacen(
+            productoId: linea.productoId,
+            almacenId: almacenDestinoId,
+            cantidad: (stockAlmacen?.cantidad ?? 0) + linea.cantidad,
+            actualizadoEn: ahora,
+            stockMinimo: stockAlmacen?.stockMinimo ?? 0,
+          ),
+          db: tx,
+        );
+      }
+    });
+    return _registrarEventoTraspasoAlmacen(
+      movimientoId: movimientoId,
+      tiendaOrigenId: tiendaOrigenId,
+      almacenDestinoId: almacenDestinoId,
+      lineas: lineas,
+      notas: notas,
     );
   }
 

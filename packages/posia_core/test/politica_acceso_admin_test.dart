@@ -55,7 +55,7 @@ void main() {
 		);
 	});
 
-	test('empleado accede al panel pero solo ve mi cuenta, sync y config', () {
+	test('empleado accede al panel pero solo ve cuenta, sync, config y actualizaciones', () {
 		// Todos pueden abrir el panel para alcanzar sync/config del hub.
 		expect(
 			PoliticaAccesoAdmin.puedeAccederPanelAdmin(empleado, null),
@@ -65,6 +65,7 @@ void main() {
 			PermisosAdmin.miCuenta,
 			PermisosAdmin.sync,
 			PermisosAdmin.config,
+			PermisosAdmin.actualizaciones,
 		]) {
 			expect(
 				PoliticaAccesoAdmin.puedeVerSeccionAdmin(empleado, null, clave),
@@ -78,6 +79,14 @@ void main() {
 				empleado,
 				null,
 				PermisosAdmin.productos,
+			),
+			isFalse,
+		);
+		expect(
+			PoliticaAccesoAdmin.puedeVerSeccionAdmin(
+				empleado,
+				null,
+				PermisosAdmin.baseDatos,
 			),
 			isFalse,
 		);
@@ -156,6 +165,14 @@ void main() {
 				PermisosAdmin.productos,
 			),
 			isTrue,
+		);
+		expect(
+			PoliticaAccesoAdmin.puedeVerSeccionAdmin(
+				supervisor,
+				null,
+				PermisosAdmin.baseDatos,
+			),
+			isFalse,
 		);
 	});
 }

@@ -12,6 +12,7 @@ import 'almacen_eventos.dart';
 import 'almacen_usuarios_postgres.dart';
 import 'esquema_pos_postgres.dart';
 import 'evento_hub.dart';
+import 'gestor_base_postgres.dart';
 import 'proyector_eventos_postgres.dart';
 
 class AlmacenEventosPostgres implements AlmacenEventos {
@@ -69,19 +70,57 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 
 	/// Tipos de catálogo "last-write-wins": solo importa el estado más
 	/// reciente por entidad. Deja intacto el historial append-only (ventas,
-	/// compras, movimientos, asistencia, nómina).
-	static const _tiposCatalogoCompactables = [
+	/// compras, movimientos, asistencia, nómina, cotizaciones, pedidos).
+	///
+	/// Incluye lápidas (`productDeleted`, `categoryDeleted`, etc.) para que
+	/// una reconstrucción desde `/v1/catalog/events` no reviva filas ya
+	/// borradas. `productUpserted` y `productDeleted` se compactan por tipo
+	/// por separado; al aplicar en orden de `seq` gana el más reciente.
+	static const tiposCatalogoCompactables = [
 		'productUpserted',
+		'productDeleted',
 		'categoryUpserted',
+		'categoryDeleted',
+		'variantUpserted',
+		'storeUpserted',
+		'warehouseUpserted',
+		'presentationTypeUpserted',
 		'productPresentationsReplaced',
 		'wholesaleTiersReplaced',
-		'variantUpserted',
+		'lotePromocionReplaced',
+		'comboReplaced',
+		'customRoleUpserted',
+		'userUpserted',
 		'customerUpserted',
 		'supplierUpserted',
-		'warehouseUpserted',
-		'storeUpserted',
-		'customRoleUpserted',
+		'supplierDeleted',
+		'priceListUpserted',
+		'priceListDeleted',
+		'priceListItemUpserted',
+		'priceListItemDeleted',
+		'customerProductPriceUpserted',
+		'customerProductPriceDeleted',
+		'customerDiscountUpserted',
+		'customerDiscountDeleted',
+		'employeeProfileUpserted',
 	];
+
+	/// Clave de entidad para compactar last-write-wins. La mayoría usa `id`;
+	/// presentaciones/mayoreo van por `productoId`; ítems de lista y precios
+	/// cliente-producto no tienen `id`; el perfil de empleado usa `usuarioId`.
+	static const sqlClaveEntidadCatalogo = '''
+CASE
+	WHEN type IN ('productPresentationsReplaced', 'wholesaleTiersReplaced')
+		THEN payload->>'productoId'
+	WHEN type IN ('priceListItemUpserted', 'priceListItemDeleted')
+		THEN coalesce(payload->>'listaPreciosId', '') || ':' || coalesce(payload->>'productoId', '')
+	WHEN type IN ('customerProductPriceUpserted', 'customerProductPriceDeleted')
+		THEN coalesce(payload->>'clienteId', '') || ':' || coalesce(payload->>'productoId', '')
+	WHEN type = 'employeeProfileUpserted'
+		THEN payload->>'usuarioId'
+	ELSE payload->>'id'
+END
+''';
 
 	/// Colapsa versiones viejas del mismo evento de catálogo, dejando solo la
 	/// más reciente por (tipo, id de entidad). Corre en cada arranque (no es
@@ -90,19 +129,14 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 	/// Seguro con el cursor de pull (`seq`): un dispositivo con cursor viejo
 	/// solo deja de ver estados de catálogo ya superados, nunca el más
 	/// reciente. `productPresentationsReplaced`/`wholesaleTiersReplaced` usan
-	/// `productoId` como clave de entidad (no tienen `id` propio); el resto
-	/// usa `id`.
+	/// `productoId` / claves compuestas según [sqlClaveEntidadCatalogo].
 	Future<int> _compactarCatalogoDuplicado(Pool<Object> pool) async {
-		final listaTipos = _tiposCatalogoCompactables.map((t) => "'$t'").join(', ');
+		final listaTipos = tiposCatalogoCompactables.map((t) => "'$t'").join(', ');
 		final resultado = await pool.execute('''
 			WITH claves AS (
 				SELECT
 					seq,
-					CASE
-						WHEN type IN ('productPresentationsReplaced', 'wholesaleTiersReplaced')
-							THEN payload->>'productoId'
-						ELSE payload->>'id'
-					END AS entity_key
+					$sqlClaveEntidadCatalogo AS entity_key
 				FROM sync_events
 				WHERE type IN ($listaTipos)
 			),
@@ -115,7 +149,9 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 						) AS rn
 					FROM claves c
 					JOIN sync_events se ON se.seq = c.seq
-					WHERE c.entity_key IS NOT NULL AND c.entity_key <> ''
+					WHERE c.entity_key IS NOT NULL
+						AND c.entity_key <> ''
+						AND c.entity_key <> ':'
 				) t
 				WHERE rn > 1
 			)
@@ -349,7 +385,7 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 		return AlmacenUsuariosPostgres(_obtenerPool);
 	}
 
-	/// Eventos que definen el catalogo (ver [_tiposCatalogoCompactables]),
+	/// Eventos que definen el catalogo (ver [tiposCatalogoCompactables]),
 	/// deduplicados al mas reciente por entidad.
 	///
 	/// A diferencia de un pull normal desde seq=0, esto NO trae ventas,
@@ -357,27 +393,24 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 	/// diverge de Neon pero cuyo historial transaccional esta sano puede
 	/// repararse sin repetir años de eventos que no le hacen falta. Reusa la
 	/// misma extraccion de clave por entidad que [_compactarCatalogoDuplicado]
-	/// (`productPresentationsReplaced`/`wholesaleTiersReplaced` usan
-	/// `productoId`, el resto usa `id`) para no discrepar sobre cual es la
-	/// version mas reciente de cada fila.
+	/// ([sqlClaveEntidadCatalogo]) para no discrepar sobre cual es la version
+	/// mas reciente de cada fila.
 	Future<List<EventoHub>> obtenerCatalogoCompacto() async {
 		final pool = await _obtenerPool();
-		final listaTipos = _tiposCatalogoCompactables.map((t) => "'$t'").join(', ');
+		final listaTipos = tiposCatalogoCompactables.map((t) => "'$t'").join(', ');
 		final resultado = await pool.execute('''
 			SELECT DISTINCT ON (type, entity_key)
 				seq, id, store_id, device_id, type, payload, created_at
 			FROM (
 				SELECT
 					seq, id, store_id, device_id, type, payload, created_at,
-					CASE
-						WHEN type IN ('productPresentationsReplaced', 'wholesaleTiersReplaced')
-							THEN payload->>'productoId'
-						ELSE payload->>'id'
-					END AS entity_key
+					$sqlClaveEntidadCatalogo AS entity_key
 				FROM sync_events
 				WHERE type IN ($listaTipos)
 			) con_clave
-			WHERE entity_key IS NOT NULL AND entity_key <> ''
+			WHERE entity_key IS NOT NULL
+				AND entity_key <> ''
+				AND entity_key <> ':'
 			ORDER BY type, entity_key, seq DESC
 		''');
 		final eventos = resultado.map(_mapearFila).toList()
@@ -476,6 +509,49 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 		);
 	}
 
+	Future<UsoBaseNeon> auditarUsoBase() async {
+		final pool = await _obtenerPool();
+		return pool.run((sesion) => GestorBasePostgres(sesion).auditarUso());
+	}
+
+	Future<ResultadoExportacionNeon> exportarHistorial({
+		required DateTime antesDe,
+		required List<String> grupos,
+	}) async {
+		final pool = await _obtenerPool();
+		return pool.run(
+			(sesion) => GestorBasePostgres(sesion).exportar(
+				antesDe: antesDe,
+				grupos: grupos,
+			),
+		);
+	}
+
+	Future<ResultadoPurgaNeon> purgarHistorial({
+		required DateTime antesDe,
+		required List<String> grupos,
+	}) async {
+		final pool = await _obtenerPool();
+		final resultado = await pool.runTx(
+			(sesion) => GestorBasePostgres(sesion).purgar(
+				antesDe: antesDe,
+				grupos: grupos,
+			),
+		);
+		try {
+			await pool.execute('VACUUM');
+		} on Object {
+			// Neon puede rechazar VACUUM en algunos planes; el espacio queda
+			// reutilizable con el autovacuum.
+		}
+		return resultado;
+	}
+
+	Future<int> compactarCatalogo() async {
+		final pool = await _obtenerPool();
+		return _compactarCatalogoDuplicado(pool);
+	}
+
 	/// Reproyecta eventos que quedaron solo en sync_events (nunca aplicados a
 	/// su tabla espejo). Cada backfill corre una sola vez, marcado en
 	/// schema_meta; agregar un backfill nuevo no repite los anteriores.
@@ -504,14 +580,10 @@ class AlmacenEventosPostgres implements AlmacenEventos {
 		// sin proyectarse (ver docs/mantenimiento/AUDITORIA_INICIAL.md).
 		await _reproyectarPorTipos(
 			pool: pool,
-			claveMeta: 'mirror_backfill_ops_v1',
+			claveMeta: 'mirror_backfill_tombstones_v1',
 			tipos: [
-				'purchaseCompleted',
-				'payrollPeriodClosed',
-				'employeeProfileUpserted',
-				'attendanceChallengeCreated',
-				'attendanceCheckedIn',
-				'attendanceCheckedOut',
+				'productDeleted',
+				'categoryDeleted',
 			],
 		);
 	}

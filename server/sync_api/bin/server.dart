@@ -44,6 +44,7 @@ Future<void> main() async {
 		almacen: almacen,
 		usuarios: usuarios,
 		claveApi: config.claveApi,
+		actualizaciones: await CatalogoActualizacionesApp.desdeConfig(config),
 	);
 	estado.handler = enrutador.construirHandler();
 	estado.authDisponible = usuarios != null;

@@ -606,10 +606,18 @@ class AdminEmisorEventosSync {
 					'total': venta.total,
 					'descuentoTicket': venta.descuentoTicket,
 					'metodoPago': venta.metodoPago.name,
+					'turnoCajaId': venta.turnoCajaId,
+					'montoEfectivo': venta.montoEfectivo,
+					'montoTarjeta': venta.montoTarjeta,
+					'montoTransferencia': venta.montoTransferencia,
 					'clienteId': venta.clienteId,
 					'vendedorId': venta.vendedorId,
 					'creditoDias': venta.creditoDias,
 					'creditoVenceEn': venta.creditoVenceEn?.toIso8601String(),
+					'creditoLiquidado': venta.creditoLiquidado,
+					if (venta.creditoLiquidadoEn != null)
+						'creditoLiquidadoEn':
+							venta.creditoLiquidadoEn!.toUtc().toIso8601String(),
 					'lineas': venta.lineas
 						.map(
 							(linea) => {
@@ -670,6 +678,7 @@ class AdminEmisorEventosSync {
 					if (almacenDestinoId != null && almacenDestinoId.isNotEmpty)
 						'almacenDestinoId': almacenDestinoId,
 					'estado': traspaso.estado.name,
+					'notas': traspaso.notas,
 					'lineas': traspaso.lineas
 						.map(
 							(l) => {
@@ -714,6 +723,7 @@ class AdminEmisorEventosSync {
 		String motivo, {
 		required String tiendaId,
 		double? stockMinimo,
+		String? almacenId,
 	}) {
 		final payload = <String, Object?>{
 			'productoId': productoId,
@@ -722,6 +732,9 @@ class AdminEmisorEventosSync {
 		};
 		if (stockMinimo != null) {
 			payload['stockMinimo'] = stockMinimo;
+		}
+		if (almacenId != null && almacenId.isNotEmpty) {
+			payload['almacenId'] = almacenId;
 		}
 		return _emitir(
 			SyncEvent(

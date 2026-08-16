@@ -157,6 +157,14 @@ class EsquemaPosPostgres {
 			CREATE INDEX IF NOT EXISTS idx_sync_events_seq ON sync_events (seq)
 		''');
 		await conexion.execute('''
+			CREATE TABLE IF NOT EXISTS deleted_entities (
+				tipo TEXT NOT NULL,
+				entidad_id TEXT NOT NULL,
+				eliminado_en TEXT NOT NULL,
+				PRIMARY KEY (tipo, entidad_id)
+			)
+		''');
+		await conexion.execute('''
 			CREATE TABLE IF NOT EXISTS users (
 				id TEXT PRIMARY KEY,
 				nombre TEXT NOT NULL,

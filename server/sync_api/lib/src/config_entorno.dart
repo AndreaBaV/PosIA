@@ -62,6 +62,13 @@ class ConfigEntorno {
 	/// Ruta JSONL cuando no hay Postgres.
 	String get rutaArchivoEventos => obtener('EVENTS_FILE') ?? 'posia_sync_events.jsonl';
 
+	/// JSON de actualizaciones de la app (`app_update.json` por defecto).
+	String get rutaManifiestoActualizacion =>
+		obtener('POSIA_APP_UPDATE_MANIFEST') ?? 'app_update.json';
+
+	/// Carpeta con APK/ZIP servidos en `/v1/app/files/`.
+	String? get directorioActualizaciones => obtener('POSIA_APP_UPDATE_DIR');
+
 	/// Produccion: Render, o POSIA_ENV=production.
 	bool get esProduccion {
 		final env = obtener('POSIA_ENV')?.toLowerCase();

@@ -37,7 +37,10 @@ void main() {
 			final hubs = ClasificacionArquitecturaSync.tablasDeClase(
 				ClaseTablaSync.soloHub,
 			).map((t) => t.nombreNeon).toSet();
-			expect(hubs, containsAll(['sync_events', 'schema_meta']));
+			expect(
+				hubs,
+				containsAll(['sync_events', 'schema_meta', 'deleted_entities']),
+			);
 		});
 	});
 }

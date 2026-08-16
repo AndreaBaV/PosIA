@@ -12,9 +12,14 @@ import '../utils/compartir_ticket_digital_util.dart';
 import '../utils/imprimir_ticket_digital_util.dart';
 
 class PantallaRegistrarCotizacion extends ConsumerStatefulWidget {
-	const PantallaRegistrarCotizacion({this.clienteInicial, super.key});
+	const PantallaRegistrarCotizacion({
+		this.clienteInicial,
+		this.cotizacionInicial,
+		super.key,
+	});
 
 	final Cliente? clienteInicial;
+	final Cotizacion? cotizacionInicial;
 
 	@override
 	ConsumerState<PantallaRegistrarCotizacion> createState() =>
@@ -31,12 +36,26 @@ class _PantallaRegistrarCotizacionState extends ConsumerState<PantallaRegistrarC
 	String? _clienteId;
 	String _filtroProducto = '';
 	var _guardando = false;
+	bool get _esEdicion => widget.cotizacionInicial != null;
 
 	@override
 	void initState() {
 		super.initState();
-		_clienteId = widget.clienteInicial?.id;
-		_vigenciaController.text = VIGENCIA_COTIZACION_DIAS.toString();
+		final inicial = widget.cotizacionInicial;
+		_clienteId = inicial?.clienteId ?? widget.clienteInicial?.id;
+		_nombreController.text = inicial?.nombre ?? '';
+		_notasController.text = inicial?.notas ?? '';
+		_vigenciaController.text =
+			(inicial?.vigenciaDias ?? VIGENCIA_COTIZACION_DIAS).toString();
+		if (inicial != null) {
+			for (final linea in inicial.lineas) {
+				_seleccionados.add(linea.productoId);
+				final cantidad = linea.cantidad == linea.cantidad.roundToDouble()
+					? linea.cantidad.toStringAsFixed(0)
+					: linea.cantidad.toStringAsFixed(2);
+				_controllerCantidad(linea.productoId).text = cantidad;
+			}
+		}
 	}
 
 	@override
@@ -99,7 +118,9 @@ class _PantallaRegistrarCotizacionState extends ConsumerState<PantallaRegistrarC
 		final productosAsync = ref.watch(_productosCotizacionProvider);
 
 		return Scaffold(
-			appBar: AppBar(title: const Text('Nueva cotización')),
+			appBar: AppBar(
+				title: Text(_esEdicion ? 'Editar cotización' : 'Nueva cotización'),
+			),
 			body: ListView(
 				padding: const EdgeInsets.all(16.0),
 				children: [
@@ -185,11 +206,25 @@ class _PantallaRegistrarCotizacionState extends ConsumerState<PantallaRegistrarC
 						data: (productos) {
 							final filtrados =
 								filtrarProductosPorBusqueda(productos, _filtroProducto);
-							if (filtrados.isEmpty) {
+							final visibles = <Producto>[];
+							final ids = <String>{};
+							if (_filtroProducto.isEmpty) {
+								for (final producto in productos) {
+									if (_seleccionados.contains(producto.id) && ids.add(producto.id)) {
+										visibles.add(producto);
+									}
+								}
+							}
+							for (final producto in filtrados) {
+								if (ids.add(producto.id)) {
+									visibles.add(producto);
+								}
+							}
+							if (visibles.isEmpty) {
 								return const Text('Sin productos en catálogo');
 							}
 							return Column(
-								children: filtrados.take(40).map((producto) {
+								children: visibles.take(40).map((producto) {
 									final seleccionado = _seleccionados.contains(producto.id);
 									return Card(
 										child: Padding(
@@ -276,7 +311,13 @@ class _PantallaRegistrarCotizacionState extends ConsumerState<PantallaRegistrarC
 								child: CircularProgressIndicator(strokeWidth: 2.0),
 							)
 							: const Icon(Icons.request_quote),
-						label: Text(_guardando ? 'Guardando…' : 'Guardar cotización'),
+							label: Text(
+								_guardando
+									? 'Guardando…'
+									: _esEdicion
+										? 'Guardar cambios'
+										: 'Guardar cotización',
+							),
 					),
 				],
 			),
@@ -337,13 +378,22 @@ class _PantallaRegistrarCotizacionState extends ConsumerState<PantallaRegistrarC
 		setState(() => _guardando = true);
 		try {
 			final servicio = await ref.read(servicioAdminProvider.future);
-			final cotizacion = await servicio.registrarCotizacion(
-				lineas: lineas,
-				clienteId: _clienteId,
-				nombre: _nombreController.text,
-				notas: _notasController.text,
-				vigenciaDias: vigencia,
-			);
+			final cotizacion = _esEdicion
+				? await servicio.actualizarCotizacion(
+					cotizacionId: widget.cotizacionInicial!.id,
+					lineas: lineas,
+					clienteId: _clienteId,
+					nombre: _nombreController.text,
+					notas: _notasController.text,
+					vigenciaDias: vigencia,
+				)
+				: await servicio.registrarCotizacion(
+					lineas: lineas,
+					clienteId: _clienteId,
+					nombre: _nombreController.text,
+					notas: _notasController.text,
+					vigenciaDias: vigencia,
+				);
 			ref.invalidate(cotizacionesAdminProvider);
 			final tienda = await servicio.obtenerTiendaActiva();
 			final nombreTienda = tienda?.nombre ?? 'Tienda';
@@ -371,7 +421,7 @@ class _PantallaRegistrarCotizacionState extends ConsumerState<PantallaRegistrarC
 				context: context,
 				builder: (dialogContext) => AlertDialog(
 					icon: const Icon(Icons.request_quote, color: PosiaColors.neutro, size: 56.0),
-					title: const Text('Cotización guardada'),
+					title: Text(_esEdicion ? 'Cotización actualizada' : 'Cotización guardada'),
 					content: Text(
 						'${cotizacion.nombre.isNotEmpty ? '${cotizacion.nombre}\n' : ''}'
 						'Folio ${cotizacion.id.substring(0, 8).toUpperCase()}\n'

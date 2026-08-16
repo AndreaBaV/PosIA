@@ -28,12 +28,13 @@ class PoliticaAccesoAdmin {
 		RolPersonalizado? rolPersonalizado,
 		String clave,
 	) {
-		// Mi cuenta, Sincronización con el hub y Configuración son visibles para
-		// TODOS los usuarios: cualquiera debe poder ver el estado de la nube,
-		// forzar un sync o ajustar la impresora/dispositivo sin depender del admin.
+		// Mi cuenta, Sincronización, Configuración y Actualizaciones son visibles
+		// para TODOS los usuarios: cualquiera debe poder ver el estado de la nube,
+		// forzar un sync, ajustar la impresora o instalar la versión de Windows.
 		if (clave == PermisosAdmin.miCuenta ||
 			clave == PermisosAdmin.sync ||
-			clave == PermisosAdmin.config) {
+			clave == PermisosAdmin.config ||
+			clave == PermisosAdmin.actualizaciones) {
 			return true;
 		}
 		if (esAdministradorGlobal(usuario)) {
@@ -46,8 +47,13 @@ class PoliticaAccesoAdmin {
 			return false;
 		}
 		if (usuario.rol == RolUsuario.supervisor) {
-			return !{'tiendas', 'sync', 'config', PermisosAdmin.rolesPersonalizados}
-				.contains(clave);
+			return !{
+				'tiendas',
+				'sync',
+				'config',
+				PermisosAdmin.rolesPersonalizados,
+				PermisosAdmin.baseDatos,
+			}.contains(clave);
 		}
 		return true;
 	}

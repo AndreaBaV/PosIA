@@ -1067,7 +1067,8 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 					-cantidad,
 					ejecutor: ejecutor,
 				);
-			} else if (traspaso.tiendaOrigenId.isNotEmpty) {
+			} else if (traspaso.tiendaOrigenId.isNotEmpty &&
+				!esAlmacenCodificadoEnTraspaso(traspaso.tiendaOrigenId)) {
 				await _ajustarStock(
 					linea.productoId,
 					traspaso.tiendaOrigenId,
@@ -1082,7 +1083,8 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 					cantidad,
 					ejecutor: ejecutor,
 				);
-			} else if (traspaso.tiendaDestinoId.isNotEmpty) {
+			} else if (traspaso.tiendaDestinoId.isNotEmpty &&
+				!esAlmacenCodificadoEnTraspaso(traspaso.tiendaDestinoId)) {
 				await _ajustarStock(
 					linea.productoId,
 					traspaso.tiendaDestinoId,
@@ -1128,7 +1130,7 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			estado: estado,
 			solicitadoEn: evento.creadoEn,
 			completadoEn: estado == EstadoTraspaso.completado ? evento.creadoEn : null,
-			notas: '',
+			notas: payload['notas'] as String? ?? '',
 			lineas: lineas,
 		);
 	}
@@ -1152,6 +1154,28 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			limit: 1,
 		);
 		if (existentes.isNotEmpty) {
+			if (evento.payload['creditoLiquidado'] == true) {
+				final liquidadoEnCrudo =
+					evento.payload['creditoLiquidadoEn'] as String?;
+				await _ventaRepository.actualizarCreditoLiquidado(
+					Venta(
+						id: ventaId,
+						tiendaId: evento.tiendaId,
+						cajaId: evento.dispositivoId,
+						clienteId: null,
+						lineas: const [],
+						metodoPago: MetodoPago.credito,
+						total: 0,
+						creadaEn: evento.creadoEn,
+						creditoLiquidado: true,
+						creditoLiquidadoEn: liquidadoEnCrudo == null
+							? DateTime.now().toUtc()
+							: DateTime.tryParse(liquidadoEnCrudo)?.toUtc() ??
+								DateTime.now().toUtc(),
+					),
+					db: ejecutor,
+				);
+			}
 			return;
 		}
 		final lineasCrudas = evento.payload['lineas'] as List<Object?>? ?? [];
@@ -1164,6 +1188,8 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			(valor) => valor.name == metodoNombre,
 			orElse: () => MetodoPago.efectivo,
 		);
+		final creditoLiquidadoEnCrudo =
+			evento.payload['creditoLiquidadoEn'] as String?;
 		final venta = Venta(
 			id: ventaId,
 			tiendaId: evento.tiendaId,
@@ -1175,7 +1201,20 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 			total: (evento.payload['total'] as num?)?.toDouble() ?? 0.0,
 			descuentoTicket:
 				(evento.payload['descuentoTicket'] as num?)?.toDouble() ?? 0.0,
+			turnoCajaId: evento.payload['turnoCajaId'] as String?,
+			montoEfectivo: (evento.payload['montoEfectivo'] as num?)?.toDouble(),
+			montoTarjeta: (evento.payload['montoTarjeta'] as num?)?.toDouble(),
+			montoTransferencia:
+				(evento.payload['montoTransferencia'] as num?)?.toDouble(),
 			creadaEn: evento.creadoEn,
+			creditoDias: (evento.payload['creditoDias'] as num?)?.toInt() ?? 0,
+			creditoVenceEn: (evento.payload['creditoVenceEn'] as String?) == null
+				? null
+				: DateTime.tryParse(evento.payload['creditoVenceEn'] as String),
+			creditoLiquidado: evento.payload['creditoLiquidado'] == true,
+			creditoLiquidadoEn: creditoLiquidadoEnCrudo == null
+				? null
+				: DateTime.tryParse(creditoLiquidadoEnCrudo)?.toUtc(),
 		);
 		await _ventaRepository.guardar(venta, db: ejecutor);
 		for (final linea in lineas) {
@@ -1389,7 +1428,7 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		double? stockMinimo,
 		DatabaseExecutor? ejecutor,
 	}) async {
-		if (tiendaId.isEmpty) {
+		if (tiendaId.isEmpty || esAlmacenCodificadoEnTraspaso(tiendaId)) {
 			return;
 		}
 		final actual = await _inventarioRepository.obtenerStock(

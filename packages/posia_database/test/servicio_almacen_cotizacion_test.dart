@@ -109,6 +109,89 @@ void main() {
 			expect(reg.totalAlmacenes, 4.0);
 			await fixture.cerrar();
 		});
+
+		test('traspasarTiendaAAlmacenMultiple mueve existencias al almacén', () async {
+			final fixture = await FixtureAdmin.abrir();
+			final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
+			final producto = await servicio.registrarProductoCompleto(
+				AltaProductoRequest(
+					nombre: 'Block',
+					codigoBarras: 'alm-003',
+					precioBase: 12.0,
+					categoriaId: fixture.categoriaId,
+					stockInicial: 8.0,
+				),
+			);
+			final almacen = (await servicio.listarAlmacenes()).first;
+			final traspaso = await servicio.traspasarTiendaAAlmacenMultiple(
+				tiendaOrigenId: fixture.tiendaOrigenId,
+				almacenDestinoId: almacen.id,
+				lineas: [
+					LineaTraspasoSolicitud(productoId: producto.id, cantidad: 3.0),
+				],
+				notas: 'Devolución a bodega',
+			);
+			expect(traspaso.tiendaOrigenId, fixture.tiendaOrigenId);
+			expect(
+				traspaso.tiendaDestinoId,
+				codificarAlmacenEnTraspaso(almacen.id),
+			);
+			expect(traspaso.estado, EstadoTraspaso.completado);
+			expect(traspaso.notas, 'Devolución a bodega');
+
+			final agrupado = await servicio.obtenerInventarioAgrupado(
+				tiendaReferenciaId: fixture.tiendaOrigenId,
+			);
+			final reg = agrupado.firstWhere((r) => r.productoId == producto.id);
+			expect(reg.totalGlobal, 5.0);
+			expect(reg.totalAlmacenes, 3.0);
+			expect(reg.cantidadEnAlmacen(almacen.id), 3.0);
+
+			final cola = SyncEventRepository(baseDatos: fixture.base);
+			final pendientes = await cola.obtenerPendientes();
+			expect(
+				pendientes.any(
+					(e) =>
+						e.tipo == TipoSyncEvento.transferCompleted &&
+						e.payload['almacenDestinoId'] == almacen.id &&
+						e.payload['tiendaOrigenId'] == fixture.tiendaOrigenId,
+				),
+				isTrue,
+			);
+			await fixture.cerrar();
+		});
+
+		test('ajustarStockAlmacen encola stockAdjusted con almacenId', () async {
+			final fixture = await FixtureAdmin.abrir();
+			final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
+			final producto = await servicio.registrarProductoCompleto(
+				AltaProductoRequest(
+					nombre: 'Cal',
+					codigoBarras: 'alm-004',
+					precioBase: 40.0,
+					categoriaId: fixture.categoriaId,
+				),
+			);
+			final almacen = (await servicio.listarAlmacenes()).first;
+			await servicio.ajustarStockAlmacen(
+				productoId: producto.id,
+				almacenId: almacen.id,
+				tipo: TipoMovimientoInventario.entrada,
+				cantidad: 7.0,
+			);
+			final cola = SyncEventRepository(baseDatos: fixture.base);
+			final pendientes = await cola.obtenerPendientes();
+			expect(
+				pendientes.any(
+					(e) =>
+						e.tipo == TipoSyncEvento.stockAdjusted &&
+						e.payload['almacenId'] == almacen.id &&
+						(e.payload['delta'] as num?)?.toDouble() == 7.0,
+				),
+				isTrue,
+			);
+			await fixture.cerrar();
+		});
 	});
 
 	group('Cotizaciones', () {
@@ -155,6 +238,57 @@ void main() {
 
 			final listado = await servicio.listarCotizaciones(dias: 1);
 			expect(listado.any((c) => c.id == cotizacion.id), isTrue);
+			await fixture.cerrar();
+		});
+
+		test('actualizarCotizacion conserva folio y reemplaza líneas', () async {
+			final fixture = await FixtureAdmin.abrir();
+			final servicio = fixture.crearServicio(tiendaId: fixture.tiendaOrigenId);
+			final producto = await servicio.registrarProductoCompleto(
+				AltaProductoRequest(
+					nombre: 'Varilla 3/8',
+					codigoBarras: 'cot-edit-001',
+					precioBase: 90.0,
+					categoriaId: fixture.categoriaId,
+				),
+			);
+			final original = await servicio.registrarCotizacion(
+				lineas: [
+					LineaCotizacion(
+						productoId: producto.id,
+						nombreProducto: producto.nombre,
+						cantidad: 2.0,
+						precioUnitario: 90.0,
+					),
+				],
+				nombre: 'Obra A',
+				notas: 'Borrador',
+			);
+			final actualizada = await servicio.actualizarCotizacion(
+				cotizacionId: original.id,
+				lineas: [
+					LineaCotizacion(
+						productoId: producto.id,
+						nombreProducto: producto.nombre,
+						cantidad: 5.0,
+						precioUnitario: 90.0,
+					),
+				],
+				nombre: 'Obra A revisada',
+				notas: 'Ajustada',
+				vigenciaDias: 21,
+			);
+			expect(actualizada.id, original.id);
+			expect(actualizada.total, 450.0);
+			expect(actualizada.nombre, 'Obra A revisada');
+			expect(actualizada.notas, 'Ajustada');
+			expect(actualizada.vigenciaDias, 21);
+			expect(actualizada.lineas.first.cantidad, 5.0);
+			expect(actualizada.creadaEn, original.creadaEn);
+
+			final recuperada = await servicio.obtenerCotizacion(original.id);
+			expect(recuperada?.total, 450.0);
+			expect(recuperada?.nombre, 'Obra A revisada');
 			await fixture.cerrar();
 		});
 

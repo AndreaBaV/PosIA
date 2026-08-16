@@ -44,4 +44,34 @@ class Cotizacion {
 		}
 		return redondearMonto(acumulado);
 	}
+
+	Cotizacion copiarCon({
+		String? id,
+		String? tiendaId,
+		String? nombre,
+		String? clienteId,
+		String? nombreCliente,
+		double? total,
+		String? notas,
+		int? vigenciaDias,
+		DateTime? creadaEn,
+		String? cajaId,
+		String? vendedorId,
+		List<LineaCotizacion>? lineas,
+	}) {
+		return Cotizacion(
+			id: id ?? this.id,
+			tiendaId: tiendaId ?? this.tiendaId,
+			nombre: nombre ?? this.nombre,
+			clienteId: clienteId ?? this.clienteId,
+			nombreCliente: nombreCliente ?? this.nombreCliente,
+			total: total ?? this.total,
+			notas: notas ?? this.notas,
+			vigenciaDias: vigenciaDias ?? this.vigenciaDias,
+			creadaEn: creadaEn ?? this.creadaEn,
+			cajaId: cajaId ?? this.cajaId,
+			vendedorId: vendedorId ?? this.vendedorId,
+			lineas: lineas ?? this.lineas,
+		);
+	}
 }

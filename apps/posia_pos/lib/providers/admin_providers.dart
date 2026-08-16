@@ -15,6 +15,7 @@ import 'package:posia_sync/posia_sync.dart';
 import 'package:posia_ui/posia_ui.dart';
 
 import '../models/item_historial.dart';
+import '../services/servicio_actualizacion_app.dart';
 import 'app_providers.dart';
 
 /// Repositorio de config del dispositivo (independiente del tenant activo).
@@ -34,6 +35,31 @@ final servicioAutenticacionProvider = FutureProvider<ServicioAutenticacion>((ref
 		cliente = HubSyncClient(urlBase: hubUrl, claveApi: clave);
 	}
 	return ServicioAutenticacion(clienteHub: cliente);
+});
+
+/// Cliente de actualizaciones; null si este dispositivo no tiene hub.
+final servicioActualizacionAppProvider =
+	FutureProvider<ServicioActualizacionApp?>((ref) async {
+		final configRepo = await ref.watch(configDispositivoRepoProvider.future);
+		final hubUrl = await configRepo.obtenerHubUrl();
+		if (hubUrl == null || hubUrl.trim().isEmpty) {
+			return null;
+		}
+		final clave = await configRepo.obtenerValor(claveConfigHubApiKey);
+		return ServicioActualizacionApp(
+			clienteHub: HubSyncClient(urlBase: hubUrl, claveApi: clave),
+		);
+	});
+
+/// Cliente del hub para gestionar almacenamiento Neon.
+final clienteHubGestionBaseProvider = FutureProvider<HubSyncClient?>((ref) async {
+	final configRepo = await ref.watch(configDispositivoRepoProvider.future);
+	final hubUrl = await configRepo.obtenerHubUrl();
+	if (hubUrl == null || hubUrl.trim().isEmpty) {
+		return null;
+	}
+	final clave = await configRepo.obtenerValor(claveConfigHubApiKey);
+	return HubSyncClient(urlBase: hubUrl, claveApi: clave);
 });
 
 /// Configuracion de hub/caja sin requerir sesion de tenant.

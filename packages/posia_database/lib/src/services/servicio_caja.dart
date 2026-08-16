@@ -1351,10 +1351,18 @@ class ServicioCaja {
         'total': venta.total,
         'descuentoTicket': venta.descuentoTicket,
         'metodoPago': venta.metodoPago.name,
+        'turnoCajaId': venta.turnoCajaId,
+        'montoEfectivo': venta.montoEfectivo,
+        'montoTarjeta': venta.montoTarjeta,
+        'montoTransferencia': venta.montoTransferencia,
         'clienteId': venta.clienteId,
         'vendedorId': venta.vendedorId,
         'creditoDias': venta.creditoDias,
         'creditoVenceEn': venta.creditoVenceEn?.toIso8601String(),
+        'creditoLiquidado': venta.creditoLiquidado,
+        if (venta.creditoLiquidadoEn != null)
+          'creditoLiquidadoEn':
+              venta.creditoLiquidadoEn!.toUtc().toIso8601String(),
         'lineas': venta.lineas
             .map(
               (linea) => {

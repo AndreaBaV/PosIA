@@ -13,6 +13,7 @@ import '../models/venta.dart';
 import 'cliente_credito_util.dart';
 import 'formateador_ticket_digital.dart';
 import 'moneda_util.dart';
+import 'traspaso_util.dart';
 
 String _formatearFechaHora(DateTime fechaUtc) {
   final local = fechaUtc.toLocal();
@@ -241,28 +242,45 @@ String generarTextoTicketTraspaso({
   String? nombreOperador,
   bool conLogoImpreso = false,
 }) {
+  final titulo = tituloTicketTraspaso(
+    origenId: traspaso.tiendaOrigenId,
+    destinoId: traspaso.tiendaDestinoId,
+  );
+  final origen = etiquetaUbicacionTraspaso(
+    ubicacionId: traspaso.tiendaOrigenId,
+    nombre: nombreTiendaOrigen,
+  );
+  final destino = etiquetaUbicacionTraspaso(
+    ubicacionId: traspaso.tiendaDestinoId,
+    nombre: nombreTiendaDestino,
+  );
+  final etiquetaOrigen = esAlmacenCodificadoEnTraspaso(traspaso.tiendaOrigenId)
+      ? 'Almacén origen'
+      : 'Tienda origen';
+  final etiquetaDestino = esAlmacenCodificadoEnTraspaso(traspaso.tiendaDestinoId)
+      ? 'Almacén destino'
+      : 'Tienda destino';
   final buffer = StringBuffer();
   _escribirEncabezadoMarca(
     buffer,
     conLogoImpreso: conLogoImpreso,
     tituloDocumento: conLogoImpreso
-        ? 'TRASPASO'
-        : '====== TRASPASO ${NOMBRE_COMERCIAL_APP.toUpperCase()} ======',
+        ? titulo
+        : '====== $titulo ${NOMBRE_COMERCIAL_APP.toUpperCase()} ======',
   );
   buffer
     ..writeln('Folio: ${traspaso.id.substring(0, 8).toUpperCase()}')
     ..writeln('Fecha: ${_formatearFechaHora(traspaso.solicitadoEn)}')
-    ..writeln('Origen: $nombreTiendaOrigen')
-    ..writeln('Destino: $nombreTiendaDestino')
+    ..writeln('$etiquetaOrigen: $origen')
+    ..writeln('$etiquetaDestino: $destino')
     ..writeln('----------------------------')
     ..writeln('PRODUCTOS (${traspaso.lineas.length})')
+    ..writeln('CANT  PRODUCTO')
     ..writeln('----------------------------');
   var totalUnidades = 0.0;
   for (final linea in traspaso.lineas) {
-    buffer.writeln(linea.nombreProducto);
-    buffer.writeln(
-      '  Cant: ${_formatearCantidadTraspaso(linea.cantidadSolicitada)} u.',
-    );
+    final cantidad = _formatearCantidadTraspaso(linea.cantidadSolicitada);
+    buffer.writeln('${cantidad.padLeft(4)}  ${linea.nombreProducto}');
     totalUnidades = totalUnidades + linea.cantidadSolicitada;
   }
   buffer
@@ -276,7 +294,12 @@ String generarTextoTicketTraspaso({
   }
   buffer
     ..writeln('============================')
-    ..writeln('Documento de control interno');
+    ..writeln(
+      subtituloTicketTraspaso(
+        origenId: traspaso.tiendaOrigenId,
+        destinoId: traspaso.tiendaDestinoId,
+      ),
+    );
   return buffer.toString();
 }
 
@@ -287,12 +310,28 @@ String generarTextoComprobanteTraspaso({
   required String nombreTiendaDestino,
   String? nombreOperadorEnvio,
 }) {
+  final titulo = tituloTicketTraspaso(
+    origenId: traspaso.tiendaOrigenId,
+    destinoId: traspaso.tiendaDestinoId,
+  );
+  final origen = etiquetaUbicacionTraspaso(
+    ubicacionId: traspaso.tiendaOrigenId,
+    nombre: nombreTiendaOrigen,
+  );
+  final destino = etiquetaUbicacionTraspaso(
+    ubicacionId: traspaso.tiendaDestinoId,
+    nombre: nombreTiendaDestino,
+  );
   final buffer = StringBuffer()
-    ..writeln('==== COMPROBANTE TRASPASO ====')
+    ..writeln('== COMPROBANTE $titulo ==')
     ..writeln('Folio: ${traspaso.id.substring(0, 8).toUpperCase()}')
     ..writeln('Fecha envio: ${_formatearFechaHora(traspaso.solicitadoEn)}')
-    ..writeln('Origen: $nombreTiendaOrigen')
-    ..writeln('Destino: $nombreTiendaDestino')
+    ..writeln(
+      '${esAlmacenCodificadoEnTraspaso(traspaso.tiendaOrigenId) ? 'Almacén origen' : 'Tienda origen'}: $origen',
+    )
+    ..writeln(
+      '${esAlmacenCodificadoEnTraspaso(traspaso.tiendaDestinoId) ? 'Almacén destino' : 'Tienda destino'}: $destino',
+    )
     ..writeln('------------------------------')
     ..writeln('PRODUCTOS ENVIADOS')
     ..writeln('------------------------------');

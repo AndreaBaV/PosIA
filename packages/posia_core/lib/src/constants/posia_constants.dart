@@ -94,6 +94,9 @@ const int TAMANO_LOTE_SYNC_HUB = 40;
 /// chico de sync.
 const int TIMEOUT_SUBIDA_IMAGEN_SEGUNDOS = 60;
 
+/// Timeout al descargar el instalador de una actualizacion de la app.
+const int TIMEOUT_DESCARGA_ACTUALIZACION_SEGUNDOS = 600;
+
 /// Tamano maximo de foto de producto que acepta /v1/admin/imagenes.
 const int TAMANO_MAXIMO_IMAGEN_PRODUCTO_BYTES = 5 * 1024 * 1024;
 
@@ -116,6 +119,15 @@ const int LONGITUD_PIN_ADMIN = 4;
 
 /// Indica build de produccion (release); false en debug/profile.
 const bool MODO_RELEASE = bool.fromEnvironment('dart.vm.product');
+
+/// Tope de almacenamiento del plan gratuito de Neon (0.5 GB).
+const int LIMITE_BYTES_NEON_FREE = 512 * 1024 * 1024;
+
+/// Filas maximas por hoja al exportar historial de Neon.
+const int LIMITE_FILAS_EXPORT_NEON = 20000;
+
+/// Timeout de exportacion / purga de historial en el hub.
+const int TIMEOUT_HUB_GESTION_NEON_SEGUNDOS = 180;
 
 /// Maximo de tiendas activas permitidas por licencia estandar.
 const int LIMITE_MAX_TIENDAS = 5;

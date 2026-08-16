@@ -127,9 +127,49 @@ void main() {
     expect(ticket, contains('TRASPASO LA FORTUNA'));
     expect(ticket, contains('Arroz 1kg'));
     expect(ticket, contains('Total unidades: 15'));
+    expect(ticket, contains('Tienda origen'));
     expect(comprobante, contains('PRODUCTOS RECIBIDOS'));
     expect(comprobante, contains('RECIBE:'));
     expect(comprobante, contains('Ana'));
+  });
+
+  test('ticket de almacén etiqueta origen y destino', () {
+    final traspaso = Traspaso(
+      id: 'traspaso-alm-001',
+      tiendaOrigenId: 't1',
+      tiendaDestinoId: codificarAlmacenEnTraspaso('alm-1'),
+      estado: EstadoTraspaso.completado,
+      solicitadoEn: DateTime.utc(2026, 8, 16, 12),
+      completadoEn: DateTime.utc(2026, 8, 16, 12),
+      notas: 'Devolución a bodega',
+      lineas: const [
+        LineaTraspaso(
+          productoId: 'p1',
+          nombreProducto: 'Cemento 50kg',
+          cantidadSolicitada: 12,
+          cantidadRecibida: 12,
+        ),
+      ],
+    );
+    final texto = generarTextoTicketTraspaso(
+      traspaso: traspaso,
+      nombreTiendaOrigen: 'Centro',
+      nombreTiendaDestino: 'Central',
+      nombreOperador: 'Luis',
+    );
+    expect(texto, contains('INGRESO A ALMACÉN'));
+    expect(texto, contains('Almacén destino: Almacén Central'));
+    expect(texto, contains('Tienda origen: Centro'));
+    expect(texto, contains('  12  Cemento 50kg'));
+    expect(texto, contains('Devolución a bodega'));
+    final digital = construirTicketDigitalTraspaso(
+      traspaso: traspaso,
+      nombreTiendaOrigen: 'Centro',
+      nombreTiendaDestino: 'Central',
+    );
+    expect(digital.tituloDocumento, 'INGRESO A ALMACÉN');
+    expect(digital.campos['Almacén destino'], 'Almacén Central');
+    expect(digital.mostrarColumnaRecepcion, isFalse);
   });
 
   test('generarTextoPagareCredito incluye copia y firma', () {

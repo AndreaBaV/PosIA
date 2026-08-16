@@ -6,8 +6,10 @@ import 'package:posia_core/posia_core.dart';
 import 'package:posia_ui/posia_ui.dart';
 
 import '../providers/admin_providers.dart';
+import '../screens/pantalla_actualizaciones_admin.dart';
 import '../screens/pantalla_almacenes_admin.dart';
 import '../screens/pantalla_asistencia_admin.dart';
+import '../screens/pantalla_base_datos_admin.dart';
 import '../screens/pantalla_categorias_admin.dart';
 import '../screens/pantalla_clientes_admin.dart';
 import '../screens/pantalla_compras_admin.dart';
@@ -460,6 +462,33 @@ List<EntradaMenuAdmin> construirCatalogoMenuAdmin(
 			palabrasClave: [
 				'sync', 'sincronizacion', 'nube', 'cloud', 'servidor', 'conexion',
 				'respaldo', 'online', 'offline', 'hub',
+			],
+		),
+		EntradaMenuAdmin(
+			clave: PermisosAdmin.baseDatos,
+			seccion: 'Reportes y sistema',
+			titulo: 'Base de datos',
+			subtitulo: 'Uso de Neon, Excel y limpieza',
+			icono: Icons.storage,
+			color: Colors.blueGrey,
+			destino: PantallaBaseDatosAdmin(),
+			palabrasClave: [
+				'base datos', 'neon', 'almacenamiento', 'espacio', 'gb',
+				'exportar', 'excel', 'xlsx', 'purgar', 'borrar historial',
+				'free tier', 'nube', 'limite',
+			],
+		),
+		EntradaMenuAdmin(
+			clave: PermisosAdmin.actualizaciones,
+			seccion: 'Reportes y sistema',
+			titulo: 'Actualizaciones',
+			subtitulo: 'Descargar e instalar',
+			icono: Icons.system_update,
+			color: Colors.teal,
+			destino: PantallaActualizacionesAdmin(),
+			palabrasClave: [
+				'actualizacion', 'update', 'version', 'descargar', 'instalar',
+				'windows', 'laptop', 'nueva version',
 			],
 		),
 		EntradaMenuAdmin(

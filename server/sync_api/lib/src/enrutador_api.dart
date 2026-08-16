@@ -7,6 +7,7 @@
 library;
 
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
@@ -14,6 +15,7 @@ import 'package:shelf_router/shelf_router.dart';
 import 'almacen_eventos.dart';
 import 'almacen_eventos_postgres.dart';
 import 'almacen_usuarios_postgres.dart';
+import 'catalogo_actualizaciones_app.dart';
 import 'evento_hub.dart';
 
 /// Construye el enrutador REST sobre un [AlmacenEventos].
@@ -26,13 +28,16 @@ class EnrutadorApi {
 		required AlmacenEventos almacen,
 		AlmacenUsuariosPostgres? usuarios,
 		String? claveApi,
+		CatalogoActualizacionesApp? actualizaciones,
 	}) : _almacen = almacen,
 	     _usuarios = usuarios,
-	     _claveApi = claveApi;
+	     _claveApi = claveApi,
+	     _actualizaciones = actualizaciones ?? CatalogoActualizacionesApp();
 
 	final AlmacenEventos _almacen;
 	final AlmacenUsuariosPostgres? _usuarios;
 	final String? _claveApi;
+	final CatalogoActualizacionesApp _actualizaciones;
 
 	/// Construye handler shelf con middleware y rutas v1.
 	///
@@ -50,7 +55,13 @@ class EnrutadorApi {
 			..get('/v1/events', _manejarConsultaEventos)
 			..get('/v1/catalog/audit', _manejarAuditoriaCatalogo)
 			..get('/v1/catalog/events', _manejarCatalogoCompacto)
-			..get('/v1/attendance/challenge', _manejarDesafioAsistenciaActivo);
+			..get('/v1/attendance/challenge', _manejarDesafioAsistenciaActivo)
+			..get('/v1/app/update', _manejarActualizacionApp)
+			..get('/v1/app/files/<nombre>', _manejarArchivoActualizacion)
+			..get('/v1/db/usage', _manejarUsoBase)
+			..get('/v1/db/export', _manejarExportarHistorial)
+			..post('/v1/db/purge', _manejarPurgarHistorial)
+			..post('/v1/db/compact', _manejarCompactarCatalogo);
 		return const Pipeline()
 			.addMiddleware(logRequests())
 			.addMiddleware(_validarClaveApi())
@@ -262,6 +273,167 @@ class EnrutadorApi {
 			return _respuestaJson({'challenge': null});
 		}
 		return _respuestaJson({'challenge': desafio});
+	}
+
+	Future<Response> _manejarActualizacionApp(Request solicitud) async {
+		final plataforma =
+			(solicitud.url.queryParameters['plataforma'] ?? '').trim().toLowerCase();
+		if (plataforma.isEmpty) {
+			return _respuestaJson(
+				{'error': 'plataforma es obligatorio (windows, android, ios)'},
+				codigo: 400,
+			);
+		}
+		if (!_actualizaciones.estaConfigurado) {
+			return _respuestaJson({'error': 'Sin actualizaciones publicadas'}, codigo: 404);
+		}
+		final origen =
+			'${solicitud.requestedUri.scheme}://${solicitud.requestedUri.authority}';
+		final manifiesto = _actualizaciones.paraPlataforma(
+			plataforma: plataforma,
+			origenPublico: origen,
+		);
+		if (manifiesto == null) {
+			return _respuestaJson({'error': 'Sin actualizaciones publicadas'}, codigo: 404);
+		}
+		return _respuestaJson(manifiesto.aJson());
+	}
+
+	Future<Response> _manejarArchivoActualizacion(
+		Request solicitud,
+		String nombre,
+	) async {
+		final decodificado = Uri.decodeComponent(nombre);
+		final archivo = _actualizaciones.archivoLocal(decodificado);
+		if (archivo == null) {
+			return _respuestaJson({'error': 'Archivo no encontrado'}, codigo: 404);
+		}
+		final mime = _mimeArchivo(decodificado);
+		return Response.ok(
+			archivo.openRead(),
+			headers: {
+				'Content-Type': mime,
+				'Content-Length': '${await archivo.length()}',
+				'Content-Disposition': 'attachment; filename="$decodificado"',
+			},
+		);
+	}
+
+	String _mimeArchivo(String nombre) {
+		final bajo = nombre.toLowerCase();
+		if (bajo.endsWith('.apk')) {
+			return 'application/vnd.android.package-archive';
+		}
+		if (bajo.endsWith('.zip')) {
+			return 'application/zip';
+		}
+		if (bajo.endsWith('.exe') || bajo.endsWith('.msi')) {
+			return 'application/octet-stream';
+		}
+		return 'application/octet-stream';
+	}
+
+	Future<Response> _manejarUsoBase(Request solicitud) async {
+		final almacen = _almacen;
+		if (almacen is! AlmacenEventosPostgres) {
+			return _respuestaJson(
+				{'error': 'Gestion de base no disponible sin Postgres'},
+				codigo: 503,
+			);
+		}
+		final uso = await almacen.auditarUsoBase();
+		return _respuestaJson(uso.aJson());
+	}
+
+	Future<Response> _manejarExportarHistorial(Request solicitud) async {
+		final almacen = _almacen;
+		if (almacen is! AlmacenEventosPostgres) {
+			return _respuestaJson(
+				{'error': 'Gestion de base no disponible sin Postgres'},
+				codigo: 503,
+			);
+		}
+		final parametros = solicitud.url.queryParameters;
+		final antesDe = DateTime.tryParse(parametros['antesDe'] ?? '');
+		if (antesDe == null) {
+			return _respuestaJson(
+				{'error': 'antesDe es obligatorio (ISO-8601)'},
+				codigo: 400,
+			);
+		}
+		final grupos = (parametros['grupos'] ?? '')
+			.split(',')
+			.map((g) => g.trim())
+			.where((g) => g.isNotEmpty)
+			.toList();
+		if (grupos.isEmpty) {
+			return _respuestaJson(
+				{'error': 'grupos es obligatorio'},
+				codigo: 400,
+			);
+		}
+		final resultado = await almacen.exportarHistorial(
+			antesDe: antesDe.toUtc(),
+			grupos: grupos,
+		);
+		return _respuestaJson(resultado.aJson());
+	}
+
+	Future<Response> _manejarPurgarHistorial(Request solicitud) async {
+		final almacen = _almacen;
+		if (almacen is! AlmacenEventosPostgres) {
+			return _respuestaJson(
+				{'error': 'Gestion de base no disponible sin Postgres'},
+				codigo: 503,
+			);
+		}
+		final Map<String, Object?> cuerpo;
+		try {
+			final crudo = jsonDecode(await solicitud.readAsString());
+			if (crudo is! Map) {
+				return _respuestaJson({'error': 'JSON invalido'}, codigo: 400);
+			}
+			cuerpo = Map<String, Object?>.from(crudo);
+		} on FormatException {
+			return _respuestaJson({'error': 'JSON invalido'}, codigo: 400);
+		}
+		if (cuerpo['confirmar'] != true) {
+			return _respuestaJson(
+				{'error': 'confirmar debe ser true'},
+				codigo: 400,
+			);
+		}
+		final antesDe = DateTime.tryParse(cuerpo['antesDe'] as String? ?? '');
+		if (antesDe == null) {
+			return _respuestaJson(
+				{'error': 'antesDe es obligatorio (ISO-8601)'},
+				codigo: 400,
+			);
+		}
+		final gruposCrudos = cuerpo['grupos'];
+		final grupos = gruposCrudos is List
+			? gruposCrudos.map((g) => '$g').where((g) => g.isNotEmpty).toList()
+			: <String>[];
+		if (grupos.isEmpty) {
+			return _respuestaJson({'error': 'grupos es obligatorio'}, codigo: 400);
+		}
+		final resultado = await almacen.purgarHistorial(
+			antesDe: antesDe.toUtc(),
+			grupos: grupos,
+		);
+		return _respuestaJson(resultado.aJson());
+	}
+
+	Future<Response> _manejarCompactarCatalogo(Request solicitud) async {
+		final almacen = _almacen;
+		if (almacen is! AlmacenEventosPostgres) {
+			return _respuestaJson(
+				{'error': 'Gestion de base no disponible sin Postgres'},
+				codigo: 503,
+			);
+		}
+		final compactados = await almacen.compactarCatalogo();
+		return _respuestaJson({'eventosCompactados': compactados});
 	}
 
 	/// Middleware que exige cabecera x-api-key cuando hay clave.

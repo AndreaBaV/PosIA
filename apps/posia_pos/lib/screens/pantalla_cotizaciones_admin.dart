@@ -165,6 +165,19 @@ class _PantallaCotizacionesAdminState extends ConsumerState<PantallaCotizaciones
     }
   }
 
+  Future<void> _abrirEditar(Cotizacion cotizacion) async {
+    final ok = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => PantallaRegistrarCotizacion(
+          cotizacionInicial: cotizacion,
+        ),
+      ),
+    );
+    if (ok == true) {
+      ref.invalidate(cotizacionesAdminProvider(_dias));
+    }
+  }
+
   Future<void> _mostrarDetalle(Cotizacion cotizacion) async {
     await showModalBottomSheet<void>(
       context: context,
@@ -216,8 +229,19 @@ class _PantallaCotizacionesAdminState extends ConsumerState<PantallaCotizaciones
                       }).toList(),
                     ),
                   ),
-                  Row(
+                  Wrap(
+                    spacing: 4.0,
+                    runSpacing: 4.0,
+                    alignment: WrapAlignment.end,
                     children: [
+                      TextButton.icon(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _abrirEditar(cotizacion);
+                        },
+                        icon: const Icon(Icons.edit),
+                        label: const Text('Editar'),
+                      ),
                       TextButton.icon(
                         onPressed: () {
                           Navigator.pop(ctx);
@@ -234,7 +258,6 @@ class _PantallaCotizacionesAdminState extends ConsumerState<PantallaCotizaciones
                         icon: const Icon(Icons.chat),
                         label: const Text('WhatsApp'),
                       ),
-                      const Spacer(),
                       TextButton(
                         style: TextButton.styleFrom(foregroundColor: PosiaColors.cancelar),
                         onPressed: () {

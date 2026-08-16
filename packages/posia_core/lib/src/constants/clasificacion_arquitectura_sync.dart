@@ -195,6 +195,11 @@ abstract final class ClasificacionArquitecturaSync {
 			motivo: 'Lineas de compra',
 		),
 		TablaClasificada(
+			sqlite: 'purchase_allocations',
+			clase: ClaseTablaSync.espejoObligatorio,
+			motivo: 'Destino de compra (tienda o almacen)',
+		),
+		TablaClasificada(
 			sqlite: 'wholesale_tiers',
 			clase: ClaseTablaSync.espejoObligatorio,
 			motivo: 'Escalas de mayoreo',
@@ -208,6 +213,16 @@ abstract final class ClasificacionArquitecturaSync {
 			sqlite: 'lote_promocion_miembros',
 			clase: ClaseTablaSync.espejoObligatorio,
 			motivo: 'Miembros de lote promocion',
+		),
+		TablaClasificada(
+			sqlite: 'combos',
+			clase: ClaseTablaSync.espejoObligatorio,
+			motivo: 'Combos de precio fijo',
+		),
+		TablaClasificada(
+			sqlite: 'combo_miembros',
+			clase: ClaseTablaSync.espejoObligatorio,
+			motivo: 'Miembros de combo',
 		),
 		TablaClasificada(
 			sqlite: 'price_lists',
@@ -313,6 +328,12 @@ abstract final class ClasificacionArquitecturaSync {
 			clase: ClaseTablaSync.soloLocal,
 			motivo: 'Placeholders de guia/desarrollo',
 		),
+		TablaClasificada(
+			sqlite: 'entidades_eliminadas',
+			clase: ClaseTablaSync.soloLocal,
+			motivo:
+				'Lapidas locales; el contrato cruzado es productDeleted/categoryDeleted',
+		),
 
 		// --- (C) Solo hub ---
 		TablaClasificada(
@@ -326,6 +347,13 @@ abstract final class ClasificacionArquitecturaSync {
 			neon: 'schema_meta',
 			clase: ClaseTablaSync.soloHub,
 			motivo: 'Flags de backfill y retencion del hub',
+		),
+		TablaClasificada(
+			sqlite: 'deleted_entities',
+			neon: 'deleted_entities',
+			clase: ClaseTablaSync.soloHub,
+			motivo:
+				'Lapidas del proyector; el pull usa productDeleted/categoryDeleted',
 		),
 	];
 
@@ -359,7 +387,12 @@ abstract final class ClasificacionArquitecturaSync {
 			tipo: TipoSyncEvento.transferCompleted,
 			politica: PoliticaEventoSync.activo,
 			motivo: 'Traspaso completado',
-			tablasAfectadas: ['transfers', 'transfer_lines', 'stock_levels'],
+			tablasAfectadas: [
+				'transfers',
+				'transfer_lines',
+				'stock_levels',
+				'stock_almacen',
+			],
 		),
 		ContratoEventoSync(
 			tipo: TipoSyncEvento.customerUpserted,
@@ -558,7 +591,13 @@ abstract final class ClasificacionArquitecturaSync {
 			tipo: TipoSyncEvento.purchaseCompleted,
 			politica: PoliticaEventoSync.activo,
 			motivo: 'Compra',
-			tablasAfectadas: ['purchases', 'purchase_lines', 'stock_levels'],
+			tablasAfectadas: [
+				'purchases',
+				'purchase_lines',
+				'purchase_allocations',
+				'stock_levels',
+				'stock_almacen',
+			],
 		),
 		ContratoEventoSync(
 			tipo: TipoSyncEvento.customerDiscountUpserted,

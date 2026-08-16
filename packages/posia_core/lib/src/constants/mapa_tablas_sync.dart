@@ -87,7 +87,10 @@ abstract final class MapaTablasSync {
 		'almacenes',
 		'purchases',
 		'purchase_lines',
+		'purchase_allocations',
 		'cash_shifts',
+		'combos',
+		'combo_miembros',
 	];
 
 	/// Solo SQLite (no se proyectan a Neon).
@@ -102,12 +105,14 @@ abstract final class MapaTablasSync {
 		'sync_eventos_aplicados',
 		'app_config',
 		'ejemplo',
+		'entidades_eliminadas',
 	];
 
 	/// Solo hub / infraestructura Neon.
 	static const List<String> soloHub = [
 		'sync_events',
 		'schema_meta',
+		'deleted_entities',
 	];
 
 	/// Resuelve el nombre Neon a partir del nombre SQLite.

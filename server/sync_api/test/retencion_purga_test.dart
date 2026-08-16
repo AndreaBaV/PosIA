@@ -55,6 +55,21 @@ void main() {
 		}
 	});
 
+	test('el catalogo compacto cubre todo estado vigente (salvo legacy)', () {
+		const legacy = {'productPresentationUpserted'};
+		for (final tipo in tiposEstadoCatalogo) {
+			if (legacy.contains(tipo)) {
+				continue;
+			}
+			expect(
+				AlmacenEventosPostgres.tiposCatalogoCompactables,
+				contains(tipo),
+				reason: 'reconstruir desde catalogo compacto sin "$tipo" '
+					'deja huecos o revive filas borradas',
+			);
+		}
+	});
+
 	test('la purga solo alcanza historial transaccional conocido', () {
 		// Si alguien agrega un tipo nuevo a la lista, que sea una decision
 		// consciente: este set es el unico historial que se acepta borrar.
@@ -75,6 +90,21 @@ void main() {
 		expect(
 			EsquemaPosPostgres.tiposHistorialPurgable.toSet(),
 			purgablesEsperados,
+		);
+	});
+
+	test('la retencion automatica no borra cotizaciones ni pedidos', () {
+		expect(
+			EsquemaPosPostgres.tiposHistorialPurgable,
+			isNot(contains('quoteUpserted')),
+		);
+		expect(
+			EsquemaPosPostgres.tiposHistorialPurgable,
+			isNot(contains('quoteDeleted')),
+		);
+		expect(
+			EsquemaPosPostgres.tiposHistorialPurgable,
+			isNot(contains('orderUpserted')),
 		);
 	});
 }

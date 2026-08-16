@@ -161,4 +161,68 @@ void main() {
     final respuesta = await http.get(Uri.parse('$urlBase/v1/catalog/events'));
     expect(respuesta.statusCode, 503);
   });
+
+  test('app/update sin manifiesto responde 404', () async {
+    final respuesta = await http.get(
+      Uri.parse('$urlBase/v1/app/update?plataforma=windows'),
+    );
+    expect(respuesta.statusCode, 404);
+  });
+
+  test('app/update sin plataforma responde 400', () async {
+    final respuesta = await http.get(Uri.parse('$urlBase/v1/app/update'));
+    expect(respuesta.statusCode, 400);
+  });
+
+  test('app/update entrega manifiesto de Windows y sirve el ZIP', () async {
+    await servidor.close(force: true);
+    final dirFiles = Directory(
+      '${directorioTemporal.path}${Platform.pathSeparator}updates',
+    )..createSync();
+    final zip = File(
+      '${dirFiles.path}${Platform.pathSeparator}POSIA-windows.zip',
+    );
+    await zip.writeAsBytes(const [0x50, 0x4B, 0x03, 0x04]);
+    final almacen = AlmacenEventosArchivo(
+      rutaArchivo:
+          '${directorioTemporal.path}${Platform.pathSeparator}eventos_update.jsonl',
+    );
+    await almacen.inicializar();
+    final enrutador = EnrutadorApi(
+      almacen: almacen,
+      claveApi: null,
+      actualizaciones: CatalogoActualizacionesApp(
+        manifiesto: {
+          'version': '2.0.1',
+          'build': 151,
+          'notas': 'Prueba',
+          'plataformas': {
+            'windows': {'archivo': 'POSIA-windows.zip'},
+          },
+        },
+        directorioArchivos: dirFiles,
+      ),
+    );
+    servidor = await shelf_io.serve(
+      enrutador.construirHandler(),
+      InternetAddress.loopbackIPv4,
+      0,
+    );
+    urlBase = 'http://127.0.0.1:${servidor.port}';
+
+    final consulta = await http.get(
+      Uri.parse('$urlBase/v1/app/update?plataforma=windows'),
+    );
+    expect(consulta.statusCode, 200);
+    final cuerpo = jsonDecode(consulta.body) as Map<String, Object?>;
+    expect(cuerpo['version'], '2.0.1');
+    expect(cuerpo['build'], 151);
+    final paquete = cuerpo['paquete'] as Map<String, Object?>;
+    expect(paquete['archivo'], 'POSIA-windows.zip');
+    expect(paquete['url'], '$urlBase/v1/app/files/POSIA-windows.zip');
+
+    final descarga = await http.get(Uri.parse(paquete['url']! as String));
+    expect(descarga.statusCode, 200);
+    expect(descarga.bodyBytes, const [0x50, 0x4B, 0x03, 0x04]);
+  });
 }

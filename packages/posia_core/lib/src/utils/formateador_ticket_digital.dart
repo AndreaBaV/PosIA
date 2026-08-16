@@ -14,6 +14,7 @@ import '../models/turno_caja.dart';
 import '../models/venta.dart';
 import 'cliente_credito_util.dart';
 import 'moneda_util.dart';
+import 'traspaso_util.dart';
 
 String _etiquetaMetodoPago(Venta venta) {
   return switch (venta.metodoPago) {
@@ -361,6 +362,37 @@ List<LineaTicketDigital> _lineasDesdeTraspaso(List<LineaTraspaso> lineas) {
       .toList();
 }
 
+Map<String, String> _camposTraspaso({
+  required Traspaso traspaso,
+  required String nombreTiendaOrigen,
+  required String nombreTiendaDestino,
+  String? nombreOperador,
+}) {
+  final origen = etiquetaUbicacionTraspaso(
+    ubicacionId: traspaso.tiendaOrigenId,
+    nombre: nombreTiendaOrigen,
+  );
+  final destino = etiquetaUbicacionTraspaso(
+    ubicacionId: traspaso.tiendaDestinoId,
+    nombre: nombreTiendaDestino,
+  );
+  final campos = <String, String>{
+    esAlmacenCodificadoEnTraspaso(traspaso.tiendaOrigenId)
+        ? 'Almacén origen'
+        : 'Tienda origen': origen,
+    esAlmacenCodificadoEnTraspaso(traspaso.tiendaDestinoId)
+        ? 'Almacén destino'
+        : 'Tienda destino': destino,
+  };
+  if (nombreOperador != null && nombreOperador.trim().isNotEmpty) {
+    campos['Operador'] = nombreOperador.trim();
+  }
+  if (traspaso.notas.trim().isNotEmpty) {
+    campos['Notas'] = traspaso.notas.trim();
+  }
+  return campos;
+}
+
 /// Ticket resumido de productos enviados en traspaso.
 TicketDigitalContenido construirTicketDigitalTraspaso({
   required Traspaso traspaso,
@@ -369,36 +401,40 @@ TicketDigitalContenido construirTicketDigitalTraspaso({
   String? nombreOperador,
   String? direccionTienda,
 }) {
-  final campos = <String, String>{
-    'Origen': nombreTiendaOrigen,
-    'Destino': nombreTiendaDestino,
-  };
-  if (nombreOperador != null && nombreOperador.trim().isNotEmpty) {
-    campos['Operador'] = nombreOperador.trim();
-  }
-  if (traspaso.notas.trim().isNotEmpty) {
-    campos['Notas'] = traspaso.notas.trim();
-  }
   final totalUnidades = traspaso.lineas.fold<double>(
     0,
     (suma, linea) => suma + linea.cantidadSolicitada,
   );
-  final notasPie = <String>[
-    'Total unidades: ${_formatearCantidadLinea(totalUnidades)}',
-    'Documento de control interno',
-    '$NOMBRE_COMERCIAL_APP',
-  ];
   return TicketDigitalContenido(
     tipo: TipoDocumentoTicketDigital.traspaso,
     folio: traspaso.id.substring(0, 8).toUpperCase(),
     fecha: traspaso.solicitadoEn,
-    nombreTienda: nombreTiendaOrigen,
+    nombreTienda: etiquetaUbicacionTraspaso(
+      ubicacionId: traspaso.tiendaDestinoId,
+      nombre: nombreTiendaDestino,
+    ),
     direccionTienda: direccionTienda,
     lineas: _lineasDesdeTraspaso(traspaso.lineas),
     total: totalUnidades,
-    campos: campos,
-    notasPie: notasPie,
+    campos: _camposTraspaso(
+      traspaso: traspaso,
+      nombreTiendaOrigen: nombreTiendaOrigen,
+      nombreTiendaDestino: nombreTiendaDestino,
+      nombreOperador: nombreOperador,
+    ),
+    notasPie: [
+      '${traspaso.lineas.length} producto(s) · control interno',
+      NOMBRE_COMERCIAL_APP,
+    ],
     etiquetaTotal: 'UNIDADES',
+    tituloPersonalizado: tituloTicketTraspaso(
+      origenId: traspaso.tiendaOrigenId,
+      destinoId: traspaso.tiendaDestinoId,
+    ),
+    subtituloPersonalizado: subtituloTicketTraspaso(
+      origenId: traspaso.tiendaOrigenId,
+      destinoId: traspaso.tiendaDestinoId,
+    ),
   );
 }
 
@@ -410,42 +446,46 @@ TicketDigitalContenido construirTicketDigitalComprobanteTraspaso({
   String? nombreOperadorEnvio,
   String? direccionTienda,
 }) {
-  final campos = <String, String>{
-    'Origen': nombreTiendaOrigen,
-    'Destino': nombreTiendaDestino,
-  };
-  if (traspaso.notas.trim().isNotEmpty) {
-    campos['Notas'] = traspaso.notas.trim();
-  }
   final notasPie = <String>[
-    'PRODUCTOS RECIBIDOS (confirmar al recibir)',
-    ...traspaso.lineas.map(
-      (l) =>
-          '${l.nombreProducto}: Env ${_formatearCantidadLinea(l.cantidadSolicitada)} · Rec ________',
-    ),
-    'ENVIA:',
+    'Confirme cantidades al recibir. Marque diferencias.',
+    '',
+    'ENVÍA',
     'Nombre: ${nombreOperadorEnvio?.trim().isNotEmpty == true ? nombreOperadorEnvio!.trim() : '________________________'}',
     'Firma: ______________________________',
-    'RECIBE:',
+    '',
+    'RECIBE',
     'Nombre: ________________________',
     'Firma: ______________________________',
-    'Fecha recepcion: _______________',
-    '$NOMBRE_COMERCIAL_APP',
+    'Fecha recepción: _______________',
+    NOMBRE_COMERCIAL_APP,
   ];
   return TicketDigitalContenido(
     tipo: TipoDocumentoTicketDigital.comprobanteTraspaso,
     folio: traspaso.id.substring(0, 8).toUpperCase(),
     fecha: traspaso.solicitadoEn,
-    nombreTienda: nombreTiendaOrigen,
+    nombreTienda: etiquetaUbicacionTraspaso(
+      ubicacionId: traspaso.tiendaDestinoId,
+      nombre: nombreTiendaDestino,
+    ),
     direccionTienda: direccionTienda,
     lineas: _lineasDesdeTraspaso(traspaso.lineas),
     total: traspaso.lineas.fold<double>(
       0,
       (suma, linea) => suma + linea.cantidadSolicitada,
     ),
-    campos: campos,
+    campos: _camposTraspaso(
+      traspaso: traspaso,
+      nombreTiendaOrigen: nombreTiendaOrigen,
+      nombreTiendaDestino: nombreTiendaDestino,
+      nombreOperador: nombreOperadorEnvio,
+    ),
     notasPie: notasPie,
     etiquetaTotal: 'UNIDADES ENVIADAS',
+    tituloPersonalizado: 'COMPROBANTE ${tituloTicketTraspaso(
+      origenId: traspaso.tiendaOrigenId,
+      destinoId: traspaso.tiendaDestinoId,
+    )}',
+    subtituloPersonalizado: 'Envío y recepción',
   );
 }
 
