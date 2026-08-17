@@ -1,0 +1,16 @@
+name: Setup Flutter
+description: Instala Flutter desde storage.googleapis.com, sin bajar subosito/flutter-action (evita 429 de GitHub).
+
+inputs:
+  flutter-version:
+    description: Version exacta de Flutter (por ejemplo 3.41.5).
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Install Flutter SDK
+      shell: bash
+      env:
+        FLUTTER_VERSION: ${{ inputs.flutter-version }}
+      run: bash "${{ github.action_path }}/install.sh"
