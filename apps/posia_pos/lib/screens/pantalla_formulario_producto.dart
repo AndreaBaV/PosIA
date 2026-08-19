@@ -3,6 +3,7 @@ library;
 
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -16,6 +17,7 @@ import 'package:posia_ui/posia_ui.dart';
 import 'package:posia_voice/posia_voice.dart';
 
 import '../providers/admin_providers.dart';
+import '../util/normalizador_imagen_producto.dart';
 import '../voz/servicio_voz_dispositivo.dart';
 import '../widgets/panel_empaques_producto.dart';
 
@@ -949,18 +951,33 @@ class _PantallaFormularioProductoState
     );
   }
 
-  TipoImagenProducto? _tipoImagenDesdeNombre(String nombre) {
-    switch (nombre.toLowerCase().split('.').last) {
-      case 'jpg':
-      case 'jpeg':
-        return TipoImagenProducto.jpeg;
-      case 'png':
-        return TipoImagenProducto.png;
-      case 'webp':
-        return TipoImagenProducto.webp;
-      default:
-        return null;
+  Future<Uint8List?> _bytesDeArchivo(PlatformFile archivo) async {
+    final enMemoria = archivo.bytes;
+    if (enMemoria != null && enMemoria.isNotEmpty) {
+      return enMemoria;
     }
+    final path = archivo.path;
+    if (path == null || path.isEmpty) {
+      return null;
+    }
+    try {
+      return await File(path).readAsBytes();
+    } on Object {
+      return null;
+    }
+  }
+
+  /// En iOS el nombre a veces llega sin extension y el tipo va aparte.
+  String _nombreArchivo(PlatformFile archivo) {
+    final nombre = archivo.name;
+    final ext = archivo.extension;
+    if (ext == null || ext.isEmpty) {
+      return nombre;
+    }
+    if (nombre.toLowerCase().endsWith('.${ext.toLowerCase()}')) {
+      return nombre;
+    }
+    return '$nombre.$ext';
   }
 
   Future<void> _seleccionarYSubirFoto(ServicioImagenesProducto servicio) async {
@@ -976,7 +993,7 @@ class _PantallaFormularioProductoState
       return;
     }
     final archivo = resultado.files.first;
-    final bytes = archivo.bytes;
+    final bytes = await _bytesDeArchivo(archivo);
     if (bytes == null) {
       if (!mounted) {
         return;
@@ -990,24 +1007,29 @@ class _PantallaFormularioProductoState
       );
       return;
     }
-    final tipo = _tipoImagenDesdeNombre(archivo.name);
-    if (tipo == null) {
-      if (!mounted) {
-        return;
-      }
+    setState(() => _subiendoImagen = true);
+    final lista = await prepararImagenProducto(
+      bytes: bytes,
+      nombreArchivo: _nombreArchivo(archivo),
+    );
+    if (!mounted) {
+      return;
+    }
+    if (lista == null) {
+      setState(() => _subiendoImagen = false);
       PosiaNotificaciones.mostrarSnackBar(
         context,
         const SnackBar(
-          content: Text('Formato no soportado (usa JPG, PNG o WEBP)'),
+          content: Text(
+            'No se pudo usar esa foto. Prueba tomarla de nuevo o elige otra.',
+          ),
           backgroundColor: PosiaColors.cancelar,
         ),
       );
       return;
     }
-    if (bytes.length > TAMANO_MAXIMO_IMAGEN_PRODUCTO_BYTES) {
-      if (!mounted) {
-        return;
-      }
+    if (lista.bytes.length > TAMANO_MAXIMO_IMAGEN_PRODUCTO_BYTES) {
+      setState(() => _subiendoImagen = false);
       PosiaNotificaciones.mostrarSnackBar(
         context,
         const SnackBar(
@@ -1017,11 +1039,10 @@ class _PantallaFormularioProductoState
       );
       return;
     }
-    setState(() => _subiendoImagen = true);
     final url = await servicio.subirFoto(
       productoId: producto.id,
-      bytes: bytes,
-      tipo: tipo,
+      bytes: lista.bytes,
+      tipo: lista.tipo,
     );
     if (!mounted) {
       return;
