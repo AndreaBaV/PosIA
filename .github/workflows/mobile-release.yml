@@ -480,6 +480,57 @@ jobs:
         working-directory: ${{ env.APP_DIR }}
         run: dart analyze .
 
+      - name: Verify macOS signing secrets
+        id: signing
+        env:
+          MACOS_CERT: ${{ secrets.MACOS_DIST_CERTIFICATE_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_DIST_CERTIFICATE_PASSWORD }}
+          MACOS_PROFILE: ${{ secrets.MACOS_PROVISION_PROFILE_BASE64 }}
+          MACOS_PROFILE_NAME: ${{ secrets.MACOS_PROVISION_PROFILE_NAME }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$MACOS_CERT" ] || [ -z "$MACOS_CERT_PASSWORD" ] || \
+             [ -z "$MACOS_PROFILE" ] || [ -z "$MACOS_PROFILE_NAME" ] || \
+             [ -z "$APPLE_TEAM_ID" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Secrets macOS incompletos. Para TestFlight: MACOS_DIST_CERTIFICATE_BASE64, MACOS_DIST_CERTIFICATE_PASSWORD, MACOS_PROVISION_PROFILE_BASE64, MACOS_PROVISION_PROFILE_NAME, APPLE_TEAM_ID."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Import Apple Distribution certificate (macOS)
+        if: steps.signing.outputs.configured == 'true'
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.MACOS_DIST_CERTIFICATE_BASE64 }}
+          p12-password: ${{ secrets.MACOS_DIST_CERTIFICATE_PASSWORD }}
+          keychain: posia-macos-build
+
+      - name: Install provisioning profile (macOS)
+        if: steps.signing.outputs.configured == 'true'
+        env:
+          MACOS_PROFILE_BASE64: ${{ secrets.MACOS_PROVISION_PROFILE_BASE64 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          MACOS_PROFILE_NAME: ${{ secrets.MACOS_PROVISION_PROFILE_NAME }}
+        run: |
+          set -euo pipefail
+          PP_PATH="$RUNNER_TEMP/macos_pp.provisionprofile"
+          tr -d ' \n\r' <<< "$MACOS_PROFILE_BASE64" | base64 --decode -o "$PP_PATH"
+          PP_UUID=$(security cms -D -i "$PP_PATH" | plutil -extract UUID raw -)
+          mkdir -p "$HOME/Library/Developer/Xcode/Provisioning Profiles"
+          cp "$PP_PATH" "$HOME/Library/Developer/Xcode/Provisioning Profiles/${PP_UUID}.provisionprofile"
+          echo "Perfil macOS instalado: ${MACOS_PROFILE_NAME} (${PP_UUID})"
+
+      - name: Prepare macOS ExportOptions.plist
+        if: steps.signing.outputs.configured == 'true'
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          MACOS_PROFILE_NAME: ${{ secrets.MACOS_PROVISION_PROFILE_NAME }}
+        run: |
+          PLIST="${{ env.APP_DIR }}/macos/ExportOptions.plist"
+          /usr/libexec/PlistBuddy -c "Set :teamID $APPLE_TEAM_ID" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :provisioningProfiles:com.posia.posiaPos $MACOS_PROFILE_NAME" "$PLIST"
+
       - name: Build macOS release
         working-directory: ${{ env.APP_DIR }}
         env:
@@ -496,7 +547,20 @@ jobs:
           [ "$POSIA_LIMPIAR_CACHE_LOCAL" = "true" ] && ARGS="$ARGS --dart-define=POSIA_LIMPIAR_CACHE_LOCAL=true"
           flutter build macos --release $ARGS
 
-      - name: Package DMG
+      - name: Package and export for App Store
+        if: steps.signing.outputs.configured == 'true'
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          set -euo pipefail
+          APP_PATH="build/macos/Build/Products/Release/POSIA POS.app"
+          PKG_PATH="build/macos/POSIA-POS.pkg"
+          productbuild --sign "3rd Party Mac Developer Installer" \
+            --component "$APP_PATH" /Applications \
+            "$PKG_PATH"
+          ls -la "$PKG_PATH"
+
+      - name: Package DMG (sin firma)
+        if: steps.signing.outputs.configured != 'true'
         working-directory: ${{ env.APP_DIR }}
         run: |
           set -euo pipefail
@@ -516,13 +580,49 @@ jobs:
             "build/macos/POSIA-POS.dmg"
           ls -la build/macos/POSIA-POS.dmg
 
-      - name: Upload macOS artifact
+      - name: Upload macOS PKG artifact
+        if: steps.signing.outputs.configured == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: posia-macos-pkg
+          path: ${{ env.APP_DIR }}/build/macos/POSIA-POS.pkg
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload macOS DMG artifact
+        if: steps.signing.outputs.configured != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: posia-macos-dmg
           path: ${{ env.APP_DIR }}/build/macos/POSIA-POS.dmg
           if-no-files-found: error
           retention-days: 30
+
+      - name: Detect TestFlight credentials (macOS)
+        id: asc_upload
+        if: steps.signing.outputs.configured == 'true'
+        env:
+          API_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+          API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APPLE_ISSUER_ID }}
+        run: |
+          if [ -n "$API_KEY" ] && [ -n "$API_KEY_ID" ] && [ -n "$ISSUER_ID" ]; then
+            echo "method=api" >> "$GITHUB_OUTPUT"
+            echo "TestFlight macOS: App Store Connect API Key"
+          else
+            echo "method=skip" >> "$GITHUB_OUTPUT"
+            echo "::notice::TestFlight macOS omitido: sin credenciales de App Store Connect API."
+          fi
+
+      - name: Upload to TestFlight (macOS)
+        if: steps.signing.outputs.configured == 'true' && steps.asc_upload.outputs.method == 'api'
+        run: |
+          set -euo pipefail
+          xcrun altool --upload-app \
+            --type macos \
+            --file "${{ env.APP_DIR }}/build/macos/POSIA-POS.pkg" \
+            --apiKey "${{ secrets.APPLE_API_KEY_ID }}" \
+            --apiIssuer "${{ secrets.APPLE_ISSUER_ID }}"
 
   github-release:
     name: GitHub Release
@@ -549,6 +649,13 @@ jobs:
         with:
           name: posia-ios-ipa
           path: dist/ios
+
+      - name: Download macOS PKG
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: posia-macos-pkg
+          path: dist/macos
 
       - name: Download macOS DMG
         uses: actions/download-artifact@v4
