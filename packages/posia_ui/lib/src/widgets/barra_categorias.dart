@@ -11,18 +11,27 @@ import 'package:posia_core/posia_core.dart';
 import '../theme/posia_theme.dart';
 import '../utils/iconos_categoria.dart';
 
-/// Chips de categorias personalizables con opcion Todos.
+/// Chips de categorias personalizables con opcion Todos y multi-seleccion.
+///
+/// - [categoriasSeleccionadasIds] vacio = "Todos".
+/// - Pulsar una categoria ya seleccionada la quita; si no queda ninguna, vuelve a Todos.
+/// - Se pueden marcar varias categorias a la vez para el grid/lista.
 class BarraCategorias extends StatelessWidget {
 	const BarraCategorias({
 		required this.categorias,
-		required this.categoriaSeleccionadaId,
+		required this.categoriasSeleccionadasIds,
 		required this.alSeleccionar,
 		super.key,
 	});
 
 	final List<Categoria> categorias;
-	final String categoriaSeleccionadaId;
+
+	/// Ids activos. Vacio equivale a [CATEGORIA_TODOS_ID].
+	final Set<String> categoriasSeleccionadasIds;
+
 	final ValueChanged<String> alSeleccionar;
+
+	bool get _todosActivo => categoriasSeleccionadasIds.isEmpty;
 
 	@override
 	Widget build(BuildContext context) {
@@ -36,7 +45,7 @@ class BarraCategorias extends StatelessWidget {
 						etiqueta: 'Todos',
 						icono: Icons.apps_rounded,
 						color: PosiaColors.neutro,
-						seleccionado: categoriaSeleccionadaId == CATEGORIA_TODOS_ID,
+						seleccionado: _todosActivo,
 						alPresionar: () => alSeleccionar(CATEGORIA_TODOS_ID),
 					),
 					...categorias.map(
@@ -44,7 +53,7 @@ class BarraCategorias extends StatelessWidget {
 							etiqueta: categoria.nombre,
 							icono: IconosCategoria.resolver(categoria.icono),
 							color: IconosCategoria.resolverColor(categoria.colorHex),
-							seleccionado: categoriaSeleccionadaId == categoria.id,
+							seleccionado: categoriasSeleccionadasIds.contains(categoria.id),
 							alPresionar: () => alSeleccionar(categoria.id),
 						),
 					),

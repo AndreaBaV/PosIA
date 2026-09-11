@@ -23,6 +23,7 @@ import '../widgets/resolucion_lineas_voz.dart';
 import '../widgets/selector_cliente_caja.dart';
 import 'pantalla_caja.dart'
 	show
+		agregarEmpaqueEnCaja,
 		confirmarVaciarCarritoCaja,
 		ejecutarCobroCaja,
 		ejecutarCotizacionCaja,
@@ -143,6 +144,7 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 			body: Stack(
 				children: [
 					GestureDetector(
+						behavior: HitTestBehavior.translucent,
 						onTap: () => ocultarTeclado(context),
 						child: esHorizontal
 							? _layoutHorizontal(context, estado, columnasGrilla)
@@ -270,7 +272,7 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 				if (estado.categorias.isNotEmpty)
 					BarraCategorias(
 						categorias: estado.categorias,
-						categoriaSeleccionadaId: estado.categoriaSeleccionadaId,
+						categoriasSeleccionadasIds: estado.categoriasSeleccionadasIds,
 						alSeleccionar: (id) {
 							ref.read(carritoNotifierProvider.notifier).seleccionarCategoria(id);
 						},
@@ -292,9 +294,10 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 	Widget _grillaProductos(BuildContext context, EstadoCarrito estado, int columnas) {
 		return GrillaProductos(
 			columnas: columnas,
-			categoriaId: estado.categoriaSeleccionadaId,
+			categoriaId: estado.claveFiltroCategorias,
 			productos: estado.productos,
 			stockLocalPorProducto: estado.stockLocalPorProducto,
+			empaquesPorProducto: estado.empaquesPorProducto,
 			mensajeVacio: _busquedaController.text.trim().isNotEmpty
 				? 'Sin resultados'
 				: 'Sin productos',
@@ -302,6 +305,19 @@ class _PantallaCajaMovilState extends ConsumerState<PantallaCajaMovil> {
 				mostrarExistenciasProductoEnCaja(context, ref, producto),
 			alPresionarLargo: (producto) =>
 				intentarSeleccionarEmpaqueEnCaja(context, ref, producto),
+			alSeleccionarEmpaque: (producto, empaque) async {
+				ocultarTeclado(context);
+				final agregado = await agregarEmpaqueEnCaja(
+					context,
+					ref,
+					producto,
+					empaque,
+				);
+				if (agregado && mounted) {
+					_busquedaController.clear();
+					ref.read(carritoNotifierProvider.notifier).limpiarBusqueda();
+				}
+			},
 			alSeleccionar: (producto) async {
 				ocultarTeclado(context);
 				final agregado = await seleccionarProductoEnCaja(context, ref, producto);

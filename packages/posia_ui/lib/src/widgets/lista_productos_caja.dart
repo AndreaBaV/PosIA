@@ -3,13 +3,14 @@
 /// Autor: Equipo POSIA
 /// Matricula: POSIA-2026-001
 /// Fecha creacion: 2026-07-03 09:50:00 (UTC-6)
-/// Ultima modificacion: 2026-07-03 09:50:00 (UTC-6)
+/// Ultima modificacion: 2026-09-11 13:15:00 (UTC-6)
 library;
 
 import 'package:flutter/material.dart';
 import 'package:posia_core/posia_core.dart';
 
 import '../theme/posia_theme.dart';
+import 'visual_producto.dart';
 
 /// Muestra catalogo como lista vertical compacta para seleccion rapida.
 class ListaProductosCaja extends StatefulWidget {
@@ -19,6 +20,8 @@ class ListaProductosCaja extends StatefulWidget {
 		required this.alSeleccionar,
 		this.alPresionarLargo,
 		this.alVerExistencias,
+		this.alSeleccionarEmpaque,
+		this.empaquesPorProducto = const {},
 		this.stockLocalPorProducto = const {},
 		this.categoriaId,
 		this.mensajeVacio = 'Sin productos',
@@ -32,20 +35,27 @@ class ListaProductosCaja extends StatefulWidget {
 	/// Existencia en la tienda activa por productoId.
 	final Map<String, double> stockLocalPorProducto;
 
+	/// Empaques comerciales (caja, bulto…) por productoId.
+	final Map<String, List<PresentacionProducto>> empaquesPorProducto;
+
 	/// Categoria activa (para conservar scroll al cambiar filtro).
 	final String? categoriaId;
 
 	/// Mensaje cuando no hay productos visibles.
 	final String mensajeVacio;
 
-	/// Accion al seleccionar producto.
+	/// Accion al seleccionar producto (unidad base).
 	final ValueChanged<Producto> alSeleccionar;
 
-	/// Accion al mantener pulsado (p. ej. vender por empaque).
+	/// Accion al mantener pulsado (dialogo de empaques).
 	final ValueChanged<Producto>? alPresionarLargo;
 
 	/// Accion al pulsar el icono de existencias.
 	final ValueChanged<Producto>? alVerExistencias;
+
+	/// Accion al pulsar un chip de empaque concreto.
+	final void Function(Producto producto, PresentacionProducto empaque)?
+		alSeleccionarEmpaque;
 
 	/// Indice resaltado para navegacion con teclado (opcional).
 	final int? indiceSeleccionado;
@@ -115,10 +125,12 @@ class _ListaProductosCajaState extends State<ListaProductosCaja> {
 				final stockLocal = widget.stockLocalPorProducto[producto.id] ?? 0.0;
 				final sinExistenciaLocal =
 					stockLocal <= 0 && !producto.permiteStockNegativo;
+				final empaques = widget.empaquesPorProducto[producto.id] ?? const [];
 				final clave = _clavesFilas.putIfAbsent(indice, GlobalKey.new);
 				return _FilaProducto(
 					key: clave,
 					producto: producto,
+					empaques: empaques,
 					seleccionado: seleccionado,
 					sinExistenciaLocal: sinExistenciaLocal,
 					alPresionar: () => widget.alSeleccionar(producto),
@@ -128,6 +140,9 @@ class _ListaProductosCajaState extends State<ListaProductosCaja> {
 					alVerExistencias: widget.alVerExistencias == null
 						? null
 						: () => widget.alVerExistencias!(producto),
+					alSeleccionarEmpaque: widget.alSeleccionarEmpaque == null
+						? null
+						: (empaque) => widget.alSeleccionarEmpaque!(producto, empaque),
 				);
 			},
 		);
@@ -138,17 +153,21 @@ class _FilaProducto extends StatelessWidget {
 	const _FilaProducto({
 		required this.producto,
 		required this.alPresionar,
+		this.empaques = const [],
 		this.alPresionarLargo,
 		this.alVerExistencias,
+		this.alSeleccionarEmpaque,
 		this.seleccionado = false,
 		this.sinExistenciaLocal = false,
 		super.key,
 	});
 
 	final Producto producto;
+	final List<PresentacionProducto> empaques;
 	final VoidCallback alPresionar;
 	final VoidCallback? alPresionarLargo;
 	final VoidCallback? alVerExistencias;
+	final ValueChanged<PresentacionProducto>? alSeleccionarEmpaque;
 	final bool seleccionado;
 	final bool sinExistenciaLocal;
 
@@ -166,92 +185,99 @@ class _FilaProducto extends StatelessWidget {
 			child: InkWell(
 				onTap: alPresionar,
 				onLongPress: alPresionarLargo,
-				child: ListTile(
-					contentPadding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 2.0),
-					leading: CircleAvatar(
-						backgroundColor: colorAcento.withValues(alpha: 0.12),
-						child: Icon(
-							_iconoProducto(producto),
-							color: colorAcento,
-							size: 22.0,
-						),
-					),
-					title: Text(
-						producto.nombre,
-						maxLines: 2,
-						overflow: TextOverflow.ellipsis,
-						style: TextStyle(
-							fontWeight: FontWeight.w500,
-							color: sinExistenciaLocal ? PosiaColors.neutro : null,
-						),
-					),
-					subtitle: sinExistenciaLocal
-						? Text(
-							'Sin existencia · $precioTexto',
-							style: TextStyle(
-								color: PosiaColors.sinExistencia,
-								fontSize: 12.0,
-								fontWeight: FontWeight.w600,
-							),
-						)
-						: Text(precioTexto),
-					trailing: Row(
-						mainAxisSize: MainAxisSize.min,
+				child: Padding(
+					padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 2.0),
+					child: Column(
+						crossAxisAlignment: CrossAxisAlignment.stretch,
 						children: [
-							if (alVerExistencias != null)
-								IconButton(
-									tooltip: 'Ver existencias',
-									visualDensity: VisualDensity.compact,
-									icon: Icon(
-										Icons.info_outline,
-										size: 20.0,
-										color: sinExistenciaLocal
-											? PosiaColors.sinExistencia
-											: PosiaColors.neutro,
-									),
-									onPressed: alVerExistencias,
+							ListTile(
+								contentPadding: const EdgeInsets.symmetric(
+									horizontal: 8.0,
+									vertical: 0.0,
 								),
-							if (seleccionado)
-								Icon(Icons.keyboard_return, size: 18.0, color: colorAcento),
+								leading: VisualProducto(
+									producto: producto,
+									colorAcento: colorAcento,
+									tamano: 40.0,
+									padding: 0.0,
+									circular: true,
+								),
+								title: Text(
+									producto.nombre,
+									maxLines: 2,
+									overflow: TextOverflow.ellipsis,
+									style: TextStyle(
+										fontWeight: FontWeight.w500,
+										color: sinExistenciaLocal ? PosiaColors.neutro : null,
+									),
+								),
+								subtitle: sinExistenciaLocal
+									? Text(
+										'Sin existencia · $precioTexto',
+										style: TextStyle(
+											color: PosiaColors.sinExistencia,
+											fontSize: 12.0,
+											fontWeight: FontWeight.w600,
+										),
+									)
+									: Text(precioTexto),
+								trailing: Row(
+									mainAxisSize: MainAxisSize.min,
+									children: [
+										if (alVerExistencias != null)
+											IconButton(
+												tooltip: 'Ver existencias',
+												visualDensity: VisualDensity.compact,
+												icon: Icon(
+													Icons.info_outline,
+													size: 20.0,
+													color: sinExistenciaLocal
+														? PosiaColors.sinExistencia
+														: PosiaColors.neutro,
+												),
+												onPressed: alVerExistencias,
+											),
+										if (seleccionado)
+											Icon(Icons.keyboard_return, size: 18.0, color: colorAcento),
+									],
+								),
+							),
+							if (empaques.isNotEmpty && alSeleccionarEmpaque != null)
+								Padding(
+									padding: const EdgeInsets.fromLTRB(64.0, 0.0, 12.0, 8.0),
+									child: Wrap(
+										spacing: 6.0,
+										runSpacing: 4.0,
+										children: [
+											for (final empaque in empaques)
+												ActionChip(
+													visualDensity: VisualDensity.compact,
+													avatar: Icon(
+														Icons.inventory_2_outlined,
+														size: 16.0,
+														color: colorAcento,
+													),
+													label: Text(
+														empaque.nombre,
+														style: TextStyle(
+															fontWeight: FontWeight.w600,
+															color: colorAcento,
+															fontSize: 12.0,
+														),
+													),
+													backgroundColor: colorAcento.withValues(alpha: 0.1),
+													side: BorderSide(
+														color: colorAcento.withValues(alpha: 0.35),
+													),
+													onPressed: () => alSeleccionarEmpaque!(empaque),
+												),
+										],
+									),
+								),
 						],
 					),
 				),
 			),
 		);
 	}
-}
-
-IconData _iconoProducto(Producto producto) {
-	final nombre = producto.nombre.toLowerCase();
-	if (nombre.contains('coca')) {
-		return Icons.local_drink;
-	}
-	if (nombre.contains('arroz')) {
-		return Icons.rice_bowl;
-	}
-	if (nombre.contains('leche')) {
-		return Icons.water_drop;
-	}
-	if (nombre.contains('huevo')) {
-		return Icons.egg;
-	}
-	if (nombre.contains('aceite')) {
-		return Icons.opacity;
-	}
-	if (nombre.contains('azucar')) {
-		return Icons.grain;
-	}
-	if (nombre.contains('frijol')) {
-		return Icons.grass;
-	}
-	if (nombre.contains('atun')) {
-		return Icons.set_meal;
-	}
-	if (producto.moduloVertical == ModuloVertical.carniceria) {
-		return Icons.set_meal;
-	}
-	if (producto.moduloVertical == ModuloVertical.farmacia) {
-		return Icons.medication;
-	}
-	return Icons.shopping_basket;
 }

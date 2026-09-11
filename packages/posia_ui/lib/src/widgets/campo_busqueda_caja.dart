@@ -6,6 +6,10 @@ import 'package:flutter/material.dart';
 import '../theme/posia_theme.dart';
 
 /// TextField con autofocus para filtrar productos y recibir escaneos USB.
+///
+/// Tras perder el foco con texto, la proxima vez que se enfoca selecciona todo
+/// (estilo traductor de Google): la primera tecla reemplaza la busqueda previa
+/// salvo que el usuario pulse de nuevo el campo para editar.
 class CampoBusquedaCaja extends StatefulWidget {
 	const CampoBusquedaCaja({
 		required this.controlador,
@@ -31,20 +35,82 @@ class CampoBusquedaCaja extends StatefulWidget {
 }
 
 class _CampoBusquedaCajaState extends State<CampoBusquedaCaja> {
+	/// Tras unblur con texto: al volver a enfocar se selecciona todo.
+	bool _reemplazarAlEscribir = false;
+
+	/// Evita tratar el primer toque de foco como "editar" (quita la seleccion).
+	bool _ignorarTapDeEnfoque = false;
+
 	@override
 	void initState() {
 		super.initState();
 		widget.controlador.addListener(_actualizar);
+		widget.focusNode.addListener(_alCambiarFoco);
+	}
+
+	@override
+	void didUpdateWidget(CampoBusquedaCaja oldWidget) {
+		super.didUpdateWidget(oldWidget);
+		if (oldWidget.controlador != widget.controlador) {
+			oldWidget.controlador.removeListener(_actualizar);
+			widget.controlador.addListener(_actualizar);
+		}
+		if (oldWidget.focusNode != widget.focusNode) {
+			oldWidget.focusNode.removeListener(_alCambiarFoco);
+			widget.focusNode.addListener(_alCambiarFoco);
+		}
 	}
 
 	@override
 	void dispose() {
 		widget.controlador.removeListener(_actualizar);
+		widget.focusNode.removeListener(_alCambiarFoco);
 		super.dispose();
 	}
 
 	void _actualizar() {
 		setState(() {});
+	}
+
+	void _alCambiarFoco() {
+		if (!widget.focusNode.hasFocus) {
+			if (widget.controlador.text.trim().isNotEmpty) {
+				_reemplazarAlEscribir = true;
+			}
+			return;
+		}
+		if (!_reemplazarAlEscribir || widget.controlador.text.isEmpty) {
+			return;
+		}
+		_ignorarTapDeEnfoque = true;
+		WidgetsBinding.instance.addPostFrameCallback((_) {
+			if (!mounted || !widget.focusNode.hasFocus) {
+				return;
+			}
+			final texto = widget.controlador.text;
+			if (texto.isEmpty) {
+				return;
+			}
+			widget.controlador.selection = TextSelection(
+				baseOffset: 0,
+				extentOffset: texto.length,
+			);
+		});
+	}
+
+	void _alPulsarCampo() {
+		if (_ignorarTapDeEnfoque) {
+			_ignorarTapDeEnfoque = false;
+			return;
+		}
+		// Segundo toque: el usuario quiere editar el texto actual.
+		if (_reemplazarAlEscribir) {
+			_reemplazarAlEscribir = false;
+		}
+	}
+
+	void _ocultarTecladoFuera(PointerDownEvent event) {
+		widget.focusNode.unfocus();
 	}
 
 	@override
@@ -56,6 +122,8 @@ class _CampoBusquedaCajaState extends State<CampoBusquedaCaja> {
 				focusNode: widget.focusNode,
 				autofocus: widget.autofocus,
 				textInputAction: TextInputAction.search,
+				onTap: _alPulsarCampo,
+				onTapOutside: _ocultarTecladoFuera,
 				decoration: InputDecoration(
 					hintText: widget.hintText,
 					prefixIcon: Icon(
@@ -79,6 +147,7 @@ class _CampoBusquedaCajaState extends State<CampoBusquedaCaja> {
 									icon: const Icon(Icons.clear),
 									tooltip: 'Limpiar búsqueda',
 									onPressed: () {
+										_reemplazarAlEscribir = false;
 										widget.controlador.clear();
 										widget.alCambiar('');
 									},
@@ -99,8 +168,16 @@ class _CampoBusquedaCajaState extends State<CampoBusquedaCaja> {
 					isDense: true,
 					contentPadding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 14.0),
 				),
-				onChanged: widget.alCambiar,
-				onSubmitted: widget.alEnviar,
+				onChanged: (valor) {
+					_reemplazarAlEscribir = false;
+					widget.alCambiar(valor);
+				},
+				onSubmitted: (valor) {
+					if (valor.trim().isNotEmpty) {
+						_reemplazarAlEscribir = true;
+					}
+					widget.alEnviar(valor);
+				},
 			),
 		);
 	}

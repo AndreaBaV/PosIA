@@ -290,7 +290,7 @@ class EstadoCarrito {
 	const EstadoCarrito({
 		required this.productos,
 		required this.categorias,
-		required this.categoriaSeleccionadaId,
+		required this.categoriasSeleccionadasIds,
 		required this.lineas,
 		required this.total,
 		this.descuentoTicket = 0.0,
@@ -302,6 +302,7 @@ class EstadoCarrito {
 		this.ticketsEnEspera = 0,
 		this.indiceBusquedaSeleccionado = 0,
 		this.stockLocalPorProducto = const {},
+		this.empaquesPorProducto = const {},
 	});
 
 	/// Catalogo visible en lista.
@@ -310,8 +311,17 @@ class EstadoCarrito {
 	/// Categorias activas para filtro.
 	final List<Categoria> categorias;
 
-	/// Categoria seleccionada en barra.
-	final String categoriaSeleccionadaId;
+	/// Categorias activas en la barra. Vacio = "Todos".
+	final Set<String> categoriasSeleccionadasIds;
+
+	/// Clave estable para scroll/PageStorage del catalogo filtrado.
+	String get claveFiltroCategorias {
+		if (categoriasSeleccionadasIds.isEmpty) {
+			return CATEGORIA_TODOS_ID;
+		}
+		final ordenados = categoriasSeleccionadasIds.toList()..sort();
+		return ordenados.join(',');
+	}
 
 	/// Lineas del carrito activo.
 	final List<LineaCarrito> lineas;
@@ -346,11 +356,14 @@ class EstadoCarrito {
 	/// Existencia local por productoId para resaltar sin stock en lista.
 	final Map<String, double> stockLocalPorProducto;
 
+	/// Empaques comerciales activos (caja, bulto…) por productoId.
+	final Map<String, List<PresentacionProducto>> empaquesPorProducto;
+
 	/// Genera copia con campos actualizados.
 	EstadoCarrito copiarCon({
 		List<Producto>? productos,
 		List<Categoria>? categorias,
-		String? categoriaSeleccionadaId,
+		Set<String>? categoriasSeleccionadasIds,
 		List<LineaCarrito>? lineas,
 		double? total,
 		double? descuentoTicket,
@@ -362,12 +375,13 @@ class EstadoCarrito {
 		int? ticketsEnEspera,
 		int? indiceBusquedaSeleccionado,
 		Map<String, double>? stockLocalPorProducto,
+		Map<String, List<PresentacionProducto>>? empaquesPorProducto,
 	}) {
 		return EstadoCarrito(
 			productos: productos ?? this.productos,
 			categorias: categorias ?? this.categorias,
-			categoriaSeleccionadaId:
-				categoriaSeleccionadaId ?? this.categoriaSeleccionadaId,
+			categoriasSeleccionadasIds:
+				categoriasSeleccionadasIds ?? this.categoriasSeleccionadasIds,
 			lineas: lineas ?? this.lineas,
 			total: total ?? this.total,
 			descuentoTicket: descuentoTicket ?? this.descuentoTicket,
@@ -381,25 +395,43 @@ class EstadoCarrito {
 				indiceBusquedaSeleccionado ?? this.indiceBusquedaSeleccionado,
 			stockLocalPorProducto:
 				stockLocalPorProducto ?? this.stockLocalPorProducto,
+			empaquesPorProducto: empaquesPorProducto ?? this.empaquesPorProducto,
 		);
 	}
 }
 
 /// Gestiona estado reactivo del carrito conectado a [ServicioCaja].
 class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
-	String _categoriaSeleccionadaId = CATEGORIA_TODOS_ID;
+	/// Vacio = categoria "Todos". Puede contener varias ids a la vez.
+	Set<String> _categoriasSeleccionadasIds = {};
 	String _textoBusqueda = '';
 	List<Producto>? _catalogoCompleto;
 	List<Categoria>? _categoriasCache;
+	Map<String, List<PresentacionProducto>> _empaquesPorProducto = {};
 
 	@override
 	Future<EstadoCarrito> build() async {
 		return _cargarEstadoInicial();
 	}
 
-	/// Cambia categoria activa filtrando el catalogo en memoria (sin parpadeo).
+	/// Alterna categorias: multi-seleccion, o vuelve a Todos.
+	///
+	/// - "Todos" limpia el filtro.
+	/// - Pulsar una categoria ya activa la quita; si no queda ninguna → Todos.
+	/// - Pulsar otra categoria la agrega al filtro del grid/lista.
 	void seleccionarCategoria(String categoriaId) {
-		_categoriaSeleccionadaId = categoriaId;
+		if (categoriaId == CATEGORIA_TODOS_ID) {
+			_categoriasSeleccionadasIds = {};
+		} else if (_categoriasSeleccionadasIds.contains(categoriaId)) {
+			_categoriasSeleccionadasIds = {
+				..._categoriasSeleccionadasIds,
+			}..remove(categoriaId);
+		} else {
+			_categoriasSeleccionadasIds = {
+				..._categoriasSeleccionadasIds,
+				categoriaId,
+			};
+		}
 		final actual = state.value;
 		if (actual == null || _catalogoCompleto == null) {
 			recargar(mostrarCarga: true);
@@ -407,8 +439,12 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 		}
 		state = AsyncData(
 			actual.copiarCon(
-				categoriaSeleccionadaId: categoriaId,
-				productos: _filtrarProductos(_catalogoCompleto!, categoriaId, _textoBusqueda),
+				categoriasSeleccionadasIds: Set<String>.from(_categoriasSeleccionadasIds),
+				productos: _filtrarProductos(
+					_catalogoCompleto!,
+					_categoriasSeleccionadasIds,
+					_textoBusqueda,
+				),
 				indiceBusquedaSeleccionado: 0,
 			),
 		);
@@ -423,7 +459,7 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 		}
 		final productos = _filtrarProductos(
 			_catalogoCompleto!,
-			_categoriaSeleccionadaId,
+			_categoriasSeleccionadasIds,
 			_textoBusqueda,
 		);
 		state = AsyncData(
@@ -474,6 +510,7 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 		if (invalidarCatalogo) {
 			_catalogoCompleto = null;
 			_categoriasCache = null;
+			_empaquesPorProducto = {};
 		}
 		if (mostrarCarga || !state.hasValue) {
 			state = const AsyncLoading();
@@ -613,6 +650,7 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 		}
 		if (invalidarCatalogo) {
 			_catalogoCompleto = null;
+			_empaquesPorProducto = {};
 		}
 		final servicio = await ref.read(servicioCajaProvider.future);
 		await _asegurarCatalogo();
@@ -626,13 +664,18 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 				lineas: servicio.obtenerCarrito(),
 				total: servicio.calcularTotalCarrito(),
 				descuentoTicket: servicio.obtenerDescuentoTicket(),
-				productos: _filtrarProductos(_catalogoCompleto!, _categoriaSeleccionadaId, _textoBusqueda),
+				productos: _filtrarProductos(
+					_catalogoCompleto!,
+					_categoriasSeleccionadasIds,
+					_textoBusqueda,
+				),
 				turnoAbierto: turno != null,
 				nombreVendedor: servicio.obtenerVendedorActivo()?.nombre,
 				nombreCliente: servicio.obtenerClienteActivo()?.nombre,
 				favoritos: await servicio.listarFavoritosCaja(),
 				ticketsEnEspera: await servicio.contarTicketsEnEspera(),
 				stockLocalPorProducto: stockLocal,
+				empaquesPorProducto: _empaquesPorProducto,
 			),
 		);
 	}
@@ -656,37 +699,40 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 		}
 		final servicio = await ref.read(servicioCajaProvider.future);
 		_catalogoCompleto = await servicio.listarProductos();
+		_empaquesPorProducto = await servicio.mapaEmpaquesActivos();
 	}
 
-	/// Vuelve a "Todos" si la categoria filtrada ya no esta activa.
+	/// Quita del filtro categorias que ya no estan activas (p. ej. tras sync).
 	///
 	/// El sync fusiona categorias duplicadas por nombre: reasigna los productos
 	/// de la perdedora a la canonica y desactiva la perdedora
 	/// (AplicadorEventosSqlite._autoSanarCategoriasDuplicadas). La caja guarda
-	/// la categoria elegida en memoria, asi que si la desactivada era la
-	/// seleccionada el filtro se queda en cero y la caja se ve vacia aunque el
-	/// catalogo este completo. Antes solo se recuperaba cerrando sesion, que es
-	/// lo unico que reiniciaba este notifier.
+	/// la seleccion en memoria, asi que si una desactivada seguia filtrando el
+	/// catalogo podia verse vacio. Antes solo se recuperaba cerrando sesion.
 	void _descartarCategoriaQueYaNoExiste() {
-		if (_categoriaSeleccionadaId == CATEGORIA_TODOS_ID) {
+		if (_categoriasSeleccionadasIds.isEmpty) {
 			return;
 		}
-		final vigente = _categoriasCache
-			?.any((categoria) => categoria.id == _categoriaSeleccionadaId);
-		if (vigente ?? false) {
+		final vigentes = _categoriasCache;
+		if (vigentes == null) {
 			return;
 		}
-		_categoriaSeleccionadaId = CATEGORIA_TODOS_ID;
+		final idsVigentes = vigentes.map((c) => c.id).toSet();
+		_categoriasSeleccionadasIds = _categoriasSeleccionadasIds
+			.where(idsVigentes.contains)
+			.toSet();
 	}
 
 	List<Producto> _filtrarProductos(
 		List<Producto> todos,
-		String categoriaId,
+		Set<String> categoriasIds,
 		String textoBusqueda,
 	) {
 		Iterable<Producto> lista = todos;
-		if (categoriaId != CATEGORIA_TODOS_ID) {
-			lista = lista.where((producto) => producto.categoriaId == categoriaId);
+		if (categoriasIds.isNotEmpty) {
+			lista = lista.where(
+				(producto) => categoriasIds.contains(producto.categoriaId),
+			);
 		}
 		if (textoBusqueda.isNotEmpty) {
 			return filtrarProductosPorBusqueda(lista.toList(), textoBusqueda);
@@ -707,7 +753,7 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 		_descartarCategoriaQueYaNoExiste();
 		final productos = _filtrarProductos(
 			_catalogoCompleto!,
-			_categoriaSeleccionadaId,
+			_categoriasSeleccionadasIds,
 			_textoBusqueda,
 		);
 		final favoritos = await servicio.listarFavoritosCaja();
@@ -720,7 +766,7 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 		return EstadoCarrito(
 			productos: productos,
 			categorias: _categoriasCache!,
-			categoriaSeleccionadaId: _categoriaSeleccionadaId,
+			categoriasSeleccionadasIds: Set<String>.from(_categoriasSeleccionadasIds),
 			lineas: servicio.obtenerCarrito(),
 			total: servicio.calcularTotalCarrito(),
 			descuentoTicket: servicio.obtenerDescuentoTicket(),
@@ -731,6 +777,7 @@ class CarritoNotifier extends AsyncNotifier<EstadoCarrito> {
 			favoritos: favoritos,
 			ticketsEnEspera: await servicio.contarTicketsEnEspera(),
 			stockLocalPorProducto: stockLocal,
+			empaquesPorProducto: _empaquesPorProducto,
 		);
 	}
 }

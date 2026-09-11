@@ -913,7 +913,7 @@ class _PantallaFormularioProductoState
                       children: [
                         Text('Foto del producto'),
                         Text(
-                          'Se ve en el catálogo de la tienda en línea',
+                          'Se ve en caja y en el catálogo en línea',
                           style: TextStyle(fontSize: 12.0, color: Colors.grey),
                         ),
                       ],

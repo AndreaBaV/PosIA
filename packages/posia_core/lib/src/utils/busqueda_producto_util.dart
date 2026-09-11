@@ -3,6 +3,17 @@ library;
 
 import '../models/producto.dart';
 
+/// Capas de relevancia: exacta > parcial > parecida.
+const int _puntajeExactaCodigo = 1000;
+const int _puntajeExactaNombre = 950;
+const int _puntajePrefijoCodigo = 900;
+const int _puntajePrefijoNombre = 850;
+const int _puntajePalabraExacta = 800;
+const int _puntajePrefijoPalabra = 700;
+const int _puntajeSubstring = 500;
+const int _puntajeParecidaMax = 220;
+const int _puntajeCodigoContiene = 150;
+
 /// Normaliza texto de busqueda: minusculas y sin acentos (í → i, ñ → n, etc.).
 String normalizarTextoBusqueda(String texto) {
 	const acentos = {
@@ -120,24 +131,70 @@ bool _tokenCoincideConPalabra(String token, String palabra) {
 	return true;
 }
 
-/// Puntaje de un token contra las palabras del nombre.
+/// Distancia de edición acotada; -1 si supera [maxDistancia].
+int _distanciaLevenshteinAcotada(String a, String b, int maxDistancia) {
+	if (a == b) {
+		return 0;
+	}
+	if ((a.length - b.length).abs() > maxDistancia) {
+		return -1;
+	}
+	if (a.isEmpty) {
+		return b.length <= maxDistancia ? b.length : -1;
+	}
+	if (b.isEmpty) {
+		return a.length <= maxDistancia ? a.length : -1;
+	}
+	var previa = List<int>.generate(b.length + 1, (i) => i);
+	for (var i = 1; i <= a.length; i++) {
+		final actual = List<int>.filled(b.length + 1, 0);
+		actual[0] = i;
+		var filaMin = actual[0];
+		for (var j = 1; j <= b.length; j++) {
+			final costo = a[i - 1] == b[j - 1] ? 0 : 1;
+			actual[j] = [
+				previa[j] + 1,
+				actual[j - 1] + 1,
+				previa[j - 1] + costo,
+			].reduce((x, y) => x < y ? x : y);
+			if (actual[j] < filaMin) {
+				filaMin = actual[j];
+			}
+		}
+		if (filaMin > maxDistancia) {
+			return -1;
+		}
+		previa = actual;
+	}
+	final dist = previa[b.length];
+	return dist <= maxDistancia ? dist : -1;
+}
+
+/// Puntaje de un token contra las palabras del nombre (exacta > parcial > parecida).
 int _puntajeTokenEnNombre(String token, List<String> palabras) {
 	var mejor = 0;
 	for (final palabra in palabras) {
 		if (palabra == token) {
-			mejor = mejor < 300 ? 300 : mejor;
+			mejor = mejor < _puntajePalabraExacta ? _puntajePalabraExacta : mejor;
 			continue;
 		}
 		if (palabra.startsWith(token)) {
-			mejor = mejor < 250 ? 250 : mejor;
+			mejor = mejor < _puntajePrefijoPalabra ? _puntajePrefijoPalabra : mejor;
 			continue;
 		}
 		if (palabra.contains(token)) {
-			mejor = mejor < 180 ? 180 : mejor;
+			mejor = mejor < _puntajeSubstring ? _puntajeSubstring : mejor;
+			continue;
+		}
+		final dist = _distanciaLevenshteinAcotada(token, palabra, 2);
+		if (dist >= 0 && dist <= 2) {
+			final parecida = _puntajeParecidaMax - (dist * 40);
+			mejor = mejor < parecida ? parecida : mejor;
 			continue;
 		}
 		if (_tokenCoincideConPalabra(token, palabra)) {
-			mejor = mejor < 120 ? 120 : mejor;
+			const abreviatura = 120;
+			mejor = mejor < abreviatura ? abreviatura : mejor;
 		}
 	}
 	return mejor;
@@ -171,13 +228,15 @@ int _puntajeSecuencia(String consulta, String texto) {
 		if (hallado < 0) {
 			return 0;
 		}
-		acumulado = acumulado + (100 - hallado);
+		// Penaliza huecos largos para no competir con coincidencias parciales.
+		final hueco = hallado - indice;
+		acumulado = acumulado + (40 - hueco).clamp(1, 40);
 		indice = hallado + 1;
 	}
-	return acumulado;
+	return acumulado.clamp(1, _puntajeParecidaMax);
 }
 
-/// Puntua coincidencia: prefijo de palabra > substring > codigo.
+/// Puntua coincidencia: exacta > parcial > parecida.
 ///
 /// Soporta consultas multi-token (`sam 1k` → "Saman arroz 1kg") e ignora acentos.
 int puntajeBusquedaProducto(Producto producto, String consulta) {
@@ -192,16 +251,16 @@ int puntajeBusquedaProducto(Producto producto, String consulta) {
 		? ''
 		: normalizarTextoBusqueda(producto.codigoBarras);
 	if (codigo.isNotEmpty && codigo == q) {
-		return 1000;
+		return _puntajeExactaCodigo;
 	}
 	if (nombre == q) {
-		return 900;
+		return _puntajeExactaNombre;
 	}
 	if (codigo.startsWith(q)) {
-		return 800;
+		return _puntajePrefijoCodigo;
 	}
 	if (nombre.startsWith(q)) {
-		return 700;
+		return _puntajePrefijoNombre;
 	}
 
 	final tokens = q.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
@@ -209,41 +268,36 @@ int puntajeBusquedaProducto(Producto producto, String consulta) {
 
 	if (tokens.length == 1) {
 		final token = tokens.first;
-		for (final palabra in palabras) {
-			if (palabra.startsWith(token)) {
-				return 600;
-			}
-		}
-		var acumulado = _puntajeSecuencia(token, nombre);
-		if (acumulado <= 0) {
-			if (codigo.contains(token)) {
-				return 150;
-			}
-			return 0;
+		final puntajePalabra = _puntajeTokenEnNombre(token, palabras);
+		if (puntajePalabra >= _puntajeSubstring) {
+			return puntajePalabra;
 		}
 		if (nombre.contains(token)) {
-			acumulado = acumulado + 200;
+			return _puntajeSubstring;
+		}
+		if (puntajePalabra > 0) {
+			return puntajePalabra;
+		}
+		final secuencia = _puntajeSecuencia(token, nombre);
+		if (secuencia > 0) {
+			return secuencia;
 		}
 		if (codigo.contains(token)) {
-			acumulado = acumulado + 150;
+			return _puntajeCodigoContiene;
 		}
-		return acumulado;
+		return 0;
 	}
 
 	// Multi-token: cada token debe coincidir con alguna palabra del nombre.
 	if (!_todosLosTokensCoinciden(tokens, palabras)) {
-		// Fallback: secuencia sobre el nombre completo (incluye espacios).
-		var acumulado = _puntajeSecuencia(q, nombre);
-		if (acumulado <= 0) {
-			if (codigo.contains(q.replaceAll(' ', ''))) {
-				return 150;
-			}
-			return 0;
+		final secuencia = _puntajeSecuencia(q, nombre);
+		if (secuencia > 0) {
+			return secuencia;
 		}
-		if (nombre.contains(q)) {
-			acumulado = acumulado + 200;
+		if (codigo.contains(q.replaceAll(' ', ''))) {
+			return _puntajeCodigoContiene;
 		}
-		return acumulado;
+		return 0;
 	}
 
 	var acumulado = 0;
@@ -255,7 +309,7 @@ int puntajeBusquedaProducto(Producto producto, String consulta) {
 		acumulado = acumulado + puntajeToken;
 	}
 	if (nombre.contains(q)) {
-		acumulado = acumulado + 200;
+		acumulado = acumulado + 80;
 	}
 	return acumulado;
 }
@@ -288,6 +342,20 @@ List<Producto> filtrarProductosPorBusqueda(
 			puntuados.add((producto: producto, puntaje: puntaje));
 		}
 	}
-	puntuados.sort((a, b) => b.puntaje.compareTo(a.puntaje));
+	puntuados.sort((a, b) {
+		final porPuntaje = b.puntaje.compareTo(a.puntaje);
+		if (porPuntaje != 0) {
+			return porPuntaje;
+		}
+		// A igualdad, nombres mas cortos (mas especificos) primero.
+		final porLongitud =
+			a.producto.nombre.length.compareTo(b.producto.nombre.length);
+		if (porLongitud != 0) {
+			return porLongitud;
+		}
+		return a.producto.nombre.toLowerCase().compareTo(
+			b.producto.nombre.toLowerCase(),
+		);
+	});
 	return puntuados.map((e) => e.producto).toList();
 }

@@ -61,6 +61,31 @@ void main() {
     expect(resultado.first.id, '1');
   });
 
+  test('filtrarProductosPorBusqueda ordena exacta > parcial > parecida', () {
+    final productos = [
+      _producto('parecida', 'Siman'),
+      _producto('parcial', 'Arroz Saman especial'),
+      _producto('exacta', 'Saman'),
+      _producto('prefijo', 'Saman arroz 1kg'),
+    ];
+    final resultado = filtrarProductosPorBusqueda(productos, 'saman');
+    expect(resultado.map((p) => p.id).toList(), [
+      'exacta',
+      'prefijo',
+      'parcial',
+      'parecida',
+    ]);
+  });
+
+  test('filtrarProductosPorBusqueda prioriza substring antes que abreviatura', () {
+    final productos = [
+      _producto('abrev', 'Super mercado andino'),
+      _producto('parcial', 'Aceite de maiz'),
+    ];
+    final resultado = filtrarProductosPorBusqueda(productos, 'maiz');
+    expect(resultado.first.id, 'parcial');
+  });
+
   test('filtrarProductosPorBusqueda vacio devuelve todos', () {
     final productos = [_producto('1', 'A')];
     expect(filtrarProductosPorBusqueda(productos, ''), productos);

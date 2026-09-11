@@ -2878,7 +2878,28 @@ class ServicioAdmin {
   }
 
   Future<List<Tienda>> listarTodasLasTiendas() async {
+    await _purgarStubsTiendaHuerfanos();
     return _tiendaRepository.listarTodas();
+  }
+
+  /// Intenta borrar placeholders FK ("Tienda" sin dirección) que ya no hacen falta.
+  Future<void> _purgarStubsTiendaHuerfanos() async {
+    final todas = await _tiendaRepository.listarTodas();
+    for (final tienda in todas) {
+      if (!tienda.esStubFk) {
+        continue;
+      }
+      if (tienda.id == _tiendaActivaId) {
+        continue;
+      }
+      try {
+        await _purgarReferenciasSecundariasTienda(tienda.id);
+        await _reasignarHuerfanosATiendaActiva(tienda.id);
+        await _tiendaRepository.eliminar(tienda.id);
+      } catch (_) {
+        // Sigue referenciada; se queda oculta en admin (esStubFk).
+      }
+    }
   }
 
   /// Registra tienda nueva respetando limite de licencia.
@@ -2926,31 +2947,132 @@ class ServicioAdmin {
     await _emisorEventos.tienda(inactiva);
   }
 
-  Future<bool> eliminarTienda(String tiendaId) async {
-    if (tiendaId == _tiendaActivaId) {
-      return false;
+  /// Elimina una tienda inactiva de la lista (y de SQLite si es posible).
+  ///
+  /// - La tienda en uso no se puede borrar.
+  /// - Debe estar inactiva (usar el switch antes).
+  /// - Emite `activa=false` al hub para no reactivarla en otros equipos.
+  /// - Purga stock y datos secundarios; si hay historial de ventas u otros
+  ///   bloqueos FK, lanza [StateError] con el motivo.
+  /// - Los stubs FK ("Tienda" sin dirección) se reasignan y se borran siempre.
+  Future<void> eliminarTienda(String tiendaId) async {
+    final id = tiendaId.trim();
+    if (id.isEmpty) {
+      return;
     }
-    final ventas = await _ventaRepository.listarVentasDelDia(tiendaId);
-    if (ventas.isNotEmpty) {
-      return false;
+    if (id == _tiendaActivaId) {
+      throw StateError(
+        'No puedes eliminar la tienda en uso. Cambia de sucursal primero.',
+      );
     }
-    final tienda = await _tiendaRepository.obtenerPorId(tiendaId);
+    final tienda = await _tiendaRepository.obtenerPorId(id);
     if (tienda == null) {
-      return false;
+      return;
     }
-    await _emisorEventos.tienda(
-      Tienda(
-        id: tienda.id,
-        nombre: tienda.nombre,
-        direccion: tienda.direccion,
-        activa: false,
-        latitud: tienda.latitud,
-        longitud: tienda.longitud,
-        radioMetrosAsistencia: tienda.radioMetrosAsistencia,
-      ),
+    if (tienda.activa) {
+      throw StateError('Desactiva la tienda antes de eliminarla.');
+    }
+
+    final inactiva = Tienda(
+      id: tienda.id,
+      nombre: tienda.nombre,
+      direccion: tienda.direccion,
+      activa: false,
+      latitud: tienda.latitud,
+      longitud: tienda.longitud,
+      radioMetrosAsistencia: tienda.radioMetrosAsistencia,
     );
-    await _tiendaRepository.eliminar(tiendaId);
-    return true;
+    await _emisorEventos.tienda(inactiva);
+
+    final ventas = Sqflite.firstIntValue(
+          await _baseDatos.rawQuery(
+            'SELECT COUNT(*) FROM sales WHERE tienda_id = ?',
+            [id],
+          ),
+        ) ??
+        0;
+    if (ventas > 0 && !tienda.esStubFk) {
+      throw StateError(
+        'No se puede borrar: tiene $ventas venta(s) en historial. '
+        'Queda archivada como inactiva.',
+      );
+    }
+
+    await _purgarReferenciasSecundariasTienda(id);
+
+    if (tienda.esStubFk) {
+      await _reasignarHuerfanosATiendaActiva(id);
+    } else {
+      final productos = Sqflite.firstIntValue(
+            await _baseDatos.rawQuery(
+              'SELECT COUNT(*) FROM products WHERE tienda_id = ?',
+              [id],
+            ),
+          ) ??
+          0;
+      if (productos > 0) {
+        throw StateError(
+          'No se puede borrar: tiene $productos producto(s). '
+          'Muévelos a otra tienda o déjala inactiva.',
+        );
+      }
+      final usuarios = Sqflite.firstIntValue(
+            await _baseDatos.rawQuery(
+              'SELECT COUNT(*) FROM usuarios WHERE tienda_id = ?',
+              [id],
+            ),
+          ) ??
+          0;
+      if (usuarios > 0) {
+        throw StateError(
+          'No se puede borrar: tiene $usuarios usuario(s) asignado(s). '
+          'Reasígnalos antes o déjala inactiva.',
+        );
+      }
+    }
+
+    try {
+      await _tiendaRepository.eliminar(id);
+    } catch (error) {
+      throw StateError(
+        'No se pudo borrar del dispositivo (datos vinculados). '
+        'Queda como inactiva. Detalle: $error',
+      );
+    }
+  }
+
+  /// Quita filas que solo existen para la tienda y no son historial contable.
+  Future<void> _purgarReferenciasSecundariasTienda(String tiendaId) async {
+    await _baseDatos.delete(
+      'stock_levels',
+      where: 'tienda_id = ?',
+      whereArgs: [tiendaId],
+    );
+    await _baseDatos.delete(
+      'held_tickets',
+      where: 'tienda_id = ?',
+      whereArgs: [tiendaId],
+    );
+  }
+
+  /// Mueve productos/usuarios de un stub FK a la tienda activa antes de borrarlo.
+  Future<void> _reasignarHuerfanosATiendaActiva(String tiendaOrigenId) async {
+    final destino = _tiendaActivaId;
+    if (destino.isEmpty || destino == tiendaOrigenId) {
+      return;
+    }
+    await _baseDatos.update(
+      'products',
+      {'tienda_id': destino},
+      where: 'tienda_id = ?',
+      whereArgs: [tiendaOrigenId],
+    );
+    await _baseDatos.update(
+      'usuarios',
+      {'tienda_id': destino},
+      where: 'tienda_id = ?',
+      whereArgs: [tiendaOrigenId],
+    );
   }
 
   Future<List<Venta>> listarVentasDelDiaTienda(String tiendaId) async {

@@ -1,27 +1,27 @@
-/// Grilla de productos con iconos grandes para seleccion tactil.
+/// Grilla de productos con foto (o icono) y empaques visibles.
 ///
 /// Autor: Equipo POSIA
 /// Matricula: POSIA-2026-001
 /// Fecha creacion: 2026-06-07 18:30:00 (UTC-6)
-/// Ultima modificacion: 2026-06-07 18:30:00 (UTC-6)
+/// Ultima modificacion: 2026-09-11 13:15:00 (UTC-6)
 library;
 
 import 'package:flutter/material.dart';
 import 'package:posia_core/posia_core.dart';
 
 import '../theme/posia_theme.dart';
+import 'visual_producto.dart';
 
-/// Muestra catalogo como grid de tarjetas con icono e imagen fallback.
+/// Muestra catalogo como grid de tarjetas con foto e empaques.
 class GrillaProductos extends StatefulWidget {
 	/// Crea grilla de productos activos.
-	///
-	/// [productos] Lista de productos a mostrar.
-	/// [alSeleccionar] Callback al tocar un producto.
 	const GrillaProductos({
 		required this.productos,
 		required this.alSeleccionar,
 		this.alPresionarLargo,
 		this.alVerExistencias,
+		this.alSeleccionarEmpaque,
+		this.empaquesPorProducto = const {},
 		this.stockLocalPorProducto = const {},
 		this.categoriaId,
 		this.mensajeVacio = 'Sin productos',
@@ -36,20 +36,27 @@ class GrillaProductos extends StatefulWidget {
 	/// Existencia en la tienda activa por productoId.
 	final Map<String, double> stockLocalPorProducto;
 
+	/// Empaques comerciales (caja, bulto…) por productoId.
+	final Map<String, List<PresentacionProducto>> empaquesPorProducto;
+
 	/// Categoria activa (para conservar scroll al cambiar filtro).
 	final String? categoriaId;
 
 	/// Mensaje cuando no hay productos visibles.
 	final String mensajeVacio;
 
-	/// Accion al seleccionar producto.
+	/// Accion al seleccionar producto (unidad base).
 	final ValueChanged<Producto> alSeleccionar;
 
-	/// Accion al mantener pulsado (p. ej. vender por empaque).
+	/// Accion al mantener pulsado (dialogo de empaques).
 	final ValueChanged<Producto>? alPresionarLargo;
 
 	/// Accion al pulsar el icono de existencias.
 	final ValueChanged<Producto>? alVerExistencias;
+
+	/// Accion al pulsar un chip de empaque concreto.
+	final void Function(Producto producto, PresentacionProducto empaque)?
+		alSeleccionarEmpaque;
 
 	/// Indice resaltado para navegacion con teclado (opcional).
 	final int? indiceSeleccionado;
@@ -113,6 +120,7 @@ class _GrillaProductosState extends State<GrillaProductos> {
 				),
 			);
 		}
+		final hayEmpaques = widget.empaquesPorProducto.isNotEmpty;
 		return GridView.builder(
 			key: PageStorageKey<String>('grilla_${widget.categoriaId ?? 'todos'}'),
 			padding: const EdgeInsets.all(12.0),
@@ -120,7 +128,7 @@ class _GrillaProductosState extends State<GrillaProductos> {
 				crossAxisCount: widget.columnas,
 				mainAxisSpacing: 10.0,
 				crossAxisSpacing: 10.0,
-				childAspectRatio: 0.88,
+				childAspectRatio: hayEmpaques ? 0.72 : 0.88,
 			),
 			itemCount: widget.productos.length,
 			itemBuilder: (context, indice) {
@@ -129,10 +137,12 @@ class _GrillaProductosState extends State<GrillaProductos> {
 				final stockLocal = widget.stockLocalPorProducto[producto.id] ?? 0.0;
 				final sinExistenciaLocal =
 					stockLocal <= 0 && !producto.permiteStockNegativo;
+				final empaques = widget.empaquesPorProducto[producto.id] ?? const [];
 				final clave = _clavesTarjetas.putIfAbsent(indice, GlobalKey.new);
 				return _TarjetaProducto(
 					key: clave,
 					producto: producto,
+					empaques: empaques,
 					seleccionado: seleccionado,
 					sinExistenciaLocal: sinExistenciaLocal,
 					alPresionar: () => widget.alSeleccionar(producto),
@@ -142,28 +152,35 @@ class _GrillaProductosState extends State<GrillaProductos> {
 					alVerExistencias: widget.alVerExistencias == null
 						? null
 						: () => widget.alVerExistencias!(producto),
+					alSeleccionarEmpaque: widget.alSeleccionarEmpaque == null
+						? null
+						: (empaque) => widget.alSeleccionarEmpaque!(producto, empaque),
 				);
 			},
 		);
 	}
 }
 
-/// Tarjeta individual de producto con icono fallback.
+/// Tarjeta individual de producto con foto y chips de empaque.
 class _TarjetaProducto extends StatelessWidget {
 	const _TarjetaProducto({
 		required this.producto,
 		required this.alPresionar,
+		this.empaques = const [],
 		this.alPresionarLargo,
 		this.alVerExistencias,
+		this.alSeleccionarEmpaque,
 		this.seleccionado = false,
 		this.sinExistenciaLocal = false,
 		super.key,
 	});
 
 	final Producto producto;
+	final List<PresentacionProducto> empaques;
 	final VoidCallback alPresionar;
 	final VoidCallback? alPresionarLargo;
 	final VoidCallback? alVerExistencias;
+	final ValueChanged<PresentacionProducto>? alSeleccionarEmpaque;
 	final bool seleccionado;
 	final bool sinExistenciaLocal;
 
@@ -194,21 +211,15 @@ class _TarjetaProducto extends StatelessWidget {
 					child: Stack(
 						children: [
 							Padding(
-								padding: const EdgeInsets.all(10.0),
+								padding: const EdgeInsets.fromLTRB(8.0, 10.0, 8.0, 8.0),
 								child: Column(
-									mainAxisAlignment: MainAxisAlignment.center,
 									children: [
-										Container(
-											padding: const EdgeInsets.all(10.0),
-											decoration: BoxDecoration(
-												color: colorAcento.withValues(alpha: 0.1),
-												borderRadius: BorderRadius.circular(12.0),
-											),
-											child: Icon(
-												_resolverIconoProducto(producto),
-												size: 40.0,
-												color: colorAcento,
-											),
+										VisualProducto(
+											producto: producto,
+											colorAcento: colorAcento,
+											tamano: 44.0,
+											padding: 0.0,
+											radio: 12.0,
 										),
 										const SizedBox(height: 8.0),
 										Text(
@@ -235,7 +246,7 @@ class _TarjetaProducto extends StatelessWidget {
 											),
 										),
 										if (sinExistenciaLocal) ...[
-											const SizedBox(height: 4.0),
+											const SizedBox(height: 2.0),
 											Text(
 												'Sin existencia',
 												style: Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -244,6 +255,20 @@ class _TarjetaProducto extends StatelessWidget {
 												),
 											),
 										],
+										if (empaques.isNotEmpty && alSeleccionarEmpaque != null) ...[
+											const SizedBox(height: 6.0),
+											Expanded(
+												child: Align(
+													alignment: Alignment.bottomCenter,
+													child: _ChipsEmpaque(
+														empaques: empaques,
+														colorAcento: colorAcento,
+														alSeleccionar: alSeleccionarEmpaque!,
+													),
+												),
+											),
+										] else
+											const Spacer(),
 									],
 								),
 							),
@@ -278,39 +303,78 @@ class _TarjetaProducto extends StatelessWidget {
 			),
 		);
 	}
+}
 
-	IconData _resolverIconoProducto(Producto producto) {
-		final nombre = producto.nombre.toLowerCase();
-		if (nombre.contains('coca')) {
-			return Icons.local_drink;
-		}
-		if (nombre.contains('arroz')) {
-			return Icons.rice_bowl;
-		}
-		if (nombre.contains('leche')) {
-			return Icons.water_drop;
-		}
-		if (nombre.contains('huevo')) {
-			return Icons.egg;
-		}
-		if (nombre.contains('aceite')) {
-			return Icons.opacity;
-		}
-		if (nombre.contains('azucar')) {
-			return Icons.grain;
-		}
-		if (nombre.contains('frijol')) {
-			return Icons.grass;
-		}
-		if (nombre.contains('atun')) {
-			return Icons.set_meal;
-		}
-		if (producto.moduloVertical == ModuloVertical.carniceria) {
-			return Icons.set_meal;
-		}
-		if (producto.moduloVertical == ModuloVertical.farmacia) {
-			return Icons.medication;
-		}
-		return Icons.shopping_basket;
+class _ChipsEmpaque extends StatelessWidget {
+	const _ChipsEmpaque({
+		required this.empaques,
+		required this.colorAcento,
+		required this.alSeleccionar,
+	});
+
+	final List<PresentacionProducto> empaques;
+	final Color colorAcento;
+	final ValueChanged<PresentacionProducto> alSeleccionar;
+
+	@override
+	Widget build(BuildContext context) {
+		return SingleChildScrollView(
+			scrollDirection: Axis.horizontal,
+			child: Row(
+				mainAxisAlignment: MainAxisAlignment.center,
+				children: [
+					for (var i = 0; i < empaques.length; i++) ...[
+						if (i > 0) const SizedBox(width: 4.0),
+						_ChipEmpaque(
+							etiqueta: empaques[i].nombre,
+							colorAcento: colorAcento,
+							alPresionar: () => alSeleccionar(empaques[i]),
+						),
+					],
+				],
+			),
+		);
+	}
+}
+
+class _ChipEmpaque extends StatelessWidget {
+	const _ChipEmpaque({
+		required this.etiqueta,
+		required this.colorAcento,
+		required this.alPresionar,
+	});
+
+	final String etiqueta;
+	final Color colorAcento;
+	final VoidCallback alPresionar;
+
+	@override
+	Widget build(BuildContext context) {
+		return Material(
+			color: colorAcento.withValues(alpha: 0.12),
+			borderRadius: BorderRadius.circular(16.0),
+			child: InkWell(
+				onTap: alPresionar,
+				borderRadius: BorderRadius.circular(16.0),
+				child: Padding(
+					padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+					child: Row(
+						mainAxisSize: MainAxisSize.min,
+						children: [
+							Icon(Icons.inventory_2_outlined, size: 12.0, color: colorAcento),
+							const SizedBox(width: 3.0),
+							Text(
+								etiqueta,
+								style: TextStyle(
+									fontSize: 11.0,
+									fontWeight: FontWeight.w700,
+									color: colorAcento,
+								),
+							),
+						],
+					),
+				),
+			),
+		);
 	}
 }

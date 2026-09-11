@@ -597,6 +597,7 @@ class _PanelEmpaquesProductoState extends ConsumerState<PanelEmpaquesProducto> {
 				precio: precio,
 			);
 			await _cargarDatos();
+			await refrescarDatosMaestros(ref);
 			if (!mounted) {
 				return;
 			}
@@ -648,6 +649,7 @@ class _PanelEmpaquesProductoState extends ConsumerState<PanelEmpaquesProducto> {
 			final servicio = await ref.read(servicioAdminProvider.future);
 			await servicio.eliminarPresentacionProducto(presentacion.id);
 			await _cargarDatos();
+			await refrescarDatosMaestros(ref);
 			if (mounted) {
 				_mostrarExito('Empaque eliminado');
 			}
@@ -702,7 +704,7 @@ class _PanelEmpaquesProductoState extends ConsumerState<PanelEmpaquesProducto> {
 						Text(
 							widget.incrustado
 								? 'Opcional. Precio fijo al vender en caja, bulto u otro empaque. '
-									'En caja se cobra al elegir el empaque o escanear su código.'
+									'En caja aparece un botón (ej. Caja x12) en el producto para cobrarlo fácil.'
 								: 'Configure cómo llega y se vende el producto: cajas, bultos, kg, etc.',
 							style: TextStyle(color: Colors.grey.shade700, fontSize: 13.0),
 						),

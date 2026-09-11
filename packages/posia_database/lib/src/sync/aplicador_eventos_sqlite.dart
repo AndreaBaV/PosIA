@@ -784,12 +784,21 @@ class AplicadorEventosSqlite implements AplicadorEventosRemotos {
 		if (id.isEmpty) {
 			return;
 		}
+		final activa = payload['activa'] as bool? ?? true;
+		// Si el admin borro la tienda localmente y solo queda el espejo remoto
+		// inactivo, no la resucites como "basura" en la lista de tiendas.
+		if (!activa) {
+			final existente = await repo.obtenerPorId(id);
+			if (existente == null) {
+				return;
+			}
+		}
 		await repo.fusionarRemota(
 			Tienda(
 				id: id,
 				nombre: payload['nombre'] as String? ?? '',
 				direccion: payload['direccion'] as String? ?? '',
-				activa: payload['activa'] as bool? ?? true,
+				activa: activa,
 				latitud: (payload['latitud'] as num?)?.toDouble(),
 				longitud: (payload['longitud'] as num?)?.toDouble(),
 				radioMetrosAsistencia: _radioMetrosDesdePayload(payload),

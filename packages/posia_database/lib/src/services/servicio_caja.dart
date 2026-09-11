@@ -379,6 +379,15 @@ class ServicioCaja {
     return presentaciones.where((p) => !p.esPresentacionBase).toList();
   }
 
+  /// Mapa productoId → empaques comerciales activos (caja, bulto, etc.).
+  Future<Map<String, List<PresentacionProducto>>> mapaEmpaquesActivos() async {
+    final repo = _presentacionRepository;
+    if (repo == null) {
+      return {};
+    }
+    return repo.mapaEmpaquesActivos();
+  }
+
   /// Agrega presentacion comercial al carrito con factor de inventario.
   Future<void> agregarPresentacion(
     PresentacionProducto presentacion, {

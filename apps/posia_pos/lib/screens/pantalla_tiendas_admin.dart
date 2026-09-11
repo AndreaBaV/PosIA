@@ -39,7 +39,9 @@ class _PantallaTiendasAdminState extends ConsumerState<PantallaTiendasAdmin> {
 			),
 			body: tiendasAsync.when(
 				data: (tiendas) {
-					final filtradas = tiendas.where((t) {
+					// Stubs FK ("Tienda" vacía) son basura de integridad, no sucursales.
+					final visibles = tiendas.where((t) => !t.esStubFk).toList();
+					final filtradas = visibles.where((t) {
 						if (_filtro.isEmpty) {
 							return true;
 						}
@@ -47,7 +49,9 @@ class _PantallaTiendasAdminState extends ConsumerState<PantallaTiendasAdmin> {
 						return t.nombre.toLowerCase().contains(q) ||
 							t.direccion.toLowerCase().contains(q);
 					}).toList();
-					final activas = tiendas.where((t) => t.activa).length;
+					final activas = visibles.where((t) => t.activa).length;
+					final inactivas = filtradas.where((t) => !t.activa).toList();
+					final activasFiltradas = filtradas.where((t) => t.activa).toList();
 					return ListView(
 						padding: const EdgeInsets.only(bottom: 24.0),
 						children: [
@@ -63,38 +67,25 @@ class _PantallaTiendasAdminState extends ConsumerState<PantallaTiendasAdmin> {
 								sugerencia: 'Buscar tienda...',
 								alCambiar: (v) => setState(() => _filtro = v.trim()),
 							),
-							...filtradas.map((tienda) => Card(
-								margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-								child: ListTile(
-									leading: Icon(
-										Icons.store,
-										color: tienda.activa ? PosiaColors.cobrar : Colors.grey,
+							...activasFiltradas.map(_tarjetaTienda),
+							if (inactivas.isNotEmpty) ...[
+								const Padding(
+									padding: EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
+									child: Text(
+										'Inactivas (archivadas)',
+										style: TextStyle(fontWeight: FontWeight.w600),
 									),
-									title: Text(tienda.nombre),
-									subtitle: Text(
-										tienda.latitud != null && tienda.longitud != null
-											? '${tienda.direccion}\nGPS configurado'
-											: tienda.direccion.isNotEmpty
-												? '${tienda.direccion}\nSin ubicación GPS'
-												: 'Sin ubicación GPS',
-									),
-									isThreeLine: true,
-									trailing: Row(
-										mainAxisSize: MainAxisSize.min,
-										children: [
-											Switch(
-												value: tienda.activa,
-												onChanged: (activa) => _cambiarEstado(tienda, activa),
-											),
-											IconButton(
-												icon: const Icon(Icons.delete_outline, color: PosiaColors.cancelar),
-												onPressed: () => _eliminar(tienda),
-											),
-										],
-									),
-									onTap: () => _editar(tienda),
 								),
-							)),
+								Padding(
+									padding: const EdgeInsets.symmetric(horizontal: 16.0),
+									child: Text(
+										'Puedes reactivarlas con el switch o eliminarlas si no tienen historial.',
+										style: TextStyle(color: Colors.grey.shade700, fontSize: 13.0),
+									),
+								),
+								const SizedBox(height: 8.0),
+								...inactivas.map(_tarjetaTienda),
+							],
 							const Divider(height: 32.0),
 							Padding(
 								padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -129,6 +120,44 @@ class _PantallaTiendasAdminState extends ConsumerState<PantallaTiendasAdmin> {
 				},
 				loading: () => const Center(child: CircularProgressIndicator()),
 				error: (e, _) => Center(child: Text('$e')),
+			),
+		);
+	}
+
+	Widget _tarjetaTienda(Tienda tienda) {
+		return Card(
+			margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+			child: ListTile(
+				leading: Icon(
+					Icons.store,
+					color: tienda.activa ? PosiaColors.cobrar : Colors.grey,
+				),
+				title: Text(tienda.nombre),
+				subtitle: Text(
+					tienda.latitud != null && tienda.longitud != null
+						? '${tienda.direccion}\nGPS configurado'
+						: tienda.direccion.isNotEmpty
+							? '${tienda.direccion}\nSin ubicación GPS'
+							: 'Sin ubicación GPS',
+				),
+				isThreeLine: true,
+				trailing: Row(
+					mainAxisSize: MainAxisSize.min,
+					children: [
+						Switch(
+							value: tienda.activa,
+							onChanged: (activa) => _cambiarEstado(tienda, activa),
+						),
+						IconButton(
+							tooltip: tienda.activa
+								? 'Desactiva la tienda antes de eliminarla'
+								: 'Eliminar permanentemente',
+							icon: const Icon(Icons.delete_outline, color: PosiaColors.cancelar),
+							onPressed: () => _eliminar(tienda),
+						),
+					],
+				),
+				onTap: () => _editar(tienda),
 			),
 		);
 	}
@@ -314,13 +343,29 @@ class _PantallaTiendasAdminState extends ConsumerState<PantallaTiendasAdmin> {
 	}
 
 	Future<void> _eliminar(Tienda tienda) async {
+		if (tienda.activa) {
+			PosiaNotificaciones.mostrarSnackBar(
+				context,
+				const SnackBar(
+					content: Text('Desactiva la tienda con el switch antes de eliminarla'),
+					backgroundColor: PosiaColors.cancelar,
+				),
+			);
+			return;
+		}
 		final confirmar = await showDialog<bool>(
 			context: context,
 			builder: (ctx) => AlertDialog(
 				title: const Text('Eliminar tienda'),
-				content: Text('Se eliminará "${tienda.nombre}" permanentemente.'),
+				content: Text(
+					'Se eliminará "${tienda.nombre}" de este dispositivo. '
+					'Si tiene ventas o productos, solo quedará archivada como inactiva.',
+				),
 				actions: [
-					TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+					TextButton(
+						onPressed: () => Navigator.pop(ctx, false),
+						child: const Text('Cancelar'),
+					),
 					FilledButton(
 						style: FilledButton.styleFrom(backgroundColor: PosiaColors.cancelar),
 						onPressed: () => Navigator.pop(ctx, true),
@@ -333,20 +378,45 @@ class _PantallaTiendasAdminState extends ConsumerState<PantallaTiendasAdmin> {
 			return;
 		}
 		final servicio = await ref.read(servicioAdminProvider.future);
-		final ok = await servicio.eliminarTienda(tienda.id);
-		if (!mounted) {
-			return;
+		try {
+			await servicio.eliminarTienda(tienda.id);
+			if (!mounted) {
+				return;
+			}
+			PosiaNotificaciones.mostrarSnackBar(
+				context,
+				const SnackBar(
+					content: Text('Tienda eliminada'),
+					backgroundColor: PosiaColors.cobrar,
+				),
+			);
+		} on StateError catch (error) {
+			if (!mounted) {
+				return;
+			}
+			PosiaNotificaciones.mostrarSnackBar(
+				context,
+				SnackBar(
+					content: Text(error.message),
+					backgroundColor: PosiaColors.cancelar,
+					duration: const Duration(seconds: 5),
+				),
+			);
+		} catch (error) {
+			if (!mounted) {
+				return;
+			}
+			PosiaNotificaciones.mostrarSnackBar(
+				context,
+				SnackBar(
+					content: Text('No se pudo eliminar: $error'),
+					backgroundColor: PosiaColors.cancelar,
+				),
+			);
 		}
-		PosiaNotificaciones.mostrarSnackBar(context, 
-			SnackBar(
-				content: Text(ok ? 'Tienda eliminada' : 'No se puede eliminar (tienda activa o con ventas)'),
-				backgroundColor: ok ? PosiaColors.cobrar : PosiaColors.cancelar,
-			),
-		);
 		ref.invalidate(_tiendasAdminProvider);
 	}
 }
-
 final _tiendasAdminProvider = FutureProvider<List<Tienda>>((ref) async {
 	final servicio = await ref.watch(servicioAdminProvider.future);
 	return servicio.listarTodasLasTiendas();

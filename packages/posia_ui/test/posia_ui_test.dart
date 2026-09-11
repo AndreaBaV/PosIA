@@ -10,7 +10,7 @@ void main() {
 				home: Scaffold(
 					body: BarraCategorias(
 						categorias: const [],
-						categoriaSeleccionadaId: CATEGORIA_TODOS_ID,
+						categoriasSeleccionadasIds: const {},
 						alSeleccionar: (_) {},
 					),
 				),

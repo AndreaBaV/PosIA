@@ -68,6 +68,25 @@ class PresentacionRepository {
     return filas.map(_mapearPresentacion).toList();
   }
 
+  /// Empaques comerciales activos (no base) indexados por producto.
+  ///
+  /// Una sola consulta para pintar chips en grilla/lista de caja.
+  Future<Map<String, List<PresentacionProducto>>> mapaEmpaquesActivos() async {
+    final filas = await _baseDatos.query(
+      'presentaciones_producto',
+      where: 'activo = 1 AND es_presentacion_base = 0',
+      orderBy: 'nombre ASC',
+    );
+    final mapa = <String, List<PresentacionProducto>>{};
+    for (final fila in filas) {
+      final presentacion = _mapearPresentacion(fila);
+      mapa
+          .putIfAbsent(presentacion.productoId, () => <PresentacionProducto>[])
+          .add(presentacion);
+    }
+    return mapa;
+  }
+
   Future<PresentacionProducto?> obtenerPorId(String id) async {
     final filas = await _baseDatos.query(
       'presentaciones_producto',

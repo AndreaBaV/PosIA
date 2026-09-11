@@ -307,7 +307,10 @@ class _ConstruirLayoutCaja extends ConsumerWidget {
 		final etiquetaCobrar = etiquetaAtajoConfigurado(teclaConfig.atajo(atajoAccionCobrar));
 		return Scaffold(
 			backgroundColor: PosiaColors.fondo,
-			body: Column(
+			body: GestureDetector(
+				behavior: HitTestBehavior.translucent,
+				onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+				child: Column(
 				children: [
 					PanelTotal(
 						nombreTienda: estado.nombreTienda,
@@ -352,7 +355,7 @@ class _ConstruirLayoutCaja extends ConsumerWidget {
 							),
 							child: BarraCategorias(
 								categorias: estado.categorias,
-								categoriaSeleccionadaId: estado.categoriaSeleccionadaId,
+								categoriasSeleccionadasIds: estado.categoriasSeleccionadasIds,
 								alSeleccionar: (id) {
 									ref.read(carritoNotifierProvider.notifier).seleccionarCategoria(id);
 								},
@@ -409,9 +412,10 @@ class _ConstruirLayoutCaja extends ConsumerWidget {
 											margin: EdgeInsets.zero,
 											clipBehavior: Clip.antiAlias,
 											child: ListaProductosCaja(
-												categoriaId: estado.categoriaSeleccionadaId,
+												categoriaId: estado.claveFiltroCategorias,
 												productos: estado.productos,
 												stockLocalPorProducto: estado.stockLocalPorProducto,
+												empaquesPorProducto: estado.empaquesPorProducto,
 												indiceSeleccionado: busquedaController.text.trim().isNotEmpty
 													? estado.indiceBusquedaSeleccionado
 													: null,
@@ -426,6 +430,17 @@ class _ConstruirLayoutCaja extends ConsumerWidget {
 														ref,
 														producto,
 													),
+												alSeleccionarEmpaque: (producto, empaque) async {
+													final agregado = await agregarEmpaqueEnCaja(
+														context,
+														ref,
+														producto,
+														empaque,
+													);
+													if (agregado) {
+														alEnfocarBusqueda();
+													}
+												},
 												alSeleccionar: (producto) async {
 													final agregado = await seleccionarProductoEnCaja(
 														context,
@@ -472,6 +487,7 @@ class _ConstruirLayoutCaja extends ConsumerWidget {
 						etiquetaTeclaCobrar: etiquetaCobrar,
 					),
 				],
+				),
 			),
 		);
 	}
@@ -536,8 +552,10 @@ Future<bool> seleccionarEmpaqueEnCaja(
 	if (!context.mounted || presentaciones.isEmpty) {
 		return false;
 	}
-	var agregado = false;
-	await showDialog<void>(
+	if (presentaciones.length == 1) {
+		return agregarEmpaqueEnCaja(context, ref, producto, presentaciones.first);
+	}
+	final elegido = await showDialog<PresentacionProducto>(
 		context: context,
 		builder: (dialogContext) => AlertDialog(
 			title: Text('Vender por empaque: ${producto.nombre}'),
@@ -560,39 +578,7 @@ Future<bool> seleccionarEmpaqueEnCaja(
 											redondearMonto(producto.precioBase * p.factorABase),
 									),
 								),
-								onTap: () async {
-									Navigator.of(dialogContext).pop();
-									if (!context.mounted) {
-										return;
-									}
-									final precioEmpaque = p.precio ??
-										redondearMonto(producto.precioBase * p.factorABase);
-									final resultado = await DialogoCantidadProducto.mostrar(
-										context,
-										producto.copiarCon(
-											nombre: '${producto.nombre} - ${p.nombre}',
-											precioBase: precioEmpaque,
-										),
-										etiquetaUnidad: p.nombre,
-									);
-									if (!resultado.confirmado) {
-										return;
-									}
-									try {
-										await servicio.agregarPresentacion(
-											p,
-											cantidad: resultado.cantidad,
-										);
-										agregado = true;
-										await ref
-											.read(carritoNotifierProvider.notifier)
-											.recargar();
-									} catch (error) {
-										if (context.mounted) {
-											await _mostrarErrorCaja(context, '$error');
-										}
-									}
-								},
+								onTap: () => Navigator.of(dialogContext).pop(p),
 							),
 						)
 						.toList(),
@@ -600,7 +586,46 @@ Future<bool> seleccionarEmpaqueEnCaja(
 			),
 		),
 	);
-	return agregado;
+	if (elegido == null || !context.mounted) {
+		return false;
+	}
+	return agregarEmpaqueEnCaja(context, ref, producto, elegido);
+}
+
+/// Agrega un empaque concreto (p. ej. chip "Caja x12") con dialogo de cantidad.
+Future<bool> agregarEmpaqueEnCaja(
+	BuildContext context,
+	WidgetRef ref,
+	Producto producto,
+	PresentacionProducto presentacion,
+) async {
+	final precioEmpaque = presentacion.precio ??
+		redondearMonto(producto.precioBase * presentacion.factorABase);
+	final resultado = await DialogoCantidadProducto.mostrar(
+		context,
+		producto.copiarCon(
+			nombre: '${producto.nombre} - ${presentacion.nombre}',
+			precioBase: precioEmpaque,
+		),
+		etiquetaUnidad: presentacion.nombre,
+	);
+	if (!resultado.confirmado) {
+		return false;
+	}
+	try {
+		final servicio = await ref.read(servicioCajaProvider.future);
+		await servicio.agregarPresentacion(
+			presentacion,
+			cantidad: resultado.cantidad,
+		);
+		await ref.read(carritoNotifierProvider.notifier).recargar();
+		return true;
+	} catch (error) {
+		if (context.mounted) {
+			await _mostrarErrorCaja(context, '$error');
+		}
+		return false;
+	}
 }
 
 String _etiquetaContenidoEmpaque(PresentacionProducto presentacion, Producto producto) {
